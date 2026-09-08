@@ -20,7 +20,7 @@
       "score": 28,
       "reasons": ["같은 기간의 폐업 수와 기존 점포 수를 함께 보면 경쟁 부담을 우선 확인해야 합니다."],
       "evidence": [
-        {"agent_id": "business_lifecycle", "path": "/industries/1"},
+        {"agent_id": "business_lifecycle", "path": "/industries/5"},
         {"agent_id": "commercial_area", "path": "/industry_counts/카페"}
       ],
       "risks": ["점포별 매출과 폐업 원인은 확인되지 않았습니다."]

@@ -33,7 +33,13 @@ class AgentTests(unittest.TestCase):
         self.assertIn("json", prompt.casefold())
         self.assertIn('"reasons"', prompt)
         self.assertIn('"path"', prompt)
+        self.assertIn("반드시 5개", prompt)
         self.assertEqual(json.loads(payload)["analyses"][0]["data"], self.request["analyses"][0]["data"])
+
+    def test_sample_has_ten_industry_candidates_for_top_five(self):
+        industries = self.request["analyses"][1]["data"]["industries"]
+        self.assertEqual(self.request["address"], "서울특별시 송파구 오금로 404 원일빌딩 1층, 올리브영 개롱역점")
+        self.assertEqual(len(industries), 10)
 
     def test_rejects_invalid_input_before_calling_model(self):
         invalid_cases = []
