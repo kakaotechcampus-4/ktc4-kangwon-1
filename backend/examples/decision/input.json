@@ -1,0 +1,43 @@
+{
+  "request_id": "sample-001",
+  "address": "서울특별시 테스트구 예시로 100 (가상 주소)",
+  "analyses": [
+    {
+      "request_id": "sample-001",
+      "agent_id": "floating_population",
+      "status": "ok",
+      "scope": {"area": "입력 주소 반경 500m", "period": "2026년 2분기"},
+      "data": {
+        "description": "연결 시험용 가상 데이터",
+        "daily_average": {"value": 12000, "unit": "명/일"},
+        "peak_hours": ["11:00~14:00", "18:00~20:00"],
+        "office_worker_share": {"value": 65, "unit": "%"}
+      }
+    },
+    {
+      "request_id": "sample-001",
+      "agent_id": "business_lifecycle",
+      "status": "ok",
+      "scope": {"area": "입력 주소 반경 500m", "period": "2026년 2분기"},
+      "data": {
+        "description": "연결 시험용 가상 데이터",
+        "industries": [
+          {"industry": "중식", "opened": 3, "closed": 1, "unit": "개소"},
+          {"industry": "카페", "opened": 4, "closed": 8, "unit": "개소"}
+        ]
+      }
+    },
+    {
+      "request_id": "sample-001",
+      "agent_id": "commercial_area",
+      "status": "ok",
+      "scope": {"area": "입력 주소 반경 500m", "period": "2026년 2분기"},
+      "data": {
+        "description": "연결 시험용 가상 데이터",
+        "industry_counts": {"중식": 3, "카페": 42},
+        "unit": "개소",
+        "summary": "업무 시설이 밀집한 가상의 상권"
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "status": "ok",
+  "summary": "가상 사례에서는 직장인 점심 수요를 검토할 수 있으며, 카페는 경쟁과 폐업 현황의 추가 확인이 필요합니다.",
+  "recommendations": [
+    {
+      "category": {"major": "음식점", "middle": "중식"},
+      "score": 72,
+      "reasons": ["직장인 비중과 점심 시간대 유동을 바탕으로 점심 식사 수요를 검토할 수 있습니다."],
+      "evidence": [
+        {"agent_id": "floating_population", "path": "/office_worker_share"},
+        {"agent_id": "floating_population", "path": "/peak_hours"},
+        {"agent_id": "commercial_area", "path": "/industry_counts/중식"}
+      ],
+      "risks": ["점포 수가 적다는 사실만으로 수요가 충분하다고 판단할 수 없습니다."]
+    }
+  ],
+  "not_recommended": [
+    {
+      "category": {"major": "음료점", "middle": "카페"},
+      "score": 28,
+      "reasons": ["같은 기간의 폐업 수와 기존 점포 수를 함께 보면 경쟁 부담을 우선 확인해야 합니다."],
+      "evidence": [
+        {"agent_id": "business_lifecycle", "path": "/industries/1"},
+        {"agent_id": "commercial_area", "path": "/industry_counts/카페"}
+      ],
+      "risks": ["점포별 매출과 폐업 원인은 확인되지 않았습니다."]
+    }
+  ],
+  "limitations": [
+    "샘플 모드의 고정 응답입니다. 실제 분석이나 실제 주소의 추천 결과가 아닙니다.",
+    "점수는 연결 시험용 예시이며 성공 확률이 아닙니다.",
+    "임대료, 점포별 매출, 실제 구매 전환율은 입력에 없습니다."
+  ]
+}
