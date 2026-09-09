@@ -20,4 +20,5 @@ where = ["."]
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.agents.decision" = ["prompt.md"]
 "app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
