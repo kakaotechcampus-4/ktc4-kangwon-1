@@ -1,0 +1,3051 @@
+{
+  "request_id": "46e9997e-ca3e-4f83-8a03-fbc446d6f253",
+  "agent_id": "commercial_area",
+  "status": "ok",
+  "scope": {
+    "area": "서울특별시 송파구 위례광장로 120 155호 반경 500m",
+    "period": "2026-09-09 조회"
+  },
+  "data": {
+    "radius_m": 500,
+    "store_total": 1241,
+    "data_reference_date": "2026-09-09 조회",
+    "by_major": [
+      {
+        "code": "I2",
+        "name": "음식",
+        "count": 358,
+        "share": 0.288477,
+        "density_per_km2": 455.8198
+      },
+      {
+        "code": "P1",
+        "name": "교육",
+        "count": 231,
+        "share": 0.18614,
+        "density_per_km2": 294.1183
+      },
+      {
+        "code": "G2",
+        "name": "소매",
+        "count": 192,
+        "share": 0.154714,
+        "density_per_km2": 244.462
+      },
+      {
+        "code": "S2",
+        "name": "수리·개인",
+        "count": 137,
+        "share": 0.110395,
+        "density_per_km2": 174.4338
+      },
+      {
+        "code": "M1",
+        "name": "과학·기술",
+        "count": 91,
+        "share": 0.073328,
+        "density_per_km2": 115.8648
+      },
+      {
+        "code": "Q1",
+        "name": "보건의료",
+        "count": 86,
+        "share": 0.069299,
+        "density_per_km2": 109.4986
+      },
+      {
+        "code": "L1",
+        "name": "부동산",
+        "count": 71,
+        "share": 0.057212,
+        "density_per_km2": 90.4
+      },
+      {
+        "code": "R1",
+        "name": "예술·스포츠",
+        "count": 55,
+        "share": 0.044319,
+        "density_per_km2": 70.0282
+      },
+      {
+        "code": "N1",
+        "name": "시설관리·임대",
+        "count": 20,
+        "share": 0.016116,
+        "density_per_km2": 25.4648
+      },
+      {
+        "code": "I1",
+        "name": "숙박업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0
+      }
+    ],
+    "by_middle": [
+      {
+        "code": "S207",
+        "name": "이용 및 미용업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 123,
+        "share": 0.099114,
+        "density_per_km2": 156.6085,
+        "density_sq": 24526.211,
+        "lq": 1.4302,
+        "same_type_count": 123,
+        "diff_type_count": 1118,
+        "marshallian": 156.6085,
+        "jacobian": 17.481
+      },
+      {
+        "code": "I210",
+        "name": "기타 간이 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 118,
+        "share": 0.095085,
+        "density_per_km2": 150.2423,
+        "density_sq": 22572.7386,
+        "lq": 1.6977,
+        "same_type_count": 118,
+        "diff_type_count": 1123,
+        "marshallian": 150.2423,
+        "jacobian": 17.3454
+      },
+      {
+        "code": "P105",
+        "name": "일반 교육기관",
+        "major_code": "P1",
+        "major_name": "교육 서비스업",
+        "count": 115,
+        "share": 0.092667,
+        "density_per_km2": 146.4225,
+        "density_sq": 21439.5625,
+        "lq": 1.8555,
+        "same_type_count": 115,
+        "diff_type_count": 1126,
+        "marshallian": 146.4225,
+        "jacobian": 17.2721
+      },
+      {
+        "code": "P106",
+        "name": "기타 교육기관",
+        "major_code": "P1",
+        "major_name": "교육 서비스업",
+        "count": 110,
+        "share": 0.088638,
+        "density_per_km2": 140.0563,
+        "density_sq": 19615.7812,
+        "lq": 1.2178,
+        "same_type_count": 110,
+        "diff_type_count": 1131,
+        "marshallian": 140.0563,
+        "jacobian": 17.1628
+      },
+      {
+        "code": "I201",
+        "name": "한식 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 98,
+        "share": 0.078969,
+        "density_per_km2": 124.7775,
+        "density_sq": 15569.4184,
+        "lq": 1.1438,
+        "same_type_count": 98,
+        "diff_type_count": 1143,
+        "marshallian": 124.7775,
+        "jacobian": 16.9609
+      },
+      {
+        "code": "Q102",
+        "name": "의원",
+        "major_code": "Q1",
+        "major_name": "보건의료업",
+        "count": 79,
+        "share": 0.063658,
+        "density_per_km2": 100.5859,
+        "density_sq": 10117.5281,
+        "lq": 1.9971,
+        "same_type_count": 79,
+        "diff_type_count": 1162,
+        "marshallian": 100.5859,
+        "jacobian": 16.7962
+      },
+      {
+        "code": "L102",
+        "name": "부동산관련 서비스업",
+        "major_code": "L1",
+        "major_name": "부동산업",
+        "count": 71,
+        "share": 0.057212,
+        "density_per_km2": 90.4,
+        "density_sq": 8172.1614,
+        "lq": 1.0008,
+        "same_type_count": 71,
+        "diff_type_count": 1170,
+        "marshallian": 90.4,
+        "jacobian": 16.7778
+      },
+      {
+        "code": "I212",
+        "name": "비알코올 음료점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 49,
+        "share": 0.039484,
+        "density_per_km2": 62.3887,
+        "density_sq": 3892.3546,
+        "lq": 0.9652,
+        "same_type_count": 49,
+        "diff_type_count": 1192,
+        "marshallian": 62.3887,
+        "jacobian": 16.8689
+      },
+      {
+        "code": "G204",
+        "name": "종합 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 36,
+        "share": 0.029009,
+        "density_per_km2": 45.8366,
+        "density_sq": 2100.9961,
+        "lq": 0.8679,
+        "same_type_count": 36,
+        "diff_type_count": 1205,
+        "marshallian": 45.8366,
+        "jacobian": 17.0156
+      },
+      {
+        "code": "G209",
+        "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 35,
+        "share": 0.028203,
+        "density_per_km2": 44.5634,
+        "density_sq": 1985.8952,
+        "lq": 0.4302,
+        "same_type_count": 35,
+        "diff_type_count": 1206,
+        "marshallian": 44.5634,
+        "jacobian": 17.0297
+      },
+      {
+        "code": "I203",
+        "name": "일식 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 29,
+        "share": 0.023368,
+        "density_per_km2": 36.9239,
+        "density_sq": 1363.3778,
+        "lq": 1.8863,
+        "same_type_count": 29,
+        "diff_type_count": 1212,
+        "marshallian": 36.9239,
+        "jacobian": 17.1226
+      },
+      {
+        "code": "G205",
+        "name": "식료품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 28,
+        "share": 0.022562,
+        "density_per_km2": 35.6507,
+        "density_sq": 1270.9729,
+        "lq": 1.1579,
+        "same_type_count": 28,
+        "diff_type_count": 1213,
+        "marshallian": 35.6507,
+        "jacobian": 17.1394
+      },
+      {
+        "code": "I204",
+        "name": "서양식 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 26,
+        "share": 0.020951,
+        "density_per_km2": 33.1042,
+        "density_sq": 1095.8899,
+        "lq": 1.784,
+        "same_type_count": 26,
+        "diff_type_count": 1215,
+        "marshallian": 33.1042,
+        "jacobian": 17.1744
+      },
+      {
+        "code": "R104",
+        "name": "유원지 및 기타 오락관련 서비스업",
+        "major_code": "R1",
+        "major_name": "예술, 스포츠 및 여가관련 서비스업",
+        "count": 23,
+        "share": 0.018533,
+        "density_per_km2": 29.2845,
+        "density_sq": 857.5825,
+        "lq": 1.6699,
+        "same_type_count": 23,
+        "diff_type_count": 1218,
+        "marshallian": 29.2845,
+        "jacobian": 17.2298
+      },
+      {
+        "code": "G215",
+        "name": "의약품, 의료용 기구, 화장품 및 방향제 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 22,
+        "share": 0.017728,
+        "density_per_km2": 28.0113,
+        "density_sq": 784.6312,
+        "lq": 0.785,
+        "same_type_count": 22,
+        "diff_type_count": 1219,
+        "marshallian": 28.0113,
+        "jacobian": 17.2491
+      },
+      {
+        "code": "M109",
+        "name": "건축 기술, 엔지니어링 및 관련 기술 서비스업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 22,
+        "share": 0.017728,
+        "density_per_km2": 28.0113,
+        "density_sq": 784.6312,
+        "lq": 0.5126,
+        "same_type_count": 22,
+        "diff_type_count": 1219,
+        "marshallian": 28.0113,
+        "jacobian": 17.2491
+      },
+      {
+        "code": "R103",
+        "name": "스포츠 서비스업",
+        "major_code": "R1",
+        "major_name": "예술, 스포츠 및 여가관련 서비스업",
+        "count": 21,
+        "share": 0.016922,
+        "density_per_km2": 26.738,
+        "density_sq": 714.9223,
+        "lq": 0.8195,
+        "same_type_count": 21,
+        "diff_type_count": 1220,
+        "marshallian": 26.738,
+        "jacobian": 17.2688
+      },
+      {
+        "code": "I202",
+        "name": "중식 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 17,
+        "share": 0.013699,
+        "density_per_km2": 21.6451,
+        "density_sq": 468.5092,
+        "lq": 1.93,
+        "same_type_count": 17,
+        "diff_type_count": 1224,
+        "marshallian": 21.6451,
+        "jacobian": 17.3516
+      },
+      {
+        "code": "M107",
+        "name": "회사 본부 및 경영 컨설팅 서비스업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 17,
+        "share": 0.013699,
+        "density_per_km2": 21.6451,
+        "density_sq": 468.5092,
+        "lq": 0.3458,
+        "same_type_count": 17,
+        "diff_type_count": 1224,
+        "marshallian": 21.6451,
+        "jacobian": 17.3516
+      },
+      {
+        "code": "G213",
+        "name": "문화, 오락 및 여가 용품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 14,
+        "share": 0.011281,
+        "density_per_km2": 17.8254,
+        "density_sq": 317.7432,
+        "lq": 0.7536,
+        "same_type_count": 14,
+        "diff_type_count": 1227,
+        "marshallian": 17.8254,
+        "jacobian": 17.418
+      },
+      {
+        "code": "I211",
+        "name": "주점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 14,
+        "share": 0.011281,
+        "density_per_km2": 17.8254,
+        "density_sq": 317.7432,
+        "lq": 1.0284,
+        "same_type_count": 14,
+        "diff_type_count": 1227,
+        "marshallian": 17.8254,
+        "jacobian": 17.418
+      },
+      {
+        "code": "G208",
+        "name": "가전제품 및 정보 통신장비 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 11,
+        "share": 0.008864,
+        "density_per_km2": 14.0056,
+        "density_sq": 196.1578,
+        "lq": 0.636,
+        "same_type_count": 11,
+        "diff_type_count": 1230,
+        "marshallian": 14.0056,
+        "jacobian": 17.4882
+      },
+      {
+        "code": "G220",
+        "name": "애완용 동물 및 관련용품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 11,
+        "share": 0.008864,
+        "density_per_km2": 14.0056,
+        "density_sq": 196.1578,
+        "lq": 1.8075,
+        "same_type_count": 11,
+        "diff_type_count": 1230,
+        "marshallian": 14.0056,
+        "jacobian": 17.4882
+      },
+      {
+        "code": "M113",
+        "name": "사진 촬영 및 처리업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 11,
+        "share": 0.008864,
+        "density_per_km2": 14.0056,
+        "density_sq": 196.1578,
+        "lq": 1.0902,
+        "same_type_count": 11,
+        "diff_type_count": 1230,
+        "marshallian": 14.0056,
+        "jacobian": 17.4882
+      },
+      {
+        "code": "R102",
+        "name": "도서관, 사적지 및 유사 여가관련 서비스업",
+        "major_code": "R1",
+        "major_name": "예술, 스포츠 및 여가관련 서비스업",
+        "count": 11,
+        "share": 0.008864,
+        "density_per_km2": 14.0056,
+        "density_sq": 196.1578,
+        "lq": 1.8075,
+        "same_type_count": 11,
+        "diff_type_count": 1230,
+        "marshallian": 14.0056,
+        "jacobian": 17.4882
+      },
+      {
+        "code": "G216",
+        "name": "사무용 기기, 안경, 사진장비 및 정밀기기 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 10,
+        "share": 0.008058,
+        "density_per_km2": 12.7324,
+        "density_sq": 162.1139,
+        "lq": 1.2008,
+        "same_type_count": 10,
+        "diff_type_count": 1231,
+        "marshallian": 12.7324,
+        "jacobian": 17.5123
+      },
+      {
+        "code": "M104",
+        "name": "회계 및 세무관련 서비스업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 10,
+        "share": 0.008058,
+        "density_per_km2": 12.7324,
+        "density_sq": 162.1139,
+        "lq": 0.7346,
+        "same_type_count": 10,
+        "diff_type_count": 1231,
+        "marshallian": 12.7324,
+        "jacobian": 17.5123
+      },
+      {
+        "code": "M112",
+        "name": "전문 디자인업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 10,
+        "share": 0.008058,
+        "density_per_km2": 12.7324,
+        "density_sq": 162.1139,
+        "lq": 0.3431,
+        "same_type_count": 10,
+        "diff_type_count": 1231,
+        "marshallian": 12.7324,
+        "jacobian": 17.5123
+      },
+      {
+        "code": "M105",
+        "name": "광고업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 8,
+        "share": 0.006446,
+        "density_per_km2": 10.1859,
+        "density_sq": 103.7529,
+        "lq": 0.3046,
+        "same_type_count": 8,
+        "diff_type_count": 1233,
+        "marshallian": 10.1859,
+        "jacobian": 17.562
+      },
+      {
+        "code": "G217",
+        "name": "시계 및 귀금속 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 6,
+        "share": 0.004835,
+        "density_per_km2": 7.6394,
+        "density_sq": 58.361,
+        "lq": 1.8732,
+        "same_type_count": 6,
+        "diff_type_count": 1235,
+        "marshallian": 7.6394,
+        "jacobian": 17.6133
+      },
+      {
+        "code": "G219",
+        "name": "화초 및 식물 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 6,
+        "share": 0.004835,
+        "density_per_km2": 7.6394,
+        "density_sq": 58.361,
+        "lq": 0.8145,
+        "same_type_count": 6,
+        "diff_type_count": 1235,
+        "marshallian": 7.6394,
+        "jacobian": 17.6133
+      },
+      {
+        "code": "I205",
+        "name": "동남아시아 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 6,
+        "share": 0.004835,
+        "density_per_km2": 7.6394,
+        "density_sq": 58.361,
+        "lq": 1.703,
+        "same_type_count": 6,
+        "diff_type_count": 1235,
+        "marshallian": 7.6394,
+        "jacobian": 17.6133
+      },
+      {
+        "code": "P107",
+        "name": "교육 지원 서비스업",
+        "major_code": "P1",
+        "major_name": "교육 서비스업",
+        "count": 6,
+        "share": 0.004835,
+        "density_per_km2": 7.6394,
+        "density_sq": 58.361,
+        "lq": 0.6938,
+        "same_type_count": 6,
+        "diff_type_count": 1235,
+        "marshallian": 7.6394,
+        "jacobian": 17.6133
+      },
+      {
+        "code": "S209",
+        "name": "세탁업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 6,
+        "share": 0.004835,
+        "density_per_km2": 7.6394,
+        "density_sq": 58.361,
+        "lq": 0.551,
+        "same_type_count": 6,
+        "diff_type_count": 1235,
+        "marshallian": 7.6394,
+        "jacobian": 17.6133
+      },
+      {
+        "code": "M111",
+        "name": "수의업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 5,
+        "share": 0.004029,
+        "density_per_km2": 6.3662,
+        "density_sq": 40.5285,
+        "lq": 1.3009,
+        "same_type_count": 5,
+        "diff_type_count": 1236,
+        "marshallian": 6.3662,
+        "jacobian": 17.6396
+      },
+      {
+        "code": "Q104",
+        "name": "기타 보건업",
+        "major_code": "Q1",
+        "major_name": "보건의료업",
+        "count": 5,
+        "share": 0.004029,
+        "density_per_km2": 6.3662,
+        "density_sq": 40.5285,
+        "lq": 3.469,
+        "same_type_count": 5,
+        "diff_type_count": 1236,
+        "marshallian": 6.3662,
+        "jacobian": 17.6396
+      },
+      {
+        "code": "G207",
+        "name": "담배 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 3.5681,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "M103",
+        "name": "법무관련 서비스업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 0.4541,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "M115",
+        "name": "그 외 기타 전문, 과학 및 기술 서비스업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 0.9251,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "N102",
+        "name": "건물ㆍ산업설비 청소 및 방제 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 0.2425,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "N105",
+        "name": "여행사 및 기타 여행 보조 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 0.555,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "S208",
+        "name": "욕탕, 마사지 및 기타 신체 관리 서비스업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 4,
+        "share": 0.003223,
+        "density_per_km2": 5.093,
+        "density_sq": 25.9382,
+        "lq": 0.8057,
+        "same_type_count": 4,
+        "diff_type_count": 1237,
+        "marshallian": 5.093,
+        "jacobian": 17.6663
+      },
+      {
+        "code": "G218",
+        "name": "예술품, 기념품 및 장식용품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 3,
+        "share": 0.002417,
+        "density_per_km2": 3.8197,
+        "density_sq": 14.5903,
+        "lq": 0.7493,
+        "same_type_count": 3,
+        "diff_type_count": 1238,
+        "marshallian": 3.8197,
+        "jacobian": 17.6935
+      },
+      {
+        "code": "G221",
+        "name": "기타 상품 전문 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 3,
+        "share": 0.002417,
+        "density_per_km2": 3.8197,
+        "density_sq": 14.5903,
+        "lq": 0.7493,
+        "same_type_count": 3,
+        "diff_type_count": 1238,
+        "marshallian": 3.8197,
+        "jacobian": 17.6935
+      },
+      {
+        "code": "N101",
+        "name": "사업시설 유지ㆍ관리 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 3,
+        "share": 0.002417,
+        "density_per_km2": 3.8197,
+        "density_sq": 14.5903,
+        "lq": 0.4803,
+        "same_type_count": 3,
+        "diff_type_count": 1238,
+        "marshallian": 3.8197,
+        "jacobian": 17.6935
+      },
+      {
+        "code": "N107",
+        "name": "사무 지원 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 3,
+        "share": 0.002417,
+        "density_per_km2": 3.8197,
+        "density_sq": 14.5903,
+        "lq": 1.2488,
+        "same_type_count": 3,
+        "diff_type_count": 1238,
+        "marshallian": 3.8197,
+        "jacobian": 17.6935
+      },
+      {
+        "code": "G222",
+        "name": "중고 상품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 2,
+        "share": 0.001612,
+        "density_per_km2": 2.5465,
+        "density_sq": 6.4846,
+        "lq": 1.1353,
+        "same_type_count": 2,
+        "diff_type_count": 1239,
+        "marshallian": 2.5465,
+        "jacobian": 17.721
+      },
+      {
+        "code": "N104",
+        "name": "고용 알선 및 인력 공급업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 2,
+        "share": 0.001612,
+        "density_per_km2": 2.5465,
+        "density_sq": 6.4846,
+        "lq": 0.2904,
+        "same_type_count": 2,
+        "diff_type_count": 1239,
+        "marshallian": 2.5465,
+        "jacobian": 17.721
+      },
+      {
+        "code": "N110",
+        "name": "개인 및 가정용품 대여업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 2,
+        "share": 0.001612,
+        "density_per_km2": 2.5465,
+        "density_sq": 6.4846,
+        "lq": 0.5947,
+        "same_type_count": 2,
+        "diff_type_count": 1239,
+        "marshallian": 2.5465,
+        "jacobian": 17.721
+      },
+      {
+        "code": "Q101",
+        "name": "병원",
+        "major_code": "Q1",
+        "major_name": "보건의료업",
+        "count": 2,
+        "share": 0.001612,
+        "density_per_km2": 2.5465,
+        "density_sq": 6.4846,
+        "lq": 1.0407,
+        "same_type_count": 2,
+        "diff_type_count": 1239,
+        "marshallian": 2.5465,
+        "jacobian": 17.721
+      },
+      {
+        "code": "S206",
+        "name": "기타 개인 및 가정용품 수리업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 2,
+        "share": 0.001612,
+        "density_per_km2": 2.5465,
+        "density_sq": 6.4846,
+        "lq": 0.2549,
+        "same_type_count": 2,
+        "diff_type_count": 1239,
+        "marshallian": 2.5465,
+        "jacobian": 17.721
+      },
+      {
+        "code": "G211",
+        "name": "가구 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 0.3673,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "I207",
+        "name": "구내식당 및 뷔페",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 0.3903,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "N108",
+        "name": "기타 사업 지원 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 0.1201,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "N111",
+        "name": "산업용 기계 및 장비 대여업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 0.2313,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "S202",
+        "name": "통신장비 수리업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 1.561,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "S203",
+        "name": "자동차 수리 및 세차업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 1,
+        "share": 0.000806,
+        "density_per_km2": 1.2732,
+        "density_sq": 1.6211,
+        "lq": 0.0644,
+        "same_type_count": 1,
+        "diff_type_count": 1240,
+        "marshallian": 1.2732,
+        "jacobian": 17.749
+      },
+      {
+        "code": "G202",
+        "name": "자동차 부품 및 내장품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "G203",
+        "name": "모터사이클 및 부품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "G206",
+        "name": "음료 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "G210",
+        "name": "철물, 공구, 창호 및 건설자재 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "G212",
+        "name": "기타 생활용품 소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "G214",
+        "name": "연료소매업",
+        "major_code": "G2",
+        "major_name": "소매업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "I101",
+        "name": "일반 및 생활 숙박시설 운영업",
+        "major_code": "I1",
+        "major_name": "숙박업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "I102",
+        "name": "기타 숙박업",
+        "major_code": "I1",
+        "major_name": "숙박업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "I206",
+        "name": "기타 외국식 음식점업",
+        "major_code": "I2",
+        "major_name": "음식점업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "M106",
+        "name": "시장 조사 및 여론 조사업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "M114",
+        "name": "인쇄 및 제품 제작업",
+        "major_code": "M1",
+        "major_name": "전문, 과학 및 기술 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "N103",
+        "name": "조경관리 및 유지 서비스업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "N109",
+        "name": "운송장비 대여업",
+        "major_code": "N1",
+        "major_name": "사업시설 관리, 사업 지원 및 임대 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "S201",
+        "name": "컴퓨터 및 주변 기기 수리업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "S204",
+        "name": "모터사이클 수리업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "S205",
+        "name": "가전제품 수리업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "S210",
+        "name": "장례식장 및 관련 서비스업",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      },
+      {
+        "code": "S211",
+        "name": "기타 개인서비스",
+        "major_code": "S2",
+        "major_name": "수리 및 개인 서비스업",
+        "count": 0,
+        "share": 0.0,
+        "density_per_km2": 0.0,
+        "density_sq": 0.0,
+        "lq": 0.0,
+        "same_type_count": 0,
+        "diff_type_count": 1241,
+        "marshallian": 0.0,
+        "jacobian": 17.7775
+      }
+    ],
+    "by_radius": [
+      {
+        "radius_m": 50,
+        "store_total": 59,
+        "category_count": 22,
+        "absent_category_count": 53,
+        "top_by_count": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 9,
+            "density_per_km2": 1145.9156,
+            "note": "9개 · 이 반경 점포의 15.3%"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "density_per_km2": 1018.5916,
+            "note": "8개 · 이 반경 점포의 13.6%"
+          },
+          {
+            "rank": 3,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "density_per_km2": 891.2677,
+            "note": "7개 · 이 반경 점포의 11.9%"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 5,
+            "density_per_km2": 636.6198,
+            "note": "5개 · 이 반경 점포의 8.5%"
+          },
+          {
+            "rank": 5,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 4,
+            "density_per_km2": 509.2958,
+            "note": "4개 · 이 반경 점포의 6.8%"
+          },
+          {
+            "rank": 6,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "3개 · 이 반경 점포의 5.1%"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "3개 · 이 반경 점포의 5.1%"
+          },
+          {
+            "rank": 8,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "3개 · 이 반경 점포의 5.1%"
+          },
+          {
+            "rank": 9,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 2,
+            "density_per_km2": 254.6479,
+            "note": "2개 · 이 반경 점포의 3.4%"
+          },
+          {
+            "rank": 10,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 2,
+            "density_per_km2": 254.6479,
+            "note": "2개 · 이 반경 점포의 3.4%"
+          }
+        ],
+        "bottom_by_count": [
+          {
+            "rank": 1,
+            "code": "G211",
+            "name": "가구 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 2,
+            "code": "S205",
+            "name": "가전제품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 3,
+            "code": "N110",
+            "name": "개인 및 가정용품 대여업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 4,
+            "code": "N102",
+            "name": "건물ㆍ산업설비 청소 및 방제 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 5,
+            "code": "M109",
+            "name": "건축 기술, 엔지니어링 및 관련 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 6,
+            "code": "N104",
+            "name": "고용 알선 및 인력 공급업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 7,
+            "code": "M105",
+            "name": "광고업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 8,
+            "code": "P107",
+            "name": "교육 지원 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I207",
+            "name": "구내식당 및 뷔페",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 10,
+            "code": "M115",
+            "name": "그 외 기타 전문, 과학 및 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          }
+        ],
+        "top_by_concentration": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 9,
+            "density_per_km2": 1145.9156,
+            "note": "1km²당 1,146개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "density_per_km2": 1018.5916,
+            "note": "1km²당 1,019개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 3,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "density_per_km2": 891.2677,
+            "note": "1km²당 891개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 5,
+            "density_per_km2": 636.6198,
+            "note": "1km²당 637개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 4,
+            "density_per_km2": 509.2958,
+            "note": "1km²당 509개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 6,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "1km²당 382개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "1km²당 382개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 3,
+            "density_per_km2": 381.9719,
+            "note": "1km²당 382개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 9,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 2,
+            "density_per_km2": 254.6479,
+            "note": "1km²당 255개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 10,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 2,
+            "density_per_km2": 254.6479,
+            "note": "1km²당 255개꼴로 모여 있습니다"
+          }
+        ],
+        "top_by_specialization": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 9,
+            "times_vs_surroundings": 2.7236,
+            "note": "주변 2,000m 평균보다 2.7배 많습니다"
+          },
+          {
+            "rank": 2,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "times_vs_surroundings": 2.0753,
+            "note": "주변 2,000m 평균보다 2.1배 많습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "times_vs_surroundings": 1.9639,
+            "note": "주변 2,000m 평균보다 2.0배 많습니다"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 5,
+            "times_vs_surroundings": 1.2229,
+            "note": "주변 2,000m 평균보다 1.2배 많습니다"
+          }
+        ],
+        "explanations": {
+          "store_total": "반경 50m 안에 점포가 59개 있습니다.",
+          "top": "가장 많은 업종은 기타 간이 음식점업(9개), 한식 음식점업(8개), 부동산관련 서비스업(7개) 순입니다.",
+          "bottom": "이 반경에 아예 없는 업종이 53개입니다.",
+          "concentration": "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. 여기서는 기타 간이 음식점업이 1km²당 1,146개로 가장 빽빽합니다. 같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다.",
+          "specialization": "특화도는 주변 2,000m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. 기타 간이 음식점업이 주변보다 2.7배 많아 가장 두드러집니다. 점포가 5개 미만인 업종은 숫자가 튀어 제외했습니다."
+        }
+      },
+      {
+        "radius_m": 100,
+        "store_total": 67,
+        "category_count": 25,
+        "absent_category_count": 50,
+        "top_by_count": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 11,
+            "density_per_km2": 350.1409,
+            "note": "11개 · 이 반경 점포의 16.4%"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "density_per_km2": 254.6479,
+            "note": "8개 · 이 반경 점포의 11.9%"
+          },
+          {
+            "rank": 3,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "density_per_km2": 222.8169,
+            "note": "7개 · 이 반경 점포의 10.4%"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 6,
+            "density_per_km2": 190.9859,
+            "note": "6개 · 이 반경 점포의 9.0%"
+          },
+          {
+            "rank": 5,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 4,
+            "density_per_km2": 127.324,
+            "note": "4개 · 이 반경 점포의 6.0%"
+          },
+          {
+            "rank": 6,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 4,
+            "density_per_km2": 127.324,
+            "note": "4개 · 이 반경 점포의 6.0%"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "3개 · 이 반경 점포의 4.5%"
+          },
+          {
+            "rank": 8,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "3개 · 이 반경 점포의 4.5%"
+          },
+          {
+            "rank": 9,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "3개 · 이 반경 점포의 4.5%"
+          },
+          {
+            "rank": 10,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 2,
+            "density_per_km2": 63.662,
+            "note": "2개 · 이 반경 점포의 3.0%"
+          }
+        ],
+        "bottom_by_count": [
+          {
+            "rank": 1,
+            "code": "G211",
+            "name": "가구 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 2,
+            "code": "S205",
+            "name": "가전제품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 3,
+            "code": "N110",
+            "name": "개인 및 가정용품 대여업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 4,
+            "code": "N102",
+            "name": "건물ㆍ산업설비 청소 및 방제 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 5,
+            "code": "M109",
+            "name": "건축 기술, 엔지니어링 및 관련 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 6,
+            "code": "M105",
+            "name": "광고업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 7,
+            "code": "P107",
+            "name": "교육 지원 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I207",
+            "name": "구내식당 및 뷔페",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 9,
+            "code": "M115",
+            "name": "그 외 기타 전문, 과학 및 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 10,
+            "code": "S206",
+            "name": "기타 개인 및 가정용품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          }
+        ],
+        "top_by_concentration": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 11,
+            "density_per_km2": 350.1409,
+            "note": "1km²당 350개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "density_per_km2": 254.6479,
+            "note": "1km²당 255개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 3,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "density_per_km2": 222.8169,
+            "note": "1km²당 223개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 6,
+            "density_per_km2": 190.9859,
+            "note": "1km²당 191개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 4,
+            "density_per_km2": 127.324,
+            "note": "1km²당 127개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 6,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 4,
+            "density_per_km2": 127.324,
+            "note": "1km²당 127개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "1km²당 95개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "1km²당 95개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 3,
+            "density_per_km2": 95.493,
+            "note": "1km²당 95개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 10,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 2,
+            "density_per_km2": 63.662,
+            "note": "1km²당 64개꼴로 모여 있습니다"
+          }
+        ],
+        "top_by_specialization": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 11,
+            "times_vs_surroundings": 2.9314,
+            "note": "주변 2,000m 평균보다 2.9배 많습니다"
+          },
+          {
+            "rank": 2,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 7,
+            "times_vs_surroundings": 1.8275,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 8,
+            "times_vs_surroundings": 1.7294,
+            "note": "주변 2,000m 평균보다 1.7배 많습니다"
+          },
+          {
+            "rank": 4,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 6,
+            "times_vs_surroundings": 1.2923,
+            "note": "주변 2,000m 평균보다 1.3배 많습니다"
+          }
+        ],
+        "explanations": {
+          "store_total": "반경 100m 안에 점포가 67개 있습니다.",
+          "top": "가장 많은 업종은 기타 간이 음식점업(11개), 한식 음식점업(8개), 부동산관련 서비스업(7개) 순입니다.",
+          "bottom": "이 반경에 아예 없는 업종이 50개입니다.",
+          "concentration": "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. 여기서는 기타 간이 음식점업이 1km²당 350개로 가장 빽빽합니다. 같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다.",
+          "specialization": "특화도는 주변 2,000m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. 기타 간이 음식점업이 주변보다 2.9배 많아 가장 두드러집니다. 점포가 5개 미만인 업종은 숫자가 튀어 제외했습니다."
+        }
+      },
+      {
+        "radius_m": 200,
+        "store_total": 119,
+        "category_count": 31,
+        "absent_category_count": 44,
+        "top_by_count": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 22,
+            "density_per_km2": 175.0704,
+            "note": "22개 · 이 반경 점포의 18.5%"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 17,
+            "density_per_km2": 135.2817,
+            "note": "17개 · 이 반경 점포의 14.3%"
+          },
+          {
+            "rank": 3,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 9,
+            "density_per_km2": 71.6197,
+            "note": "9개 · 이 반경 점포의 7.6%"
+          },
+          {
+            "rank": 4,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 8,
+            "density_per_km2": 63.662,
+            "note": "8개 · 이 반경 점포의 6.7%"
+          },
+          {
+            "rank": 5,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 6,
+            "density_per_km2": 47.7465,
+            "note": "6개 · 이 반경 점포의 5.0%"
+          },
+          {
+            "rank": 6,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "5개 · 이 반경 점포의 4.2%"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "5개 · 이 반경 점포의 4.2%"
+          },
+          {
+            "rank": 8,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "5개 · 이 반경 점포의 4.2%"
+          },
+          {
+            "rank": 9,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "5개 · 이 반경 점포의 4.2%"
+          },
+          {
+            "rank": 10,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 4,
+            "density_per_km2": 31.831,
+            "note": "4개 · 이 반경 점포의 3.4%"
+          }
+        ],
+        "bottom_by_count": [
+          {
+            "rank": 1,
+            "code": "G211",
+            "name": "가구 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 2,
+            "code": "S205",
+            "name": "가전제품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 3,
+            "code": "N110",
+            "name": "개인 및 가정용품 대여업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 4,
+            "code": "N102",
+            "name": "건물ㆍ산업설비 청소 및 방제 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 5,
+            "code": "M109",
+            "name": "건축 기술, 엔지니어링 및 관련 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 6,
+            "code": "M105",
+            "name": "광고업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 7,
+            "code": "P107",
+            "name": "교육 지원 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I207",
+            "name": "구내식당 및 뷔페",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 9,
+            "code": "M115",
+            "name": "그 외 기타 전문, 과학 및 기술 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 10,
+            "code": "S206",
+            "name": "기타 개인 및 가정용품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          }
+        ],
+        "top_by_concentration": [
+          {
+            "rank": 1,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 22,
+            "density_per_km2": 175.0704,
+            "note": "1km²당 175개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 17,
+            "density_per_km2": 135.2817,
+            "note": "1km²당 135개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 3,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 9,
+            "density_per_km2": 71.6197,
+            "note": "1km²당 72개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 4,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 8,
+            "density_per_km2": 63.662,
+            "note": "1km²당 64개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 6,
+            "density_per_km2": 47.7465,
+            "note": "1km²당 48개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 6,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "1km²당 40개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 7,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "1km²당 40개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "1km²당 40개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 5,
+            "density_per_km2": 39.7887,
+            "note": "1km²당 40개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 10,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 4,
+            "density_per_km2": 31.831,
+            "note": "1km²당 32개꼴로 모여 있습니다"
+          }
+        ],
+        "top_by_specialization": [
+          {
+            "rank": 1,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 5,
+            "times_vs_surroundings": 5.9198,
+            "note": "주변 2,000m 평균보다 5.9배 많습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 6,
+            "times_vs_surroundings": 4.2935,
+            "note": "주변 2,000m 평균보다 4.3배 많습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 5,
+            "times_vs_surroundings": 3.3915,
+            "note": "주변 2,000m 평균보다 3.4배 많습니다"
+          },
+          {
+            "rank": 4,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 22,
+            "times_vs_surroundings": 3.3009,
+            "note": "주변 2,000m 평균보다 3.3배 많습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 17,
+            "times_vs_surroundings": 2.0692,
+            "note": "주변 2,000m 평균보다 2.1배 많습니다"
+          },
+          {
+            "rank": 6,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 8,
+            "times_vs_surroundings": 1.1759,
+            "note": "주변 2,000m 평균보다 1.2배 많습니다"
+          },
+          {
+            "rank": 7,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 9,
+            "times_vs_surroundings": 1.0914,
+            "note": "주변 2,000m 평균보다 1.1배 많습니다"
+          },
+          {
+            "rank": 8,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 5,
+            "times_vs_surroundings": 0.6409,
+            "note": "주변 2,000m 평균의 0.6배에 그칩니다"
+          },
+          {
+            "rank": 9,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 5,
+            "times_vs_surroundings": 0.5773,
+            "note": "주변 2,000m 평균의 0.6배에 그칩니다"
+          }
+        ],
+        "explanations": {
+          "store_total": "반경 200m 안에 점포가 119개 있습니다.",
+          "top": "가장 많은 업종은 기타 간이 음식점업(22개), 한식 음식점업(17개), 이용 및 미용업(9개) 순입니다.",
+          "bottom": "이 반경에 아예 없는 업종이 44개입니다.",
+          "concentration": "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. 여기서는 기타 간이 음식점업이 1km²당 175개로 가장 빽빽합니다. 같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다.",
+          "specialization": "특화도는 주변 2,000m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. 중식 음식점업이 주변보다 5.9배 많아 가장 두드러집니다. 점포가 5개 미만인 업종은 숫자가 튀어 제외했습니다."
+        }
+      },
+      {
+        "radius_m": 300,
+        "store_total": 580,
+        "category_count": 48,
+        "absent_category_count": 27,
+        "top_by_count": [
+          {
+            "rank": 1,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 72,
+            "density_per_km2": 254.6479,
+            "note": "72개 · 이 반경 점포의 12.4%"
+          },
+          {
+            "rank": 2,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 64,
+            "density_per_km2": 226.3537,
+            "note": "64개 · 이 반경 점포의 11.0%"
+          },
+          {
+            "rank": 3,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 52,
+            "density_per_km2": 183.9124,
+            "note": "52개 · 이 반경 점포의 9.0%"
+          },
+          {
+            "rank": 4,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 38,
+            "density_per_km2": 134.3975,
+            "note": "38개 · 이 반경 점포의 6.6%"
+          },
+          {
+            "rank": 5,
+            "code": "P105",
+            "name": "일반 교육기관",
+            "count": 36,
+            "density_per_km2": 127.324,
+            "note": "36개 · 이 반경 점포의 6.2%"
+          },
+          {
+            "rank": 6,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 35,
+            "density_per_km2": 123.7872,
+            "note": "35개 · 이 반경 점포의 6.0%"
+          },
+          {
+            "rank": 7,
+            "code": "Q102",
+            "name": "의원",
+            "count": 30,
+            "density_per_km2": 106.1033,
+            "note": "30개 · 이 반경 점포의 5.2%"
+          },
+          {
+            "rank": 8,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 23,
+            "density_per_km2": 81.3459,
+            "note": "23개 · 이 반경 점포의 4.0%"
+          },
+          {
+            "rank": 9,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 21,
+            "density_per_km2": 74.2723,
+            "note": "21개 · 이 반경 점포의 3.6%"
+          },
+          {
+            "rank": 10,
+            "code": "G205",
+            "name": "식료품 소매업",
+            "count": 15,
+            "density_per_km2": 53.0516,
+            "note": "15개 · 이 반경 점포의 2.6%"
+          }
+        ],
+        "bottom_by_count": [
+          {
+            "rank": 1,
+            "code": "G211",
+            "name": "가구 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 2,
+            "code": "S205",
+            "name": "가전제품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 3,
+            "code": "N110",
+            "name": "개인 및 가정용품 대여업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 4,
+            "code": "I207",
+            "name": "구내식당 및 뷔페",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 5,
+            "code": "S206",
+            "name": "기타 개인 및 가정용품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 6,
+            "code": "S211",
+            "name": "기타 개인서비스",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 7,
+            "code": "N108",
+            "name": "기타 사업 지원 서비스업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 8,
+            "code": "G212",
+            "name": "기타 생활용품 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I102",
+            "name": "기타 숙박업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 10,
+            "code": "I206",
+            "name": "기타 외국식 음식점업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          }
+        ],
+        "top_by_concentration": [
+          {
+            "rank": 1,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 72,
+            "density_per_km2": 254.6479,
+            "note": "1km²당 255개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 64,
+            "density_per_km2": 226.3537,
+            "note": "1km²당 226개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 52,
+            "density_per_km2": 183.9124,
+            "note": "1km²당 184개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 4,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 38,
+            "density_per_km2": 134.3975,
+            "note": "1km²당 134개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 5,
+            "code": "P105",
+            "name": "일반 교육기관",
+            "count": 36,
+            "density_per_km2": 127.324,
+            "note": "1km²당 127개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 6,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 35,
+            "density_per_km2": 123.7872,
+            "note": "1km²당 124개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 7,
+            "code": "Q102",
+            "name": "의원",
+            "count": 30,
+            "density_per_km2": 106.1033,
+            "note": "1km²당 106개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 8,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 23,
+            "density_per_km2": 81.3459,
+            "note": "1km²당 81개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 21,
+            "density_per_km2": 74.2723,
+            "note": "1km²당 74개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 10,
+            "code": "G205",
+            "name": "식료품 소매업",
+            "count": 15,
+            "density_per_km2": 53.0516,
+            "note": "1km²당 53개꼴로 모여 있습니다"
+          }
+        ],
+        "top_by_specialization": [
+          {
+            "rank": 1,
+            "code": "R102",
+            "name": "도서관, 사적지 및 유사 여가관련 서비스업",
+            "count": 8,
+            "times_vs_surroundings": 2.8127,
+            "note": "주변 2,000m 평균보다 2.8배 많습니다"
+          },
+          {
+            "rank": 2,
+            "code": "G220",
+            "name": "애완용 동물 및 관련용품 소매업",
+            "count": 6,
+            "times_vs_surroundings": 2.1095,
+            "note": "주변 2,000m 평균보다 2.1배 많습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 64,
+            "times_vs_surroundings": 1.9702,
+            "note": "주변 2,000m 평균보다 2.0배 많습니다"
+          },
+          {
+            "rank": 4,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 13,
+            "times_vs_surroundings": 1.8092,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 5,
+            "code": "G216",
+            "name": "사무용 기기, 안경, 사진장비 및 정밀기기 소매업",
+            "count": 7,
+            "times_vs_surroundings": 1.7985,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 6,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 72,
+            "times_vs_surroundings": 1.7913,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 7,
+            "code": "R104",
+            "name": "유원지 및 기타 오락관련 서비스업",
+            "count": 11,
+            "times_vs_surroundings": 1.7089,
+            "note": "주변 2,000m 평균보다 1.7배 많습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 7,
+            "times_vs_surroundings": 1.7004,
+            "note": "주변 2,000m 평균보다 1.7배 많습니다"
+          },
+          {
+            "rank": 9,
+            "code": "Q102",
+            "name": "의원",
+            "count": 30,
+            "times_vs_surroundings": 1.6227,
+            "note": "주변 2,000m 평균보다 1.6배 많습니다"
+          },
+          {
+            "rank": 10,
+            "code": "M113",
+            "name": "사진 촬영 및 처리업",
+            "count": 7,
+            "times_vs_surroundings": 1.4845,
+            "note": "주변 2,000m 평균보다 1.5배 많습니다"
+          }
+        ],
+        "explanations": {
+          "store_total": "반경 300m 안에 점포가 580개 있습니다.",
+          "top": "가장 많은 업종은 이용 및 미용업(72개), 기타 간이 음식점업(64개), 한식 음식점업(52개) 순입니다.",
+          "bottom": "이 반경에 아예 없는 업종이 27개입니다.",
+          "concentration": "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. 여기서는 이용 및 미용업이 1km²당 255개로 가장 빽빽합니다. 같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다.",
+          "specialization": "특화도는 주변 2,000m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. 도서관, 사적지 및 유사 여가관련 서비스업이 주변보다 2.8배 많아 가장 두드러집니다. 점포가 5개 미만인 업종은 숫자가 튀어 제외했습니다."
+        }
+      },
+      {
+        "radius_m": 500,
+        "store_total": 1241,
+        "category_count": 57,
+        "absent_category_count": 18,
+        "top_by_count": [
+          {
+            "rank": 1,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 123,
+            "density_per_km2": 156.6085,
+            "note": "123개 · 이 반경 점포의 9.9%"
+          },
+          {
+            "rank": 2,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 118,
+            "density_per_km2": 150.2423,
+            "note": "118개 · 이 반경 점포의 9.5%"
+          },
+          {
+            "rank": 3,
+            "code": "P105",
+            "name": "일반 교육기관",
+            "count": 115,
+            "density_per_km2": 146.4225,
+            "note": "115개 · 이 반경 점포의 9.3%"
+          },
+          {
+            "rank": 4,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 110,
+            "density_per_km2": 140.0563,
+            "note": "110개 · 이 반경 점포의 8.9%"
+          },
+          {
+            "rank": 5,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 98,
+            "density_per_km2": 124.7775,
+            "note": "98개 · 이 반경 점포의 7.9%"
+          },
+          {
+            "rank": 6,
+            "code": "Q102",
+            "name": "의원",
+            "count": 79,
+            "density_per_km2": 100.5859,
+            "note": "79개 · 이 반경 점포의 6.4%"
+          },
+          {
+            "rank": 7,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 71,
+            "density_per_km2": 90.4,
+            "note": "71개 · 이 반경 점포의 5.7%"
+          },
+          {
+            "rank": 8,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 49,
+            "density_per_km2": 62.3887,
+            "note": "49개 · 이 반경 점포의 3.9%"
+          },
+          {
+            "rank": 9,
+            "code": "G204",
+            "name": "종합 소매업",
+            "count": 36,
+            "density_per_km2": 45.8366,
+            "note": "36개 · 이 반경 점포의 2.9%"
+          },
+          {
+            "rank": 10,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 35,
+            "density_per_km2": 44.5634,
+            "note": "35개 · 이 반경 점포의 2.8%"
+          }
+        ],
+        "bottom_by_count": [
+          {
+            "rank": 1,
+            "code": "S205",
+            "name": "가전제품 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 2,
+            "code": "S211",
+            "name": "기타 개인서비스",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 3,
+            "code": "G212",
+            "name": "기타 생활용품 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 4,
+            "code": "I102",
+            "name": "기타 숙박업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I206",
+            "name": "기타 외국식 음식점업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 6,
+            "code": "G203",
+            "name": "모터사이클 및 부품 소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 7,
+            "code": "S204",
+            "name": "모터사이클 수리업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 8,
+            "code": "M106",
+            "name": "시장 조사 및 여론 조사업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 9,
+            "code": "G214",
+            "name": "연료소매업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          },
+          {
+            "rank": 10,
+            "code": "N109",
+            "name": "운송장비 대여업",
+            "count": 0,
+            "density_per_km2": 0.0,
+            "note": "이 반경 안에는 없습니다"
+          }
+        ],
+        "top_by_concentration": [
+          {
+            "rank": 1,
+            "code": "S207",
+            "name": "이용 및 미용업",
+            "count": 123,
+            "density_per_km2": 156.6085,
+            "note": "1km²당 157개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 2,
+            "code": "I210",
+            "name": "기타 간이 음식점업",
+            "count": 118,
+            "density_per_km2": 150.2423,
+            "note": "1km²당 150개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 3,
+            "code": "P105",
+            "name": "일반 교육기관",
+            "count": 115,
+            "density_per_km2": 146.4225,
+            "note": "1km²당 146개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 4,
+            "code": "P106",
+            "name": "기타 교육기관",
+            "count": 110,
+            "density_per_km2": 140.0563,
+            "note": "1km²당 140개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 5,
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 98,
+            "density_per_km2": 124.7775,
+            "note": "1km²당 125개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 6,
+            "code": "Q102",
+            "name": "의원",
+            "count": 79,
+            "density_per_km2": 100.5859,
+            "note": "1km²당 101개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 7,
+            "code": "L102",
+            "name": "부동산관련 서비스업",
+            "count": 71,
+            "density_per_km2": 90.4,
+            "note": "1km²당 90개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 8,
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 49,
+            "density_per_km2": 62.3887,
+            "note": "1km²당 62개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 9,
+            "code": "G204",
+            "name": "종합 소매업",
+            "count": 36,
+            "density_per_km2": 45.8366,
+            "note": "1km²당 46개꼴로 모여 있습니다"
+          },
+          {
+            "rank": 10,
+            "code": "G209",
+            "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+            "count": 35,
+            "density_per_km2": 44.5634,
+            "note": "1km²당 45개꼴로 모여 있습니다"
+          }
+        ],
+        "top_by_specialization": [
+          {
+            "rank": 1,
+            "code": "Q104",
+            "name": "기타 보건업",
+            "count": 5,
+            "times_vs_surroundings": 3.469,
+            "note": "주변 2,000m 평균보다 3.5배 많습니다"
+          },
+          {
+            "rank": 2,
+            "code": "Q102",
+            "name": "의원",
+            "count": 79,
+            "times_vs_surroundings": 1.9971,
+            "note": "주변 2,000m 평균보다 2.0배 많습니다"
+          },
+          {
+            "rank": 3,
+            "code": "I202",
+            "name": "중식 음식점업",
+            "count": 17,
+            "times_vs_surroundings": 1.93,
+            "note": "주변 2,000m 평균보다 1.9배 많습니다"
+          },
+          {
+            "rank": 4,
+            "code": "I203",
+            "name": "일식 음식점업",
+            "count": 29,
+            "times_vs_surroundings": 1.8863,
+            "note": "주변 2,000m 평균보다 1.9배 많습니다"
+          },
+          {
+            "rank": 5,
+            "code": "G217",
+            "name": "시계 및 귀금속 소매업",
+            "count": 6,
+            "times_vs_surroundings": 1.8732,
+            "note": "주변 2,000m 평균보다 1.9배 많습니다"
+          },
+          {
+            "rank": 6,
+            "code": "P105",
+            "name": "일반 교육기관",
+            "count": 115,
+            "times_vs_surroundings": 1.8555,
+            "note": "주변 2,000m 평균보다 1.9배 많습니다"
+          },
+          {
+            "rank": 7,
+            "code": "R102",
+            "name": "도서관, 사적지 및 유사 여가관련 서비스업",
+            "count": 11,
+            "times_vs_surroundings": 1.8075,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 8,
+            "code": "G220",
+            "name": "애완용 동물 및 관련용품 소매업",
+            "count": 11,
+            "times_vs_surroundings": 1.8075,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 9,
+            "code": "I204",
+            "name": "서양식 음식점업",
+            "count": 26,
+            "times_vs_surroundings": 1.784,
+            "note": "주변 2,000m 평균보다 1.8배 많습니다"
+          },
+          {
+            "rank": 10,
+            "code": "I205",
+            "name": "동남아시아 음식점업",
+            "count": 6,
+            "times_vs_surroundings": 1.703,
+            "note": "주변 2,000m 평균보다 1.7배 많습니다"
+          }
+        ],
+        "explanations": {
+          "store_total": "반경 500m 안에 점포가 1,241개 있습니다.",
+          "top": "가장 많은 업종은 이용 및 미용업(123개), 기타 간이 음식점업(118개), 일반 교육기관(115개) 순입니다.",
+          "bottom": "이 반경에 아예 없는 업종이 18개입니다.",
+          "concentration": "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. 여기서는 이용 및 미용업이 1km²당 157개로 가장 빽빽합니다. 같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다.",
+          "specialization": "특화도는 주변 2,000m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. 기타 보건업이 주변보다 3.5배 많아 가장 두드러집니다. 점포가 5개 미만인 업종은 숫자가 튀어 제외했습니다."
+        }
+      }
+    ],
+    "diversity": {
+      "hhi_major": 0.169667,
+      "hhi_middle": 0.056251,
+      "effective_categories": 17.7775
+    },
+    "restaurant_density": {
+      "value": 455.8198,
+      "squared": 207771.6509,
+      "unit": "stores_per_km2",
+      "store_count": 358
+    },
+    "franchise": {
+      "count": 202,
+      "ratio": 0.1628,
+      "by_middle": [
+        {
+          "code": "I210",
+          "name": "기타 간이 음식점업",
+          "count": 51,
+          "ratio": 0.4322
+        },
+        {
+          "code": "I201",
+          "name": "한식 음식점업",
+          "count": 32,
+          "ratio": 0.3265
+        },
+        {
+          "code": "S207",
+          "name": "이용 및 미용업",
+          "count": 24,
+          "ratio": 0.1951
+        },
+        {
+          "code": "I212",
+          "name": "비알코올 음료점업",
+          "count": 16,
+          "ratio": 0.3265
+        },
+        {
+          "code": "P106",
+          "name": "기타 교육기관",
+          "count": 10,
+          "ratio": 0.0909
+        },
+        {
+          "code": "P105",
+          "name": "일반 교육기관",
+          "count": 9,
+          "ratio": 0.0783
+        },
+        {
+          "code": "I203",
+          "name": "일식 음식점업",
+          "count": 8,
+          "ratio": 0.2759
+        },
+        {
+          "code": "G204",
+          "name": "종합 소매업",
+          "count": 5,
+          "ratio": 0.1389
+        },
+        {
+          "code": "G216",
+          "name": "사무용 기기, 안경, 사진장비 및 정밀기기 소매업",
+          "count": 5,
+          "ratio": 0.5
+        },
+        {
+          "code": "I204",
+          "name": "서양식 음식점업",
+          "count": 5,
+          "ratio": 0.1923
+        },
+        {
+          "code": "I202",
+          "name": "중식 음식점업",
+          "count": 4,
+          "ratio": 0.2353
+        },
+        {
+          "code": "I211",
+          "name": "주점업",
+          "count": 4,
+          "ratio": 0.2857
+        },
+        {
+          "code": "G215",
+          "name": "의약품, 의료용 기구, 화장품 및 방향제 소매업",
+          "count": 3,
+          "ratio": 0.1364
+        },
+        {
+          "code": "M113",
+          "name": "사진 촬영 및 처리업",
+          "count": 3,
+          "ratio": 0.2727
+        },
+        {
+          "code": "R104",
+          "name": "유원지 및 기타 오락관련 서비스업",
+          "count": 3,
+          "ratio": 0.1304
+        },
+        {
+          "code": "G205",
+          "name": "식료품 소매업",
+          "count": 2,
+          "ratio": 0.0714
+        },
+        {
+          "code": "G209",
+          "name": "섬유, 의복, 신발 및 가죽제품 소매업",
+          "count": 2,
+          "ratio": 0.0571
+        },
+        {
+          "code": "I205",
+          "name": "동남아시아 음식점업",
+          "count": 2,
+          "ratio": 0.3333
+        },
+        {
+          "code": "S208",
+          "name": "욕탕, 마사지 및 기타 신체 관리 서비스업",
+          "count": 2,
+          "ratio": 0.5
+        },
+        {
+          "code": "S209",
+          "name": "세탁업",
+          "count": 2,
+          "ratio": 0.3333
+        },
+        {
+          "code": "G207",
+          "name": "담배 소매업",
+          "count": 1,
+          "ratio": 0.25
+        },
+        {
+          "code": "G208",
+          "name": "가전제품 및 정보 통신장비 소매업",
+          "count": 1,
+          "ratio": 0.0909
+        },
+        {
+          "code": "G213",
+          "name": "문화, 오락 및 여가 용품 소매업",
+          "count": 1,
+          "ratio": 0.0714
+        },
+        {
+          "code": "G220",
+          "name": "애완용 동물 및 관련용품 소매업",
+          "count": 1,
+          "ratio": 0.0909
+        },
+        {
+          "code": "G221",
+          "name": "기타 상품 전문 소매업",
+          "count": 1,
+          "ratio": 0.3333
+        },
+        {
+          "code": "M107",
+          "name": "회사 본부 및 경영 컨설팅 서비스업",
+          "count": 1,
+          "ratio": 0.0588
+        },
+        {
+          "code": "N110",
+          "name": "개인 및 가정용품 대여업",
+          "count": 1,
+          "ratio": 0.5
+        },
+        {
+          "code": "P107",
+          "name": "교육 지원 서비스업",
+          "count": 1,
+          "ratio": 0.1667
+        },
+        {
+          "code": "R102",
+          "name": "도서관, 사적지 및 유사 여가관련 서비스업",
+          "count": 1,
+          "ratio": 0.0909
+        },
+        {
+          "code": "R103",
+          "name": "스포츠 서비스업",
+          "count": 1,
+          "ratio": 0.0476
+        }
+      ],
+      "method": "brand_name_match",
+      "confidence": "low"
+    },
+    "lq_baseline": {
+      "requested_radius_m": 2000,
+      "applied_radius_m": 2000,
+      "store_total": 7749
+    },
+    "summary": {
+      "radius_notes": [
+        {
+          "radius_m": 50,
+          "text": "점포 59개. 기타 간이 음식점업이 9개로 1위이며 주변보다 약 2.7배 많습니다."
+        },
+        {
+          "radius_m": 100,
+          "text": "점포 67개. 기타 간이 음식점업이 11개로 1위이며 주변보다 약 2.9배 많습니다."
+        },
+        {
+          "radius_m": 200,
+          "text": "점포 119개. 기타 간이 음식점업이 22개로 가장 많지만, 중식 음식점업이 주변보다 약 5.9배로 가장 튀는 업종입니다."
+        },
+        {
+          "radius_m": 300,
+          "text": "점포 580개. 이용 및 미용업이 72개로 1위이며, 도서관·사적지 등 여가 관련 업종이 주변보다 약 2.8배 많습니다."
+        },
+        {
+          "radius_m": 500,
+          "text": "점포 1241개. 이용 및 미용업이 123개로 1위이며, 기타 보건업이 주변보다 약 3.5배로 가장 두드러집니다."
+        }
+      ],
+      "overall": "가까운 50~100m에서는 기타 간이 음식점업이 계속 1위이지만, 300m부터는 이용 및 미용업이 1위로 바뀝니다. 50m에는 없는 업종이 53개였는데 500m에서는 18개로 줄어, 조금만 걸어 나가면 훨씬 다양한 업종을 만날 수 있습니다. 전체적으로 음식 업종 비중이 가장 크지만 교육, 소매, 수리·개인 서비스 등 여러 업종이 섞여 있어 한쪽으로 심하게 몰리지는 않은 편입니다.",
+      "concentration": "500m 안에 음식 관련 점포가 1km²당 약 456개로 빽빽하게 모여 있는 편입니다. 업종이 골고루 섞인 정도를 보면 크게 한쪽으로 쏠리지 않고 비교적 다양하게 섞여 있습니다. 다만 200m 근처에서는 중식·서양식·일식 음식점이 주변보다 3~6배 많아 이 거리대에서 음식 업종이 눈에 띄게 몰려 있습니다."
+    },
+    "summary_text": "50m: 점포 59개. 기타 간이 음식점업이 9개로 1위이며 주변보다 약 2.7배 많습니다.\n100m: 점포 67개. 기타 간이 음식점업이 11개로 1위이며 주변보다 약 2.9배 많습니다.\n200m: 점포 119개. 기타 간이 음식점업이 22개로 가장 많지만, 중식 음식점업이 주변보다 약 5.9배로 가장 튀는 업종입니다.\n300m: 점포 580개. 이용 및 미용업이 72개로 1위이며, 도서관·사적지 등 여가 관련 업종이 주변보다 약 2.8배 많습니다.\n500m: 점포 1241개. 이용 및 미용업이 123개로 1위이며, 기타 보건업이 주변보다 약 3.5배로 가장 두드러집니다.\n종합 평가: 가까운 50~100m에서는 기타 간이 음식점업이 계속 1위이지만, 300m부터는 이용 및 미용업이 1위로 바뀝니다. 50m에는 없는 업종이 53개였는데 500m에서는 18개로 줄어, 조금만 걸어 나가면 훨씬 다양한 업종을 만날 수 있습니다. 전체적으로 음식 업종 비중이 가장 크지만 교육, 소매, 수리·개인 서비스 등 여러 업종이 섞여 있어 한쪽으로 심하게 몰리지는 않은 편입니다.\n집적도·특화도 평가: 500m 안에 음식 관련 점포가 1km²당 약 456개로 빽빽하게 모여 있는 편입니다. 업종이 골고루 섞인 정도를 보면 크게 한쪽으로 쏠리지 않고 비교적 다양하게 섞여 있습니다. 다만 200m 근처에서는 중식·서양식·일식 음식점이 주변보다 3~6배 많아 이 거리대에서 음식 업종이 눈에 띄게 몰려 있습니다."
+  },
+  "error": null,
+  "warnings": [
+    "프랜차이즈 판정은 공정위 브랜드명과 상호명을 문자열로 대조한 결과라 누락과 오탐이 있을 수 있습니다."
+  ]
+}
