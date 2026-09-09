@@ -1,4 +1,8 @@
+'use client';
+
 import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Outfit } from 'next/font/google';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
@@ -9,12 +13,14 @@ const outfit = Outfit({
 });
 
 const navLinks = [
-  { label: '홈', active: true },
-  { label: '공실 분석', active: false },
-  { label: '리포트', active: false },
+  { label: '홈', href: '/' },
+  { label: '공실 분석', href: '/vacancy-input' },
+  { label: '리포트', href: null },
 ];
 
 export default function Header() {
+  const pathname = usePathname();
+
   return (
     <header
       className="flex w-full flex-col items-start"
@@ -49,27 +55,48 @@ export default function Header() {
         </div>
 
         <nav className="flex shrink-0 items-center gap-1">
-          {navLinks.map(({ label, active }) => (
-            <div
-              key={label}
-              className="relative flex flex-col items-center justify-center px-4 py-1.5"
-            >
-              <p
-                className={`text-[15px] leading-[22.5px] whitespace-nowrap ${
-                  active ? 'font-semibold' : 'font-normal text-gray-500'
-                }`}
-                style={active ? { color: colors.brand.dark } : undefined}
+          {navLinks.map(({ label, href }) => {
+            const active = href !== null && pathname === href;
+            const content = (
+              <>
+                <p
+                  className={`text-[15px] leading-[22.5px] whitespace-nowrap ${
+                    active ? 'font-semibold' : 'font-normal text-gray-500'
+                  }`}
+                  style={active ? { color: colors.brand.dark } : undefined}
+                >
+                  {label}
+                </p>
+                {active && (
+                  <span
+                    className="absolute bottom-0 h-0.5 w-3 rounded-full"
+                    style={{ backgroundColor: colors.brand.dark }}
+                  />
+                )}
+              </>
+            );
+
+            if (href === null) {
+              return (
+                <div
+                  key={label}
+                  className="relative flex flex-col items-center justify-center px-4 py-1.5"
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                key={label}
+                href={href}
+                className="relative flex flex-col items-center justify-center px-4 py-1.5"
               >
-                {label}
-              </p>
-              {active && (
-                <span
-                  className="absolute bottom-0 h-0.5 w-3 rounded-full"
-                  style={{ backgroundColor: colors.brand.dark }}
-                />
-              )}
-            </div>
-          ))}
+                {content}
+              </Link>
+            );
+          })}
         </nav>
 
         <Button
