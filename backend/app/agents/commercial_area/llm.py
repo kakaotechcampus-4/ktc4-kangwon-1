@@ -45,6 +45,11 @@ def build_user_message(data: dict[str, Any]) -> str:
             }
             for s in slices
         ],
+        "자치구_이름": (data.get("district_baseline") or {}).get("signgu_name"),
+        "자치구_전체_대비_특화업종": [
+            {"업종": r["name"], "개수": r["count"], "자치구대비배수": round(r["times_vs_surroundings"], 2)}
+            for r in data.get("district_specialization", [])[:5]
+        ],
         "by_major": [
             {"name": row["name"], "count": row["count"]} for row in data.get("by_major", [])
         ],

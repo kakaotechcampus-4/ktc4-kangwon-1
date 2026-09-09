@@ -28,6 +28,7 @@ class MiddleCategory(Schema):
     density_per_km2: float
     density_sq: float
     lq: float | None = None
+    lq_district: float | None = None
     same_type_count: int
     diff_type_count: int
     marshallian: float
@@ -111,6 +112,12 @@ class Franchise(Schema):
     confidence: Literal["low", "medium", "high"]
 
 
+class DistrictBaseline(Schema):
+    signgu_code: Text
+    signgu_name: Text | None = None
+    store_total: int
+
+
 class LqBaseline(Schema):
     requested_radius_m: int
     applied_radius_m: int | None = None
@@ -128,6 +135,8 @@ class CommercialAreaData(Schema):
     restaurant_density: RestaurantDensity
     franchise: Franchise | None = None
     lq_baseline: LqBaseline
+    district_baseline: DistrictBaseline | None = None
+    district_specialization: list[SpecializationRank] = Field(default_factory=list)
     summary: Summary | None = None
     summary_text: Text | None = None
 
@@ -146,6 +155,8 @@ class Store:
     latitude: float | None
     longitude: float | None
     road_address: str | None
+    district_code: str | None = None
+    district_name: str | None = None
 
 
 @dataclass(frozen=True)

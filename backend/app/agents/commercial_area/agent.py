@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 
 from app.schemas import AgentAnalysis, AgentError, AnalysisTask, Scope
@@ -11,17 +12,20 @@ from .config import Settings, load_dotenv_if_present
 from .franchise import build_franchise, load_brands
 from .llm import render_summary_text, summarize
 from .metrics import (
+    build_district_specialization,
     build_diversity,
     build_major_rows,
     build_middle_rows,
     build_radius_slices,
     build_restaurant_density,
     count_by_middle,
+    haversine_m,
 )
-from .schemas import CommercialAreaData, LqBaseline, Summary
+from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Summary
 from .upjong import load_middle_master, master_from_stores
 
 AGENT_ID = "commercial_area"
+DISTRICT_VOTE_SIZE = 10
 
 
 def analyze(
@@ -108,8 +112,35 @@ def analyze(
             degraded = True
             warnings.append(f"LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다: {exc.message}")
 
+        district_counts = None
+        district_baseline = None
+        district_name = None
+        district_code, district_name = _nearest_district(stores, site.latitude, site.longitude)
+        if district_code:
+            try:
+                district_stores, district_meta = client.stores_in_district(district_code)
+                district_counts = dict(count_by_middle(district_stores))
+                district_baseline = DistrictBaseline(
+                    signgu_code=district_code,
+                    signgu_name=district_name,
+                    store_total=len(district_stores),
+                )
+                if district_meta.get("truncated"):
+                    degraded = True
+                    warnings.append(
+                        "자치구 조회가 페이지 상한에 걸려 자치구 대비 배수가 과대추정될 수 있습니다."
+                    )
+            except SbizApiError as exc:
+                degraded = True
+                warnings.append(
+                    f"자치구 조회 실패로 자치구 대비 배수를 계산하지 못했습니다: {exc.message}"
+                )
+        else:
+            degraded = True
+            warnings.append("점포 자료에 자치구 코드가 없어 자치구 대비 배수를 계산하지 못했습니다.")
+
         major_rows = build_major_rows(stores, radius, master)
-        middle_rows = build_middle_rows(stores, radius, master, baseline_counts)
+        middle_rows = build_middle_rows(stores, radius, master, baseline_counts, district_counts)
 
         franchise = None
         brands = load_brands(settings)
@@ -146,6 +177,12 @@ def analyze(
             restaurant_density=build_restaurant_density(stores, radius, settings),
             franchise=franchise,
             lq_baseline=baseline,
+            district_baseline=district_baseline,
+            district_specialization=(
+                build_district_specialization(middle_rows, settings, district_name)
+                if district_counts and district_name
+                else []
+            ),
         )
 
         data = payload.model_dump()
@@ -167,3 +204,17 @@ def analyze(
     finally:
         if owns_client:
             client.close()
+
+
+def _nearest_district(stores, lat: float, lon: float) -> tuple[str | None, str | None]:
+    located = [
+        s for s in stores
+        if s.district_code and s.latitude is not None and s.longitude is not None
+    ]
+    if not located:
+        return None, None
+    located.sort(key=lambda s: haversine_m(lat, lon, s.latitude, s.longitude))
+    nearest = located[:DISTRICT_VOTE_SIZE]
+    code = Counter(s.district_code for s in nearest).most_common(1)[0][0]
+    name = next((s.district_name for s in nearest if s.district_code == code), None)
+    return code, name

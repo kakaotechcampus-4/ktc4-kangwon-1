@@ -10,7 +10,12 @@ from typing import Any
 
 import httpx
 
-from .config import SBIZ_BASE_URL, SBIZ_RADIUS_OPERATION, Settings
+from .config import (
+    SBIZ_BASE_URL,
+    SBIZ_DISTRICT_OPERATION,
+    SBIZ_RADIUS_OPERATION,
+    Settings,
+)
 from .schemas import Store
 
 REFERENCE_DATE_KEYS = ("stdrDt", "dataStdDe", "baseYm", "stdrYm")
@@ -134,6 +139,8 @@ def to_store(item: dict[str, Any]) -> Store | None:
         latitude=_to_float(item.get("lat")),
         longitude=_to_float(item.get("lon")),
         road_address=_clean(item.get("rdnmAdr")),
+        district_code=_clean(item.get("signguCd")),
+        district_name=_clean(item.get("signguNm")),
     )
 
 
@@ -163,18 +170,30 @@ class StoreClient:
             self._client = None
 
     def _request_page(self, lat: float, lon: float, radius_m: int, page: int) -> dict[str, Any]:
+        return self._request(
+            SBIZ_RADIUS_OPERATION,
+            {"radius": radius_m, "cx": lon, "cy": lat},
+            page,
+        )
+
+    def _request_district_page(self, signgu_cd: str, page: int) -> dict[str, Any]:
+        return self._request(
+            SBIZ_DISTRICT_OPERATION,
+            {"divId": "signguCd", "key": signgu_cd},
+            page,
+        )
+
+    def _request(self, operation: str, query: dict[str, Any], page: int) -> dict[str, Any]:
         if not self.settings.sbiz_service_key:
-            raise SbizApiError("NO_KEY", "SBIZ_SERVICE_KEY가 설정되지 않았습니다.")
+            raise SbizApiError("NO_KEY", "COMMERCIAL_AREA_API_KEY가 설정되지 않았습니다.")
         params = {
             "serviceKey": self.settings.sbiz_service_key,
             "type": "json",
-            "radius": radius_m,
-            "cx": lon,
-            "cy": lat,
             "numOfRows": self.settings.page_size,
             "pageNo": page,
+            **query,
         }
-        url = f"{SBIZ_BASE_URL}/{SBIZ_RADIUS_OPERATION}"
+        url = f"{SBIZ_BASE_URL}/{operation}"
 
         last_error: Exception | None = None
         for attempt in range(self.settings.max_retries + 1):
@@ -273,3 +292,39 @@ class StoreClient:
                     continue
                 raise
         raise last_error or SbizApiError("NO_RADIUS", "사용 가능한 반경을 찾지 못했습니다.")
+
+    def stores_in_district(self, signgu_cd: str) -> tuple[list[Store], dict[str, Any]]:
+        cache_key = f"district_{signgu_cd}"
+        path = _cache_path(self.settings, cache_key)
+        cached = _read_cache(path, self.settings.district_cache_ttl_hours)
+        if cached is not None:
+            stores = [s for s in (to_store(i) for i in cached["items"]) if s]
+            return stores, {**cached["meta"], "from_cache": True}
+
+        items: list[dict[str, Any]] = []
+        page = 1
+        total_count = 0
+        while page <= self.settings.district_max_pages:
+            try:
+                payload = self._request_district_page(signgu_cd, page)
+            except NoDataError:
+                total_count = len(items)
+                break
+            page_items, total_count = _extract_items(payload)
+            items.extend(page_items)
+            if len(items) >= total_count or not page_items:
+                break
+            page += 1
+
+        meta = {
+            "signgu_cd": signgu_cd,
+            "total_count": total_count,
+            "fetched": len(items),
+            "truncated": len(items) < total_count,
+            "reference_date": reference_date_of(items),
+            "from_cache": False,
+        }
+        _write_cache(path, {"items": items, "meta": meta})
+
+        stores = [s for s in (to_store(i) for i in items) if s]
+        return stores, meta

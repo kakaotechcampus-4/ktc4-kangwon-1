@@ -93,10 +93,12 @@ def build_middle_rows(
     radius_m: int,
     master: Sequence[MiddleCode],
     baseline_counts: dict[str, int] | None = None,
+    district_counts: dict[str, int] | None = None,
 ) -> list[MiddleCategory]:
     counts = count_by_middle(stores)
     total = len(stores)
     baseline_total = sum(baseline_counts.values()) if baseline_counts else 0
+    district_total = sum(district_counts.values()) if district_counts else 0
 
     known = {m.code: m for m in master}
     for store in stores:
@@ -115,11 +117,8 @@ def build_middle_rows(
         diff_count = total - count
         other_counts = [c for k, c in counts.items() if k != code and c > 0]
 
-        lq = None
-        if baseline_counts and baseline_total > 0:
-            baseline_share = _share(baseline_counts.get(code, 0), baseline_total)
-            if baseline_share > 0:
-                lq = round(_share(count, total) / baseline_share, 4)
+        lq = _ratio_against(count, total, baseline_counts, baseline_total, code)
+        lq_district = _ratio_against(count, total, district_counts, district_total, code)
 
         density = _density(count, radius_m)
         rows.append(
@@ -133,6 +132,7 @@ def build_middle_rows(
                 density_per_km2=round(density, 4),
                 density_sq=round(density**2, 4),
                 lq=lq,
+                lq_district=lq_district,
                 same_type_count=count,
                 diff_type_count=diff_count,
                 marshallian=round(density, 4),
@@ -140,6 +140,54 @@ def build_middle_rows(
             )
         )
     return sorted(rows, key=lambda r: (-r.count, r.code))
+
+
+def _ratio_against(
+    count: int,
+    total: int,
+    baseline_counts: dict[str, int] | None,
+    baseline_total: int,
+    code: str,
+) -> float | None:
+    if not baseline_counts or baseline_total <= 0:
+        return None
+    baseline_share = _share(baseline_counts.get(code, 0), baseline_total)
+    if baseline_share <= 0:
+        return None
+    return round(_share(count, total) / baseline_share, 4)
+
+
+def build_district_specialization(
+    rows: Sequence[MiddleCategory],
+    settings: Settings,
+    district_name: str,
+) -> list[SpecializationRank]:
+    threshold = settings.min_count_for_specialization
+    picked = sorted(
+        [r for r in rows if r.lq_district is not None and r.count >= threshold],
+        key=lambda r: (-(r.lq_district or 0.0), r.name),
+    )[: settings.rank_size]
+
+    ranks = []
+    for index, row in enumerate(picked, 1):
+        times = row.lq_district or 0.0
+        if 0.95 <= times <= 1.05:
+            note = f"{district_name} 전체와 비슷한 수준입니다"
+        elif times > 1.05:
+            note = f"{district_name} 전체보다 {times:.1f}배 많습니다"
+        else:
+            note = f"{district_name} 전체의 {times:.1f}배에 그칩니다"
+        ranks.append(
+            SpecializationRank(
+                rank=index,
+                code=row.code,
+                name=row.name,
+                count=row.count,
+                times_vs_surroundings=times,
+                note=note,
+            )
+        )
+    return ranks
 
 
 def build_diversity(

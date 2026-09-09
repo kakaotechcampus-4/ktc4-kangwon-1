@@ -11,6 +11,7 @@ BACKEND_DIR = PACKAGE_DIR.parents[3]
 
 SBIZ_BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2"
 SBIZ_RADIUS_OPERATION = "storeListInRadius"
+SBIZ_DISTRICT_OPERATION = "storeListInDong"
 FTC_BRAND_BASE_URL = "http://apis.data.go.kr/1130000/FftcBrandFrcsStatsService"
 FTC_BRAND_OPERATION = "getBrandFrcsStats"
 
@@ -37,6 +38,8 @@ class Settings:
 
     cache_dir: Path = BACKEND_DIR / "cache"
     cache_ttl_hours: int = 24 * 7
+    district_cache_ttl_hours: int = 24 * 90
+    district_max_pages: int = 120
     lq_cache_grid_m: int = 250
 
     upjong_master_path: Path = PACKAGE_DIR / "data" / "upjong_codes.csv"

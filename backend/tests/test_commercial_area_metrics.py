@@ -27,7 +27,8 @@ MASTER = [
 ]
 
 
-def store(code, name, major_code, major_name, label, lat=37.5, lon=127.0):
+def store(code, name, major_code, major_name, label, lat=37.5, lon=127.0,
+          district_code=None, district_name=None):
     return Store(
         store_id=f"{code}-{label}",
         name=label,
@@ -41,6 +42,8 @@ def store(code, name, major_code, major_name, label, lat=37.5, lon=127.0):
         latitude=lat,
         longitude=lon,
         road_address=None,
+        district_code=district_code,
+        district_name=district_name,
     )
 
 
@@ -114,6 +117,32 @@ class MetricsTests(unittest.TestCase):
         stores.append(store("Z999", "미확인업종", "Z9", "미확인", "신규"))
         rows = build_middle_rows(stores, 500, MASTER)
         self.assertEqual(len(rows), len(MASTER) + 1)
+
+
+class DistrictComparisonTests(unittest.TestCase):
+    def test_district_ratio_is_independent_of_local_baseline(self):
+        stores = sample_stores()
+        district = {"I201": 200, "I212": 200, "G204": 600}
+        local = {"I201": 100, "I212": 100, "G204": 200}
+        rows = build_middle_rows(stores, 500, MASTER, local, district)
+        han = next(r for r in rows if r.code == "I201")
+
+        self.assertTrue(math.isclose(han.lq, (6 / 10) / (100 / 400), rel_tol=1e-3))
+        self.assertTrue(math.isclose(han.lq_district, (6 / 10) / (200 / 1000), rel_tol=1e-3))
+
+    def test_district_ratio_is_none_without_district_counts(self):
+        rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100})
+        self.assertTrue(all(r.lq_district is None for r in rows))
+
+    def test_district_specialization_names_the_district(self):
+        from app.agents.commercial_area.metrics import build_district_specialization
+
+        rows = build_middle_rows(sample_stores(), 500, MASTER, None, {"I201": 200, "G204": 800})
+        ranks = build_district_specialization(rows, Settings(), "송파구")
+
+        self.assertTrue(ranks)
+        self.assertIn("송파구 전체", ranks[0].note)
+        self.assertTrue(all(r.count >= Settings().min_count_for_specialization for r in ranks))
 
 
 class RadiusSliceTests(unittest.TestCase):
