@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.12,<3",
   "openai>=2.15,<3",
   "python-dotenv>=1,<2",
+  "httpx>=0.27,<1",
 ]
 
 [tool.setuptools.packages.find]
@@ -20,3 +21,4 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.agents.decision" = ["prompt.md"]
+"app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
