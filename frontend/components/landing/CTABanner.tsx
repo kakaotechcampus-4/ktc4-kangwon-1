@@ -1,3 +1,6 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { Outfit } from 'next/font/google';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
@@ -8,6 +11,12 @@ const outfit = Outfit({
 });
 
 export default function CTABanner() {
+  const router = useRouter();
+
+  const handleStartAnalysis = () => {
+    router.push('/vacancy-input');
+  };
+
   return (
     <div
       className="flex w-full flex-col items-center py-16"
@@ -30,9 +39,11 @@ export default function CTABanner() {
         </div>
 
         <Button
+          type="button"
           variant="primary"
           className={outfit.className}
           style={{ padding: '16px 32px' }}
+          onClick={handleStartAnalysis}
         >
           공실 분석 시작하기 →
         </Button>

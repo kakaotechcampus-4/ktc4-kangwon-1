@@ -1,22 +1,20 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Outfit } from 'next/font/google';
-import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
-
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600'],
-});
 
 const navLinks = [
   { label: '홈', href: '/' },
   { label: '공실 분석', href: '/vacancy-input' },
-  { label: '리포트', href: null },
+  { label: '리포트', href: '/report' },
 ];
+
+const navAccentStyle = {
+  '--nav-accent': colors.brand.primary,
+} as CSSProperties;
 
 export default function Header() {
   const pathname = usePathname();
@@ -29,8 +27,8 @@ export default function Header() {
         borderBottom: `1px solid ${colors.neutral.border}`,
       }}
     >
-      <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center justify-between px-8">
-        <div className="flex shrink-0 items-center gap-2.5">
+      <div className="mx-auto grid h-14 w-full max-w-[1440px] grid-cols-3 items-center px-8">
+        <Link href="/" className="flex items-center gap-2.5 justify-self-start">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md">
             <Image
               src="/images/logo-mark.svg"
@@ -52,60 +50,48 @@ export default function Header() {
               ai
             </span>
           </p>
-        </div>
+        </Link>
 
-        <nav className="flex shrink-0 items-center gap-1">
+        <nav
+          className="flex items-center gap-1 justify-self-center"
+          style={navAccentStyle}
+        >
           {navLinks.map(({ label, href }) => {
-            const active = href !== null && pathname === href;
-            const content = (
-              <>
-                <p
-                  className={`text-[15px] leading-[22.5px] whitespace-nowrap ${
-                    active ? 'font-semibold' : 'font-normal text-gray-500'
-                  }`}
-                  style={active ? { color: colors.brand.dark } : undefined}
-                >
-                  {label}
-                </p>
-                {active && (
-                  <span
-                    className="absolute bottom-0 h-0.5 w-3 rounded-full"
-                    style={{ backgroundColor: colors.brand.dark }}
-                  />
-                )}
-              </>
-            );
-
-            if (href === null) {
-              return (
-                <div
-                  key={label}
-                  className="relative flex flex-col items-center justify-center px-4 py-1.5"
-                >
-                  {content}
-                </div>
-              );
-            }
+            const active = pathname === href;
 
             return (
               <Link
                 key={label}
                 href={href}
-                className="relative flex flex-col items-center justify-center px-4 py-1.5"
+                className="group relative flex flex-col items-center justify-center px-4 py-1.5"
               >
-                {content}
+                <p
+                  className={`text-[15px] leading-[22.5px] whitespace-nowrap transition-colors ${
+                    active
+                      ? 'font-semibold'
+                      : 'font-normal text-gray-500 group-hover:text-[var(--nav-accent)]'
+                  }`}
+                  style={active ? { color: colors.brand.dark } : undefined}
+                >
+                  {label}
+                </p>
+                {active ? (
+                  <span
+                    className="absolute bottom-0 h-0.5 w-3 rounded-full"
+                    style={{ backgroundColor: colors.brand.dark }}
+                  />
+                ) : (
+                  <span
+                    className="absolute bottom-0 h-0.5 w-3 scale-x-0 rounded-full opacity-0 transition-all duration-150 group-hover:scale-x-100 group-hover:opacity-100"
+                    style={{ backgroundColor: colors.brand.primary }}
+                  />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <Button
-          variant="primary"
-          className={`${outfit.className} shrink-0`}
-          style={{ padding: '8px 20px' }}
-        >
-          공실 분석 시작하기
-        </Button>
+        <div />
       </div>
     </header>
   );
