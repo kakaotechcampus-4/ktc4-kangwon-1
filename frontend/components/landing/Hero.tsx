@@ -1,4 +1,7 @@
+'use client';
+
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Outfit, DM_Mono } from 'next/font/google';
 import type { CSSProperties, ReactNode } from 'react';
 import Button from '@/components/ui/Button';
@@ -140,6 +143,18 @@ const infoCards: InfoCard[] = [
 ];
 
 export default function Hero() {
+  const router = useRouter();
+
+  const handleStartAnalysis = () => {
+    router.push('/vacancy-input');
+  };
+
+  const handleViewReportPreview = () => {
+    document
+      .getElementById('report-preview')
+      ?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div
       className="flex w-full justify-center py-16"
@@ -180,10 +195,20 @@ export default function Hero() {
           </p>
 
           <div className="flex items-center gap-3 pt-8">
-            <Button variant="primary" className={outfit.className}>
+            <Button
+              type="button"
+              variant="primary"
+              className={outfit.className}
+              onClick={handleStartAnalysis}
+            >
               공실 분석 시작하기 →
             </Button>
-            <Button variant="outline" className="text-gray-600">
+            <Button
+              type="button"
+              variant="outline"
+              className="text-gray-600"
+              onClick={handleViewReportPreview}
+            >
               리포트 예시 보기
             </Button>
           </div>
