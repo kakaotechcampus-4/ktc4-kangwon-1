@@ -35,7 +35,10 @@ export default function ReportPreview({
   ranks = defaultRanks,
 }: ReportPreviewProps) {
   return (
-    <div className="flex w-full flex-col items-start px-[100px] py-16">
+    <div
+      id="report-preview"
+      className="flex w-full flex-col items-start px-[100px] py-16"
+    >
       <div className="flex w-full items-end justify-between">
         <h2
           className={`${outfit.className} text-[44px] font-bold`}
