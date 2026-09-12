@@ -1,80 +1,80 @@
-# ktc4-team-01
-카카오테크 캠퍼스 4기 2단계 팀 프로젝트 — 강원대 1팀
+# 채움 — 공실에 맞는 업종을 찾아드립니다
 
-## 프로젝트 구조
+카카오테크 캠퍼스 4기 2단계 팀 프로젝트 · 강원대 1팀
 
-주소를 입력받아 유동인구·개폐업·상권 분석을 병렬 실행하고 중재 결과를 리포트로 제공합니다.
-중재 에이전트와 샘플 입력 실행은 구현되어 있습니다. 유동인구·개폐업·상권·리포트 에이전트와 분석 API는 아직 구현되지 않았습니다.
+빈 상가 주소 하나를 넣으면 **그 자리에 어떤 업종이 맞는지** 근거와 함께 리포트로 돌려줍니다.
+쓰는 사람은 상권 분석을 배운 적 없는 임대인입니다.
 
-```text
-ktc4-kangwon-1/
-├─ frontend/
-│  └─ src/                         # 화면·백엔드 API 연동
-└─ backend/
-   ├─ pyproject.toml               # 파이썬 의존성·패키지 설정
-   ├─ .env.example                 # API 키·모델 설정 예시
-   ├─ app/
-   │  ├─ __init__.py               # 백엔드 패키지
-   │  ├─ main.py                   # FastAPI 진입점
-   │  ├─ schemas.py                # 에이전트 간 공통 입출력
-   │  ├─ orchestrator.py           # 병렬 실행·중재·리포트 연결
-   │  ├─ address.py                # 주소 정규화·좌표 변환
-   │  ├─ api/v1/                  # 사용자 요청 API
-   │  └─ agents/
-   │     ├─ floating_population/   # 유동인구 분석
-   │     ├─ business_lifecycle/    # 개폐업 분석
-   │     ├─ commercial_area/       # 상권·경쟁 분석
-   │     ├─ decision/
-   │     │  ├─ agent.py            # 추천·비추천 업종 판단
-   │     │  ├─ llm.py              # 엘리스 OpenAI 호환 API 호출
-   │     │  └─ prompt.md           # 중재 판단 기준
-   │     └─ report/                # 시각화용 결과 구성
-   ├─ examples/                   # 목업 자료·단독 실행 예시
-   └─ tests/                      # 자동 테스트
+```
+주소 입력 → 좌표 변환 → 분석 에이전트 3종 병렬 실행 → 중재(업종 판단) → 리포트
 ```
 
-공통 입출력은 `backend/app/schemas.py`에 정의했습니다. 전체 실행 흐름은 `backend/app/orchestrator.py`, 주소 변환은 `backend/app/address.py`에 구현합니다.
-중재 에이전트 외 내부 파일은 담당자가 작성합니다. LangChain·LangGraph는 도입이 확정되면 추가합니다.
+## 구조
 
-## 백엔드 실행
+| 폴더 | 내용 | 문서 |
+| --- | --- | --- |
+| `frontend/` | Next.js 16 · React 19 · Tailwind v4 | [frontend/README.md](frontend/README.md) |
+| `backend/` | FastAPI · Python 3.12 · 비동기 | [backend/README.md](backend/README.md) |
+| `docs/` | 팀 규칙 | 아래 표 |
 
-Python 3.12를 사용합니다. 저장소 루트에서 실행합니다.
+| 문서 | 언제 읽나 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | **코드를 고치기 전에.** 사람과 AI 에이전트가 함께 읽는 기준 |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 이름·계층·에러 처리·반응형 규칙 |
+| [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) | 브랜치·커밋·PR·리뷰 |
+| [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | 프론트와 백엔드가 주고받는 형태 |
 
-```powershell
+## 빠르게 띄우기
+
+키가 없어도 전체 흐름이 돕니다.
+
+```bash
+# 1) 백엔드 (터미널 A)
 cd backend
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+py -3.12 -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev]"
+MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:app --reload
+
+# 2) 프론트엔드 (터미널 B)
+cd frontend
+npm install
+npm run dev
 ```
 
-API 문서는 `http://127.0.0.1:8000/docs`에서 확인합니다. 현재 등록된 분석 경로는 없습니다.
-프론트엔드는 프레임워크 결정 후 초기화합니다. 실제 API 키는 커밋하지 않고 환경 변수로 관리합니다.
+- 화면 <http://localhost:3000>
+- API 문서 <http://127.0.0.1:8000/docs>
 
-API 연결을 시작할 때 `backend/.env.example`을 `backend/.env`로 복사해 키와 모델 정보를 채웁니다.
+실제 분석을 돌리려면 `backend/.env.example`을 `backend/.env`로 복사해 키를 채웁니다.
 
-## 중재 에이전트 샘플 입력 실행
+## 만든 것 / 남은 것
 
-가상의 세 분석 에이전트 입력을 실제 엘리스 LLM에 전달해 중재 결과를 확인합니다. 실행 전 `.env`에 엘리스 API 설정이 필요합니다.
+| 구성 요소 | 상태 |
+| --- | --- |
+| 팀 공통 스키마 (`backend/app/schemas.py`) | ✅ |
+| 상권·경쟁 분석 에이전트 | ✅ |
+| 중재(업종 판단) 에이전트 | ✅ |
+| 오케스트레이터 · `POST /api/v1/analyses` · CORS | ✅ |
+| 랜딩 · 공실 입력 화면 | ✅ (백엔드 연동 전) |
+| 유동인구 에이전트 | ⬜ |
+| 개폐업 에이전트 | ⬜ |
+| 리포트 에이전트 · 결과 화면 | ⬜ |
+| 프론트 ↔ 백엔드 실제 연동 | ⬜ |
 
-```powershell
-cd backend
-.\.venv\Scripts\python.exe examples/run_decision.py --mock
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+## 검사
+
+```bash
+cd backend  && .venv/Scripts/python -m ruff check . && .venv/Scripts/python -m mypy \
+            && .venv/Scripts/python -m unittest discover -s tests
+cd frontend && npm run format:check && npm run lint && npm run build
 ```
 
-실제 분석 입력 파일은 아래처럼 실행합니다.
+PR마다 CI(`.github/workflows/ci.yml`)가 같은 것을 돌립니다.
 
-```powershell
-.\.venv\Scripts\python.exe examples/run_decision.py --input path\to\analyses.json
+## 데이터 출처
+
+```
+상가(상권)정보 — 소상공인시장진흥공단 (2026), data.go.kr
+가맹정보 — 공정거래위원회 (2026), data.go.kr
 ```
 
-`input.json`은 샘플 입력이고, `response.json`은 외부 호출 없이 단위 테스트에 쓰는 고정 응답입니다.
-
-## 빈 폴더 안내
-
-구현되지 않은 에이전트 폴더에는 자리 표시용 파일도 넣지 않았습니다. Git은 빈 폴더를 추적하지 않으므로 복제 시 빈 폴더는 나타나지 않습니다.
-다음 명령으로 저장소 루트에서 동일한 폴더를 만들 수 있습니다.
-
-```powershell
-New-Item -ItemType Directory -Force -Path frontend/src, backend/app/api/v1, backend/app/agents/floating_population, backend/app/agents/business_lifecycle, backend/app/agents/commercial_area, backend/app/agents/decision, backend/app/agents/report, backend/examples, backend/tests
-```
+공공누리 데이터는 출처표시가 의무입니다. 리포트와 화면 하단에 넣습니다.
