@@ -4,7 +4,6 @@ from typing import Annotated, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-
 # 공통 기본 타입과 검증 규칙
 AgentId = Literal["floating_population", "business_lifecycle", "commercial_area"]
 AGENT_IDS = get_args(AgentId)
@@ -73,7 +72,9 @@ class AgentAnalysis(Schema):
                 raise ValueError("실패한 분석은 오류 설명과 빈 자료를 전달해야 합니다.")
         elif self.status == "no_data":
             if self.scope is None or self.data or self.error:
-                raise ValueError("자료 없음 분석은 분석 범위, 빈 자료와 오류 없는 상태를 전달해야 합니다.")
+                raise ValueError(
+                    "자료 없음 분석은 분석 범위, 빈 자료와 오류 없는 상태를 전달해야 합니다."
+                )
         elif self.scope is None or not self.data or self.error:
             raise ValueError("사용 가능한 분석에는 지역, 기준 기간과 자료가 필요합니다.")
         return self
@@ -143,5 +144,6 @@ class DecisionResult(DecisionContent):
     agent_id: Literal["decision"]
     request_id: Text
     address: Text
-    status: Literal["ok", "partial", "no_data"]
+    # 중재 자체는 ok/no_data만 내지만, 입력 분석이 일부 빠지면 리포트에는 partial로 나갑니다.
+    status: Literal["ok", "partial", "no_data"]  # type: ignore[assignment]
     source_analyses: list[AgentAnalysis]

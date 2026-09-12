@@ -55,7 +55,7 @@
 cd backend
 py -3.12 -m venv .venv
 .venv\Scripts\activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 `backend/.env`에 아래 값을 넣는다.
@@ -80,19 +80,28 @@ pip install -e .
 ## 쓰는 법
 
 ```python
+import asyncio
+
 from app.agents.commercial_area import analyze
 
-result = analyze({
-    "request_id": "request-001",
-    "site": {
-        "input_address": "서울특별시 송파구 위례광장로 120 155호",
-        "road_address": "서울특별시 송파구 위례광장로 120",
-        "detail_address": "155호",
-        "latitude": 37.4748,
-        "longitude": 127.1416,
-    },
-})
+result = asyncio.run(
+    analyze(
+        {
+            "request_id": "request-001",
+            "site": {
+                "input_address": "서울특별시 송파구 위례광장로 120 155호",
+                "road_address": "서울특별시 송파구 위례광장로 120",
+                "detail_address": "155호",
+                "latitude": 37.4748,
+                "longitude": 127.1416,
+            },
+        }
+    )
+)
 ```
+
+`analyze`는 **코루틴**이다. 서버 안에서는 `await analyze(task)`로 부른다.
+`store_client`를 넘기지 않으면 함수가 직접 만들고 끝날 때 닫는다.
 
 `AgentAnalysis`를 돌려주므로 `result.model_dump()`를 그대로 `DecisionRequest.analyses`에 넣으면 된다.
 
@@ -151,6 +160,8 @@ python examples/probe_radius.py
 
 ## 알아둘 제약
 
+- **모든 외부 호출은 비동기다.** 첫 페이지에서 전체 건수를 확인한 뒤 나머지 페이지를 동시에 받아온다.
+  동시 요청 수는 `SBIZ_MAX_CONCURRENCY`(기본 4)로 제한한다. 쿼터와 429 때문이다.
 - **API 쿼터가 하루 10,000건이다.** 같은 좌표 요청은 `backend/cache/`에 저장해 재사용한다. 강남 500m는 1회 분석에 5페이지, LQ용 2km는 48페이지가 나간다. LQ 기준 조회는 좌표를 250m 격자로 반올림해 같은 동네끼리 캐시를 공유한다.
 - **반경 5개를 위해 API를 5번 부르지 않는다.** 500m 한 번 받아 좌표로 안쪽 반경을 직접 계산한다. API 실측값과 오차 0~2건으로 일치하는 것을 확인했다.
 - **프랜차이즈 판정은 정확하지 않다.** 공정위 API에 반경 검색이 없어 브랜드명과 상호명을 문자열로 대조한다. 누락과 오탐이 있어 `confidence: "low"`로 표시한다.
@@ -168,7 +179,9 @@ cd backend
 python -m unittest discover -s tests
 ```
 
-43건이 네트워크 없이 돈다. 가짜 응답으로 계약 형식, status 전이, 모델 응답 파싱, 주소 분리, 자치구 기준선 계산과 캐시 재사용을 검증한다.
+네트워크 없이 돈다. 가짜 응답으로 계약 형식, status 전이, 모델 응답 파싱, 주소 분리,
+자치구 기준선 계산과 캐시 재사용을 검증한다. 주소부터 중재까지 이어지는 통합 시험은
+`tests/test_orchestrator_e2e.py`에 있다.
 
 ## 데이터 출처
 

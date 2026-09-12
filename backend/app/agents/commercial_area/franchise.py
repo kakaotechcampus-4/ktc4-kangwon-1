@@ -56,14 +56,14 @@ def save_brands(settings: Settings, brands: Sequence[str]) -> None:
         pass
 
 
-def fetch_brands(settings: Settings, max_pages: int = 30) -> list[str]:
+async def fetch_brands(settings: Settings, max_pages: int = 30) -> list[str]:
     if not settings.ftc_service_key:
         raise RuntimeError("FTC_SERVICE_KEY가 설정되지 않았습니다.")
     url = f"{FTC_BRAND_BASE_URL}/{FTC_BRAND_OPERATION}"
     brands: list[str] = []
-    with httpx.Client(timeout=settings.request_timeout_s) as client:
+    async with httpx.AsyncClient(timeout=settings.request_timeout_s) as client:
         for page in range(1, max_pages + 1):
-            response = client.get(
+            response = await client.get(
                 url,
                 params={
                     "serviceKey": settings.ftc_service_key,
@@ -95,14 +95,14 @@ def _brand_items(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def load_brands(settings: Settings) -> list[str] | None:
+async def load_brands(settings: Settings) -> list[str] | None:
     cached = load_cached_brands(settings)
     if cached:
         return cached
     if not settings.ftc_service_key:
         return None
     try:
-        brands = fetch_brands(settings)
+        brands = await fetch_brands(settings)
     except (httpx.HTTPError, RuntimeError, json.JSONDecodeError):
         return None
     if not brands:

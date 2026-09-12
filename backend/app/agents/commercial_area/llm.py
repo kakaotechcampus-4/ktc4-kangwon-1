@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-import time
-from pathlib import Path
 from typing import Any
 
 from .config import PACKAGE_DIR, Settings
@@ -29,7 +28,11 @@ def build_user_message(data: dict[str, Any]) -> str:
         "radius_m": data.get("radius_m"),
         "store_total": data.get("store_total"),
         "반경별_점포수": [
-            {"반경m": s["radius_m"], "점포수": s["store_total"], "없는업종수": s["absent_category_count"]}
+            {
+                "반경m": s["radius_m"],
+                "점포수": s["store_total"],
+                "없는업종수": s["absent_category_count"],
+            }
             for s in slices
         ],
         "반경별_요약": [
@@ -47,7 +50,11 @@ def build_user_message(data: dict[str, Any]) -> str:
         ],
         "자치구_이름": (data.get("district_baseline") or {}).get("signgu_name"),
         "자치구_전체_대비_특화업종": [
-            {"업종": r["name"], "개수": r["count"], "자치구대비배수": round(r["times_vs_surroundings"], 2)}
+            {
+                "업종": r["name"],
+                "개수": r["count"],
+                "자치구대비배수": round(r["times_vs_surroundings"], 2),
+            }
             for r in data.get("district_specialization", [])[:5]
         ],
         "by_major": [
@@ -65,7 +72,9 @@ def build_user_message(data: dict[str, Any]) -> str:
     return json.dumps(trimmed, ensure_ascii=False)
 
 
-def summarize(data: dict[str, Any], settings: Settings) -> tuple[dict[str, Any] | None, str | None]:
+async def summarize(
+    data: dict[str, Any], settings: Settings
+) -> tuple[dict[str, Any] | None, str | None]:
     if not settings.llm_model:
         return None, "ELICE_MODEL이 설정되지 않아 요약을 생략했습니다."
     if not settings.llm_api_key:
@@ -79,7 +88,7 @@ def summarize(data: dict[str, Any], settings: Settings) -> tuple[dict[str, Any] 
     last_problem = "모델이 빈 응답을 반환했습니다."
     for attempt in range(MAX_ATTEMPTS):
         try:
-            text = _complete(system_prompt, user_message, settings)
+            text = await _complete(system_prompt, user_message, settings)
         except Exception as exc:
             last_problem = f"요약 실패: {type(exc).__name__}"
             text = None
@@ -89,21 +98,25 @@ def summarize(data: dict[str, Any], settings: Settings) -> tuple[dict[str, Any] 
                 return summary, None
             last_problem = "모델 응답에서 요약 내용을 찾지 못했습니다."
         if attempt < MAX_ATTEMPTS - 1:
-            time.sleep(RETRY_DELAY_S)
+            await asyncio.sleep(RETRY_DELAY_S)
     return None, last_problem
 
 
-def _complete(system_prompt: str, user_message: str, settings: Settings) -> str:
-    from openai import OpenAI
+async def _complete(system_prompt: str, user_message: str, settings: Settings) -> str:
+    from openai import AsyncOpenAI
 
-    with OpenAI(
+    model = settings.llm_model
+    if not model:
+        raise ValueError("ELICE_MODEL이 설정되지 않았습니다.")
+
+    async with AsyncOpenAI(
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,
         timeout=settings.llm_timeout_s,
         max_retries=1,
     ) as client:
-        response = client.chat.completions.create(
-            model=settings.llm_model,
+        response = await client.chat.completions.create(
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -145,7 +158,8 @@ def parse_summary(text: str) -> dict[str, Any]:
         if not isinstance(row, dict):
             continue
         try:
-            radius = int(row.get("radius_m"))
+            raw_radius: Any = row.get("radius_m")
+            radius = int(raw_radius)
         except (TypeError, ValueError):
             continue
         note = str(row.get("text") or "").strip()

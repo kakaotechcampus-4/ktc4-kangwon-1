@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 
-from app.schemas import AgentAnalysis, AgentError, AnalysisTask, Scope
+from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from .client import SbizApiError, StoreClient
 from .config import Settings, load_dotenv_if_present
@@ -24,11 +24,11 @@ from .metrics import (
 from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Summary
 from .upjong import load_middle_master, master_from_stores
 
-AGENT_ID = "commercial_area"
+AGENT_ID: AgentId = "commercial_area"
 DISTRICT_VOTE_SIZE = 10
 
 
-def analyze(
+async def analyze(
     task: AnalysisTask | dict,
     settings: Settings | None = None,
     store_client: StoreClient | None = None,
@@ -48,7 +48,7 @@ def analyze(
 
     try:
         try:
-            stores, meta = client.stores_in_radius(site.latitude, site.longitude, radius)
+            stores, meta = await client.stores_in_radius(site.latitude, site.longitude, radius)
         except SbizApiError as exc:
             return AgentAnalysis(
                 request_id=task.request_id,
@@ -88,7 +88,7 @@ def analyze(
         baseline_counts = None
         baseline = LqBaseline(requested_radius_m=settings.lq_radius_candidates[0])
         try:
-            baseline_stores, baseline_meta = client.stores_in_radius_with_fallback(
+            baseline_stores, baseline_meta = await client.stores_in_radius_with_fallback(
                 site.latitude,
                 site.longitude,
                 settings.lq_radius_candidates,
@@ -107,7 +107,9 @@ def analyze(
                 )
             if baseline_meta.get("truncated"):
                 degraded = True
-                warnings.append("LQ 기준 반경 조회가 페이지 상한에 걸려 LQ가 과대추정될 수 있습니다.")
+                warnings.append(
+                    "LQ 기준 반경 조회가 페이지 상한에 걸려 LQ가 과대추정될 수 있습니다."
+                )
         except SbizApiError as exc:
             degraded = True
             warnings.append(f"LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다: {exc.message}")
@@ -118,7 +120,7 @@ def analyze(
         district_code, district_name = _nearest_district(stores, site.latitude, site.longitude)
         if district_code:
             try:
-                district_stores, district_meta = client.stores_in_district(district_code)
+                district_stores, district_meta = await client.stores_in_district(district_code)
                 district_counts = dict(count_by_middle(district_stores))
                 district_baseline = DistrictBaseline(
                     signgu_code=district_code,
@@ -128,7 +130,8 @@ def analyze(
                 if district_meta.get("truncated"):
                     degraded = True
                     warnings.append(
-                        "자치구 조회가 페이지 상한에 걸려 자치구 대비 배수가 과대추정될 수 있습니다."
+                        "자치구 조회가 페이지 상한에 걸려 "
+                        "자치구 대비 배수가 과대추정될 수 있습니다."
                     )
             except SbizApiError as exc:
                 degraded = True
@@ -137,13 +140,15 @@ def analyze(
                 )
         else:
             degraded = True
-            warnings.append("점포 자료에 자치구 코드가 없어 자치구 대비 배수를 계산하지 못했습니다.")
+            warnings.append(
+                "점포 자료에 자치구 코드가 없어 자치구 대비 배수를 계산하지 못했습니다."
+            )
 
         major_rows = build_major_rows(stores, radius, master)
         middle_rows = build_middle_rows(stores, radius, master, baseline_counts, district_counts)
 
         franchise = None
-        brands = load_brands(settings)
+        brands = await load_brands(settings)
         if brands:
             franchise = build_franchise(stores, brands, middle_rows)
             warnings.append(
@@ -186,7 +191,7 @@ def analyze(
         )
 
         data = payload.model_dump()
-        summary, summary_warning = summarize(data, settings)
+        summary, summary_warning = await summarize(data, settings)
         if summary_warning:
             warnings.append(summary_warning)
         if summary:
@@ -203,13 +208,12 @@ def analyze(
         )
     finally:
         if owns_client:
-            client.close()
+            await client.aclose()
 
 
 def _nearest_district(stores, lat: float, lon: float) -> tuple[str | None, str | None]:
     located = [
-        s for s in stores
-        if s.district_code and s.latitude is not None and s.longitude is not None
+        s for s in stores if s.district_code and s.latitude is not None and s.longitude is not None
     ]
     if not located:
         return None, None

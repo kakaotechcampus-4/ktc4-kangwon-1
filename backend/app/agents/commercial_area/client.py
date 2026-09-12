@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,7 @@ from .schemas import Store
 REFERENCE_DATE_KEYS = ("stdrDt", "dataStdDe", "baseYm", "stdrYm")
 NODATA_RESULT_CODES = {"03"}
 NODATA_KEYWORDS = ("NODATA", "NO_DATA", "데이터없음", "데이터가_없")
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class SbizApiError(Exception):
@@ -96,7 +99,7 @@ def _extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
         items = []
     if isinstance(items, dict):
         items = [items]
-    total = body.get("totalCount")
+    total: Any = body.get("totalCount")
     try:
         total_count = int(total)
     except (TypeError, ValueError):
@@ -153,37 +156,67 @@ def reference_date_of(items: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    raw = response.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
+
+
 class StoreClient:
-    def __init__(self, settings: Settings, client: httpx.Client | None = None):
+    """상가정보 API 비동기 클라이언트입니다.
+
+    분석 한 번이 반경·기준선·자치구 조회로 100회가 넘는 요청을 만듭니다.
+    첫 페이지에서 전체 건수를 확인한 뒤 나머지 페이지를 동시에 받아오되,
+    일일 쿼터와 429를 고려해 동시 요청 수를 max_concurrency로 제한합니다.
+    """
+
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
         self.settings = settings
         self._client = client
+        self._owns_client = client is None
         self.calls_made = 0
 
-    def _http(self) -> httpx.Client:
+    def _http(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.Client(timeout=self.settings.request_timeout_s)
+            self._client = httpx.AsyncClient(
+                timeout=self.settings.request_timeout_s,
+                limits=httpx.Limits(max_connections=self.settings.max_concurrency),
+            )
+            self._owns_client = True
         return self._client
 
-    def close(self) -> None:
-        if self._client is not None:
-            self._client.close()
-            self._client = None
+    async def aclose(self) -> None:
+        if self._client is not None and self._owns_client:
+            await self._client.aclose()
+        self._client = None
 
-    def _request_page(self, lat: float, lon: float, radius_m: int, page: int) -> dict[str, Any]:
-        return self._request(
+    async def __aenter__(self) -> StoreClient:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
+
+    async def _request_page(
+        self, lat: float, lon: float, radius_m: int, page: int
+    ) -> dict[str, Any]:
+        return await self._request(
             SBIZ_RADIUS_OPERATION,
             {"radius": radius_m, "cx": lon, "cy": lat},
             page,
         )
 
-    def _request_district_page(self, signgu_cd: str, page: int) -> dict[str, Any]:
-        return self._request(
+    async def _request_district_page(self, signgu_cd: str, page: int) -> dict[str, Any]:
+        return await self._request(
             SBIZ_DISTRICT_OPERATION,
             {"divId": "signguCd", "key": signgu_cd},
             page,
         )
 
-    def _request(self, operation: str, query: dict[str, Any], page: int) -> dict[str, Any]:
+    async def _request(self, operation: str, query: dict[str, Any], page: int) -> dict[str, Any]:
         if not self.settings.sbiz_service_key:
             raise SbizApiError("NO_KEY", "COMMERCIAL_AREA_API_KEY가 설정되지 않았습니다.")
         params = {
@@ -197,10 +230,12 @@ class StoreClient:
 
         last_error: Exception | None = None
         for attempt in range(self.settings.max_retries + 1):
+            wait_s = self.settings.retry_backoff_s * (attempt + 1)
             try:
-                response = self._http().get(url, params=params)
+                response = await self._http().get(url, params=params)
                 self.calls_made += 1
-                if response.status_code in {429, 500, 502, 503, 504}:
+                if response.status_code in RETRY_STATUS_CODES:
+                    wait_s = _retry_after_seconds(response) or wait_s
                     raise httpx.HTTPStatusError(
                         f"status {response.status_code}",
                         request=response.request,
@@ -209,18 +244,55 @@ class StoreClient:
                 response.raise_for_status()
                 try:
                     payload = response.json()
-                except json.JSONDecodeError:
-                    raise SbizApiError("BAD_RESPONSE", response.text[:200].replace("\n", " "))
+                except json.JSONDecodeError as decode_error:
+                    raise SbizApiError(
+                        "BAD_RESPONSE", response.text[:200].replace("\n", " ")
+                    ) from decode_error
                 _check_header(payload)
                 return payload
             except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_error = exc
                 if attempt < self.settings.max_retries:
-                    time.sleep(self.settings.retry_backoff_s * (attempt + 1))
+                    await asyncio.sleep(wait_s)
                     continue
         raise SbizApiError("UPSTREAM_FAILED", str(last_error))
 
-    def stores_in_radius(
+    async def _collect_pages(
+        self,
+        fetch_page: Callable[[int], Awaitable[dict[str, Any]]],
+        max_pages: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """첫 페이지로 전체 건수를 확인하고 나머지 페이지를 동시에 받아옵니다."""
+        try:
+            payload = await fetch_page(1)
+        except NoDataError:
+            return [], 0
+
+        items, total_count = _extract_items(payload)
+        if not items or len(items) >= total_count:
+            return items, total_count
+
+        page_size = max(1, self.settings.page_size)
+        last_page = min(max_pages, -(-total_count // page_size))
+        if last_page <= 1:
+            return items, total_count
+
+        semaphore = asyncio.Semaphore(max(1, self.settings.max_concurrency))
+
+        async def one(page: int) -> list[dict[str, Any]]:
+            async with semaphore:
+                try:
+                    page_payload = await fetch_page(page)
+                except NoDataError:
+                    return []
+            return _extract_items(page_payload)[0]
+
+        pages = await asyncio.gather(*(one(page) for page in range(2, last_page + 1)))
+        for page_items in pages:
+            items.extend(page_items)
+        return items, total_count
+
+    async def stores_in_radius(
         self,
         lat: float,
         lon: float,
@@ -239,29 +311,15 @@ class StoreClient:
                 stores = [s for s in (to_store(i) for i in cached["items"]) if s]
                 return stores, {**cached["meta"], "from_cache": True}
 
-        items: list[dict[str, Any]] = []
-        truncated = False
-        page = 1
-        total_count = 0
-        while page <= self.settings.max_pages:
-            try:
-                payload = self._request_page(cache_lat, cache_lon, radius_m, page)
-            except NoDataError:
-                total_count = len(items)
-                break
-            page_items, total_count = _extract_items(payload)
-            items.extend(page_items)
-            if len(items) >= total_count or not page_items:
-                break
-            page += 1
-
-        if len(items) < total_count:
-            truncated = True
+        items, total_count = await self._collect_pages(
+            lambda page: self._request_page(cache_lat, cache_lon, radius_m, page),
+            self.settings.max_pages,
+        )
 
         meta = {
             "total_count": total_count,
             "fetched": len(items),
-            "truncated": truncated,
+            "truncated": len(items) < total_count,
             "radius_m": radius_m,
             "reference_date": reference_date_of(items),
             "from_cache": False,
@@ -272,7 +330,7 @@ class StoreClient:
         stores = [s for s in (to_store(i) for i in items) if s]
         return stores, meta
 
-    def stores_in_radius_with_fallback(
+    async def stores_in_radius_with_fallback(
         self,
         lat: float,
         lon: float,
@@ -282,7 +340,7 @@ class StoreClient:
         last_error: SbizApiError | None = None
         for radius_m in candidates:
             try:
-                return self.stores_in_radius(lat, lon, radius_m, grid_m=grid_m)
+                return await self.stores_in_radius(lat, lon, radius_m, grid_m=grid_m)
             except RadiusRejectedError as exc:
                 last_error = exc
                 continue
@@ -293,7 +351,7 @@ class StoreClient:
                 raise
         raise last_error or SbizApiError("NO_RADIUS", "사용 가능한 반경을 찾지 못했습니다.")
 
-    def stores_in_district(self, signgu_cd: str) -> tuple[list[Store], dict[str, Any]]:
+    async def stores_in_district(self, signgu_cd: str) -> tuple[list[Store], dict[str, Any]]:
         cache_key = f"district_{signgu_cd}"
         path = _cache_path(self.settings, cache_key)
         cached = _read_cache(path, self.settings.district_cache_ttl_hours)
@@ -301,20 +359,10 @@ class StoreClient:
             stores = [s for s in (to_store(i) for i in cached["items"]) if s]
             return stores, {**cached["meta"], "from_cache": True}
 
-        items: list[dict[str, Any]] = []
-        page = 1
-        total_count = 0
-        while page <= self.settings.district_max_pages:
-            try:
-                payload = self._request_district_page(signgu_cd, page)
-            except NoDataError:
-                total_count = len(items)
-                break
-            page_items, total_count = _extract_items(payload)
-            items.extend(page_items)
-            if len(items) >= total_count or not page_items:
-                break
-            page += 1
+        items, total_count = await self._collect_pages(
+            lambda page: self._request_district_page(signgu_cd, page),
+            self.settings.district_max_pages,
+        )
 
         meta = {
             "signgu_cd": signgu_cd,

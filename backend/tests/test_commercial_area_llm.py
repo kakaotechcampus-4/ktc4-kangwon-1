@@ -57,7 +57,9 @@ class AddressSplitTests(unittest.TestCase):
         )
 
     def test_keeps_address_without_unit(self):
-        self.assertEqual(split_detail("서울 송파구 위례광장로 120"), ("서울 송파구 위례광장로 120", None))
+        self.assertEqual(
+            split_detail("서울 송파구 위례광장로 120"), ("서울 송파구 위례광장로 120", None)
+        )
 
     def test_candidates_get_progressively_shorter(self):
         candidates = query_candidates("서울특별시 강남구 테헤란로 123, ○○빌딩 3층 302호")
