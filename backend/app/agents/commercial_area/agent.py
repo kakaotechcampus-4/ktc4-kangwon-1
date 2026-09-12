@@ -150,11 +150,9 @@ async def analyze(
         franchise = None
         brands = await load_brands(settings)
         if brands:
+            # 판정 방식의 한계는 franchise.method 와 confidence 로 전달한다.
+            # warnings 는 실패에만 쓴다. 고지를 여기 넣으면 정상 분석도 partial 로 내려간다.
             franchise = build_franchise(stores, brands, middle_rows)
-            warnings.append(
-                "프랜차이즈 판정은 공정위 브랜드명과 상호명을 문자열로 대조한 결과라 "
-                "누락과 오탐이 있을 수 있습니다."
-            )
         else:
             degraded = True
             warnings.append(

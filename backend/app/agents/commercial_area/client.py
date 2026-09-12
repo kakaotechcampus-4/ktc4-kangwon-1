@@ -287,9 +287,18 @@ class StoreClient:
                     return []
             return _extract_items(page_payload)[0]
 
-        pages = await asyncio.gather(*(one(page) for page in range(2, last_page + 1)))
-        for page_items in pages:
-            items.extend(page_items)
+        # 한 페이지가 실패하면 남은 요청을 취소한다.
+        # gather 는 예외만 올려보내고 나머지를 계속 돌려서, 어차피 버릴 조회에
+        # 쿼터를 그대로 쓴다. 자치구 조회는 67페이지라 손실이 크다.
+        tasks: list[asyncio.Task[list[dict[str, Any]]]] = []
+        try:
+            async with asyncio.TaskGroup() as group:
+                tasks = [group.create_task(one(page)) for page in range(2, last_page + 1)]
+        except* SbizApiError as failures:
+            raise failures.exceptions[0] from None
+
+        for task in tasks:
+            items.extend(task.result())
         return items, total_count
 
     async def stores_in_radius(
