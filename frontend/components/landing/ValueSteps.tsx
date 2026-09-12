@@ -46,26 +46,28 @@ const steps: Step[] = [
 export default function ValueSteps() {
   return (
     <div
-      className="flex w-full flex-col items-center py-16"
+      className="flex w-full flex-col items-center px-5 py-12 sm:px-8 lg:py-16"
       style={{ backgroundColor: colors.neutral.black }}
     >
-      <div className="flex w-full max-w-[1440px] flex-col items-start px-[100px]">
-        <h2 className={`${outfit.className} text-[44px] font-bold text-white`}>
+      <div className="flex w-full max-w-[1440px] flex-col items-start lg:px-[100px]">
+        <h2
+          className={`${outfit.className} text-[28px] font-bold text-white sm:text-[36px] lg:text-[44px]`}
+        >
           채움은 이렇게 가치를 채웁니다
         </h2>
 
-        <div className="flex w-full items-stretch gap-[60px] pt-12">
+        <div className="flex w-full flex-col items-stretch gap-10 pt-10 lg:flex-row lg:gap-[60px] lg:pt-12">
           {steps.map((step, index) => (
             <Fragment key={step.id}>
               <div className="flex flex-1 flex-col items-start pt-1">
                 <div className="flex items-baseline gap-3">
                   <p
-                    className={`${dmMono.className} text-[48px] font-light tracking-[-0.96px] text-white/20`}
+                    className={`${dmMono.className} text-[36px] font-light tracking-[-0.96px] text-white/20 sm:text-[48px]`}
                   >
                     {step.number}
                   </p>
                   <p
-                    className={`${outfit.className} text-[30px] font-bold`}
+                    className={`${outfit.className} text-[24px] font-bold sm:text-[30px]`}
                     style={{ color: colors.brand.primary }}
                   >
                     {step.title}
@@ -75,13 +77,13 @@ export default function ValueSteps() {
                   className="mt-5 mb-5 h-px w-8 opacity-50"
                   style={{ backgroundColor: colors.brand.primary }}
                 />
-                <p className="w-[287px] text-[15px] leading-[24.5px] text-gray-300">
+                <p className="w-full max-w-[287px] text-[15px] leading-[24.5px] text-gray-300">
                   {step.description}
                 </p>
               </div>
 
               {index < steps.length - 1 && (
-                <div className="relative flex w-px shrink-0 items-center justify-center">
+                <div className="relative hidden w-px shrink-0 items-center justify-center lg:flex">
                   <div className="absolute inset-0 w-px bg-white/10" />
                   <p
                     className={`${dmMono.className} relative px-4 text-[18px]`}

@@ -27,8 +27,17 @@ MASTER = [
 ]
 
 
-def store(code, name, major_code, major_name, label, lat=37.5, lon=127.0,
-          district_code=None, district_name=None):
+def store(
+    code,
+    name,
+    major_code,
+    major_name,
+    label,
+    lat=37.5,
+    lon=127.0,
+    district_code=None,
+    district_name=None,
+):
     return Store(
         store_id=f"{code}-{label}",
         name=label,
@@ -56,10 +65,7 @@ def sample_stores():
 
 def ring_stores():
     near = [store("I201", "한식", "I2", "음식점업", f"가까운{i}") for i in range(4)]
-    far = [
-        store("I212", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027)
-        for i in range(3)
-    ]
+    far = [store("I212", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027) for i in range(3)]
     return near + far
 
 
@@ -101,7 +107,9 @@ class MetricsTests(unittest.TestCase):
         self.assertTrue(0 < diversity.hhi_middle <= 1)
 
     def test_lq_uses_baseline_shares(self):
-        rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100, "I212": 100, "G204": 200})
+        rows = build_middle_rows(
+            sample_stores(), 500, MASTER, {"I201": 100, "I212": 100, "G204": 200}
+        )
         han = next(r for r in rows if r.code == "I201")
         self.assertTrue(math.isclose(han.lq, (6 / 10) / (100 / 400), rel_tol=1e-3))
         self.assertIsNone(next(r for r in rows if r.code == "R102").lq)

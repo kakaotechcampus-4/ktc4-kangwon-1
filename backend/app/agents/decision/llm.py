@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from app.schemas import DecisionContent
 
 
-def generate_decision(system_prompt: str, input_json: str) -> DecisionContent:
+async def generate_decision(system_prompt: str, input_json: str) -> DecisionContent:
     """구조화 응답을 요청하며 실패를 샘플 결과로 대체하지 않습니다."""
     model = os.getenv("ELICE_MODEL", "").strip()
     if not model:
@@ -28,12 +28,14 @@ def generate_decision(system_prompt: str, input_json: str) -> DecisionContent:
         raise ValueError("응답 길이와 대기 시간은 양수로 설정해 주세요.")
 
     try:
-        from openai import APIError, APIStatusError, OpenAI
+        from openai import APIError, APIStatusError, AsyncOpenAI
     except ImportError as exc:
         raise RuntimeError("OpenAI 호환 호출 라이브러리를 설치해 주세요: pip install -e .") from exc
     try:
-        with OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=1) as client:
-            response = client.chat.completions.create(
+        async with AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=1
+        ) as client:
+            response = await client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -47,13 +49,19 @@ def generate_decision(system_prompt: str, input_json: str) -> DecisionContent:
         suffix = f": {detail}" if isinstance(detail, str) else ""
         raise RuntimeError(f"모델 요청이 HTTP {exc.status_code}로 거절되었습니다{suffix}") from exc
     except APIError as exc:
-        raise RuntimeError("모델 요청에 실패했습니다. 엘리스 키, URL, 모델 접근 권한과 연결 상태를 확인해 주세요.") from exc
+        raise RuntimeError(
+            "모델 요청에 실패했습니다. 엘리스 키, URL, 모델 접근 권한과 연결 상태를 확인해 주세요."
+        ) from exc
 
     if not response.choices:
-        raise RuntimeError("모델이 분석을 완료하지 못했습니다. 응답 거절 또는 길이 제한을 확인해 주세요.")
+        raise RuntimeError(
+            "모델이 분석을 완료하지 못했습니다. 응답 거절 또는 길이 제한을 확인해 주세요."
+        )
     choice = response.choices[0]
     if choice.finish_reason != "stop" or not choice.message.content:
-        raise RuntimeError("모델이 분석을 완료하지 못했습니다. 응답 거절 또는 길이 제한을 확인해 주세요.")
+        raise RuntimeError(
+            "모델이 분석을 완료하지 못했습니다. 응답 거절 또는 길이 제한을 확인해 주세요."
+        )
     try:
         return DecisionContent.model_validate_json(choice.message.content)
     except ValidationError as exc:

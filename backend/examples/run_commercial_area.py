@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 import uuid
 from pathlib import Path
 
 from app.agents.commercial_area import analyze
-from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.config import load_dotenv_if_present
+from app.agents.commercial_area.config import Settings, load_dotenv_if_present
 from app.agents.commercial_area.geocode import GeocodeError, geocode
 from app.schemas import AnalysisTask, Site
 
 
-def main() -> int:
+async def run() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("--address", default="서울특별시 강남구 테헤란로 123")
@@ -33,7 +33,7 @@ def main() -> int:
     site_kwargs = {}
     if args.lat is None or args.lon is None:
         try:
-            found = geocode(args.address, settings)
+            found = await geocode(args.address, settings)
         except GeocodeError as exc:
             print(f"주소를 좌표로 바꾸지 못했습니다: {exc}")
             return 1
@@ -57,7 +57,7 @@ def main() -> int:
         request_id=str(uuid.uuid4()),
         site=Site(input_address=args.address, latitude=lat, longitude=lon, **site_kwargs),
     )
-    result = analyze(task, settings=settings)
+    result = await analyze(task, settings=settings)
     payload = result.model_dump()
 
     if args.out:
@@ -79,7 +79,10 @@ def main() -> int:
 
     data = payload["data"]
     print(f"\n총 점포 {data['store_total']}개")
-    print(f"업종 다양성 HHI(중분류) {data['diversity']['hhi_middle']} / 유효 업종수 {data['diversity']['effective_categories']}")
+    print(
+        f"업종 다양성 HHI(중분류) {data['diversity']['hhi_middle']} / "
+        f"유효 업종수 {data['diversity']['effective_categories']}"
+    )
     print(f"음식점 밀도 {data['restaurant_density']['value']} 개/km²")
     if data.get("franchise"):
         print(f"프랜차이즈 {data['franchise']['count']}개 ({data['franchise']['ratio']:.1%})")
@@ -99,6 +102,10 @@ def main() -> int:
             print(f"\n집적도·특화도 평가 : {summary['concentration']}")
         print("=" * 72)
     return 0
+
+
+def main() -> int:
+    return asyncio.run(run())
 
 
 if __name__ == "__main__":

@@ -1,26 +1,27 @@
 """분석 결과를 모아 검증된 최종 판단을 반환합니다."""
 
+import inspect
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from importlib.resources import files
+from typing import Any
 
 from app.schemas import AGENT_IDS, AgentAnalysis, DecisionContent, DecisionRequest, DecisionResult
 
 from .llm import generate_decision
 
+GenerateDecision = Callable[[str, str], DecisionContent | dict | Awaitable[DecisionContent | dict]]
 
-def analyze(
+
+async def analyze(
     request: DecisionRequest | dict,
     *,
-    generate: Callable[[str, str], DecisionContent | dict] | None = None,
+    generate: GenerateDecision | None = None,
 ) -> DecisionResult:
     """입력을 검증하고 모델 판단을 리포트용 결과로 반환합니다."""
     request = DecisionRequest.model_validate(request)
-    sources = {item.agent_id: item for item in request.analyses}
-    available = {
-        key: item for key, item in sources.items()
-        if item.status in {"ok", "partial"}
-    }
+    sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
+    available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
     limitations = []
 
     for agent_id in AGENT_IDS:
@@ -28,7 +29,8 @@ def analyze(
         if source is None:
             limitations.append(f"분석 누락: {agent_id}")
         elif source.status == "error":
-            limitations.append(f"분석 실패: {agent_id} ({source.error.message})")
+            detail = source.error.message if source.error else "사유 없음"
+            limitations.append(f"분석 실패: {agent_id} ({detail})")
         elif source.status == "no_data":
             limitations.append(f"자료 없음: {agent_id}")
         else:
@@ -36,15 +38,20 @@ def analyze(
                 limitations.append(f"부분 분석: {agent_id}")
             limitations.extend(f"{agent_id}: {warning}" for warning in source.warnings)
 
-    scopes = {(item.scope.area, item.scope.period) for item in available.values()}
+    scopes = {
+        (item.scope.area, item.scope.period)
+        for item in available.values()
+        if item.scope is not None
+    }
     if len(scopes) > 1:
         limitations.append("분석 지역 또는 기준 기간이 달라 지표를 직접 비교하기 어렵습니다.")
 
     if available:
         prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
-        content = DecisionContent.model_validate(
-            (generate or generate_decision)(prompt, request.model_dump_json())
-        )
+        produced = (generate or generate_decision)(prompt, request.model_dump_json())
+        if inspect.isawaitable(produced):
+            produced = await produced
+        content = DecisionContent.model_validate(produced)
         _validate_evidence(content, available)
     else:
         content = DecisionContent(
@@ -81,7 +88,7 @@ def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysi
             path = evidence.path
             if not path.startswith("/") or re.search(r"~(?![01])", path):
                 raise ValueError(f"근거 경로 형식이 잘못되었습니다: {path}")
-            value = sources[evidence.agent_id].data
+            value: Any = sources[evidence.agent_id].data
             try:
                 for part in path[1:].split("/"):
                     key = part.replace("~1", "/").replace("~0", "~")

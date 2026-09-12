@@ -5,9 +5,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = PACKAGE_DIR.parents[3]
+BACKEND_DIR = PACKAGE_DIR.parents[2]
 
 SBIZ_BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2"
 SBIZ_RADIUS_OPERATION = "storeListInRadius"
@@ -32,6 +33,7 @@ class Settings:
 
     page_size: int = 1000
     max_pages: int = 60
+    max_concurrency: int = 4
     request_timeout_s: float = 15.0
     max_retries: int = 2
     retry_backoff_s: float = 1.5
@@ -56,8 +58,8 @@ class Settings:
     llm_timeout_s: float = 120.0
 
     @classmethod
-    def from_env(cls, **overrides) -> "Settings":
-        env_values = {
+    def from_env(cls, **overrides) -> Settings:
+        env_values: dict[str, Any] = {
             "sbiz_service_key": os.environ.get("COMMERCIAL_AREA_API_KEY"),
             "ftc_service_key": os.environ.get("FRANCHISE_API_KEY"),
             "geocoding_api_key": os.environ.get("GEOCODING_API_KEY"),
@@ -69,6 +71,7 @@ class Settings:
         for name, key in (
             ("analysis_radius_m", "ANALYSIS_RADIUS_M"),
             ("llm_max_tokens", "LLM_MAX_TOKENS"),
+            ("max_concurrency", "SBIZ_MAX_CONCURRENCY"),
         ):
             raw = os.environ.get(key)
             if raw:

@@ -27,7 +27,7 @@ export default function Header() {
         borderBottom: `1px solid ${colors.neutral.border}`,
       }}
     >
-      <div className="mx-auto grid h-14 w-full max-w-[1440px] grid-cols-3 items-center px-8">
+      <div className="mx-auto grid h-14 w-full max-w-[1440px] grid-cols-3 items-center px-5 sm:px-8">
         <Link href="/" className="flex items-center gap-2.5 justify-self-start">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md">
             <Image
@@ -53,7 +53,7 @@ export default function Header() {
         </Link>
 
         <nav
-          className="flex items-center gap-1 justify-self-center"
+          className="flex items-center gap-0.5 justify-self-center sm:gap-1"
           style={navAccentStyle}
         >
           {navLinks.map(({ label, href }) => {

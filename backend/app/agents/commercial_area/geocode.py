@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -56,11 +57,11 @@ class GeocodeResult:
     confidence: str
 
 
-def _kakao(address: str, settings: Settings) -> GeocodeResult | None:
+async def _kakao(address: str, settings: Settings) -> GeocodeResult | None:
     headers = {"Authorization": f"KakaoAK {settings.geocoding_api_key}"}
-    with httpx.Client(timeout=settings.request_timeout_s) as client:
+    async with httpx.AsyncClient(timeout=settings.request_timeout_s) as client:
         for url, kind in ((KAKAO_ADDRESS_URL, "address"), (KAKAO_KEYWORD_URL, "keyword")):
-            response = client.get(url, headers=headers, params={"query": address, "size": 1})
+            response = await client.get(url, headers=headers, params={"query": address, "size": 1})
             if response.status_code in {401, 403}:
                 raise GeocodeError("KAKAO_AUTH", "카카오 REST 키가 거부됐습니다.")
             response.raise_for_status()
@@ -68,7 +69,9 @@ def _kakao(address: str, settings: Settings) -> GeocodeResult | None:
             if not documents:
                 continue
             doc = documents[0]
-            road = (doc.get("road_address") or {}).get("address_name") or doc.get("road_address_name")
+            road = (doc.get("road_address") or {}).get("address_name") or doc.get(
+                "road_address_name"
+            )
             jibun = (doc.get("address") or {}).get("address_name") or doc.get("address_name")
             return GeocodeResult(
                 query=address,
@@ -84,11 +87,11 @@ def _kakao(address: str, settings: Settings) -> GeocodeResult | None:
     return None
 
 
-def _nominatim(address: str, settings: Settings) -> GeocodeResult | None:
+async def _nominatim(address: str, settings: Settings) -> GeocodeResult | None:
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "ko"}
-    params = {"q": address, "format": "json", "limit": 1, "countrycodes": "kr"}
-    with httpx.Client(timeout=settings.request_timeout_s) as client:
-        response = client.get(NOMINATIM_URL, headers=headers, params=params)
+    params: dict[str, Any] = {"q": address, "format": "json", "limit": 1, "countrycodes": "kr"}
+    async with httpx.AsyncClient(timeout=settings.request_timeout_s) as client:
+        response = await client.get(NOMINATIM_URL, headers=headers, params=params)
         response.raise_for_status()
         results = response.json()
     if not results:
@@ -107,7 +110,7 @@ def _nominatim(address: str, settings: Settings) -> GeocodeResult | None:
     )
 
 
-def geocode(address: str, settings: Settings) -> GeocodeResult:
+async def geocode(address: str, settings: Settings) -> GeocodeResult:
     cleaned = (address or "").strip()
     if not cleaned:
         raise GeocodeError("EMPTY_ADDRESS", "주소가 비어 있습니다.")
@@ -127,7 +130,7 @@ def geocode(address: str, settings: Settings) -> GeocodeResult:
     result = None
     for index, candidate in enumerate(query_candidates(cleaned)):
         try:
-            found = lookup(candidate, settings)
+            found = await lookup(candidate, settings)
         except httpx.HTTPError as exc:
             raise GeocodeError("UPSTREAM_FAILED", f"{type(exc).__name__}") from exc
         if found is not None:

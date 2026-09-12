@@ -32,7 +32,7 @@ const previewItems: PreviewItem[] = [
 export default function AnalysisPreviewPanel() {
   return (
     <Card
-      className="w-[360px] shrink-0 gap-4"
+      className="w-full gap-4 lg:w-[360px] lg:shrink-0"
       style={{
         padding: '22px 24px',
         borderRadius: '12px',
