@@ -45,8 +45,8 @@ type StatsRowProps = {
 
 export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
   return (
-    <div className="flex w-full flex-col items-center pb-16">
-      <div className="flex w-full max-w-[1185px] gap-[60px]">
+    <div className="flex w-full flex-col items-center px-5 pb-12 sm:px-8 lg:pb-16">
+      <div className="grid w-full max-w-[1185px] grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-[60px]">
         {stats.map(({ id, label, value, unit, accent }) => {
           const accentColor =
             accent === 'primary' ? colors.brand.primary : colors.brand.dark;
@@ -54,7 +54,7 @@ export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
           return (
             <div
               key={id}
-              className="relative flex w-[251.25px] shrink-0 flex-col overflow-hidden rounded-xl border p-6"
+              className="relative flex w-full flex-col overflow-hidden rounded-xl border p-6"
               style={{
                 backgroundColor: colors.neutral.white,
                 borderColor: colors.neutral.border,

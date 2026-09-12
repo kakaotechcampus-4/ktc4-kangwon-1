@@ -37,11 +37,11 @@ export default function ReportPreview({
   return (
     <div
       id="report-preview"
-      className="flex w-full flex-col items-start px-[100px] py-16"
+      className="flex w-full flex-col items-start px-5 py-12 sm:px-8 lg:px-[100px] lg:py-16"
     >
-      <div className="flex w-full items-end justify-between">
+      <div className="flex w-full flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
         <h2
-          className={`${outfit.className} text-[44px] font-bold`}
+          className={`${outfit.className} text-[28px] font-bold sm:text-[36px] lg:text-[44px]`}
           style={{ color: colors.neutral.black }}
         >
           분석 리포트 미리보기
@@ -60,7 +60,7 @@ export default function ReportPreview({
         style={{ padding: 0, borderRadius: '12px' }}
       >
         <div
-          className="flex w-full items-center justify-between px-8 py-5"
+          className="flex w-full flex-col items-start justify-between gap-3 px-5 py-5 sm:flex-row sm:items-center sm:px-8"
           style={{
             backgroundColor: colors.brand.dark,
             borderBottom: `1px solid ${colors.neutral.border}`,
@@ -89,7 +89,7 @@ export default function ReportPreview({
         </div>
 
         <div
-          className="flex w-full flex-col items-start px-8 py-6"
+          className="flex w-full flex-col items-start px-5 py-6 sm:px-8"
           style={{ borderBottom: `1px solid ${colors.neutral.border}` }}
         >
           <p
@@ -112,7 +112,7 @@ export default function ReportPreview({
           </p>
         </div>
 
-        <div className="flex w-full gap-6 px-8 py-6">
+        <div className="grid w-full grid-cols-1 gap-6 px-5 py-6 md:grid-cols-3 sm:px-8">
           {ranks.map(({ id, number, label, score }) => (
             <div key={id} className="flex flex-1 flex-col gap-2">
               <div className="flex w-full items-center justify-between">

@@ -19,16 +19,16 @@ export default function CTABanner() {
 
   return (
     <div
-      className="flex w-full flex-col items-center py-16"
+      className="flex w-full flex-col items-center px-5 py-12 sm:px-8 lg:py-16"
       style={{
         backgroundColor: colors.neutral.white,
         borderTop: `1px solid ${colors.neutral.border}`,
       }}
     >
-      <div className="flex w-full max-w-[1440px] items-center justify-between px-[100px]">
+      <div className="flex w-full max-w-[1440px] flex-col items-start justify-between gap-6 lg:flex-row lg:items-center lg:px-[100px]">
         <div className="flex flex-col items-start">
           <h2
-            className={`${outfit.className} text-[44px] leading-[50px] font-bold`}
+            className={`${outfit.className} text-[28px] leading-[1.2] font-bold sm:text-[36px] lg:text-[44px] lg:leading-[50px]`}
             style={{ color: colors.neutral.black }}
           >
             지금 바로 공실을 분석해보세요.
