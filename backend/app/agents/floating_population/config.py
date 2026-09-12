@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = PACKAGE_DIR.parents[3]
@@ -26,6 +27,15 @@ class Settings:
     quarter_probe_limit: int = 12  # 최신 분기를 찾아 거꾸로 살펴볼 분기 수(3년)
     request_timeout_s: float = 15.0
 
+    # 추세에 쓸 분기 수(최신 포함, 거꾸로). 12개면 3년치라 전년 동기 비교를 세 번 할 수 있고
+    # 계절성을 세 주기 본다. 한 분기당 호출 1회(실측 0.39초)라 12개도 5초 안쪽이다.
+    # (2026Q2 기준으로 12개면 2023Q3 까지 거슬러 간다. 원본은 2021Q1 부터 22개 분기가 있다.)
+    trend_quarters: int = 12
+
+    # 반경별 인구를 낼 반경들(m). 집계는 이 중 최대 반경까지의 상권으로 한 번만 받고
+    # 로컬에서 면적 안분하므로 **반경을 늘려도 API 호출은 늘지 않는다.**
+    radius_profile_m: tuple[int, ...] = (100, 250, 500, 750, 1000)
+
     base_url: str = SEOUL_OPEN_API_BASE
     flpop_service: str = FLPOP_SERVICE
     trdar_area_service: str = TRDAR_AREA_SERVICE
@@ -33,8 +43,8 @@ class Settings:
     api_key: str | None = None
 
     @classmethod
-    def from_env(cls, **overrides) -> Settings:
-        env_values: dict[str, object] = {
+    def from_env(cls, **overrides: Any) -> Settings:
+        env_values: dict[str, Any] = {
             "api_key": os.environ.get("FLOATING_POPULATION_API_KEY"),
             "base_url": os.environ.get("SEOUL_OPEN_API_BASE"),
             "flpop_service": os.environ.get("SEOUL_FLPOP_SERVICE"),

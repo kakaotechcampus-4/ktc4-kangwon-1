@@ -64,9 +64,7 @@ def to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
     a_ = (lam - _LON0) * cos_phi
 
     x = _FALSE_EASTING + _K0 * n * (
-        a_
-        + (1 - t + c) * a_**3 / 6
-        + (5 - 18 * t + t**2 + 72 * c - 58 * _EP2) * a_**5 / 120
+        a_ + (1 - t + c) * a_**3 / 6 + (5 - 18 * t + t**2 + 72 * c - 58 * _EP2) * a_**5 / 120
     )
     y = _FALSE_NORTHING + _K0 * (
         _meridian_arc(phi)
@@ -80,3 +78,34 @@ def to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
         )
     )
     return x, y
+
+
+def circle_overlap_ratio(distance_m: float, radius_m: float, area_radius_m: float) -> float:
+    """상권 구역(면적 등가원) 중 분석 반경 안에 들어온 **면적 비율** (0~1).
+
+    반경별 인구를 낼 때 쓴다. 상권 단위 자료는 구역 전체의 합계만 주므로, 반경으로 잘라
+    "반경 300m 안의 인구" 를 구하려면 구역의 일부만 세는 수밖에 없다. 여기서는 **상권 안에서
+    인구가 고르게 분포한다고 가정**하고 겹친 면적 비율만큼 인구를 안분한다. 가정이 들어가는
+    자리이므로 `data.radius_profile.method` 에 그대로 적어 둔다.
+
+    왜 이 방법이 필요한가 — 대표 점이 반경 안이면 통째로 세는 방식은 반경을 줄일수록
+    쓸모없어진다(실측: 반경 100m 에서 4개 지점 중 3곳이 상권 0곳, 테헤란로는 상권 1곳이
+    100% 인데 그 상권의 실제 도달 거리가 483m). 면적 안분은 반경이 줄면 값도 부드럽게 준다.
+
+    면적이 0 인 상권(등가 반지름 0)은 점으로 보고 반경 안이면 1, 밖이면 0 을 준다.
+    """
+    if area_radius_m <= 0:
+        return 1.0 if distance_m <= radius_m else 0.0
+    if distance_m >= radius_m + area_radius_m:
+        return 0.0
+    if distance_m <= abs(radius_m - area_radius_m):
+        # 한쪽이 다른 쪽을 완전히 품는다. 상권이 더 작으면 전부 포함(1.0),
+        # 반경이 더 작으면 반경 원의 면적만큼만 포함된다.
+        return 1.0 if area_radius_m <= radius_m else (radius_m / area_radius_m) ** 2
+
+    # 두 원의 렌즈꼴 교집합 면적 (표준 공식)
+    d, r1, r2 = distance_m, radius_m, area_radius_m
+    a1 = math.acos(max(-1.0, min(1.0, (d**2 + r1**2 - r2**2) / (2 * d * r1))))
+    a2 = math.acos(max(-1.0, min(1.0, (d**2 + r2**2 - r1**2) / (2 * d * r2))))
+    lens = r1**2 * (a1 - math.sin(2 * a1) / 2) + r2**2 * (a2 - math.sin(2 * a2) / 2)
+    return max(0.0, min(1.0, lens / (math.pi * r2**2)))

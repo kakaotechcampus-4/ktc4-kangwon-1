@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import uuid
 
@@ -50,7 +51,7 @@ def main() -> int:
         ),
     )
 
-    analysis = analyze(task)
+    analysis = asyncio.run(analyze(task))
     print(analysis.model_dump_json(indent=2))
     if analysis.status == "error" and analysis.error is not None:
         print(f"[error] {analysis.error.code}", file=sys.stderr)

@@ -98,6 +98,5 @@ def scale_percentile(mean_per_area: float) -> int:
 def time_indices(time_per_hour_share: dict[str, float]) -> dict[str, float]:
     """시간대별 시간당 비중 → 서울 평균 대비 배수."""
     return {
-        band: index(time_per_hour_share[band], TIME_PER_HOUR_SHARE_AVG[band])
-        for band in TIME_BANDS
+        band: index(time_per_hour_share[band], TIME_PER_HOUR_SHARE_AVG[band]) for band in TIME_BANDS
     }

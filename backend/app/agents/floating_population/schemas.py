@@ -113,6 +113,69 @@ class Reliability(Schema):
     level: Literal["high", "medium", "low"]
 
 
+class QuarterPoint(Schema):
+    """추세 그래프의 점 하나 = 한 분기.
+
+    같은 상권 집합을 분기마다 다시 합산한 값이다. 분기별로 상권 목록이 조금씩 바뀌므로
+    (서울 전체 1,648~1,650곳 사이에서 오르내린다) 그 분기에 실제로 자료가 있던 상권 수를
+    `trade_area_count` 로 함께 싣는다 — 이 값이 흔들리면 증감이 상권 수 변화일 수 있다.
+    """
+
+    period_code: Text  # "20262"
+    period: Text  # "2026년 2분기"
+    total: float  # 분기 합계
+    daily_avg: float  # 분기 합계 ÷ 그 분기 일수
+    trade_area_count: int
+    age_share: dict[str, float]
+    time_per_hour_share: dict[str, float]
+
+
+class Trend(Schema):
+    """분기별 추세. 최신 1개 분기만 보던 단면 분석의 한계를 푼다.
+
+    `quarters` 는 **오래된 순**이라 그대로 꺾은선 차트의 x축이 된다.
+    """
+
+    unit: Text
+    quarters: list[QuarterPoint]
+    # 최신 vs 직전 분기. 분기가 2개 미만이면 None.
+    qoq_change: float | None = None
+    # 최신 vs 4분기 전(전년 동기). 계절성을 제거한 비교라 판단에는 이쪽이 낫다.
+    # 분기가 5개 미만이면 None.
+    yoy_change: float | None = None
+    direction: Text  # "증가" · "감소" · "보합" · "판단 불가"
+
+
+class RadiusPoint(Schema):
+    """반경별 인구 곡선의 점 하나.
+
+    `daily_avg` 는 그 반경 안에 **면적 안분으로 들어온 몫**이다. 상권 전체가 아니라
+    겹친 면적 비율만큼만 센다.
+    """
+
+    radius_m: int
+    total: float
+    daily_avg: float
+    # 조금이라도 걸친 상권 수(안분 가중치 > 0). 반경 안에 통째로 든 상권 수가 아니다.
+    trade_area_count: int
+    # 안분 가중치의 합. 상권 "몇 곳분" 인지를 뜻한다(예: 2.4 = 상권 2.4곳분).
+    effective_trade_areas: float
+
+
+class RadiusProfile(Schema):
+    """반경을 넓혀가며 본 인구 곡선.
+
+    ⚠️ 원자료가 **상권 조각 단위**라 정직한 반경 절단이 불가능하다. 대표 점이 반경 안이면
+    상권을 통째로 세는 방식은 반경을 줄일수록 무너진다(실측: 반경 100m 에서 4개 지점 중
+    3곳이 상권 0곳, 테헤란로는 상권 1곳이 100% 를 차지하는데 그 상권의 실제 도달 거리가
+    483m). 그래서 면적 안분을 쓰고, 가정을 `method` 에 밝혀 둔다.
+    """
+
+    unit: Text
+    method: Text
+    points: list[RadiusPoint]
+
+
 class Source(Schema):
     name: Text
     url: Text
@@ -134,6 +197,8 @@ class FloatingPopulationData(Schema):
     trade_areas: list[TradeArea]
     population: Population
     benchmark: Benchmark
+    trend: Trend
+    radius_profile: RadiusProfile
     type: TypeJudgement
     reliability: Reliability
     sources: list[Source]

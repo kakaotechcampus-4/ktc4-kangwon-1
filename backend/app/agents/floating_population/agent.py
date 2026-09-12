@@ -15,16 +15,17 @@
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 import httpx
 
-from app.schemas import AgentAnalysis, AgentError, AnalysisTask, Scope
+from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from . import baseline
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
 from .config import Settings, load_dotenv_if_present
-from .geo import to_epsg5181
+from .geo import circle_overlap_ratio, to_epsg5181
 from .models import (
     AGE_BANDS,
     DAYS,
@@ -41,13 +42,17 @@ from .schemas import (
     Benchmark,
     FloatingPopulationData,
     Population,
+    QuarterPoint,
+    RadiusPoint,
+    RadiusProfile,
     Reliability,
     Source,
     TradeArea,
+    Trend,
     TypeJudgement,
 )
 
-AGENT_ID = "floating_population"
+AGENT_ID: AgentId = "floating_population"
 
 SOURCES = [
     {
@@ -160,8 +165,7 @@ def _benchmark(population: Population, trade_area_count: int) -> Benchmark:
         unit="배수 (1.0 = 서울 전체 상권 평균)",
         baseline=baseline.BASELINE_LABEL,
         age_index={
-            a: baseline.index(population.age_share[a], baseline.AGE_SHARE_AVG[a])
-            for a in AGE_BANDS
+            a: baseline.index(population.age_share[a], baseline.AGE_SHARE_AVG[a]) for a in AGE_BANDS
         },
         time_per_hour_index=time_index,
         lunch_index=time_index["11_14"],
@@ -195,12 +199,139 @@ def _description(quarter: str, covered: int, outer_reach: float, radius_m: int) 
         "population 의 인원수는 분기 합계이며 같은 사람의 반복 통행이 중복 집계됩니다 — "
         "하루 평균이 필요하면 population.daily_avg 를 쓰십시오. "
         "benchmark 는 서울 전체 상권 평균 대비 배수(1.0 = 평균)입니다. "
+        "trend 는 같은 상권들을 분기마다 다시 합산한 추세로 quarters 가 오래된 순이며, "
+        "변화율(qoq_change·yoy_change)은 분기 일수 차이를 없앤 daily_avg 기준입니다. "
+        "radius_profile 은 반경별 인구인데 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 "
+        "없어 겹친 면적 비율로 안분한 추정값입니다 — 실측값이 아닙니다. "
+        "시간대는 원자료가 6구간(00-06·06-11·11-14·14-17·17-21·21-24)뿐이라 더 잘게 나눌 수 "
+        "없고, 구간 길이가 3~6시간으로 달라 비교는 반드시 time_per_hour_share 로 해야 합니다 "
+        "— by_time 총량으로 비교하면 6시간짜리 00-06 구간이 거의 항상 1위가 됩니다. "
         "업종별 점포수·매출·임대료는 이 자료에 없습니다."
+    )
+
+
+def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) -> Trend:
+    """분기별 추세. 최신 1개 분기만 보던 단면 분석의 한계를 푼다.
+
+    **같은 상권 집합으로 분기마다 다시 합산한다.** 반경 판정은 상권영역(시점 없는 현재
+    스냅샷)으로 한 번만 하므로 분기가 바뀌어도 대상 상권은 같다. 다만 그 분기에 자료가 없는
+    상권이 있을 수 있어(서울 전체가 1,648~1,650곳 사이에서 오르내린다) 분기마다 실제 집계된
+    상권 수를 함께 싣는다 — 증감이 상권 수 변화 때문일 수 있기 때문이다.
+
+    변화율은 `daily_avg` 로 잰다. 분기 합계는 분기 일수(90~92일)가 달라 그대로 비교하면
+    최대 2% 의 가짜 증감이 섞인다.
+    """
+    points: list[QuarterPoint] = []
+    for quarter, records in series:
+        rs = [r for r in records if r.trdar_cd in main_codes]
+        if not rs:
+            continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
+        pop = _aggregate(rs, quarter)
+        points.append(
+            QuarterPoint(
+                period_code=quarter,
+                period=period_ko(quarter),
+                total=pop.total,
+                daily_avg=round(pop.daily_avg, 1),
+                trade_area_count=len(rs),
+                age_share=pop.age_share,
+                time_per_hour_share=pop.time_per_hour_share,
+            )
+        )
+
+    def change(new: float, old: float) -> float | None:
+        return round((new - old) / old, 4) if old else None
+
+    qoq = change(points[-1].daily_avg, points[-2].daily_avg) if len(points) >= 2 else None
+    yoy = change(points[-1].daily_avg, points[-5].daily_avg) if len(points) >= 5 else None
+
+    # 전년 동기가 있으면 그걸로 본다 — 계절성이 빠져서 판단에 낫다.
+    basis = yoy if yoy is not None else qoq
+    if basis is None:
+        direction = "판단 불가"
+    elif basis > 0.05:
+        direction = "증가"
+    elif basis < -0.05:
+        direction = "감소"
+    else:
+        direction = "보합"
+
+    return Trend(
+        unit="명 (분기 합계) · daily_avg 는 명/일 · 변화율은 비율(0.05 = +5%)",
+        quarters=points,
+        qoq_change=qoq,
+        yoy_change=yoy,
+        direction=direction,
+    )
+
+
+def _radius_profile(
+    scan_hits: list[tuple[TrdarArea, float]],
+    by_cd: dict[str, FlpopRecord],
+    radii: tuple[int, ...],
+    days: int,
+) -> RadiusProfile:
+    """반경을 넓혀가며 본 인구 곡선. **면적 안분**으로 낸다.
+
+    원자료가 상권 조각 단위라 정직한 반경 절단이 안 된다. 대표 점이 반경 안이면 상권을
+    통째로 세는 방식은 반경을 줄일수록 무너진다 — 실측(2026Q2)으로 확인한 것:
+
+    | 반경 | 길동 | 테헤란로 | 서교동 | 평창동 |
+    | --- | --- | --- | --- | --- |
+    | 100m | 0곳 | 1곳(100%) | 0곳 | 0곳 |
+    | 250m | 4곳 | 1곳(100%) | 1곳(100%) | 0곳 |
+    | 500m | 9곳 | 8곳 | 12곳 | 2곳 |
+
+    테헤란로 100m 의 "상권 1곳" 은 실제 도달 거리가 483m 이고, 서교동은 250m→500m 에서
+    합계가 **+2,981%** 튄다. 조각이 하나 들어오고 나가는 데 따라 계단식으로 뛰기 때문이다.
+
+    그래서 반경 원과 상권 면적 등가원의 **겹친 면적 비율**만큼만 인구를 센다. 반경이 줄면
+    값도 부드럽게 줄고 100m 에서도 0 이 되지 않는다. 대신 **상권 안에서 인구가 고르게
+    분포한다**는 가정이 들어가므로 `method` 에 그대로 적어 결정·리포트 쪽이 알게 한다.
+    """
+    points: list[RadiusPoint] = []
+    for r in sorted(radii):
+        total = 0.0
+        weight_sum = 0.0
+        touched = 0
+        for area, distance in scan_hits:
+            record = by_cd.get(area.trdar_cd)
+            if record is None:
+                continue
+            w = circle_overlap_ratio(distance, r, area.equivalent_radius_m)
+            if w <= 0:
+                continue
+            total += record.total * w
+            weight_sum += w
+            touched += 1
+        points.append(
+            RadiusPoint(
+                radius_m=r,
+                total=round(total, 1),
+                daily_avg=round(total / days, 1),
+                trade_area_count=touched,
+                effective_trade_areas=round(weight_sum, 2),
+            )
+        )
+    return RadiusProfile(
+        unit="명 (분기 합계) · daily_avg 는 명/일",
+        method=(
+            "면적 안분 — 상권 구역을 면적 등가원으로 근사하고, 반경 원과 겹친 면적 비율만큼 "
+            "인구를 나눠 셌습니다. 상권 안에서 인구가 고르게 분포한다고 가정한 값이므로 "
+            "실측값이 아니라 추정값입니다. 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 "
+            "없어 쓰는 방법입니다. "
+            "⚠️ 그래서 같은 반경이라도 population 의 값보다 작습니다 — population 은 반경에 "
+            "걸친 상권을 구역째 합산하고(바깥 경계가 반경을 넘습니다), 이 곡선은 겹친 만큼만 "
+            "셉니다. 서로 다른 질문의 답이지 모순이 아닙니다. 지역의 대표 수치로는 "
+            "population 을, 반경에 따른 증가 추이로는 이 곡선을 쓰십시오."
+        ),
+        points=points,
     )
 
 
 def _reliability(found: int, covered: int) -> Reliability:
     """상권 표본이 얼마나 두터운지. 결정 에이전트가 가중치를 낮추는 근거."""
+    level: Literal["high", "medium", "low"]
     if covered <= 1:
         level = "low"
     elif covered < 3 or covered < found:
@@ -210,13 +341,18 @@ def _reliability(found: int, covered: int) -> Reliability:
     return Reliability(trade_area_count=found, covered_trade_areas=covered, level=level)
 
 
-def analyze(
+async def analyze(
     task: AnalysisTask,
     *,
     settings: Settings | None = None,
     client: SeoulOpenDataClient | None = None,
 ) -> AgentAnalysis:
-    """입력 위치 반경 안의 유동인구를 분석해 팀 공통 계약 형태로 돌려준다."""
+    """입력 위치 반경 안의 유동인구를 분석해 팀 공통 계약 형태로 돌려준다.
+
+    오케스트레이터가 분석 에이전트를 `asyncio.gather` 로 동시에 돌리므로 비동기다
+    (`orchestrator.AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]`).
+    클라이언트를 주입하지 않으면 여기서 만들고 끝날 때 닫는다.
+    """
     site = task.site
     if settings is None:
         load_dotenv_if_present()
@@ -252,6 +388,7 @@ def analyze(
             warnings=[message],
         )
 
+    owns_client = client is None
     try:
         client = client or SeoulOpenDataClient(settings)
     except MissingApiKeyError as e:
@@ -259,8 +396,9 @@ def analyze(
 
     x, y = to_epsg5181(site.latitude, site.longitude)
 
+    # 네트워크를 쓰는 구간은 여기뿐이다. 아래 계산은 전부 로컬이라 끝나는 대로 연결을 닫는다.
     try:
-        areas = client.fetch_trdar_areas()
+        areas = await client.fetch_trdar_areas()
         hits = _overlapping_areas(areas, x, y, radius)
         if not hits:
             return empty(
@@ -268,11 +406,22 @@ def analyze(
                 f"{site.input_address} 기준 반경 {radius}m 와 겹치는 "
                 "서울시 상권분석서비스 상권이 없습니다",
             )
-        quarter, records = client.fetch_flpop({a.trdar_cd for a, _ in hits})
+        # 반경별 곡선은 분석 반경보다 넓게 본다. 상권 선택은 로컬 계산이고 길단위인구는 어차피
+        # 분기 전체를 받아 거르므로, 넓혀도 **API 호출은 늘지 않는다.**
+        scan_radius = max(radius, max(settings.radius_profile_m, default=radius))
+        scan_hits = _overlapping_areas(areas, x, y, scan_radius)
+        main_codes = {a.trdar_cd for a, _ in hits}
+        wanted = main_codes | {a.trdar_cd for a, _ in scan_hits}
+        series = await client.fetch_flpop_series(wanted, settings.trend_quarters)
+        quarter, latest = series[-1]
+        records = [r for r in latest if r.trdar_cd in main_codes]
     except httpx.TimeoutException as e:
         return failed("UPSTREAM_TIMEOUT", f"서울시 API 응답 시간이 초과되었습니다: {e}")
     except (SeoulOpenApiError, httpx.HTTPError) as e:
         return failed("UPSTREAM_ERROR", f"서울시 API 오류: {e}")
+    finally:
+        if owns_client:
+            await client.aclose()
 
     if not records:
         return empty(
@@ -287,8 +436,25 @@ def analyze(
         weekend_to_weekday=population.weekend_to_weekday_ratio,
     )
     reliability = _reliability(len(hits), covered)
+    trend = _trend(series, main_codes)
 
     warnings = list(BASE_WARNINGS)
+    warnings.append(
+        "radius_profile 은 상권 안 인구가 고르게 분포한다고 보고 면적 비율로 안분한 "
+        "추정값입니다 — 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 없습니다."
+    )
+    if len(trend.quarters) < settings.trend_quarters:
+        warnings.append(
+            f"추세는 {settings.trend_quarters}개 분기를 요청해 "
+            f"{len(trend.quarters)}개 분기만 자료가 있었습니다."
+        )
+    # 분기마다 집계된 상권 수가 다르면 증감이 표본 변화일 수 있다.
+    counts = {p.trade_area_count for p in trend.quarters}
+    if len(counts) > 1:
+        warnings.append(
+            f"분기마다 자료가 있는 상권 수가 달라({min(counts)}~{max(counts)}곳) "
+            "추세의 증감에 표본 변화가 섞여 있을 수 있습니다."
+        )
     # 반경에 걸친 상권은 구역 전체가 집계에 들어간다. 실제로 어디까지 미치는지 밝혀 둔다.
     outer_reach = max(d + a.equivalent_radius_m for a, d in hits)
     if outer_reach > radius:
@@ -325,6 +491,13 @@ def analyze(
         ],
         population=population,
         benchmark=_benchmark(population, covered),
+        trend=trend,
+        radius_profile=_radius_profile(
+            scan_hits,
+            {r.trdar_cd: r for r in latest},
+            settings.radius_profile_m,
+            quarter_days(quarter),
+        ),
         type=TypeJudgement(signals_unit="비율 (0~1). 주말/주중은 배수", **type_result.model_dump()),
         reliability=reliability,
         sources=[Source(**s, period=period_ko(quarter)) for s in SOURCES],

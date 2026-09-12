@@ -41,7 +41,9 @@ _AGE_KEYS = {
 
 def _num(row: dict, key: str) -> float:
     v = row.get(key)
-    return 0.0 if v in (None, "") else float(v)
+    if v is None or v == "":
+        return 0.0
+    return float(v)
 
 
 def period_ko(stdr_yyqu_cd: str) -> str:
