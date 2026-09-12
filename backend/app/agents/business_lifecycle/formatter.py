@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-
 # =========================================
 # 1. 파일 경로
 # =========================================
@@ -25,7 +24,6 @@ OUTPUT_PATH = (
 
 with open(
     INPUT_PATH,
-    "r",
     encoding="utf-8"
 ) as f:
 
@@ -138,7 +136,7 @@ with open(
 
 
 print(
-    f"중재 Agent용 JSON 생성 완료"
+    "중재 Agent용 JSON 생성 완료"
 )
 
 print(

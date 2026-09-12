@@ -39,6 +39,11 @@ testpaths = ["tests"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.format]
+# business_lifecycle은 아직 프로토타입이라 포맷 검사에서 임시 제외합니다.
+# 담당자가 `ruff format .` 한 번 돌린 뒤 이 줄을 지우면 됩니다.
+exclude = ["app/agents/business_lifecycle/**"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 

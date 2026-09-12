@@ -1,7 +1,7 @@
 import json
 import uuid
-import pandas as pd
 
+import pandas as pd
 
 # =========================================
 # 1. 설정

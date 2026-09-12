@@ -1,10 +1,9 @@
-import os
 import json
+import os
 import re
 from pathlib import Path
 
 from openai import OpenAI
-
 
 # ============================================================
 # 1. 기본 설정
@@ -140,7 +139,6 @@ JSON 외의 설명, 마크다운, 코드블록은 작성하지 않는다.
 
 with open(
     INPUT_PATH,
-    "r",
     encoding="utf-8",
 ) as f:
     agent_input = json.load(f)
