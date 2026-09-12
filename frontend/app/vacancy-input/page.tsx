@@ -28,8 +28,8 @@ export default function VacancyInputPage() {
           </p>
         </div>
 
-        <div className="flex w-full items-start gap-8">
-          <div className="flex flex-1">
+        <div className="flex w-full flex-col items-start gap-8 md:flex-row">
+          <div className="flex w-full md:flex-1">
             <AddressInput />
           </div>
           <AnalysisPreviewPanel />

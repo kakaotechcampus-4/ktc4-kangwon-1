@@ -1,3 +1,5 @@
+'use client';
+
 import { Outfit, DM_Mono } from 'next/font/google';
 import { LayoutGrid, Share2, Target, type LucideIcon } from 'lucide-react';
 import Card from '@/components/ui/Card';
@@ -52,9 +54,9 @@ const problems: Problem[] = [
 
 export default function ProblemCards() {
   return (
-    <div className="flex w-full flex-col items-start px-[100px] py-16">
+    <div className="problem-container flex w-full flex-col items-start py-16">
       <h2
-        className={`${outfit.className} text-[44px] leading-[50px] font-bold`}
+        className={`problem-headline ${outfit.className} font-bold`}
         style={{ color: colors.neutral.black }}
       >
         건물주는 이런 문제를 마주합니다.
@@ -63,14 +65,16 @@ export default function ProblemCards() {
         상권만으로는 내 공실에 맞는 업종을 판단하기 어렵습니다.
       </p>
 
-      <div className="mx-auto flex w-[1137px] gap-[60px] pt-10">
+      <div className="problem-row mx-auto flex w-full pt-10">
         {problems.map(({ id, number, tag, icon: Icon, title, description }) => (
-          <Card key={id} className="w-[339px] shrink-0">
+          <Card key={id} className="problem-card shrink-0">
             <div className="flex w-full items-center justify-between">
-              <p className={`${dmMono.className} text-[13px] text-gray-300`}>
+              <p
+                className={`problem-number ${dmMono.className} text-gray-300`}
+              >
                 {number}
               </p>
-              <Badge>{tag}</Badge>
+              <Badge className="problem-badge">{tag}</Badge>
             </div>
 
             <div className="pt-5 opacity-75">
@@ -82,18 +86,91 @@ export default function ProblemCards() {
             </div>
 
             <p
-              className={`${outfit.className} w-[280px] pt-4 text-[23px] leading-[30px] font-bold`}
+              className={`problem-title ${outfit.className} w-full pt-4 font-bold`}
               style={{ color: colors.neutral.black }}
             >
               {title}
             </p>
 
-            <p className="w-[280px] pt-2.5 text-[15px] leading-[22.95px] text-gray-500">
+            <p className="problem-desc w-full pt-2.5 text-gray-500">
               {description}
             </p>
           </Card>
         ))}
       </div>
+
+      {/*
+        375px~1337px 사이를 별도 구간 나누기 없이 하나의 1차식(clamp)으로
+        처리한다. 두 기준점에서 "카드3 + gap*2 + 좌우여백*2 = 뷰포트 폭"이
+        정확히 성립하도록 역산했기 때문에(375px: 101*3+16*2+20*2=375,
+        1337px: 339*3+60*2+100*2=1337), 그 사이 어떤 폭에서도 이 등식이
+        선형적으로 유지되어 카드 행이 화면보다 넘치거나 과도하게 남는
+        여백이 생기지 않는다. clamp()가 375px 미만/1337px 초과 구간은
+        각각 최소/최대값으로 고정해주므로 별도 @media 분기가 필요 없다.
+      */}
+      <style jsx global>{`
+        /*
+          섹션 헤드라인(h2, 44px)도 같은 375px~1337px clamp 패턴을 따른다.
+          이 사이트의 다른 두 섹션 헤드라인(ValueSteps, ReportPreview)과
+          정확히 동일한 min/slope/max를 공유해, 스크롤하며 세 헤드라인을
+          지나갈 때 축소되는 느낌이 일관되도록 한다. line-height는 별도
+          clamp 대신 font-size 값(--headline-fs)에 고정 비율(50/44)을 곱해
+          계산해, 두 값이 항상 정확히 같은 비율로 함께 줄어든다.
+        */
+        .problem-headline {
+          --headline-fs: clamp(
+            26px,
+            calc(26px + (100vw - 375px) * 0.018711),
+            44px
+          );
+          font-size: var(--headline-fs);
+          line-height: calc(var(--headline-fs) * 1.13636);
+        }
+        .problem-container {
+          padding-inline: clamp(
+            20px,
+            calc(20px + (100vw - 375px) * 0.0832),
+            100px
+          );
+        }
+        .problem-row {
+          max-width: 1137px;
+          gap: clamp(16px, calc(16px + (100vw - 375px) * 0.04574), 60px);
+        }
+        .problem-card {
+          width: clamp(101px, calc(101px + (100vw - 375px) * 0.2474), 339px);
+        }
+        .problem-title {
+          font-size: clamp(
+            14px,
+            calc(14px + (100vw - 375px) * 0.00936),
+            23px
+          );
+          line-height: clamp(
+            20px,
+            calc(20px + (100vw - 375px) * 0.0104),
+            30px
+          );
+        }
+        .problem-desc {
+          font-size: clamp(
+            11px,
+            calc(11px + (100vw - 375px) * 0.00416),
+            15px
+          );
+          line-height: clamp(
+            16px,
+            calc(16px + (100vw - 375px) * 0.00722),
+            22.95px
+          );
+        }
+        .problem-number {
+          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.00416), 13px);
+        }
+        .problem-badge {
+          font-size: clamp(7px, calc(7px + (100vw - 375px) * 0.00312), 10px);
+        }
+      `}</style>
     </div>
   );
 }

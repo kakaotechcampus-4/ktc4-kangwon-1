@@ -43,10 +43,25 @@ type StatsRowProps = {
   stats?: Stat[];
 };
 
+// 768px에서 min, 1440px에서 max가 되도록 선형 보간한다. max는 기존 디자인 값과
+// 동일해 1440px 이상에서는 clamp 상한에 고정되어 기존 화면이 그대로 유지되고,
+// 그 아래로는 미디어 쿼리 없이 한 수식으로 끊김 없이 줄어든다.
+const fluid = (min: number, max: number) =>
+  `clamp(${min}px, calc(${min}px + (100vw - 768px) * ${(
+    (max - min) /
+    672
+  ).toFixed(5)}), ${max}px)`;
+
 export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
   return (
-    <div className="flex w-full flex-col items-center pb-16">
-      <div className="flex w-full max-w-[1185px] gap-[60px]">
+    <div
+      className="flex w-full flex-col items-center pb-16"
+      style={{ paddingInline: fluid(24, 127.5) }}
+    >
+      <div
+        className="flex w-full max-w-[1185px]"
+        style={{ gap: fluid(20, 60) }}
+      >
         {stats.map(({ id, label, value, unit, accent }) => {
           const accentColor =
             accent === 'primary' ? colors.brand.primary : colors.brand.dark;
@@ -54,10 +69,11 @@ export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
           return (
             <div
               key={id}
-              className="relative flex w-[251.25px] shrink-0 flex-col overflow-hidden rounded-xl border p-6"
+              className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border"
               style={{
                 backgroundColor: colors.neutral.white,
                 borderColor: colors.neutral.border,
+                padding: fluid(14, 24),
               }}
             >
               <span
@@ -65,18 +81,32 @@ export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
                 style={{ backgroundColor: accentColor, top: -24, right: -23 }}
               />
 
-              <p className="text-sm leading-[21px] tracking-[1.96px] text-gray-400 uppercase">
+              <p
+                className="text-gray-400 uppercase"
+                style={{
+                  fontSize: fluid(10, 14),
+                  lineHeight: fluid(15, 21),
+                  letterSpacing: fluid(1.2, 1.96),
+                }}
+              >
                 {label}
               </p>
 
               <div className="flex items-baseline gap-1.5 pt-3">
                 <span
-                  className="text-[35px] leading-[52.5px] font-bold"
-                  style={{ color: accentColor }}
+                  className="font-bold"
+                  style={{
+                    color: accentColor,
+                    fontSize: fluid(22, 35),
+                    lineHeight: fluid(33, 52.5),
+                  }}
                 >
                   {value}
                 </span>
-                <span className="text-sm font-medium text-gray-400">
+                <span
+                  className="font-medium text-gray-400"
+                  style={{ fontSize: fluid(10, 14) }}
+                >
                   {unit}
                 </span>
               </div>
