@@ -124,7 +124,8 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     """여러 상권의 같은 분기 레코드를 하나로 합산하고 비중까지 계산한다.
 
     원본 인원수는 **분기 합계**다. 결정 에이전트가 다른 에이전트의 "명/일" 과 나란히 읽게
-    되므로 단위를 명시하고 일평균(`daily_avg`)도 함께 낸다.
+    되므로 **일평균(`daily_avg`)으로만** 내보내고 합계는 싣지 않는다. 합계 원값이 남는 곳은
+    `by_age`·`by_time`·`by_day` 뿐이다.
     """
     total = sum(r.total for r in records)
     denom = total or 1.0
@@ -144,12 +145,13 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
 
     days = quarter_days(quarter)
     return Population(
-        unit=f"명 ({period_ko(quarter)} 합계, 같은 사람의 반복 통행이 중복 집계됨)",
+        unit=(
+            f"daily_avg 는 명/일 ({period_ko(quarter)} 합계 ÷ {days}일). "
+            "같은 사람의 반복 통행이 중복 집계된 통행량이며 사람 수가 아님. "
+            "by_age·by_time·by_day 는 분기 합계 원값"
+        ),
         share_unit="비율 (0~1)",
-        total=float(total),
         daily_avg=round(total / days, 1),
-        male=float(sum(r.male for r in records)),
-        female=float(female),
         female_ratio=round(female / denom, 4),
         by_age={a: float(v) for a, v in by_age.items()},
         age_share={a: round(by_age[a] / denom, 4) for a in AGE_BANDS},
@@ -157,18 +159,23 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
         time_per_hour_share={b: round(per_hour[b] / ph_sum, 4) for b in TIME_BANDS},
         peak_time_band=max(TIME_BANDS, key=per_hour.__getitem__),
         by_day={d: float(v) for d, v in by_day.items()},
-        weekday_avg=round(weekday_avg, 1),
-        weekend_avg=round(weekend_avg, 1),
         weekend_to_weekday_ratio=round(weekend_avg / weekday_avg, 4) if weekday_avg else 0.0,
     )
 
 
-def _benchmark(population: Population, trade_area_count: int) -> Benchmark:
-    """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다."""
+def _benchmark(
+    population: Population, quarter_total: float, trade_area_count: int, days: int
+) -> Benchmark:
+    """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다.
+
+    `scale_percentile` 은 서울 기준선이 분기 합계로 측정돼 있어 분기 합계로 계산하지만,
+    밖으로 내보낼 때는 일평균으로 바꾼다 — 이 블록의 `unit` 이 "배수" 라 분기 합계가 섞이면
+    표기가 어긋나고, 다른 에이전트의 "명/일" 옆에서 오독된다.
+    """
     time_index = baseline.time_indices(population.time_per_hour_share)
-    mean_per_area = population.total / (trade_area_count or 1)
+    mean_per_area = quarter_total / (trade_area_count or 1)
     return Benchmark(
-        unit="배수 (1.0 = 서울 전체 상권 평균)",
+        unit="배수 (1.0 = 서울 전체 상권 평균). 단 mean_daily_per_trade_area 는 명/일",
         baseline=baseline.BASELINE_LABEL,
         age_index={
             a: baseline.index(population.age_share[a], baseline.AGE_SHARE_AVG[a]) for a in AGE_BANDS
@@ -180,7 +187,7 @@ def _benchmark(population: Population, trade_area_count: int) -> Benchmark:
         weekend_index=baseline.index(
             population.weekend_to_weekday_ratio, baseline.WEEKEND_TO_WEEKDAY_AVG
         ),
-        mean_per_trade_area=round(mean_per_area, 1),
+        mean_daily_per_trade_area=round(mean_per_area / days, 1),
         scale_percentile=baseline.scale_percentile(mean_per_area),
     )
 
@@ -202,8 +209,10 @@ def _description(quarter: str, covered: int, outer_reach: float, radius_m: int) 
         "지하철 출구·시장·아파트 단위로 잘려 있어 서로 경쟁하는 별개 상권이 아닙니다 — "
         f"상권 {covered}곳은 같은 지역을 나눈 조각 {covered}개라는 뜻이며 인접 동네 {covered}개가 "
         "아닙니다. "
-        "population 의 인원수는 분기 합계이며 같은 사람의 반복 통행이 중복 집계됩니다 — "
-        "하루 평균이 필요하면 population.daily_avg 를 쓰십시오. "
+        "인원수는 population.daily_avg(명/일) 하나로만 냅니다 — 분기 합계는 다른 에이전트의 "
+        "'명/일' 과 나란히 놓였을 때 오독되므로 싣지 않습니다. 같은 사람의 반복 통행이 "
+        "중복 집계된 통행량이며 사람 수가 아닙니다. "
+        "분기 합계 원값은 population 의 by_age·by_time·by_day 에만 남아 있습니다. "
         "benchmark 는 서울 전체 상권 평균 대비 배수(1.0 = 평균)입니다. "
         "trend 는 같은 상권들을 분기마다 다시 합산한 추세로 quarters 가 오래된 순이며, "
         "변화율(qoq_change·yoy_change)은 분기 일수 차이를 없앤 daily_avg 기준입니다. "
@@ -237,7 +246,6 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
             QuarterPoint(
                 period_code=quarter,
                 period=period_ko(quarter),
-                total=pop.total,
                 daily_avg=round(pop.daily_avg, 1),
                 trade_area_count=len(rs),
                 age_share=pop.age_share,
@@ -545,6 +553,9 @@ async def analyze(
         )
 
     population = _aggregate(records, quarter)
+    # 분기 합계는 내보내지 않지만 규모 백분위를 낼 때는 필요하다(서울 기준선이 분기 합계
+    # 기준으로 측정돼 있다). 계산에만 쓰고 `data` 에는 싣지 않는다.
+    quarter_total = sum(r.total for r in records)
     covered = len(records)
     type_result = classify(
         age_share=population.age_share,
@@ -584,7 +595,7 @@ async def analyze(
     # 상권이 하나면 분포가 그 상권 하나에 전적으로 좌우된다 — 결정 에이전트가 무게를 낮춰야 한다.
     if covered == 1:
         warnings.append(
-            f"반경 {radius}m 와 겹치는 상권이 1곳뿐이라(총 {population.total:,.0f}명) "
+            f"반경 {radius}m 와 겹치는 상권이 1곳뿐이라(일평균 {population.daily_avg:,.0f}명) "
             "분포가 그 상권 하나에 좌우됩니다. 판정 신뢰도를 낮게 보십시오."
         )
 
@@ -605,7 +616,7 @@ async def analyze(
             for a, d in hits
         ],
         population=population,
-        benchmark=_benchmark(population, covered),
+        benchmark=_benchmark(population, quarter_total, covered, quarter_days(quarter)),
         trend=trend,
         radius_profile=_radius_profile(
             scan_hits,

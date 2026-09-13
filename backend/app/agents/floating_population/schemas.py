@@ -37,18 +37,19 @@ class TradeArea(Schema):
 class Population(Schema):
     """반경 안 상권을 합산한 유동인구 분포. 리포트 차트·표의 원본이다.
 
-    ⚠️ 인원수는 모두 **분기 합계**다(원본 데이터가 그렇다 — `by_day` 합계가 `total` 과 같은
-    것으로 확인). 같은 사람의 반복 통행이 중복 집계되고, **하루 평균이 아니다.** 결정
-    에이전트가 다른 에이전트의 "명/일" 수치와 헷갈리지 않게 `unit` 과 `daily_avg` 를 함께 싣는다.
+    **인원수는 `daily_avg`(명/일) 하나로만 낸다.** 원본은 분기 합계인데, 그걸 그대로 실으면
+    다른 에이전트의 "명/일" 과 나란히 놓였을 때 1,000배로 오독된다(목업 유동인구가
+    `daily_average: 15,200명/일` 이었다). 합계·남녀 인원수·요일 평균은 쓸 곳이 없으면서
+    오독 위험만 있어 아예 내보내지 않는다 — 필요한 형태(비율·일평균)로만 낸다.
+
+    분기 합계 원값이 남아 있는 곳은 아래 `by_age`·`by_time`·`by_day` 뿐이고, 그 셋은
+    `population_raw` 로 묶여 선별 대상이다.
     """
 
     unit: Text
     share_unit: Text
 
-    total: float
-    daily_avg: float  # total ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
-    male: float
-    female: float
+    daily_avg: float  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
     female_ratio: float
 
     # ⚠️ 아래 원값 셋(`by_age`·`by_time`·`by_day`)은 선별에서 빠지면 **`null` 이 된다.**
@@ -68,10 +69,9 @@ class Population(Schema):
     peak_time_band: Text
 
     by_day: dict[str, float] | None
-    # 이름을 `*_daily_avg` 로 두었더니 "하루 평균" 으로 읽혔다. 실제로는 분기 중 해당 요일
-    # 합계들의 평균이라 하루 평균의 13배쯤 된다. 하루 평균은 위 `daily_avg` 를 쓴다.
-    weekday_avg: float
-    weekend_avg: float
+    # 주중·주말 평균 인원수는 내보내지 않는다. 한때 `weekday_daily_avg` 로 두었더니 "하루
+    # 평균" 으로 읽혔는데 실제로는 분기 중 해당 요일 합계들의 평균이라 하루 평균의 13배였다.
+    # 쓸 곳은 이 비율뿐이라 비율만 낸다.
     weekend_to_weekday_ratio: float
 
 
@@ -92,7 +92,8 @@ class Benchmark(Schema):
     night_index: float  # 21~24시
     weekend_index: float
 
-    mean_per_trade_area: float
+    # 상권 1곳당 일평균. 분기 합계로 두면 블록 unit("배수")과 어긋나고 오독 위험도 남는다.
+    mean_daily_per_trade_area: float
     scale_percentile: int  # 서울 상권 중 규모 백분위(상권 1곳당 기준)
 
 
@@ -130,8 +131,9 @@ class QuarterPoint(Schema):
 
     period_code: Text  # "20262"
     period: Text  # "2026년 2분기"
-    total: float  # 분기 합계
-    daily_avg: float  # 분기 합계 ÷ 그 분기 일수
+    # 분기 합계는 싣지 않는다 — 분기 일수(90~92일)가 달라 그대로 비교하면 가짜 증감이 섞이고,
+    # 비교에 쓸 수 있는 형태는 일평균뿐이다.
+    daily_avg: float
     trade_area_count: int
     age_share: dict[str, float]
     time_per_hour_share: dict[str, float]

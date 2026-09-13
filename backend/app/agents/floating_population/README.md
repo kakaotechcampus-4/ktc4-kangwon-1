@@ -128,14 +128,10 @@ AgentAnalysis
 
 ### 실으면 안 되는 것
 
-- **`population.total`** — 분기 합계(길동 15,850,297)다. 그대로 쓰면 "길동 유동인구 1,585만 명"
-  으로 읽힌다. 사용자에게는 `daily_avg` 만 보여준다.
 - **`population.by_time` 원값** — ⚠️ **가장 위험한 자리다.** 총량 1위는 `00_06`(423만)인데
   그 구간이 6시간이라 그럴 뿐이다. 시간당으로 보면 `21_24` 가 1위다. `by_time` 을 그대로
   막대그래프로 그리면 **"길동은 새벽에 사람이 가장 많다"는 틀린 리포트**가 나온다.
   반드시 `time_per_hour_share` 를 쓴다.
-- **`weekday_avg`·`weekend_avg`** — 분기 중 해당 요일 합계들의 평균이라 사람이 읽을 숫자가
-  아니다(하루 평균의 13배). 비율인 `weekend_to_weekday_ratio` 만 의미가 있다.
 - `description`(결정 에이전트 LLM 용 긴 문장) · `type.signals`/`thresholds`/`rules_version` ·
   `*_unit` · `period_code` · `trade_areas[].code`/`area_m2`/`distance_m`/`equivalent_radius_m`
   — 전부 결정 판단용·내부 판정용이다.
@@ -275,25 +271,30 @@ AgentAnalysis
 등록 전에는 편집 설치(`pip install -e .`)에서만 동작하고 배포 패키지에는 `prompt.md` 가
 빠진다(`decision`·`commercial_area` 는 이미 등록돼 있다).
 
-## 인원수는 분기 합계다 — 일평균이 아니다
+## 인원수는 `daily_avg`(명/일) 하나로만 낸다
 
-원본 데이터가 분기 단위 합계다(`by_day` 합계가 `total` 과 같은 것으로 확인). 같은 사람의
-반복 통행이 중복 집계된다.
+원본 데이터는 **분기 합계**다(`by_day` 합계가 총량과 같은 것으로 확인). 같은 사람의 반복
+통행이 중복 집계된 **통행량**이지 사람 수가 아니다.
 
-이게 왜 중요한가: 결정 에이전트는 세 에이전트의 `data` 를 **LLM 프롬프트에 넣어 읽힌다.**
-그 프롬프트에 "필드 이름, 설명, 단위와 실제 값을 함께 읽는다" · "단위나 기간이 불명확한
-수치는 추측해서 환산하지 않는다" 고 적혀 있고, 팀 목업의 유동인구 에이전트는
-`daily_average: 15,200명/일` 형태였다. 단위를 안 적으면 우리 `total: 12,336,036` 을
-일평균으로 읽어 **1,000배 오독**한다.
+문제는 결정 에이전트가 세 에이전트의 `data` 를 **LLM 프롬프트에 넣어 읽힌다**는 것이다.
+프롬프트에 "필드 이름, 설명, 단위와 실제 값을 함께 읽는다" 고 적혀 있고 팀 목업의 유동인구
+에이전트는 `daily_average: 15,200명/일` 형태였다. 분기 합계를 그대로 실으면 **1,000배 오독**한다.
 
-그래서 이렇게 대응한다:
+그래서 **쓸 수 있는 형태로만 내보낸다.** 아래 필드들은 "쓰지 마세요" 라고 적어야만 하는
+것들이라 아예 뺐다 — 소비자가 없으면서 오독 위험만 있었다.
 
-- `description`·`population.unit`·`population.share_unit`·`benchmark.unit`·`type.signals_unit`
-  으로 단위를 명시한다
-- 다른 에이전트의 "명/일" 과 비교할 수 있게 **`population.daily_avg`**(분기 합계 ÷ 분기 일수)
-  를 함께 낸다
-- `weekday_avg`·`weekend_avg` 는 **하루 평균이 아니다** — 분기 중 해당 요일 합계들의 평균이라
-  하루 평균의 13배쯤 된다. 처음에 `weekday_daily_avg` 로 이름을 붙였다가 고쳤다
+| 뺀 필드 | 정체 | 대신 쓰는 것 |
+| --- | --- | --- |
+| `population.total` | 분기 합계 | `population.daily_avg` |
+| `population.male` · `female` | 분기 합계 | `population.female_ratio` |
+| `population.weekday_avg` · `weekend_avg` | 분기 중 같은 요일 합계들의 평균(일평균의 13배) | `weekend_to_weekday_ratio` |
+| `trend.quarters[].total` | 분기 합계 | `quarters[].daily_avg` |
+
+**분기 합계 원값이 남아 있는 곳은 `by_age`·`by_time`·`by_day` 뿐**이고, 그 셋은
+`population_raw` 로 묶여 선별 대상이다. 단위는 `population.unit` 에 적혀 있다.
+
+규모 백분위(`benchmark.scale_percentile`)는 여전히 분기 합계로 계산한다 — 서울 기준선이 그
+기준으로 측정돼 있기 때문이다. 계산에만 쓰고 `data` 에는 싣지 않는다.
 
 ## 서울시가 말하는 "상권" 은 우리가 쓰는 말과 다르다
 
