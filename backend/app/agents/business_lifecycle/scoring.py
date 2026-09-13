@@ -1,6 +1,6 @@
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
 
 # ============================================================
 # 기본 설정
@@ -46,7 +46,7 @@ print("전체 서비스 업종 수:", len(df))
 # ============================================================
 
 score_mask = (
-    (df["data_available"] == True)
+    df["data_available"]
     & df["store_count"].notna()
     & (df["store_count"] > 0)
     & df["close_rate"].notna()

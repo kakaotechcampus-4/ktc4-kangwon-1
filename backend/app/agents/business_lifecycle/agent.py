@@ -4,7 +4,6 @@ from pathlib import Path
 
 from openai import OpenAI
 
-
 # ============================================================
 # 기본 설정
 # ============================================================
@@ -292,7 +291,6 @@ def analyze_batch(batch):
 
 with open(
     INPUT_FILE,
-    "r",
     encoding="utf-8",
 ) as f:
 

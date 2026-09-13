@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 # ============================================================
 # 기본 설정
 # ============================================================
@@ -112,7 +111,7 @@ df["data_available"] = (
 # ============================================================
 
 available_df = df[
-    (df["data_available"] == True)
+    df["data_available"]
     & df["lifecycle_score"].notna()
 ].copy()
 
@@ -126,7 +125,7 @@ available_df = df[
 
 unavailable_df = df[
     ~(
-        (df["data_available"] == True)
+        df["data_available"]
         & df["lifecycle_score"].notna()
     )
 ].copy()

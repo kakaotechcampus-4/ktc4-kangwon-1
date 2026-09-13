@@ -1,13 +1,12 @@
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
 from mapping import (
-    SERVICE_INDUSTRIES,
-    SEOUL_TO_SERVICE,
     EXCLUDED_SEOUL_INDUSTRIES,
+    SEOUL_TO_SERVICE,
+    SERVICE_INDUSTRIES,
     UNSUPPORTED_SERVICE_INDUSTRIES,
 )
-
 
 # ============================================================
 # 기본 설정
