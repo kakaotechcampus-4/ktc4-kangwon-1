@@ -1,6 +1,7 @@
 import json
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -30,7 +31,7 @@ PERIOD = "2025Q2"
 # Lifecycle Score 설정
 # ============================================================
 
-SCORING_METHOD = {
+SCORING_METHOD: dict[str, Any] = {
     "description": (
         "개롱역 2025년 2분기 데이터가 존재하는 업종 간 "
         "상대 순위를 기반으로 계산한 개폐업 안정성 점수"
@@ -146,7 +147,7 @@ print(
 # 5. Agent 분석 대상 업종 JSON 생성
 # ============================================================
 
-industries = []
+industries: list[dict[str, Any]] = []
 
 
 for _, row in available_df.iterrows():
@@ -224,7 +225,7 @@ for _, row in available_df.iterrows():
 # 6. 데이터 없는 업종 JSON 생성
 # ============================================================
 
-unavailable_industries = []
+unavailable_industries: list[dict[str, Any]] = []
 
 
 for _, row in unavailable_df.iterrows():
@@ -261,7 +262,7 @@ for _, row in unavailable_df.iterrows():
 # 7. Agent 입력 전체 JSON
 # ============================================================
 
-agent_input = {
+agent_input: dict[str, Any] = {
 
     "request_id": str(uuid.uuid4()),
 
