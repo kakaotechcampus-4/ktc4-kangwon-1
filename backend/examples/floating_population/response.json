@@ -341,6 +341,24 @@
       "covered_trade_areas": 8,
       "level": "high"
     },
+    "selection": {
+      "applied": false,
+      "selectable": [
+        "trade_areas",
+        "population_raw",
+        "radius_profile",
+        "trend"
+      ],
+      "included": [
+        "trade_areas",
+        "population_raw",
+        "radius_profile",
+        "trend"
+      ],
+      "dropped": [],
+      "reason": null,
+      "unavailable_reason": "ELICE_MODEL·ELICE_API_KEY·ELICE_BASE_URL 이 있어야 블록 선별을 합니다."
+    },
     "sources": [
       {
         "name": "서울시 상권분석서비스(길단위인구-상권)",

@@ -14,14 +14,16 @@
 
 from __future__ import annotations
 
+import json
 import math
+from collections.abc import Awaitable, Callable
 from typing import Literal
 
 import httpx
 
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
-from . import baseline
+from . import baseline, llm
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
 from .config import Settings, load_dotenv_if_present
@@ -46,6 +48,7 @@ from .schemas import (
     RadiusPoint,
     RadiusProfile,
     Reliability,
+    Selection,
     Source,
     TradeArea,
     Trend,
@@ -53,6 +56,9 @@ from .schemas import (
 )
 
 AGENT_ID: AgentId = "floating_population"
+
+# 선별 함수 자리. 테스트에서 갈아 끼운다(팀 `decision.analyze(generate=...)` 와 같은 방식).
+SelectBlocks = Callable[[str], Awaitable[tuple[list[str], str]]]
 
 SOURCES = [
     {
@@ -329,6 +335,114 @@ def _radius_profile(
     )
 
 
+def _selection_digest(data: FloatingPopulationData) -> str:
+    """선별 모델에게 보낼 요약. **`data` 전체를 보내지 않는다.**
+
+    전체를 보내면 줄이려던 토큰을 선별하느라 그대로 쓰게 된다. 블록마다 "읽을 게 있는지" 를
+    판단할 최소 정보만 추린다 — 개수, 값의 폭, 0 이 몇 개인지 같은 것들.
+    """
+    rp = data.radius_profile
+    tr = data.trend
+    digest = {
+        "지역": data.description[:120],
+        "유형": data.type.label,
+        "신뢰도": data.reliability.level,
+        "trade_areas": {
+            "개수": len(data.trade_areas or []),
+            "이름": [t.name for t in (data.trade_areas or [])][:12],
+            "행정동": sorted({t.adstrd for t in (data.trade_areas or []) if t.adstrd}),
+        },
+        "population_raw": {
+            "설명": "연령·시간대·요일 원값(분기 합계). 같은 내용의 비중이 따로 있음",
+            "비중_이미_있음": True,
+        },
+        "radius_profile": {
+            "단계": [p.radius_m for p in (rp.points if rp else [])],
+            "일평균": [round(p.daily_avg) for p in (rp.points if rp else [])],
+            "값이_0인_단계수": sum(1 for p in (rp.points if rp else []) if p.daily_avg <= 0),
+        },
+        "trend": {
+            "분기수": len(tr.quarters) if tr else 0,
+            "방향": tr.direction if tr else None,
+            "전분기_변화율": tr.qoq_change if tr else None,
+            "전년동기_변화율": tr.yoy_change if tr else None,
+            "일평균_추이": [round(q.daily_avg) for q in (tr.quarters if tr else [])],
+        },
+    }
+    return json.dumps(digest, ensure_ascii=False)
+
+
+def _apply_selection(data: FloatingPopulationData, included: list[str]) -> None:
+    """고르지 않은 블록을 `None` 으로 비운다. **키는 지우지 않는다.**
+
+    결정 에이전트가 `evidence.path` 로 내부를 탐색하는데(`decision/agent.py:86-95`), 키가
+    없으면 `KeyError` → `ValueError` 가 되어 리포트 전체가 죽는다. 실측으로 확인한 차이:
+
+    | 인용 경로 | 키를 지웠을 때 | `None` 으로 뒀을 때 |
+    | --- | --- | --- |
+    | `/trade_areas` | 죽는다 | **통과**(값이 null) |
+    | `/trade_areas/0` | 죽는다 | 죽는다 |
+
+    `None` 은 **리프 경로만** 살린다. 한 단계 더 들어가는 인용은 여전히 죽는다. 그래도 이쪽이
+    나은 이유는, 결정 에이전트가 **내가 보낸 것만 보기 때문**이다 — null 인 블록 안쪽을
+    인용할 이유가 없고, 혹시 리프를 인용해도 죽지 않는다.
+    """
+    if "trade_areas" not in included:
+        data.trade_areas = None
+    if "trend" not in included:
+        data.trend = None
+    if "radius_profile" not in included:
+        data.radius_profile = None
+    if "population_raw" not in included:
+        data.population.by_age = None
+        data.population.by_time = None
+        data.population.by_day = None
+
+
+async def _select(
+    data: FloatingPopulationData,
+    select: SelectBlocks | None,
+) -> tuple[Selection, str | None]:
+    """블록을 고른다. 실패하면 전부 싣고 그 사실을 경고로 돌려준다."""
+    selectable = list(llm.SELECTABLE)
+    try:
+        included, reason = await (select or llm.select_blocks)(_selection_digest(data))
+    except llm.SelectionUnavailable as e:
+        return (
+            Selection(
+                applied=False,
+                selectable=selectable,
+                included=selectable,
+                dropped=[],
+                unavailable_reason=str(e),
+            ),
+            None,  # 키가 없어 못 한 경우까지 경고로 띄우면 시끄럽다
+        )
+    except Exception as e:  # 모델 쪽 어떤 실패도 분석을 막지 않는다
+        return (
+            Selection(
+                applied=False,
+                selectable=selectable,
+                included=selectable,
+                dropped=[],
+                unavailable_reason=f"{type(e).__name__}: {e}",
+            ),
+            f"자료 선별에 실패해 전부 실었습니다: {type(e).__name__}",
+        )
+
+    dropped = [b for b in selectable if b not in included]
+    return (
+        Selection(
+            applied=True,
+            selectable=selectable,
+            included=included,
+            dropped=dropped,
+            reason=(reason or None) if dropped else None,
+        ),
+        None,
+    )
+
+
 def _reliability(found: int, covered: int) -> Reliability:
     """상권 표본이 얼마나 두터운지. 결정 에이전트가 가중치를 낮추는 근거."""
     level: Literal["high", "medium", "low"]
@@ -346,6 +460,7 @@ async def analyze(
     *,
     settings: Settings | None = None,
     client: SeoulOpenDataClient | None = None,
+    select: SelectBlocks | None = None,
 ) -> AgentAnalysis:
     """입력 위치 반경 안의 유동인구를 분석해 팀 공통 계약 형태로 돌려준다.
 
@@ -500,8 +615,28 @@ async def analyze(
         ),
         type=TypeJudgement(signals_unit="비율 (0~1). 주말/주중은 배수", **type_result.model_dump()),
         reliability=reliability,
+        # 바로 아래에서 실제 선별 결과로 덮어쓴다. 모델이 없거나 실패해도 계약은 채워진다.
+        selection=Selection(
+            applied=False,
+            selectable=list(llm.SELECTABLE),
+            included=list(llm.SELECTABLE),
+            dropped=[],
+        ),
         sources=[Source(**s, period=period_ko(quarter)) for s in SOURCES],
     )
+
+    # 넘길 블록을 고른다. 숫자는 이미 다 계산돼 있고 모델은 고르기만 한다.
+    selection, select_warning = await _select(data, select)
+    data.selection = selection
+    if selection.applied:
+        _apply_selection(data, selection.included)
+        if selection.dropped:
+            warnings.append(
+                f"판단에 쓰이지 않는 자료 {len(selection.dropped)}개를 뺐습니다"
+                f"({', '.join(selection.dropped)}). {selection.reason}".strip()
+            )
+    if select_warning:
+        warnings.append(select_warning)
 
     return AgentAnalysis(
         request_id=task.request_id,

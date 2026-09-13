@@ -51,16 +51,23 @@ class Population(Schema):
     female: float
     female_ratio: float
 
-    by_age: dict[str, float]
+    # ⚠️ 아래 원값 셋(`by_age`·`by_time`·`by_day`)은 선별에서 빠지면 **`null` 이 된다.**
+    # 키를 지우지 않고 `null` 로 두는 이유(실측으로 확인, `decision/agent.py:86-95`):
+    #   `/population/by_day`      → null 로 해석되고 통과. 키를 지웠으면 KeyError 로 죽는다.
+    #   `/population/by_day/mon`  → **그래도 죽는다**(ValueError "입력에 없는 근거입니다").
+    # 즉 null 은 리프 경로만 살린다. 한 단계 더 들어가는 인용은 여전히 리포트를 죽인다.
+    # 다만 결정 에이전트는 **내가 보낸 것만 보므로** null 인 블록 안쪽을 인용할 이유가 없다.
+    # 비중(`*_share`)은 선별 대상이 아니라 항상 남는다.
+    by_age: dict[str, float] | None
     age_share: dict[str, float]
 
-    by_time: dict[str, float]
+    by_time: dict[str, float] | None
     # 시간대 비교는 반드시 이 값으로 한다 — 구간 길이가 3~6시간으로 달라서 총량으로 비교하면
     # 6시간짜리 00~06시가 거의 항상 1위가 된다(실데이터에서 확인된 왜곡).
     time_per_hour_share: dict[str, float]
     peak_time_band: Text
 
-    by_day: dict[str, float]
+    by_day: dict[str, float] | None
     # 이름을 `*_daily_avg` 로 두었더니 "하루 평균" 으로 읽혔다. 실제로는 분기 중 해당 요일
     # 합계들의 평균이라 하루 평균의 13배쯤 된다. 하루 평균은 위 `daily_avg` 를 쓴다.
     weekday_avg: float
@@ -176,6 +183,28 @@ class RadiusProfile(Schema):
     points: list[RadiusPoint]
 
 
+class Selection(Schema):
+    """무엇을 넘기고 무엇을 뺐는지. LLM 이 고르고 코드가 검증한 결과다.
+
+    `data` 는 결정 에이전트 프롬프트에 통째로 실린다. 분석 에이전트가 셋이라 그대로 두면
+    판단에 쓸 지표가 차트용 시리즈에 묻힌다(실측: 길동 `data` 6,944자 중 결정이 쓰는
+    `benchmark`·`type`·`reliability` 는 995자, 14%). 그래서 지역에서 의미가 없는 블록을 뺀다.
+
+    **선별은 최적화지 기능이 아니다.** 모델이 없거나 실패하면 `applied=False` 로 전부 싣는다 —
+    분석 자체는 그대로 나가야 한다.
+    """
+
+    applied: bool
+    selectable: list[Text]  # 고를 수 있었던 블록 전부
+    included: list[Text]
+    dropped: list[Text]
+    # 뺀 이유(사람이 읽는 문장). 뺀 것이 없거나 선별을 못 했으면 `null`.
+    # (팀 `Text` 는 빈 문자열을 막으므로 "없음" 은 `null` 로 나타낸다)
+    reason: Text | None = None
+    # 선별을 못 한 이유. `applied=True` 면 `null`.
+    unavailable_reason: Text | None = None
+
+
 class Source(Schema):
     name: Text
     url: Text
@@ -194,11 +223,13 @@ class FloatingPopulationData(Schema):
     description: Text
     period_code: Text
     radius_m: int
-    trade_areas: list[TradeArea]
+    # ⚠️ 선별에서 빠지면 `null` 이 된다(키는 남는다 — 위 `Population` 주석의 이유와 같다).
+    trade_areas: list[TradeArea] | None
     population: Population
     benchmark: Benchmark
-    trend: Trend
-    radius_profile: RadiusProfile
+    trend: Trend | None
+    radius_profile: RadiusProfile | None
     type: TypeJudgement
     reliability: Reliability
+    selection: Selection
     sources: list[Source]
