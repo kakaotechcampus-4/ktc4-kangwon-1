@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chaeum-backend"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "pydantic>=2.12,<3",
+  "openai>=2.15,<3",
+  "python-dotenv>=1,<2",
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+# 개발·검사용. 배포에는 들어가지 않습니다.
+#   pip install -e ".[dev]"
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.6,<1",
+  "mypy>=1.11,<2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.agents.decision" = ["prompt.md"]
+"app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+# business_lifecycle은 아직 프로토타입이라 포맷 검사에서 임시 제외합니다.
+# 담당자가 `ruff format .` 한 번 돌린 뒤 이 줄을 지우면 됩니다.
+exclude = ["app/agents/business_lifecycle/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+ignore_missing_imports = true
