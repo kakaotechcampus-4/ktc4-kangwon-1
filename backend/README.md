@@ -57,6 +57,72 @@ POST /api/v1/analyses  { address }
 
 ## 실행
 
+### API 원본 응답 목업 + 실제 에이전트·LLM
+
+```bash
+python examples/run_api_mock.py
+python examples/run_api_mock.py --input examples/fixtures/api_responses.json
+```
+
+`examples/fixtures/api_responses.json`에서 주소·가상 좌표와 API 원본 응답을 수정합니다.
+유동인구·상권은 기존 HTTP 클라이언트의 응답 파싱부터 전처리·지표 계산까지 실행합니다.
+오케스트레이터, 유동인구 자료 선별, 상권 요약, 최종판단 LLM은 `.env`의 엘리스 설정으로
+실제 호출합니다. 실행 비용이 발생하며, 이 예제에는 `--offline` 옵션이 없습니다.
+
+준비할 환경변수는 `ELICE_API_KEY`, `ELICE_BASE_URL`, `ELICE_MODEL`입니다.
+데이터 API 키는 필요하지 않습니다. 데이터 조회 클라이언트는 `httpx.MockTransport`로
+고정되며, 등록되지 않은 요청은 오류로 처리합니다. LLM 오류를 완성된 목업 결과로 대체하지
+않습니다. 유동인구 선별·상권 요약의 기존 실패 처리와 최종판단의 오류 검증은 그대로 적용됩니다.
+
+목업에는 상권영역, 두 분기 인구, 500m·2km·자치구 점포, 브랜드 원본 응답이 있습니다.
+점포 응답은 페이지별로 나누어 반환하므로 페이지 수집도 실제 클라이언트가 수행합니다.
+프랜차이즈 조회는 HTTP 클라이언트 주입을 지원하지 않아 브랜드 원본 목업을 기존 파서로
+읽어 임시 캐시에 준비합니다. 브랜드 API의 실제 HTTP 조회는 이 예제로 검증하지 않습니다.
+목업 캐시는 실행별 임시 폴더에 저장하고 종료 시 정리합니다.
+
+개폐업은 `AGENT_NOT_CONNECTED` 응답을 유지합니다. 최종 결과는 stdout의 `DecisionResult`
+JSON이며 `source_analyses`에서 두 에이전트가 직접 계산한 결과를 확인할 수 있습니다.
+기존 `run_orchestration.py --mock --offline`은 완성된 분석 결과를 재생하는 별도 예제입니다.
+
+개롱역 올리브영 주소는 시나리오 이름이며 좌표·인구·점포는 실제 관측값이 아닙니다.
+주소 좌표와 상권영역 EPSG:5181 좌표·점포 좌표는 일관되게 수정해야 합니다.
+조회 반경은 500m·2km, 자치구는 11710, 유동인구 기준일은 JSON의 `today`로 고정됩니다.
+목업 업종은 API 원본 분류이며 공통 70개 업종 매핑을 구현한 데이터가 아닙니다.
+
+LLM도 대역으로 교체하여 외부 연결 없이 검증:
+
+```bash
+python -m unittest discover -s tests -p test_api_mock.py -v
+```
+
+### ReAct 분석 연결
+
+`app.agents.orchestration.build_react_agents()`는 유동인구·상권의 실제
+`analyze()`와 개폐업 미연결 응답을 등록합니다. 등록 자체는 외부 API를 호출하지 않습니다.
+`run_react(address, resolve=resolve, agents=build_react_agents())`로 명시적으로 연결합니다.
+`resolve`는 주소 문자열을 받아 검증된 `Site`를 반환하는 비동기 함수입니다.
+
+개폐업은 `status="error"`, `error.code="AGENT_NOT_CONNECTED"`를 반환합니다.
+최종판단은 이 사유를 `limitations`에 기록하고 세 원본 응답을 `source_analyses`에 보존합니다.
+판단 가능한 자료가 있으면 `partial`, 판단을 보류하면 `no_data`입니다.
+개폐업 담당자가 공통 비동기 진입점을 제공하면 등록 함수의 해당 항목을 교체합니다.
+
+실제 분석용 등록 함수는 `(0, 0)` 좌표를 외부 호출 전에 거절합니다.
+다른 좌표의 정확성을 보증하는 검사는 아니므로, 검증된 위치만 사용해야 합니다.
+기존 HTTP API와 `default_agents()`는 상권만 등록하는 고정 흐름을 유지합니다.
+
+개롱역 올리브영 가상 입력으로 외부 호출 없이 실행:
+
+```bash
+python examples/run_orchestration.py --mock --offline
+python -m unittest discover -s tests -p test_orchestration_connections.py -v
+```
+
+예제는 기존 분석 결과 목업을 사용합니다. 연결 테스트는 실제 두 분석 함수의 계산을
+실행하되 API 클라이언트와 LLM을 대역으로 교체합니다. 키가 있어도 네트워크를 차단합니다.
+`--offline`을 빼면 기존 예제는 실제 LLM을 호출합니다. 이번 검증에는 실제 API·LLM 및
+카카오 주소 검색 연결 시험을 포함하지 않습니다.
+
 Python **3.12**가 필요합니다. `pyproject.toml`이 `>=3.12,<3.13`으로 고정합니다.
 
 ```bash
