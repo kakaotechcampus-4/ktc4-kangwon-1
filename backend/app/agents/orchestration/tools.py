@@ -15,7 +15,9 @@ TOOL_DEFINITIONS = [
             "name": name,
             "description": description,
             "parameters": {
-                "type": "object", "properties": {}, "required": [],
+                "type": "object",
+                "properties": {},
+                "required": [],
                 "additionalProperties": False,
             },
         },

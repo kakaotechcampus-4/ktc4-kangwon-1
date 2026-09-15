@@ -18,35 +18,46 @@ from prepare_task import MOCK_ADDRESS, mock_resolve
 from app.agents.orchestration import run_react
 from app.schemas import DecisionRequest
 
+DECISION_FOLDER = Path(__file__).resolve().parent / "decision"
+
 
 async def run(offline: bool):
     """기존 개롱역 분석 목업을 연결하고 요청 ID만 현재 요청에 맞춥니다."""
-    folder = Path(__file__).resolve().parent / "decision"
-    source = DecisionRequest.model_validate_json((folder / "input.json").read_text("utf-8"))
+    folder = DECISION_FOLDER
+    input_json = await asyncio.to_thread((folder / "input.json").read_text, encoding="utf-8")
+    source = DecisionRequest.model_validate_json(input_json)
     if source.address != MOCK_ADDRESS:
         raise ValueError("주소 목업과 분석 목업의 위치가 다릅니다.")
 
     def make_agent(analysis):
         async def analyze(task):
             return analysis.model_copy(update={"request_id": task.request_id}, deep=True)
+
         return analyze
 
     actions = iter(("prepare_address", "run_analyses", "make_decision"))
 
     async def mock_action(messages, definitions):
         name = next(actions)
-        return ChatCompletionMessage.model_validate({
-            "role": "assistant", "tool_calls": [{
-                "id": f"call-{name}", "type": "function",
-                "function": {"name": name, "arguments": "{}"},
-            }],
-        })
+        return ChatCompletionMessage.model_validate(
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": f"call-{name}",
+                        "type": "function",
+                        "function": {"name": name, "arguments": "{}"},
+                    }
+                ],
+            }
+        )
 
     def mock_decision(system_prompt, input_json):
         return json.loads((folder / "response.json").read_text("utf-8"))
 
     return await run_react(
-        source.address, resolve=mock_resolve,
+        source.address,
+        resolve=mock_resolve,
         agents={item.agent_id: make_agent(item) for item in source.analyses},
         generate_action=mock_action if offline else None,
         generate=mock_decision if offline else None,

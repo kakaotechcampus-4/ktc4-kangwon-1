@@ -19,8 +19,13 @@ from app.schemas import AnalysisTask, Site
 
 def sample_site():
     """실제 위치가 아닌 검증용 좌표입니다."""
-    return Site(input_address="주소", road_address="도로명주소",
-                detail_address="원일빌딩 1층", latitude=0.0, longitude=0.0)
+    return Site(
+        input_address="주소",
+        road_address="도로명주소",
+        detail_address="원일빌딩 1층",
+        latitude=0.0,
+        longitude=0.0,
+    )
 
 
 class PrepareTaskTests(unittest.IsolatedAsyncioTestCase):
@@ -31,8 +36,7 @@ class PrepareTaskTests(unittest.IsolatedAsyncioTestCase):
     async def test_prepares_task(self):
         self.assertTrue(callable(getattr(orchestrator, "prepare_task", None)))
         resolve = AsyncMock(return_value=sample_site())
-        task = await orchestrator.prepare_task(
-            "  주소  ", resolve=resolve, request_id="request-1")
+        task = await orchestrator.prepare_task("  주소  ", resolve=resolve, request_id="request-1")
         resolve.assert_awaited_once_with("주소")
         self.assertEqual(task.request_id, "request-1")
         self.assertEqual(task.site.detail_address, "원일빌딩 1층")
@@ -53,15 +57,15 @@ class PrepareTaskTests(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_invalid_explicit_id(self):
         with self.assertRaises(ValidationError):
             await orchestrator.prepare_task(
-                "주소", resolve=AsyncMock(return_value=sample_site()), request_id="")
+                "주소", resolve=AsyncMock(return_value=sample_site()), request_id=""
+            )
 
     async def test_revalidates_resolver_output(self):
         for update in ({"latitude": 91.0}, {"road_address": None, "jibun_address": None}):
             with self.subTest(update=update):
                 invalid = sample_site().model_copy(update=update)
                 with self.assertRaises(ValidationError):
-                    await orchestrator.prepare_task(
-                        "주소", resolve=AsyncMock(return_value=invalid))
+                    await orchestrator.prepare_task("주소", resolve=AsyncMock(return_value=invalid))
 
     async def test_lookup_failure_stops_analysis(self):
         with (

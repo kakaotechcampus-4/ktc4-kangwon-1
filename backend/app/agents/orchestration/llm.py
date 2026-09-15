@@ -24,12 +24,17 @@ async def generate_action(messages: list[Any], definitions: list[Any]) -> ChatCo
         raise ValueError("응답 길이와 대기 시간은 양수로 설정해 주세요.")
     try:
         async with AsyncOpenAI(
-            api_key=values["ELICE_API_KEY"], base_url=values["ELICE_BASE_URL"],
-            timeout=timeout, max_retries=1,
+            api_key=values["ELICE_API_KEY"],
+            base_url=values["ELICE_BASE_URL"],
+            timeout=timeout,
+            max_retries=1,
         ) as client:
             response = await client.chat.completions.create(
-                model=values["ELICE_MODEL"], messages=messages, tools=definitions,
-                tool_choice="required", parallel_tool_calls=False,
+                model=values["ELICE_MODEL"],
+                messages=messages,
+                tools=definitions,
+                tool_choice="required",
+                parallel_tool_calls=False,
                 reasoning_effort="none",
                 max_completion_tokens=max_tokens,
             )
