@@ -29,7 +29,9 @@ where = ["."]
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.db" = ["schema.sql"]
 "app.agents.decision" = ["prompt.md"]
+"app.agents.orchestration" = ["prompt.md"]
 "app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
 
 [tool.pytest.ini_options]

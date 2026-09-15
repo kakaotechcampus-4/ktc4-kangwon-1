@@ -1,0 +1,518 @@
+{
+  "description": "개롱역 올리브영 주소는 시나리오 이름입니다. 좌표·상권·점포·인구는 가상 값이며 실제 입지 판단에 사용하지 않습니다.",
+  "today": "2026-07-01",
+  "site": {
+    "input_address": "서울특별시 송파구 오금로 404 원일빌딩 1층, 올리브영 개롱역점",
+    "road_address": "서울특별시 송파구 오금로 404",
+    "detail_address": "원일빌딩 1층, 올리브영 개롱역점",
+    "latitude": 37.5,
+    "longitude": 127.1
+  },
+  "responses": {
+    "areas": {
+      "TbgisTrdarRelm": {
+        "list_total_count": 1,
+        "RESULT": {
+          "CODE": "INFO-000"
+        },
+        "row": [
+          {
+            "TRDAR_CD": "MOCK-001",
+            "TRDAR_CD_NM": "가상 시험 상권",
+            "XCNTS_VALUE": 208842.54558833793,
+            "YDNTS_VALUE": 444508.82103379985,
+            "RELM_AR": 10000
+          }
+        ]
+      }
+    },
+    "population": {
+      "20261": {
+        "VwsmTrdarFlpopQq": {
+          "list_total_count": 1,
+          "RESULT": {
+            "CODE": "INFO-000"
+          },
+          "row": [
+            {
+              "TRDAR_CD": "MOCK-001",
+              "STDR_YYQU_CD": "20261",
+              "TOT_FLPOP_CO": 810000,
+              "ML_FLPOP_CO": 405000,
+              "FML_FLPOP_CO": 405000,
+              "TMZON_00_06_FLPOP_CO": 32400,
+              "TMZON_06_11_FLPOP_CO": 97200,
+              "TMZON_11_14_FLPOP_CO": 202500,
+              "TMZON_14_17_FLPOP_CO": 145800,
+              "TMZON_17_21_FLPOP_CO": 251100,
+              "TMZON_21_24_FLPOP_CO": 81000,
+              "MON_FLPOP_CO": 113400,
+              "TUES_FLPOP_CO": 113400,
+              "WED_FLPOP_CO": 113400,
+              "THUR_FLPOP_CO": 113400,
+              "FRI_FLPOP_CO": 129600,
+              "SAT_FLPOP_CO": 121500,
+              "SUN_FLPOP_CO": 105300,
+              "AGRDE_10_FLPOP_CO": 48600,
+              "AGRDE_20_FLPOP_CO": 145800,
+              "AGRDE_30_FLPOP_CO": 202500,
+              "AGRDE_40_FLPOP_CO": 178200,
+              "AGRDE_50_FLPOP_CO": 137700,
+              "AGRDE_60_ABOVE_FLPOP_CO": 97200
+            }
+          ]
+        }
+      },
+      "20262": {
+        "VwsmTrdarFlpopQq": {
+          "list_total_count": 1,
+          "RESULT": {
+            "CODE": "INFO-000"
+          },
+          "row": [
+            {
+              "TRDAR_CD": "MOCK-001",
+              "STDR_YYQU_CD": "20262",
+              "TOT_FLPOP_CO": 910000,
+              "ML_FLPOP_CO": 455000,
+              "FML_FLPOP_CO": 455000,
+              "TMZON_00_06_FLPOP_CO": 36400,
+              "TMZON_06_11_FLPOP_CO": 109200,
+              "TMZON_11_14_FLPOP_CO": 227500,
+              "TMZON_14_17_FLPOP_CO": 163800,
+              "TMZON_17_21_FLPOP_CO": 282100,
+              "TMZON_21_24_FLPOP_CO": 91000,
+              "MON_FLPOP_CO": 127400,
+              "TUES_FLPOP_CO": 127400,
+              "WED_FLPOP_CO": 127400,
+              "THUR_FLPOP_CO": 127400,
+              "FRI_FLPOP_CO": 145600,
+              "SAT_FLPOP_CO": 136500,
+              "SUN_FLPOP_CO": 118300,
+              "AGRDE_10_FLPOP_CO": 54600,
+              "AGRDE_20_FLPOP_CO": 163800,
+              "AGRDE_30_FLPOP_CO": 227500,
+              "AGRDE_40_FLPOP_CO": 200200,
+              "AGRDE_50_FLPOP_CO": 154700,
+              "AGRDE_60_ABOVE_FLPOP_CO": 109200
+            }
+          ]
+        }
+      }
+    },
+    "stores_500": {
+      "response": {
+        "header": {
+          "resultCode": "00",
+          "resultMsg": "NORMAL SERVICE"
+        },
+        "body": {
+          "totalCount": 6,
+          "items": [
+            {
+              "bizesId": "MOCK-0",
+              "bizesNm": "시험점포0",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-1",
+              "bizesNm": "시험점포1",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5003,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-2",
+              "bizesNm": "가상커피2",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5006,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-3",
+              "bizesNm": "시험점포3",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5009,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-4",
+              "bizesNm": "시험점포4",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5012,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-5",
+              "bizesNm": "시험점포5",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5015,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            }
+          ]
+        }
+      }
+    },
+    "stores_2000": {
+      "response": {
+        "header": {
+          "resultCode": "00",
+          "resultMsg": "NORMAL SERVICE"
+        },
+        "body": {
+          "totalCount": 10,
+          "items": [
+            {
+              "bizesId": "MOCK-0",
+              "bizesNm": "시험점포0",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-1",
+              "bizesNm": "시험점포1",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5003,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-2",
+              "bizesNm": "가상커피2",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5006,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-3",
+              "bizesNm": "시험점포3",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5009,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-4",
+              "bizesNm": "시험점포4",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5012,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-5",
+              "bizesNm": "시험점포5",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5015,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-6",
+              "bizesNm": "시험점포6",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.506,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-7",
+              "bizesNm": "시험점포7",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.509,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-8",
+              "bizesNm": "시험점포8",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.512,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-9",
+              "bizesNm": "시험점포9",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.515,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            }
+          ]
+        }
+      }
+    },
+    "stores_district": {
+      "response": {
+        "header": {
+          "resultCode": "00",
+          "resultMsg": "NORMAL SERVICE"
+        },
+        "body": {
+          "totalCount": 12,
+          "items": [
+            {
+              "bizesId": "MOCK-0",
+              "bizesNm": "시험점포0",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-1",
+              "bizesNm": "시험점포1",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5003,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-2",
+              "bizesNm": "가상커피2",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5006,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-3",
+              "bizesNm": "시험점포3",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.5009,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-4",
+              "bizesNm": "시험점포4",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.5012,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-5",
+              "bizesNm": "시험점포5",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.5015,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-6",
+              "bizesNm": "시험점포6",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.506,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-7",
+              "bizesNm": "시험점포7",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.509,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-8",
+              "bizesNm": "시험점포8",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.512,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-9",
+              "bizesNm": "시험점포9",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I201",
+              "indsMclsNm": "한식",
+              "lat": 37.515,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-10",
+              "bizesNm": "시험점포10",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I202",
+              "indsMclsNm": "중식",
+              "lat": 37.518,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            },
+            {
+              "bizesId": "MOCK-11",
+              "bizesNm": "시험점포11",
+              "indsLclsCd": "I2",
+              "indsLclsNm": "음식점업",
+              "indsMclsCd": "I212",
+              "indsMclsNm": "커피/음료",
+              "lat": 37.521,
+              "lon": 127.1,
+              "signguCd": "11710",
+              "signguNm": "송파구",
+              "stdrDt": "20260630"
+            }
+          ]
+        }
+      }
+    },
+    "brands": {
+      "response": {
+        "body": {
+          "items": [
+            {
+              "brandNm": "가상커피"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
