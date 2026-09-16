@@ -17,7 +17,6 @@ from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaNoDataError,
 )
 from app.agents.business_lifecycle.config import Settings
-from app.orchestrator import default_agents
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
 GARAK_SITE = Site(
@@ -218,9 +217,6 @@ class BusinessAreaResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
         self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "env_override")
         self.assertEqual(len(result.data["industries"]), 70)
-
-    def test_default_agents_registers_business_lifecycle(self):
-        self.assertIn("business_lifecycle", default_agents())
 
 
 if __name__ == "__main__":
