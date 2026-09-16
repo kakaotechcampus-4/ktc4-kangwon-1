@@ -5,7 +5,7 @@ import { Outfit, DM_Mono } from 'next/font/google';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import AreaChart from '@/components/charts/AreaChart';
-import DivergingBar from '@/components/report-v2/DivergingBar';
+import DivergingBar from '@/components/report/DivergingBar';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { colors } from '@/styles/tokens';
 import {

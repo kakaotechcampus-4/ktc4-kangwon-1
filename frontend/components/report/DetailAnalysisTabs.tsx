@@ -1,8 +1,8 @@
 import { Outfit } from 'next/font/google';
 import Tabs, { type TabItem } from '@/components/ui/Tabs';
-import FloatingPopulationSection from '@/components/report-v2/FloatingPopulationSection';
-import CompetitorAnalysisSection from '@/components/report-v2/CompetitorAnalysisSection';
-import OpenCloseTrendSection from '@/components/report-v2/OpenCloseTrendSection';
+import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
+import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
+import OpenCloseTrendSection from '@/components/report/OpenCloseTrendSection';
 import { colors } from '@/styles/tokens';
 
 const outfit = Outfit({

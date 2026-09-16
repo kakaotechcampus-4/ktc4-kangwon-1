@@ -1,12 +1,9 @@
 import { DM_Mono } from 'next/font/google';
 import Header from '@/components/layout/Header';
 import ReportHeader from '@/components/report/ReportHeader';
-import AIConclusionBanner from '@/components/report/AIConclusionBanner';
 import RecommendationSection from '@/components/report/RecommendationSection';
-import FootTrafficChart from '@/components/report/FootTrafficChart';
-import CompetitorChart from '@/components/report/CompetitorChart';
-import OpenCloseChart from '@/components/report/OpenCloseChart';
-import AISummaryBanner from '@/components/report/AISummaryBanner';
+import AIAnalysisSummary from '@/components/report/AIAnalysisSummary';
+import DetailAnalysisTabs from '@/components/report/DetailAnalysisTabs';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
 import { mockReportData } from '@/lib/mockData/report';
@@ -24,17 +21,12 @@ export default function ReportPage() {
     >
       <Header />
       <ReportHeader />
-      <AIConclusionBanner />
       <RecommendationSection />
-      <FootTrafficChart />
-      <div className="flex w-full items-start gap-6 px-8 pt-8">
-        <CompetitorChart />
-        <OpenCloseChart />
-      </div>
-      <AISummaryBanner />
+      <AIAnalysisSummary />
+      <DetailAnalysisTabs />
 
       <div
-        className="mx-8 mt-8 mb-10 flex items-center justify-between pt-6"
+        className="mx-8 mt-10 mb-10 flex items-center justify-between pt-6"
         style={{ borderTop: `1px solid ${colors.neutral.border}` }}
       >
         <p className={`${dmMono.className} text-xs text-gray-400`}>
