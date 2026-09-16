@@ -81,9 +81,7 @@ def preprocess_business_lifecycle_data(
     )
 
     if not rows:
-        raise ValueError(
-            "서울시 Open API에서 조회된 데이터가 없습니다."
-        )
+        raise ValueError("서울시 Open API에서 조회된 데이터가 없습니다.")
 
     df = pd.DataFrame(rows)
 
@@ -110,61 +108,33 @@ def preprocess_business_lifecycle_data(
             errors="coerce",
         ).fillna(0)
 
-    df["stdr_yyqu_cd"] = (
-        df["stdr_yyqu_cd"].astype(str)
-    )
+    df["stdr_yyqu_cd"] = df["stdr_yyqu_cd"].astype(str)
 
-    df["svc_induty_cd"] = (
-        df["svc_induty_cd"].astype(str)
-    )
+    df["svc_induty_cd"] = df["svc_induty_cd"].astype(str)
 
     # ========================================================
     # 4. 서울시 업종 → 서비스 70개 업종 매핑
     # ========================================================
 
-    df["service_id"] = (
-        df["svc_induty_cd"]
-        .map(SEOUL_TO_SERVICE)
-    )
+    df["service_id"] = df["svc_induty_cd"].map(SEOUL_TO_SERVICE)
 
-    excluded_mask = (
-        df["svc_induty_cd"].isin(
-            EXCLUDED_SEOUL_INDUSTRIES.keys()
-        )
-    )
+    excluded_mask = df["svc_induty_cd"].isin(EXCLUDED_SEOUL_INDUSTRIES.keys())
 
-    unknown_mask = (
-        df["service_id"].isna()
-        & ~excluded_mask
-    )
+    unknown_mask = df["service_id"].isna() & ~excluded_mask
 
     unknown_df = df[unknown_mask]
 
     if not unknown_df.empty:
-        unknown_codes = sorted(
-            unknown_df[
-                "svc_induty_cd"
-            ].unique()
-        )
+        unknown_codes = sorted(unknown_df["svc_induty_cd"].unique())
 
-        raise ValueError(
-            "mapping.py에 정의되지 않은 "
-            f"서울시 업종이 있습니다: {unknown_codes}"
-        )
+        raise ValueError(f"mapping.py에 정의되지 않은 서울시 업종이 있습니다: {unknown_codes}")
 
     # 전자상거래업 등 의도적으로 제외한 업종 제거
-    mapped_df = df[
-        df["service_id"].notna()
-    ].copy()
+    mapped_df = df[df["service_id"].notna()].copy()
 
-    mapped_df["service_id"] = (
-        mapped_df["service_id"].astype(int)
-    )
+    mapped_df["service_id"] = mapped_df["service_id"].astype(int)
 
-    mapped_df["service_name"] = (
-        mapped_df["service_id"]
-        .map(SERVICE_INDUSTRIES)
-    )
+    mapped_df["service_name"] = mapped_df["service_id"].map(SERVICE_INDUSTRIES)
 
     print(
         "매핑 후 원본 행 수:",
@@ -179,78 +149,65 @@ def preprocess_business_lifecycle_data(
     # → 패스트푸드·치킨전문점
     # ========================================================
 
-    quarterly_df = (
-        mapped_df
-        .groupby(
-            [
-                "stdr_yyqu_cd",
-                "service_id",
-                "service_name",
-            ],
-            as_index=False,
-        )
-        .agg(
-            store_count=(
-                "similr_induty_stor_co",
-                "sum",
-            ),
-            open_count=(
-                "opbiz_stor_co",
-                "sum",
-            ),
-            close_count=(
-                "clsbiz_stor_co",
-                "sum",
-            ),
-        )
+    quarterly_df = mapped_df.groupby(
+        [
+            "stdr_yyqu_cd",
+            "service_id",
+            "service_name",
+        ],
+        as_index=False,
+    ).agg(
+        store_count=(
+            "similr_induty_stor_co",
+            "sum",
+        ),
+        open_count=(
+            "opbiz_stor_co",
+            "sum",
+        ),
+        close_count=(
+            "clsbiz_stor_co",
+            "sum",
+        ),
     )
 
     # ========================================================
     # 6. 3년 전체 집계
     # ========================================================
 
-    period_df = (
-        quarterly_df
-        .groupby(
-            [
-                "service_id",
-                "service_name",
-            ],
-            as_index=False,
-        )
-        .agg(
-            observed_quarters=(
-                "stdr_yyqu_cd",
-                "nunique",
-            ),
-
-            # 각 분기의 점포 수 합
-            # 비율 계산 시 가중 분모로 사용
-            store_exposure=(
-                "store_count",
-                "sum",
-            ),
-
-            avg_store_count=(
-                "store_count",
-                "mean",
-            ),
-
-            period_open_count=(
-                "open_count",
-                "sum",
-            ),
-
-            period_close_count=(
-                "close_count",
-                "sum",
-            ),
-        )
+    period_df = quarterly_df.groupby(
+        [
+            "service_id",
+            "service_name",
+        ],
+        as_index=False,
+    ).agg(
+        observed_quarters=(
+            "stdr_yyqu_cd",
+            "nunique",
+        ),
+        # 각 분기의 점포 수 합
+        # 비율 계산 시 가중 분모로 사용
+        store_exposure=(
+            "store_count",
+            "sum",
+        ),
+        avg_store_count=(
+            "store_count",
+            "mean",
+        ),
+        period_open_count=(
+            "open_count",
+            "sum",
+        ),
+        period_close_count=(
+            "close_count",
+            "sum",
+        ),
     )
 
     period_df["period_net_change"] = (
-        period_df["period_open_count"]
-        - period_df["period_close_count"]
+        period_df["period_open_count"] - period_df["period_close_count"]
     )
 
     # ========================================================
@@ -260,40 +217,31 @@ def preprocess_business_lifecycle_data(
     # 점포 수를 분모로 가중 계산
     # ========================================================
 
-    period_df["avg_open_rate"] = (
-        period_df.apply(
-            lambda row: calculate_rate(
-                row["period_open_count"],
-                row["store_exposure"],
-            ),
-            axis=1,
-        )
+    period_df["avg_open_rate"] = period_df.apply(
+        lambda row: calculate_rate(
+            row["period_open_count"],
+            row["store_exposure"],
+        ),
+        axis=1,
     )
 
-    period_df["avg_close_rate"] = (
-        period_df.apply(
-            lambda row: calculate_rate(
-                row["period_close_count"],
-                row["store_exposure"],
-            ),
-            axis=1,
-        )
+    period_df["avg_close_rate"] = period_df.apply(
+        lambda row: calculate_rate(
+            row["period_close_count"],
+            row["store_exposure"],
+        ),
+        axis=1,
     )
 
-    period_df["net_change_rate"] = (
-        period_df.apply(
-            lambda row: calculate_rate(
-                row["period_net_change"],
-                row["store_exposure"],
-            ),
-            axis=1,
-        )
+    period_df["net_change_rate"] = period_df.apply(
+        lambda row: calculate_rate(
+            row["period_net_change"],
+            row["store_exposure"],
+        ),
+        axis=1,
     )
 
-    period_df["turnover_rate"] = (
-        period_df["avg_open_rate"]
-        + period_df["avg_close_rate"]
-    ).round(2)
+    period_df["turnover_rate"] = (period_df["avg_open_rate"] + period_df["avg_close_rate"]).round(2)
 
     # ========================================================
     # 8. 최근 1년 데이터
@@ -303,48 +251,31 @@ def preprocess_business_lifecycle_data(
 
     recent_quarters = quarters[-4:]
 
-    recent_df = quarterly_df[
-        quarterly_df[
-            "stdr_yyqu_cd"
-        ].isin(recent_quarters)
-    ]
+    recent_df = quarterly_df[quarterly_df["stdr_yyqu_cd"].isin(recent_quarters)]
 
-    recent_summary = (
-        recent_df
-        .groupby(
-            "service_id",
-            as_index=False,
-        )
-        .agg(
-            recent_store_exposure=(
-                "store_count",
-                "sum",
-            ),
-            recent_year_open_count=(
-                "open_count",
-                "sum",
-            ),
-            recent_year_close_count=(
-                "close_count",
-                "sum",
-            ),
-        )
+    recent_summary = recent_df.groupby(
+        "service_id",
+        as_index=False,
+    ).agg(
+        recent_store_exposure=(
+            "store_count",
+            "sum",
+        ),
+        recent_year_open_count=(
+            "open_count",
+            "sum",
+        ),
+        recent_year_close_count=(
+            "close_count",
+            "sum",
+        ),
     )
 
-    recent_summary[
-        "recent_year_net_change"
-    ] = (
-        recent_summary[
-            "recent_year_open_count"
-        ]
-        - recent_summary[
-            "recent_year_close_count"
-        ]
+    recent_summary["recent_year_net_change"] = (
+        recent_summary["recent_year_open_count"] - recent_summary["recent_year_close_count"]
     )
 
-    recent_summary[
-        "recent_year_close_rate"
-    ] = recent_summary.apply(
+    recent_summary["recent_year_close_rate"] = recent_summary.apply(
         lambda row: calculate_rate(
             row["recent_year_close_count"],
             row["recent_store_exposure"],
@@ -352,9 +283,7 @@ def preprocess_business_lifecycle_data(
         axis=1,
     )
 
-    recent_summary[
-        "recent_year_net_change_rate"
-    ] = recent_summary.apply(
+    recent_summary["recent_year_net_change_rate"] = recent_summary.apply(
         lambda row: calculate_rate(
             row["recent_year_net_change"],
             row["recent_store_exposure"],
@@ -370,33 +299,23 @@ def preprocess_business_lifecycle_data(
 
     oldest_quarters = quarters[:4]
 
-    oldest_df = quarterly_df[
-        quarterly_df[
-            "stdr_yyqu_cd"
-        ].isin(oldest_quarters)
-    ]
+    oldest_df = quarterly_df[quarterly_df["stdr_yyqu_cd"].isin(oldest_quarters)]
 
-    oldest_summary = (
-        oldest_df
-        .groupby(
-            "service_id",
-            as_index=False,
-        )
-        .agg(
-            oldest_store_exposure=(
-                "store_count",
-                "sum",
-            ),
-            oldest_year_close_count=(
-                "close_count",
-                "sum",
-            ),
-        )
+    oldest_summary = oldest_df.groupby(
+        "service_id",
+        as_index=False,
+    ).agg(
+        oldest_store_exposure=(
+            "store_count",
+            "sum",
+        ),
+        oldest_year_close_count=(
+            "close_count",
+            "sum",
+        ),
     )
 
-    oldest_summary[
-        "oldest_year_close_rate"
-    ] = oldest_summary.apply(
+    oldest_summary["oldest_year_close_rate"] = oldest_summary.apply(
         lambda row: calculate_rate(
             row["oldest_year_close_count"],
             row["oldest_store_exposure"],
@@ -429,30 +348,21 @@ def preprocess_business_lifecycle_data(
     )
 
     period_df["close_rate_trend"] = (
-        period_df["recent_year_close_rate"]
-        - period_df["oldest_year_close_rate"]
+        period_df["recent_year_close_rate"] - period_df["oldest_year_close_rate"]
     ).round(2)
 
     # ========================================================
     # 11. 기준분기 최신 점포 수
     # ========================================================
 
-    latest_df = quarterly_df[
-        quarterly_df[
-            "stdr_yyqu_cd"
-        ] == base_quarter
-    ][
+    latest_df = quarterly_df[quarterly_df["stdr_yyqu_cd"] == base_quarter][
         [
             "service_id",
             "store_count",
         ]
     ].copy()
 
-    latest_df = latest_df.rename(
-        columns={
-            "store_count": "latest_store_count"
-        }
-    )
+    latest_df = latest_df.rename(columns={"store_count": "latest_store_count"})
 
     period_df = period_df.merge(
         latest_df,
@@ -464,24 +374,18 @@ def preprocess_business_lifecycle_data(
     # 12. 원본 서울시 업종 정보
     # ========================================================
 
-    source_info = (
-        mapped_df
-        .groupby(
-            "service_id",
-            as_index=False,
-        )
-        .agg(
-            source_industry_count=(
-                "svc_induty_cd",
-                "nunique",
-            ),
-            source_industries=(
-                "svc_induty_cd_nm",
-                lambda values: " | ".join(
-                    sorted(set(values))
-                ),
-            ),
-        )
+    source_info = mapped_df.groupby(
+        "service_id",
+        as_index=False,
+    ).agg(
+        source_industry_count=(
+            "svc_induty_cd",
+            "nunique",
+        ),
+        source_industries=(
+            "svc_induty_cd_nm",
+            lambda values: " | ".join(sorted(set(values))),
+        ),
     )
 
     period_df = period_df.merge(
@@ -500,8 +404,7 @@ def preprocess_business_lifecycle_data(
                 "service_id": service_id,
                 "service_name": service_name,
             }
-            for service_id, service_name
-            in SERVICE_INDUSTRIES.items()
+            for service_id, service_name in SERVICE_INDUSTRIES.items()
         ]
     )
 
@@ -518,11 +421,7 @@ def preprocess_business_lifecycle_data(
     # 14. 데이터 존재 여부
     # ========================================================
 
-    final_df["data_available"] = (
-        final_df[
-            "observed_quarters"
-        ].notna()
-    )
+    final_df["data_available"] = final_df["observed_quarters"].notna()
 
     def get_missing_reason(
         row: pd.Series,
@@ -530,29 +429,16 @@ def preprocess_business_lifecycle_data(
         if row["data_available"]:
             return None
 
-        service_id = int(
-            row["service_id"]
-        )
+        service_id = int(row["service_id"])
 
-        if (
-            service_id
-            in UNSUPPORTED_SERVICE_INDUSTRIES
-        ):
-            return (
-                "서울시 생활밀접업종 데이터에 "
-                "직접 대응 업종 없음"
-            )
+        if service_id in UNSUPPORTED_SERVICE_INDUSTRIES:
+            return "서울시 생활밀접업종 데이터에 직접 대응 업종 없음"
 
-        return (
-            f"최근 {quarter_count}개 분기에 "
-            "대응 서울시 업종 데이터 없음"
-        )
+        return f"최근 {quarter_count}개 분기에 대응 서울시 업종 데이터 없음"
 
-    final_df["missing_reason"] = (
-        final_df.apply(
-            get_missing_reason,
-            axis=1,
-        )
+    final_df["missing_reason"] = final_df.apply(
+        get_missing_reason,
+        axis=1,
     )
 
     # ========================================================
@@ -572,9 +458,7 @@ def preprocess_business_lifecycle_data(
     ]
 
     for column in round_columns:
-        final_df[column] = (
-            final_df[column].round(2)
-        )
+        final_df[column] = final_df[column].round(2)
 
     # ========================================================
     # 16. 컬럼 순서
@@ -585,12 +469,9 @@ def preprocess_business_lifecycle_data(
             "service_id",
             "service_name",
             "data_available",
-
             "observed_quarters",
-
             "latest_store_count",
             "avg_store_count",
-
             # 3년 전체
             "period_open_count",
             "period_close_count",
@@ -599,22 +480,18 @@ def preprocess_business_lifecycle_data(
             "avg_close_rate",
             "net_change_rate",
             "turnover_rate",
-
             # 최근 1년
             "recent_year_open_count",
             "recent_year_close_count",
             "recent_year_net_change",
             "recent_year_close_rate",
             "recent_year_net_change_rate",
-
             # 과거 대비 변화
             "oldest_year_close_rate",
             "close_rate_trend",
-
             # 매핑 확인
             "source_industry_count",
             "source_industries",
-
             "missing_reason",
         ]
     ]
@@ -623,12 +500,7 @@ def preprocess_business_lifecycle_data(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=(
-            "서울시 Open API 기반 "
-            "Business Lifecycle 전처리"
-        )
-    )
+    parser = argparse.ArgumentParser(description=("서울시 Open API 기반 Business Lifecycle 전처리"))
 
     parser.add_argument(
         "--area-code",
@@ -648,20 +520,15 @@ def main() -> None:
 
     parser.add_argument(
         "--output",
-        help=(
-            "테스트 결과를 저장할 CSV 경로. "
-            "생략하면 파일을 생성하지 않습니다."
-        ),
+        help=("테스트 결과를 저장할 CSV 경로. 생략하면 파일을 생성하지 않습니다."),
     )
 
     args = parser.parse_args()
 
-    result_df = (
-        preprocess_business_lifecycle_data(
-            area_code=args.area_code,
-            base_quarter=args.base_quarter,
-            quarter_count=args.count,
-        )
+    result_df = preprocess_business_lifecycle_data(
+        area_code=args.area_code,
+        base_quarter=args.base_quarter,
+        quarter_count=args.count,
     )
 
     print()
@@ -670,39 +537,21 @@ def main() -> None:
 
     print(
         "데이터 존재 업종:",
-        int(
-            result_df[
-                "data_available"
-            ].sum()
-        ),
+        int(result_df["data_available"].sum()),
     )
 
     print(
         "데이터 없는 업종:",
-        int(
-            (~result_df[
-                "data_available"
-            ]).sum()
-        ),
+        int((~result_df["data_available"]).sum()),
     )
 
     print()
     print("샘플 결과:")
 
-    print(
-        result_df[
-            result_df[
-                "data_available"
-            ]
-        ]
-        .head(10)
-        .to_string(index=False)
-    )
+    print(result_df[result_df["data_available"]].head(10).to_string(index=False))
 
     if args.output:
-        output_path = Path(
-            args.output
-        )
+        output_path = Path(args.output)
 
         result_df.to_csv(
             output_path,

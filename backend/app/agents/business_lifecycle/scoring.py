@@ -32,16 +32,10 @@ def get_confidence(
 
     coverage_ratio = observed_quarters / expected_quarters
 
-    if (
-        coverage_ratio >= 1.0
-        and avg_store_count >= 20
-    ):
+    if coverage_ratio >= 1.0 and avg_store_count >= 20:
         return "high"
 
-    if (
-        coverage_ratio >= 0.67
-        and avg_store_count >= 5
-    ):
+    if coverage_ratio >= 0.67 and avg_store_count >= 5:
         return "medium"
 
     return "low"
@@ -70,9 +64,7 @@ def calculate_lifecycle_scores(
         & result_df["close_rate_trend"].notna()
     )
 
-    score_df = result_df.loc[
-        score_mask
-    ].copy()
+    score_df = result_df.loc[score_mask].copy()
 
     # ========================================================
     # 2. 최근 1년 폐업률 안정성
@@ -81,8 +73,7 @@ def calculate_lifecycle_scores(
     # ========================================================
 
     score_df["recent_close_rate_score"] = (
-        score_df["recent_year_close_rate"]
-        .rank(
+        score_df["recent_year_close_rate"].rank(
             method="average",
             pct=True,
             ascending=False,
@@ -97,8 +88,7 @@ def calculate_lifecycle_scores(
     # ========================================================
 
     score_df["net_change_score"] = (
-        score_df["net_change_rate"]
-        .rank(
+        score_df["net_change_rate"].rank(
             method="average",
             pct=True,
             ascending=True,
@@ -114,8 +104,7 @@ def calculate_lifecycle_scores(
     # ========================================================
 
     score_df["turnover_score"] = (
-        score_df["turnover_rate"]
-        .rank(
+        score_df["turnover_rate"].rank(
             method="average",
             pct=True,
             ascending=False,
@@ -136,8 +125,7 @@ def calculate_lifecycle_scores(
     # ========================================================
 
     score_df["close_trend_score"] = (
-        score_df["close_rate_trend"]
-        .rank(
+        score_df["close_rate_trend"].rank(
             method="average",
             pct=True,
             ascending=False,
@@ -150,14 +138,10 @@ def calculate_lifecycle_scores(
     # ========================================================
 
     score_df["lifecycle_score"] = (
-        RECENT_CLOSE_RATE_WEIGHT
-        * score_df["recent_close_rate_score"]
-        + NET_CHANGE_WEIGHT
-        * score_df["net_change_score"]
-        + TURNOVER_WEIGHT
-        * score_df["turnover_score"]
-        + CLOSE_TREND_WEIGHT
-        * score_df["close_trend_score"]
+        RECENT_CLOSE_RATE_WEIGHT * score_df["recent_close_rate_score"]
+        + NET_CHANGE_WEIGHT * score_df["net_change_score"]
+        + TURNOVER_WEIGHT * score_df["turnover_score"]
+        + CLOSE_TREND_WEIGHT * score_df["close_trend_score"]
     )
 
     score_columns = [
@@ -168,9 +152,7 @@ def calculate_lifecycle_scores(
         "lifecycle_score",
     ]
 
-    score_df[score_columns] = (
-        score_df[score_columns].round(1)
-    )
+    score_df[score_columns] = score_df[score_columns].round(1)
 
     # ========================================================
     # 7. Confidence
@@ -178,12 +160,8 @@ def calculate_lifecycle_scores(
 
     score_df["confidence"] = score_df.apply(
         lambda row: get_confidence(
-            observed_quarters=row[
-                "observed_quarters"
-            ],
-            avg_store_count=row[
-                "avg_store_count"
-            ],
+            observed_quarters=row["observed_quarters"],
+            avg_store_count=row["avg_store_count"],
             expected_quarters=quarter_count,
         ),
         axis=1,
@@ -211,10 +189,7 @@ def calculate_lifecycle_scores(
         how="left",
     )
 
-    final_df["confidence"] = (
-        final_df["confidence"]
-        .fillna("none")
-    )
+    final_df["confidence"] = final_df["confidence"].fillna("none")
 
     return final_df
 
@@ -228,12 +203,10 @@ def score_business_lifecycle(
     API 조회 → 전처리 → 점수 계산까지 실행한다.
     """
 
-    preprocessed_df = (
-        preprocess_business_lifecycle_data(
-            area_code=area_code,
-            base_quarter=base_quarter,
-            quarter_count=quarter_count,
-        )
+    preprocessed_df = preprocess_business_lifecycle_data(
+        area_code=area_code,
+        base_quarter=base_quarter,
+        quarter_count=quarter_count,
     )
 
     return calculate_lifecycle_scores(
@@ -244,10 +217,7 @@ def score_business_lifecycle(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "최근 3년 개폐업 데이터를 기반으로 "
-            "Lifecycle Score를 계산합니다."
-        )
+        description=("최근 3년 개폐업 데이터를 기반으로 Lifecycle Score를 계산합니다.")
     )
 
     parser.add_argument(
@@ -271,10 +241,7 @@ def main() -> None:
 
     parser.add_argument(
         "--output",
-        help=(
-            "테스트용 CSV 저장 경로. "
-            "생략하면 파일을 생성하지 않습니다."
-        ),
+        help=("테스트용 CSV 저장 경로. 생략하면 파일을 생성하지 않습니다."),
     )
 
     args = parser.parse_args()
@@ -285,11 +252,7 @@ def main() -> None:
         quarter_count=args.count,
     )
 
-    scored_df = result_df[
-        result_df[
-            "lifecycle_score"
-        ].notna()
-    ]
+    scored_df = result_df[result_df["lifecycle_score"].notna()]
 
     print()
     print("===== Lifecycle Score 결과 =====")
@@ -306,9 +269,7 @@ def main() -> None:
 
     print(
         "점수 없는 업종:",
-        result_df[
-            "lifecycle_score"
-        ].isna().sum(),
+        result_df["lifecycle_score"].isna().sum(),
     )
 
     # ========================================================
@@ -318,14 +279,10 @@ def main() -> None:
     print()
     print("===== 상위 10개 =====")
 
-    top10 = (
-        scored_df
-        .sort_values(
-            "lifecycle_score",
-            ascending=False,
-        )
-        .head(10)
-    )
+    top10 = scored_df.sort_values(
+        "lifecycle_score",
+        ascending=False,
+    ).head(10)
 
     print(
         top10[
@@ -340,9 +297,7 @@ def main() -> None:
                 "lifecycle_score",
                 "confidence",
             ]
-        ].to_string(
-            index=False
-        )
+        ].to_string(index=False)
     )
 
     # ========================================================
@@ -352,14 +307,10 @@ def main() -> None:
     print()
     print("===== 하위 10개 =====")
 
-    bottom10 = (
-        scored_df
-        .sort_values(
-            "lifecycle_score",
-            ascending=True,
-        )
-        .head(10)
-    )
+    bottom10 = scored_df.sort_values(
+        "lifecycle_score",
+        ascending=True,
+    ).head(10)
 
     print(
         bottom10[
@@ -374,15 +325,11 @@ def main() -> None:
                 "lifecycle_score",
                 "confidence",
             ]
-        ].to_string(
-            index=False
-        )
+        ].to_string(index=False)
     )
 
     if args.output:
-        output_path = Path(
-            args.output
-        )
+        output_path = Path(args.output)
 
         result_df.to_csv(
             output_path,

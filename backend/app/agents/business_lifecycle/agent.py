@@ -279,14 +279,10 @@ def get_llm_client() -> OpenAI:
     base_url = os.getenv("ELICE_BASE_URL") or os.getenv("ELICE_MLAPI_BASE_URL")
 
     if not api_key:
-        raise BusinessLifecycleAgentError(
-            "ELICE_API_KEY 환경변수가 설정되어 있지 않습니다."
-        )
+        raise BusinessLifecycleAgentError("ELICE_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
     if not base_url:
-        raise BusinessLifecycleAgentError(
-            "ELICE_BASE_URL 환경변수가 설정되어 있지 않습니다."
-        )
+        raise BusinessLifecycleAgentError("ELICE_BASE_URL 환경변수가 설정되어 있지 않습니다.")
 
     return OpenAI(
         api_key=api_key,
@@ -309,9 +305,7 @@ def clean_json_response(
     cleaned = text.strip()
 
     if cleaned.startswith("```json"):
-        cleaned = cleaned[
-            len("```json"):
-        ]
+        cleaned = cleaned[len("```json") :]
 
     elif cleaned.startswith("```"):
         cleaned = cleaned[3:]
@@ -329,27 +323,19 @@ def parse_llm_response(
     LLM 응답을 JSON으로 변환.
     """
 
-    cleaned = clean_json_response(
-        response_text
-    )
+    cleaned = clean_json_response(response_text)
 
     try:
-        parsed = json.loads(
-            cleaned
-        )
+        parsed = json.loads(cleaned)
 
     except json.JSONDecodeError as exc:
-        raise BusinessLifecycleAgentError(
-            "LLM 응답을 JSON으로 변환하지 못했습니다."
-        ) from exc
+        raise BusinessLifecycleAgentError("LLM 응답을 JSON으로 변환하지 못했습니다.") from exc
 
     if not isinstance(
         parsed,
         dict,
     ):
-        raise BusinessLifecycleAgentError(
-            "LLM 응답의 최상위 구조가 JSON 객체가 아닙니다."
-        )
+        raise BusinessLifecycleAgentError("LLM 응답의 최상위 구조가 JSON 객체가 아닙니다.")
 
     return parsed
 
@@ -363,37 +349,21 @@ def validate_llm_result(
     정확히 반환했는지 확인.
     """
 
-    input_industries = (
-        agent_input["industries"]
+    input_industries = agent_input["industries"]
+
+    output_industries = llm_result.get(
+        "industry_scores",
+        [],
     )
 
-    output_industries = (
-        llm_result.get(
-            "industry_scores",
-            [],
-        )
-    )
+    input_ids = {industry["industry_id"] for industry in input_industries}
 
-    input_ids = {
-        industry["industry_id"]
-        for industry
-        in input_industries
-    }
-
-    output_ids = {
-        industry.get("industry_id")
-        for industry
-        in output_industries
-    }
+    output_ids = {industry.get("industry_id") for industry in output_industries}
 
     if input_ids != output_ids:
-        missing = (
-            input_ids - output_ids
-        )
+        missing = input_ids - output_ids
 
-        extra = (
-            output_ids - input_ids
-        )
+        extra = output_ids - input_ids
 
         raise BusinessLifecycleAgentError(
             "LLM 업종 결과가 입력과 일치하지 않습니다. "
@@ -414,13 +384,9 @@ def run_llm_analysis(
 
     client = get_llm_client()
 
-    industries = agent_input[
-        "industries"
-    ]
+    industries = agent_input["industries"]
 
-    all_industry_scores: list[
-        dict[str, Any]
-    ] = []
+    all_industry_scores: list[dict[str, Any]] = []
 
     # ========================================================
     # Batch 단위 LLM 호출
@@ -431,18 +397,12 @@ def run_llm_analysis(
         len(industries),
         BATCH_SIZE,
     ):
-        batch = industries[
-            start:start + BATCH_SIZE
-        ]
+        batch = industries[start : start + BATCH_SIZE]
 
-        batch_number = (
-            start // BATCH_SIZE
-        ) + 1
+        batch_number = (start // BATCH_SIZE) + 1
 
         print()
-        print(
-            f"===== LLM Batch {batch_number} ====="
-        )
+        print(f"===== LLM Batch {batch_number} =====")
 
         print(
             "분석 업종 수:",
@@ -450,35 +410,27 @@ def run_llm_analysis(
         )
 
         llm_input = {
-            "scope": agent_input[
-                "scope"
-            ],
-
-            "scoring_method": agent_input[
-                "scoring_method"
-            ],
-
+            "scope": agent_input["scope"],
+            "scoring_method": agent_input["scoring_method"],
             "industries": batch,
         }
 
-        response = (
-            client.chat.completions.create(
-                model=get_model_name(),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": SYSTEM_PROMPT,
-                    },
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            llm_input,
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    },
-                ],
-            )
+        response = client.chat.completions.create(
+            model=get_model_name(),
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        llm_input,
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                },
+            ],
         )
 
         choice = response.choices[0]
@@ -488,9 +440,7 @@ def run_llm_analysis(
             choice.finish_reason,
         )
 
-        response_text = (
-            choice.message.content
-        )
+        response_text = choice.message.content
 
         if not response_text:
             raise BusinessLifecycleAgentError(
@@ -500,51 +450,30 @@ def run_llm_analysis(
                 f"{choice.finish_reason}"
             )
 
-        batch_result = parse_llm_response(
-            response_text
-        )
+        batch_result = parse_llm_response(response_text)
 
-        batch_scores = (
-            batch_result.get(
-                "industry_scores"
-            )
-        )
+        batch_scores = batch_result.get("industry_scores")
 
         if not isinstance(
             batch_scores,
             list,
         ):
             raise BusinessLifecycleAgentError(
-                f"LLM Batch {batch_number}의 "
-                "industry_scores가 올바르지 않습니다."
+                f"LLM Batch {batch_number}의 industry_scores가 올바르지 않습니다."
             )
 
         # ====================================================
         # 현재 batch의 ID 검증
         # ====================================================
 
-        input_ids = {
-            industry[
-                "industry_id"
-            ]
-            for industry in batch
-        }
+        input_ids = {industry["industry_id"] for industry in batch}
 
-        output_ids = {
-            industry.get(
-                "industry_id"
-            )
-            for industry in batch_scores
-        }
+        output_ids = {industry.get("industry_id") for industry in batch_scores}
 
         if input_ids != output_ids:
-            missing = (
-                input_ids - output_ids
-            )
+            missing = input_ids - output_ids
 
-            extra = (
-                output_ids - input_ids
-            )
+            extra = output_ids - input_ids
 
             raise BusinessLifecycleAgentError(
                 f"LLM Batch {batch_number} "
@@ -553,13 +482,9 @@ def run_llm_analysis(
                 f"추가={sorted(extra)}"
             )
 
-        all_industry_scores.extend(
-            batch_scores
-        )
+        all_industry_scores.extend(batch_scores)
 
-        print(
-            f"Batch {batch_number} 완료"
-        )
+        print(f"Batch {batch_number} 완료")
 
     # ========================================================
     # 전체 결과 구성
@@ -571,9 +496,7 @@ def run_llm_analysis(
             f"분기의 개폐업 데이터를 기반으로 "
             f"{len(all_industry_scores)}개 업종을 분석했습니다."
         ),
-
-        "industry_scores":
-            all_industry_scores,
+        "industry_scores": all_industry_scores,
     }
 
     # ========================================================
@@ -621,52 +544,26 @@ def run_business_lifecycle_agent(
     # 2. 점수가 있는 업종만 LLM 분석
     # ========================================================
 
-    llm_result = run_llm_analysis(
-        agent_input=agent_input
-    )
+    llm_result = run_llm_analysis(agent_input=agent_input)
 
     # ========================================================
     # 3. 최종 Agent 결과 생성
     # ========================================================
 
     result: dict[str, Any] = {
-        "request_id": agent_input[
-            "request_id"
-        ],
-
-        "agent_id":
-            "business_lifecycle",
-
-        "scope": agent_input[
-            "scope"
-        ],
-
-        "coverage": agent_input[
-            "coverage"
-        ],
-
-        "scoring_method": agent_input[
-            "scoring_method"
-        ],
-
+        "request_id": agent_input["request_id"],
+        "agent_id": "business_lifecycle",
+        "scope": agent_input["scope"],
+        "coverage": agent_input["coverage"],
+        "scoring_method": agent_input["scoring_method"],
         "summary": llm_result.get(
             "summary",
             "",
         ),
-
         # LLM 분석 완료 업종
-        "industry_scores": (
-            llm_result[
-                "industry_scores"
-            ]
-        ),
-
+        "industry_scores": (llm_result["industry_scores"]),
         # 데이터 부족으로 판단 보류
-        "unavailable_industries": (
-            agent_input[
-                "unavailable_industries"
-            ]
-        ),
+        "unavailable_industries": (agent_input["unavailable_industries"]),
     }
 
     return result
@@ -832,8 +729,7 @@ def _choose_base_quarter(
         validate_quarter_code(settings.base_quarter_override)
         if compare_quarters(settings.base_quarter_override, latest_closed_quarter()) > 0:
             raise FutureQuarterError(
-                f"아직 확정되지 않은 분기는 조회하지 않습니다: "
-                f"{settings.base_quarter_override}"
+                f"아직 확정되지 않은 분기는 조회하지 않습니다: {settings.base_quarter_override}"
             )
         return settings.base_quarter_override
 
@@ -895,11 +791,7 @@ def _error(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Business Lifecycle Agent 실행"
-        )
-    )
+    parser = argparse.ArgumentParser(description=("Business Lifecycle Agent 실행"))
 
     parser.add_argument(
         "--area-code",
@@ -922,51 +814,34 @@ def main() -> None:
 
     parser.add_argument(
         "--output",
-        help=(
-            "테스트용 Agent 결과 JSON 저장 경로"
-        ),
+        help=("테스트용 Agent 결과 JSON 저장 경로"),
     )
 
     parser.add_argument(
-    "--request-id",
-    help=(
-        "외부에서 전달받은 요청 ID. "
-        "생략하면 테스트용 ID가 자동 생성됩니다."
-        ),
+        "--request-id",
+        help=("외부에서 전달받은 요청 ID. 생략하면 테스트용 ID가 자동 생성됩니다."),
     )
 
     args = parser.parse_args()
 
-    result = (
-        run_business_lifecycle_agent(
-            area_code=args.area_code,
-            base_quarter=args.base_quarter,
-            quarter_count=args.count,
-            request_id=args.request_id,
-        )
+    result = run_business_lifecycle_agent(
+        area_code=args.area_code,
+        base_quarter=args.base_quarter,
+        quarter_count=args.count,
+        request_id=args.request_id,
     )
 
     print()
-    print(
-        "===== Business Lifecycle Agent 완료 ====="
-    )
+    print("===== Business Lifecycle Agent 완료 =====")
 
     print(
         "분석 업종:",
-        len(
-            result[
-                "industry_scores"
-            ]
-        ),
+        len(result["industry_scores"]),
     )
 
     print(
         "판단 보류 업종:",
-        len(
-            result[
-                "unavailable_industries"
-            ]
-        ),
+        len(result["unavailable_industries"]),
     )
 
     print(
@@ -975,9 +850,7 @@ def main() -> None:
     )
 
     if args.output:
-        output_path = Path(
-            args.output
-        )
+        output_path = Path(args.output)
 
         with output_path.open(
             "w",

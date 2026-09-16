@@ -26,17 +26,10 @@ class FutureQuarterError(ValueError):
 
 
 def get_api_key() -> str:
-    api_key = os.getenv(
-        "BUSINESS_LIFECYCLE_API_KEY"
-    ) or os.getenv(
-        "SEOUL_OPEN_API_KEY"
-    )
+    api_key = os.getenv("BUSINESS_LIFECYCLE_API_KEY") or os.getenv("SEOUL_OPEN_API_KEY")
 
     if not api_key:
-        raise SeoulOpenAPIError(
-            "BUSINESS_LIFECYCLE_API_KEY "
-            "환경변수가 설정되어 있지 않습니다."
-        )
+        raise SeoulOpenAPIError("BUSINESS_LIFECYCLE_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
     return api_key
 
@@ -83,22 +76,16 @@ def request_page(
             raw_data = response.read().decode("utf-8")
 
     except HTTPError as exc:
-        raise SeoulOpenAPIError(
-            f"서울시 API HTTP 오류: {exc.code}"
-        ) from exc
+        raise SeoulOpenAPIError(f"서울시 API HTTP 오류: {exc.code}") from exc
 
     except URLError as exc:
-        raise SeoulOpenAPIError(
-            f"서울시 API 연결 실패: {exc.reason}"
-        ) from exc
+        raise SeoulOpenAPIError(f"서울시 API 연결 실패: {exc.reason}") from exc
 
     try:
         return json.loads(raw_data)
 
     except json.JSONDecodeError as exc:
-        raise SeoulOpenAPIError(
-            "서울시 API 응답을 JSON으로 해석할 수 없습니다."
-        ) from exc
+        raise SeoulOpenAPIError("서울시 API 응답을 JSON으로 해석할 수 없습니다.") from exc
 
 
 def extract_service_data(
@@ -109,37 +96,25 @@ def extract_service_data(
     if top_result is not None:
         if top_result.get("CODE") == "INFO-200":
             raise SeoulOpenAPINoDataError(
-                f"서울시 API 자료 없음: "
-                f"{top_result.get('CODE')} - "
-                f"{top_result.get('MESSAGE')}"
+                f"서울시 API 자료 없음: {top_result.get('CODE')} - {top_result.get('MESSAGE')}"
             )
         raise SeoulOpenAPIError(
-            f"서울시 API 오류: "
-            f"{top_result.get('CODE')} - "
-            f"{top_result.get('MESSAGE')}"
+            f"서울시 API 오류: {top_result.get('CODE')} - {top_result.get('MESSAGE')}"
         )
 
     service_data = response_data.get(SERVICE_NAME)
 
     if service_data is None:
-        raise SeoulOpenAPIError(
-            f"응답에 {SERVICE_NAME} 데이터가 없습니다."
-        )
+        raise SeoulOpenAPIError(f"응답에 {SERVICE_NAME} 데이터가 없습니다.")
 
     result = service_data.get("RESULT", {})
 
     if result.get("CODE") not in (None, "INFO-000"):
         if result.get("CODE") == "INFO-200":
             raise SeoulOpenAPINoDataError(
-                f"서울시 API 자료 없음: "
-                f"{result.get('CODE')} - "
-                f"{result.get('MESSAGE')}"
+                f"서울시 API 자료 없음: {result.get('CODE')} - {result.get('MESSAGE')}"
             )
-        raise SeoulOpenAPIError(
-            f"서울시 API 오류: "
-            f"{result.get('CODE')} - "
-            f"{result.get('MESSAGE')}"
-        )
+        raise SeoulOpenAPIError(f"서울시 API 오류: {result.get('CODE')} - {result.get('MESSAGE')}")
 
     return service_data
 
@@ -159,9 +134,7 @@ def normalize_row(
         "trdar_cd_nm": row.get("TRDAR_CD_NM"),
         "svc_induty_cd": row.get("SVC_INDUTY_CD"),
         "svc_induty_cd_nm": row.get("SVC_INDUTY_CD_NM"),
-        "similr_induty_stor_co": row.get(
-            "SIMILR_INDUTY_STOR_CO"
-        ),
+        "similr_induty_stor_co": row.get("SIMILR_INDUTY_STOR_CO"),
         "stor_co": row.get("STOR_CO"),
         "frc_stor_co": row.get("FRC_STOR_CO"),
         "opbiz_rt": row.get("OPBIZ_RT"),
@@ -196,22 +169,16 @@ def fetch_store_data(
         )
 
         try:
-            service_data = extract_service_data(
-                response_data
-            )
+            service_data = extract_service_data(response_data)
         except SeoulOpenAPINoDataError:
             return []
 
-        total_count = int(
-            service_data.get("list_total_count", 0)
-        )
+        total_count = int(service_data.get("list_total_count", 0))
 
         page_rows = service_data.get("row", [])
 
         for row in page_rows:
-            rows.append(
-                normalize_row(row)
-            )
+            rows.append(normalize_row(row))
 
         if len(rows) >= total_count:
             break
@@ -228,24 +195,18 @@ def validate_quarter_code(
     quarter_code: str,
 ) -> None:
     if len(quarter_code) != 5:
-        raise ValueError(
-            "분기 코드는 YYYYQ 형식이어야 합니다. 예: 20252"
-        )
+        raise ValueError("분기 코드는 YYYYQ 형식이어야 합니다. 예: 20252")
 
     quarter = int(quarter_code[4])
 
     if quarter not in (1, 2, 3, 4):
-        raise ValueError(
-            "분기는 1~4 중 하나여야 합니다."
-        )
+        raise ValueError("분기는 1~4 중 하나여야 합니다.")
 
 
 def previous_quarter(
     quarter_code: str,
 ) -> str:
-    validate_quarter_code(
-        quarter_code
-    )
+    validate_quarter_code(quarter_code)
 
     year = int(quarter_code[:4])
     quarter = int(quarter_code[4])
@@ -304,9 +265,7 @@ def get_candidate_quarters(
     latest_allowed = latest_closed_quarter(today)
 
     if compare_quarters(quarter, latest_allowed) > 0:
-        raise FutureQuarterError(
-            f"아직 확정되지 않은 분기는 조회하지 않습니다: {quarter}"
-        )
+        raise FutureQuarterError(f"아직 확정되지 않은 분기는 조회하지 않습니다: {quarter}")
 
     quarters: list[str] = []
 
@@ -355,22 +314,16 @@ def get_recent_quarters(
     → 20223 ~ 20252
     """
 
-    validate_quarter_code(
-        base_quarter
-    )
+    validate_quarter_code(base_quarter)
 
     year = int(base_quarter[:4])
     quarter = int(base_quarter[4])
 
     if quarter not in (1, 2, 3, 4):
-        raise ValueError(
-            "분기는 1~4 중 하나여야 합니다."
-        )
+        raise ValueError("분기는 1~4 중 하나여야 합니다.")
 
     if count <= 0:
-        raise ValueError(
-            "조회할 분기 수는 1 이상이어야 합니다."
-        )
+        raise ValueError("조회할 분기 수는 1 이상이어야 합니다.")
 
     quarters: list[str] = []
 
@@ -378,9 +331,7 @@ def get_recent_quarters(
     current_quarter = quarter
 
     for _ in range(count):
-        quarters.append(
-            f"{current_year}{current_quarter}"
-        )
+        quarters.append(f"{current_year}{current_quarter}")
 
         current_quarter -= 1
 
@@ -444,9 +395,7 @@ def main() -> None:
     fetch_recent_store_data()를 직접 호출한다.
     """
 
-    parser = argparse.ArgumentParser(
-        description="서울시 상권 개폐업 데이터 조회"
-    )
+    parser = argparse.ArgumentParser(description="서울시 상권 개폐업 데이터 조회")
 
     parser.add_argument(
         "--area-code",

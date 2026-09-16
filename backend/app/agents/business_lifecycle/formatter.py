@@ -46,36 +46,18 @@ def format_scored_industry(
     """
 
     return {
-        "industry_id": industry[
-            "industry_id"
-        ],
-        "industry_name": industry[
-            "industry_name"
-        ],
-
-        "score": industry[
-            "lifecycle_score"
-        ],
-
-        "type": industry[
-            "type"
-        ],
-
-        "confidence": industry[
-            "confidence"
-        ],
-
+        "industry_id": industry["industry_id"],
+        "industry_name": industry["industry_name"],
+        "score": industry["lifecycle_score"],
+        "type": industry["type"],
+        "confidence": industry["confidence"],
         "data_available": True,
         "score_available": True,
-
         "evidence": industry.get(
             "evidence",
             [],
         ),
-
-        "warning": industry.get(
-            "warning"
-        ),
+        "warning": industry.get("warning"),
     }
 
 
@@ -88,31 +70,20 @@ def format_unscored_industry(
     """
 
     return {
-        "industry_id": industry[
-            "industry_id"
-        ],
-        "industry_name": industry[
-            "industry_name"
-        ],
-
+        "industry_id": industry["industry_id"],
+        "industry_name": industry["industry_name"],
         "score": None,
-
         "type": "판단 보류",
-
         "confidence": industry.get(
             "confidence",
             "none",
         ),
-
         "data_available": industry.get(
             "data_available",
             False,
         ),
-
         "score_available": False,
-
         "evidence": [],
-
         "warning": industry.get(
             "missing_reason",
             "분석에 필요한 데이터가 부족합니다.",
@@ -129,19 +100,12 @@ def build_warnings(
 
     warnings: list[str] = []
 
-    unscored_count = sum(
-        1
-        for industry in industries
-        if not industry["score_available"]
-    )
+    unscored_count = sum(1 for industry in industries if not industry["score_available"])
 
     low_confidence_count = sum(
         1
         for industry in industries
-        if (
-            industry["score_available"]
-            and industry["confidence"] == "low"
-        )
+        if (industry["score_available"] and industry["confidence"] == "low")
     )
 
     if unscored_count > 0:
@@ -191,23 +155,15 @@ def format_for_mediator(
     }
     """
 
-    request_id = agent_result.get(
-        "request_id"
-    )
+    request_id = agent_result.get("request_id")
 
     if not request_id:
-        raise BusinessLifecycleFormatterError(
-            "request_id가 없습니다."
-        )
+        raise BusinessLifecycleFormatterError("request_id가 없습니다.")
 
-    agent_id = agent_result.get(
-        "agent_id"
-    )
+    agent_id = agent_result.get("agent_id")
 
     if agent_id != "business_lifecycle":
-        raise BusinessLifecycleFormatterError(
-            "agent_id가 business_lifecycle이 아닙니다."
-        )
+        raise BusinessLifecycleFormatterError("agent_id가 business_lifecycle이 아닙니다.")
 
     scored_industries = agent_result.get(
         "industry_scores",
@@ -223,53 +179,35 @@ def format_for_mediator(
         scored_industries,
         list,
     ):
-        raise BusinessLifecycleFormatterError(
-            "industry_scores가 list가 아닙니다."
-        )
+        raise BusinessLifecycleFormatterError("industry_scores가 list가 아닙니다.")
 
     if not isinstance(
         unscored_industries,
         list,
     ):
-        raise BusinessLifecycleFormatterError(
-            "unavailable_industries가 list가 아닙니다."
-        )
+        raise BusinessLifecycleFormatterError("unavailable_industries가 list가 아닙니다.")
 
     # ========================================================
     # 1. 점수 있는 업종
     # ========================================================
 
-    industries: list[
-        dict[str, Any]
-    ] = []
+    industries: list[dict[str, Any]] = []
 
     for industry in scored_industries:
-        industries.append(
-            format_scored_industry(
-                industry
-            )
-        )
+        industries.append(format_scored_industry(industry))
 
     # ========================================================
     # 2. 판단 보류 업종
     # ========================================================
 
     for industry in unscored_industries:
-        industries.append(
-            format_unscored_industry(
-                industry
-            )
-        )
+        industries.append(format_unscored_industry(industry))
 
     # ========================================================
     # 3. 업종 ID 기준 정렬
     # ========================================================
 
-    industries.sort(
-        key=lambda item: item[
-            "industry_id"
-        ]
-    )
+    industries.sort(key=lambda item: item["industry_id"])
 
     # ========================================================
     # 4. 70개 Master 검증
@@ -277,65 +215,39 @@ def format_for_mediator(
 
     if len(industries) != 70:
         raise BusinessLifecycleFormatterError(
-            "Business Lifecycle 결과의 업종 수가 "
-            f"70개가 아닙니다. "
-            f"현재={len(industries)}"
+            f"Business Lifecycle 결과의 업종 수가 70개가 아닙니다. 현재={len(industries)}"
         )
 
-    industry_ids = [
-        industry["industry_id"]
-        for industry in industries
-    ]
+    industry_ids = [industry["industry_id"] for industry in industries]
 
     if len(set(industry_ids)) != 70:
-        raise BusinessLifecycleFormatterError(
-            "중복된 industry_id가 존재합니다."
-        )
+        raise BusinessLifecycleFormatterError("중복된 industry_id가 존재합니다.")
 
-    expected_ids = set(
-        range(1, 71)
-    )
+    expected_ids = set(range(1, 71))
 
-    actual_ids = set(
-        industry_ids
-    )
+    actual_ids = set(industry_ids)
 
     if expected_ids != actual_ids:
-        missing_ids = sorted(
-            expected_ids - actual_ids
-        )
+        missing_ids = sorted(expected_ids - actual_ids)
 
-        extra_ids = sorted(
-            actual_ids - expected_ids
-        )
+        extra_ids = sorted(actual_ids - expected_ids)
 
         raise BusinessLifecycleFormatterError(
-            "70개 Master industry_id가 일치하지 않습니다. "
-            f"누락={missing_ids}, "
-            f"추가={extra_ids}"
+            f"70개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
         )
 
     # ========================================================
     # 5. Coverage 계산
     # ========================================================
 
-    scored_count = sum(
-        1
-        for industry in industries
-        if industry["score_available"]
-    )
+    scored_count = sum(1 for industry in industries if industry["score_available"])
 
-    unscored_count = (
-        len(industries)
-        - scored_count
-    )
+    unscored_count = len(industries) - scored_count
 
     coverage = {
         "target_industries": 70,
-        "scored_industries":
-            scored_count,
-        "unscored_industries":
-            unscored_count,
+        "scored_industries": scored_count,
+        "unscored_industries": unscored_count,
     }
 
     # ========================================================
@@ -357,20 +269,12 @@ def format_for_mediator(
     # 7. Warnings
     # ========================================================
 
-    warnings = build_warnings(
-        industries
-    )
+    warnings = build_warnings(industries)
 
     if extra_warnings:
         warnings.extend(extra_warnings)
 
-    warnings = list(
-        dict.fromkeys(
-            warning
-            for warning in warnings
-            if warning
-        )
-    )
+    warnings = list(dict.fromkeys(warning for warning in warnings if warning))
 
     # ========================================================
     # 8. 중재 Agent 공통 반환 구조
@@ -384,22 +288,16 @@ def format_for_mediator(
                 "summary",
                 "",
             ),
-
             "metadata": build_metadata(
                 agent_result=agent_result,
                 metadata=metadata,
             ),
-
             "coverage": coverage,
-
-            "scoring_method":
-                agent_result.get(
-                    "scoring_method",
-                    {},
-                ),
-
-            "industries":
-                industries,
+            "scoring_method": agent_result.get(
+                "scoring_method",
+                {},
+            ),
+            "industries": industries,
         }
 
     formatted_result: dict[
@@ -407,16 +305,10 @@ def format_for_mediator(
         Any,
     ] = {
         "request_id": request_id,
-
-        "agent_id":
-            "business_lifecycle",
-
+        "agent_id": "business_lifecycle",
         "status": status,
-
         "scope": scope.model_dump(),
-
         "data": data,
-
         "warnings": warnings,
     }
 
@@ -475,11 +367,7 @@ def build_metadata(
     }
     if metadata:
         result_metadata.update(metadata)
-    return {
-        key: value
-        for key, value in result_metadata.items()
-        if value is not None
-    }
+    return {key: value for key, value in result_metadata.items() if value is not None}
 
 
 def main() -> None:
@@ -491,52 +379,34 @@ def main() -> None:
     """
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Business Lifecycle Agent 결과를 "
-            "중재 Agent 공통 형식으로 변환"
-        )
+        description=("Business Lifecycle Agent 결과를 중재 Agent 공통 형식으로 변환")
     )
 
     parser.add_argument(
         "--input",
         required=True,
-        help=(
-            "Business Lifecycle Agent "
-            "결과 JSON 파일"
-        ),
+        help=("Business Lifecycle Agent 결과 JSON 파일"),
     )
 
     parser.add_argument(
         "--output",
         required=True,
-        help=(
-            "중재 Agent용 JSON 저장 경로"
-        ),
+        help=("중재 Agent용 JSON 저장 경로"),
     )
 
     args = parser.parse_args()
 
-    input_path = Path(
-        args.input
-    )
+    input_path = Path(args.input)
 
-    output_path = Path(
-        args.output
-    )
+    output_path = Path(args.output)
 
     with input_path.open(
         "r",
         encoding="utf-8",
     ) as file:
-        agent_result = json.load(
-            file
-        )
+        agent_result = json.load(file)
 
-    formatted_result = (
-        format_for_mediator(
-            agent_result
-        )
-    )
+    formatted_result = format_for_mediator(agent_result)
 
     formatted_payload = formatted_result.model_dump()
 
@@ -552,34 +422,24 @@ def main() -> None:
         )
 
     print()
-    print(
-        "===== Formatter 완료 ====="
-    )
+    print("===== Formatter 완료 =====")
 
     print(
         "request_id:",
-        formatted_payload[
-            "request_id"
-        ],
+        formatted_payload["request_id"],
     )
 
     print(
         "agent_id:",
-        formatted_payload[
-            "agent_id"
-        ],
+        formatted_payload["agent_id"],
     )
 
     print(
         "status:",
-        formatted_payload[
-            "status"
-        ],
+        formatted_payload["status"],
     )
 
-    coverage = formatted_payload[
-        "data"
-    ].get("coverage", {})
+    coverage = formatted_payload["data"].get("coverage", {})
 
     print(
         "전체 업종:",
