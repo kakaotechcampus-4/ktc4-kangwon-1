@@ -1,0 +1,76 @@
+{
+  "TbgisTrdarRelm": {
+    "list_total_count": 1650,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110055",
+        "TRDAR_CD_NM": "황학동벼룩시장",
+        "XCNTS_VALUE": "201642",
+        "YDNTS_VALUE": "452260",
+        "SIGNGU_CD": "11140",
+        "SIGNGU_CD_NM": "중구",
+        "ADSTRD_CD": "11140670",
+        "ADSTRD_CD_NM": "황학동",
+        "RELM_AR": "27575"
+      },
+      {
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110008",
+        "TRDAR_CD_NM": "배화여자대학교(박노수미술관)",
+        "XCNTS_VALUE": "197093",
+        "YDNTS_VALUE": "453418",
+        "SIGNGU_CD": "11110",
+        "SIGNGU_CD_NM": "종로구",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "RELM_AR": "149264"
+      },
+      {
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110009",
+        "TRDAR_CD_NM": "자하문터널",
+        "XCNTS_VALUE": "196991",
+        "YDNTS_VALUE": "455057",
+        "SIGNGU_CD": "11110",
+        "SIGNGU_CD_NM": "종로구",
+        "ADSTRD_CD": "11110550",
+        "ADSTRD_CD_NM": "부암동",
+        "RELM_AR": "178306"
+      },
+      {
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110010",
+        "TRDAR_CD_NM": "평창동서측",
+        "XCNTS_VALUE": "197064",
+        "YDNTS_VALUE": "456643",
+        "SIGNGU_CD": "11110",
+        "SIGNGU_CD_NM": "종로구",
+        "ADSTRD_CD": "11110560",
+        "ADSTRD_CD_NM": "평창동",
+        "RELM_AR": "369415"
+      },
+      {
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110017",
+        "TRDAR_CD_NM": "정독도서관",
+        "XCNTS_VALUE": "198581",
+        "YDNTS_VALUE": "453781",
+        "SIGNGU_CD": "11110",
+        "SIGNGU_CD_NM": "종로구",
+        "ADSTRD_CD": "11110600",
+        "ADSTRD_CD_NM": "가회동",
+        "RELM_AR": "83855"
+      }
+    ]
+  }
+}

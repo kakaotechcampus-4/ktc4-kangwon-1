@@ -1,0 +1,76 @@
+{
+  "VwsmTrdarIxQq": {
+    "list_total_count": 36300,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20252",
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110004",
+        "TRDAR_CD_NM": "대신고등학교",
+        "TRDAR_CHNGE_IX": "HH",
+        "TRDAR_CHNGE_IX_NM": "정체",
+        "OPR_SALE_MT_AVRG": 143.0,
+        "CLS_SALE_MT_AVRG": 74.0,
+        "SU_OPR_SALE_MT_AVRG": 112.0,
+        "SU_CLS_SALE_MT_AVRG": 53.0
+      },
+      {
+        "STDR_YYQU_CD": "20254",
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110004",
+        "TRDAR_CD_NM": "대신고등학교",
+        "TRDAR_CHNGE_IX": "HH",
+        "TRDAR_CHNGE_IX_NM": "정체",
+        "OPR_SALE_MT_AVRG": 132.0,
+        "CLS_SALE_MT_AVRG": 76.0,
+        "SU_OPR_SALE_MT_AVRG": 115.0,
+        "SU_CLS_SALE_MT_AVRG": 53.0
+      },
+      {
+        "STDR_YYQU_CD": "20251",
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110013",
+        "TRDAR_CD_NM": "체부동홍종문가옥",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 83.0,
+        "CLS_SALE_MT_AVRG": 38.0,
+        "SU_OPR_SALE_MT_AVRG": 111.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20252",
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110013",
+        "TRDAR_CD_NM": "체부동홍종문가옥",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 84.0,
+        "CLS_SALE_MT_AVRG": 38.0,
+        "SU_OPR_SALE_MT_AVRG": 112.0,
+        "SU_CLS_SALE_MT_AVRG": 53.0
+      },
+      {
+        "STDR_YYQU_CD": "20253",
+        "TRDAR_SE_CD": "A",
+        "TRDAR_SE_CD_NM": "골목상권",
+        "TRDAR_CD": "3110013",
+        "TRDAR_CD_NM": "체부동홍종문가옥",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 84.0,
+        "CLS_SALE_MT_AVRG": 38.0,
+        "SU_OPR_SALE_MT_AVRG": 113.0,
+        "SU_CLS_SALE_MT_AVRG": 53.0
+      }
+    ]
+  }
+}

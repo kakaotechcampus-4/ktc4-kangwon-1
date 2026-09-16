@@ -1,0 +1,91 @@
+{
+  "VwsmTrdarStorQq": {
+    "list_total_count": 1680756,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20262",
+        "TRDAR_SE_CD": "R",
+        "TRDAR_SE_CD_NM": "전통시장",
+        "TRDAR_CD": "3130327",
+        "TRDAR_CD_NM": "평화시장(남평화시장, 제일평화시장, 신평화패션타운)",
+        "SVC_INDUTY_CD": "CS300043",
+        "SVC_INDUTY_CD_NM": "전자상거래업",
+        "SIMILR_INDUTY_STOR_CO": 3.0,
+        "STOR_CO": 3.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "TRDAR_SE_CD": "R",
+        "TRDAR_SE_CD_NM": "전통시장",
+        "TRDAR_CD": "3130327",
+        "TRDAR_CD_NM": "평화시장(남평화시장, 제일평화시장, 신평화패션타운)",
+        "SVC_INDUTY_CD": "CS300035",
+        "SVC_INDUTY_CD_NM": "인테리어",
+        "SIMILR_INDUTY_STOR_CO": 2.0,
+        "STOR_CO": 2.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "TRDAR_SE_CD": "R",
+        "TRDAR_SE_CD_NM": "전통시장",
+        "TRDAR_CD": "3130327",
+        "TRDAR_CD_NM": "평화시장(남평화시장, 제일평화시장, 신평화패션타운)",
+        "SVC_INDUTY_CD": "CS300029",
+        "SVC_INDUTY_CD_NM": "애완동물",
+        "SIMILR_INDUTY_STOR_CO": 1.0,
+        "STOR_CO": 1.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "TRDAR_SE_CD": "R",
+        "TRDAR_SE_CD_NM": "전통시장",
+        "TRDAR_CD": "3130327",
+        "TRDAR_CD_NM": "평화시장(남평화시장, 제일평화시장, 신평화패션타운)",
+        "SVC_INDUTY_CD": "CS300027",
+        "SVC_INDUTY_CD_NM": "섬유제품",
+        "SIMILR_INDUTY_STOR_CO": 1.0,
+        "STOR_CO": 1.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "TRDAR_SE_CD": "R",
+        "TRDAR_SE_CD_NM": "전통시장",
+        "TRDAR_CD": "3130327",
+        "TRDAR_CD_NM": "평화시장(남평화시장, 제일평화시장, 신평화패션타운)",
+        "SVC_INDUTY_CD": "CS300024",
+        "SVC_INDUTY_CD_NM": "운동/경기용품",
+        "SIMILR_INDUTY_STOR_CO": 5.0,
+        "STOR_CO": 5.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      }
+    ]
+  }
+}

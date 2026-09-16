@@ -1,0 +1,66 @@
+{
+  "VwsmSignguIxQq": {
+    "list_total_count": 550,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20243",
+        "SIGNGU_CD": "11200",
+        "SIGNGU_CD_NM": "성동구",
+        "TRDAR_CHNGE_IX": "LH",
+        "TRDAR_CHNGE_IX_NM": "상권확장",
+        "OPR_SALE_MT_AVRG": 104.0,
+        "CLS_SALE_MT_AVRG": 54.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "SIGNGU_CD": "11320",
+        "SIGNGU_CD_NM": "도봉구",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 105.0,
+        "CLS_SALE_MT_AVRG": 50.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "SIGNGU_CD": "11545",
+        "SIGNGU_CD_NM": "금천구",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 105.0,
+        "CLS_SALE_MT_AVRG": 51.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "SIGNGU_CD": "11110",
+        "SIGNGU_CD_NM": "종로구",
+        "TRDAR_CHNGE_IX": "HH",
+        "TRDAR_CHNGE_IX_NM": "정체",
+        "OPR_SALE_MT_AVRG": 130.0,
+        "CLS_SALE_MT_AVRG": 62.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "SIGNGU_CD": "11350",
+        "SIGNGU_CD_NM": "노원구",
+        "TRDAR_CHNGE_IX": "LL",
+        "TRDAR_CHNGE_IX_NM": "다이나믹",
+        "OPR_SALE_MT_AVRG": 101.0,
+        "CLS_SALE_MT_AVRG": 51.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "VwsmAdstrdIxQq": {
+    "list_total_count": 9350,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20242",
+        "ADSTRD_CD": "11110630",
+        "ADSTRD_CD_NM": "종로5·6가동",
+        "TRDAR_CHNGE_IX": "HH",
+        "TRDAR_CHNGE_IX_NM": "정체",
+        "OPR_SALE_MT_AVRG": 137.0,
+        "CLS_SALE_MT_AVRG": 66.0,
+        "SU_OPR_SALE_MT_AVRG": 105.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "ADSTRD_CD": "11110630",
+        "ADSTRD_CD_NM": "종로5·6가동",
+        "TRDAR_CHNGE_IX": "HH",
+        "TRDAR_CHNGE_IX_NM": "정체",
+        "OPR_SALE_MT_AVRG": 140.0,
+        "CLS_SALE_MT_AVRG": 66.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20242",
+        "ADSTRD_CD": "11110640",
+        "ADSTRD_CD_NM": "이화동",
+        "TRDAR_CHNGE_IX": "LH",
+        "TRDAR_CHNGE_IX_NM": "상권확장",
+        "OPR_SALE_MT_AVRG": 98.0,
+        "CLS_SALE_MT_AVRG": 55.0,
+        "SU_OPR_SALE_MT_AVRG": 105.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110640",
+        "ADSTRD_CD_NM": "이화동",
+        "TRDAR_CHNGE_IX": "LH",
+        "TRDAR_CHNGE_IX_NM": "상권확장",
+        "OPR_SALE_MT_AVRG": 98.0,
+        "CLS_SALE_MT_AVRG": 55.0,
+        "SU_OPR_SALE_MT_AVRG": 103.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      },
+      {
+        "STDR_YYQU_CD": "20243",
+        "ADSTRD_CD": "11110640",
+        "ADSTRD_CD_NM": "이화동",
+        "TRDAR_CHNGE_IX": "LH",
+        "TRDAR_CHNGE_IX_NM": "상권확장",
+        "OPR_SALE_MT_AVRG": 99.0,
+        "CLS_SALE_MT_AVRG": 56.0,
+        "SU_OPR_SALE_MT_AVRG": 107.0,
+        "SU_CLS_SALE_MT_AVRG": 52.0
+      }
+    ]
+  }
+}

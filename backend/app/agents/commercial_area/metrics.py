@@ -6,6 +6,7 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
+from .baseline import seoul_percentile
 from .config import RESTAURANT_MAJOR_NAMES, Settings
 from .schemas import (
     CategoryRank,
@@ -110,6 +111,17 @@ def build_middle_rows(
                 major_name=store.major_name,
             )
 
+    # 누적 유인(Nelson 2원칙)용 대분류 집계. 중분류 75회를 도는 루프 안에서 매번 다시 세지 않도록
+    # 여기서 한 번만 만든다.
+    major_counts = count_by_major(stores)
+    middle_counts_by_major: dict[str, list[int]] = {}
+    for code, entry in known.items():
+        middle_counts_by_major.setdefault(entry.major_code, []).append(counts.get(code, 0))
+    cluster_diversity = {
+        major: round(effective_categories(hhi(values)), 4)
+        for major, values in middle_counts_by_major.items()
+    }
+
     rows: list[MiddleCategory] = []
     for code in sorted(known):
         entry = known[code]
@@ -137,6 +149,8 @@ def build_middle_rows(
                 diff_type_count=diff_count,
                 marshallian=round(density, 4),
                 jacobian=round(effective_categories(hhi(other_counts)), 4),
+                major_cluster_count=major_counts.get(entry.major_code, 0),
+                major_cluster_diversity=cluster_diversity.get(entry.major_code, 0.0),
             )
         )
     return sorted(rows, key=lambda r: (-r.count, r.code))
@@ -416,6 +430,7 @@ def build_restaurant_density(
     stores: Sequence[Store],
     radius_m: int,
     settings: Settings,
+    in_seoul: bool = False,
 ) -> RestaurantDensity:
     count = sum(1 for s in stores if s.major_name in RESTAURANT_MAJOR_NAMES)
     density = _density(count, radius_m)
@@ -424,4 +439,5 @@ def build_restaurant_density(
         squared=round(density**2, 4),
         unit="stores_per_km2",
         store_count=count,
+        seoul_percentile=seoul_percentile(density) if in_seoul else None,
     )

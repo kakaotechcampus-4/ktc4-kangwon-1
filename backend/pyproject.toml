@@ -34,6 +34,7 @@ include = ["app*"]
 "app.agents.decision" = ["prompt.md"]
 "app.agents.orchestration" = ["prompt.md"]
 "app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
+"app.industries" = ["data/*.csv", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
