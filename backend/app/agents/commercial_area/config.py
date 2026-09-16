@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.industries import MASTER_PATH
+
 PACKAGE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = PACKAGE_DIR.parents[2]
 
@@ -27,8 +29,10 @@ RESTAURANT_MAJOR_NAMES = ("음식점업", "음식", "음식점")
 class Settings:
     analysis_radius_m: int = 500
     lq_radius_candidates: tuple[int, ...] = (2000, 1500, 1000)
-    breakdown_radii: tuple[int, ...] = (50, 100, 200, 300, 500)
-    rank_size: int = 10
+    # 결정 에이전트가 data 를 통째로 프롬프트에 넣는데(decision/agent.py 가 자르지 않는다)
+    # by_radius 가 전체의 44%라 빈 응답이 났다. 단계와 순위 길이를 줄여 크기를 맞춘다.
+    breakdown_radii: tuple[int, ...] = (50, 200, 500)
+    rank_size: int = 5
     min_count_for_specialization: int = 5
 
     page_size: int = 1000
@@ -44,11 +48,11 @@ class Settings:
     district_max_pages: int = 120
     lq_cache_grid_m: int = 250
 
-    upjong_master_path: Path = PACKAGE_DIR / "data" / "upjong_codes.csv"
+    upjong_master_path: Path = MASTER_PATH
 
     sbiz_service_key: str | None = None
     ftc_service_key: str | None = None
-    ftc_year: str = "2024"
+    ftc_year: str = "2025"
     geocoding_api_key: str | None = None
     geocoder: str = "auto"
     llm_model: str | None = None

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date
 
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
@@ -21,7 +20,15 @@ from .metrics import (
     count_by_middle,
     haversine_m,
 )
-from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Summary
+from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Source, Summary
+from .sources import (
+    SBIZ_PERIOD,
+    SBIZ_REFERENCE_DATE,
+    build_description,
+    build_sources,
+    franchise_base_year,
+)
+from .trade_areas import build_trade_areas
 from .upjong import load_middle_master, master_from_stores
 
 AGENT_ID: AgentId = "commercial_area"
@@ -58,7 +65,8 @@ async def analyze(
                 warnings=warnings,
             )
 
-        period = meta.get("reference_date") or f"{date.today().isoformat()} 조회"
+        # 응답에 날짜 필드가 없는 것을 확인했지만, 원천이 나중에 추가할 수 있어 앞단은 남긴다.
+        period = meta.get("reference_date") or SBIZ_PERIOD
 
         if not stores:
             return AgentAnalysis(
@@ -152,12 +160,16 @@ async def analyze(
         if brands:
             # 판정 방식의 한계는 franchise.method 와 confidence 로 전달한다.
             # warnings 는 실패에만 쓴다. 고지를 여기 넣으면 정상 분석도 partial 로 내려간다.
-            franchise = build_franchise(stores, brands, middle_rows)
+            franchise = build_franchise(
+                stores, brands, middle_rows, base_year=franchise_base_year(settings)
+            )
         else:
             degraded = True
             warnings.append(
                 "공정위 브랜드 목록을 확보하지 못해 프랜차이즈 비율을 계산하지 못했습니다."
             )
+
+        trade_areas = build_trade_areas(site.latitude, site.longitude, radius)
 
         radius_slices = build_radius_slices(
             stores,
@@ -170,14 +182,24 @@ async def analyze(
         )
 
         payload = CommercialAreaData(
+            description=build_description(
+                settings,
+                radius_m=radius,
+                store_total=len(stores),
+                baseline_radius_m=baseline.applied_radius_m,
+                district_name=district_name if district_counts else None,
+                with_franchise=franchise is not None,
+            ),
             radius_m=radius,
             store_total=len(stores),
-            data_reference_date=period,
+            data_reference_date=SBIZ_REFERENCE_DATE,
             by_major=major_rows,
             by_middle=middle_rows,
             by_radius=radius_slices,
             diversity=build_diversity(major_rows, middle_rows),
-            restaurant_density=build_restaurant_density(stores, radius, settings),
+            restaurant_density=build_restaurant_density(
+                stores, radius, settings, in_seoul=bool(trade_areas)
+            ),
             franchise=franchise,
             lq_baseline=baseline,
             district_baseline=district_baseline,
@@ -186,6 +208,11 @@ async def analyze(
                 if district_counts and district_name
                 else []
             ),
+            trade_areas=trade_areas,
+            sources=[
+                Source(name=s.name, url=s.url, license=s.license, period=s.period)
+                for s in build_sources(settings, with_franchise=franchise is not None)
+            ],
         )
 
         data = payload.model_dump()

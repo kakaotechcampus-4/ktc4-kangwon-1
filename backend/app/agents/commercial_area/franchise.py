@@ -14,7 +14,6 @@ import httpx
 from .config import FTC_BRAND_BASE_URL, FTC_BRAND_OPERATION, Settings
 from .schemas import Franchise, FranchiseByMiddle, MiddleCategory, Store
 
-BRAND_CACHE_NAME = "ftc_brands.json"
 MIN_BRAND_LENGTH = 2
 NORMALIZE_PATTERN = re.compile(r"[\s\(\)\[\]\-_.,'\"·&]+")
 BRANCH_SUFFIX_PATTERN = re.compile(r"(점|지점|본점|직영점)$")
@@ -26,7 +25,9 @@ def normalize_name(value: str) -> str:
 
 
 def brand_cache_path(settings: Settings) -> Path:
-    return settings.cache_dir / BRAND_CACHE_NAME
+    # 연도를 파일 이름에 넣는다. 이게 없으면 ftc_year 를 올려도 지난 연도 목록이 그대로 읽히고,
+    # franchise.base_year 는 새 연도를 가리켜 실제와 어긋난다.
+    return settings.cache_dir / f"ftc_brands_{settings.ftc_year}.json"
 
 
 def load_cached_brands(settings: Settings) -> list[str] | None:
@@ -124,6 +125,7 @@ def build_franchise(
     stores: Sequence[Store],
     brands: Sequence[str],
     middle_rows: Sequence[MiddleCategory],
+    base_year: int | None = None,
 ) -> Franchise:
     normalized_brands = {
         normalized
@@ -146,10 +148,15 @@ def build_franchise(
     ]
 
     total = len(stores)
+    independent = total - len(matched)
     return Franchise(
         count=len(matched),
         ratio=round(len(matched) / total, 4) if total else 0.0,
+        # 프랜차이즈가 아닌 나머지. 받는 쪽이 뺄셈하지 않게 명시 필드로 낸다.
+        independent_count=independent,
+        independent_ratio=round(independent / total, 4) if total else 0.0,
         by_middle=by_middle,
         method="brand_name_match",
         confidence="low",
+        base_year=base_year,
     )

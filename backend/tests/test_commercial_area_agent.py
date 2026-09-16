@@ -10,6 +10,7 @@ from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
 from app.agents.commercial_area.schemas import MiddleCode, Store
+from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
 from app.agents.commercial_area.upjong import write_master
 from app.schemas import AgentAnalysis, AnalysisTask
 
@@ -214,6 +215,67 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.data["district_baseline"])
         self.assertTrue(all(r["lq_district"] is None for r in result.data["by_middle"]))
         self.assertTrue(result.data["store_total"] > 0)
+
+    async def test_period_falls_back_to_the_source_quarter(self):
+        class UndatedClient(FakeClient):
+            async def stores_in_radius(self, lat, lon, radius_m, use_cache=True, grid_m=None):
+                stores, meta = await super().stores_in_radius(lat, lon, radius_m, use_cache, grid_m)
+                meta.pop("reference_date")
+                return stores, meta
+
+        result = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=UndatedClient(self.settings, sample_stores()),
+        )
+        self.assertEqual(result.scope.period, SBIZ_PERIOD)
+        self.assertNotIn("조회", result.scope.period)
+
+    async def test_data_carries_reference_date_description_and_sources(self):
+        result = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+        data = result.data
+
+        self.assertEqual(data["data_reference_date"], SBIZ_REFERENCE_DATE)
+        self.assertIn(SBIZ_PERIOD, data["description"])
+        self.assertIn("점수", data["description"])
+
+        self.assertEqual(len(data["sources"]), 1)
+        source = data["sources"][0]
+        self.assertEqual(source["period"], SBIZ_PERIOD)
+        self.assertTrue(source["name"] and source["url"] and source["license"])
+
+    async def test_radius_slices_follow_the_configured_steps(self):
+        result = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+        slices = result.data["by_radius"]
+
+        self.assertEqual([s["radius_m"] for s in slices], list(self.settings.breakdown_radii))
+        for entry in slices:
+            self.assertLessEqual(len(entry["top_by_count"]), self.settings.rank_size)
+            self.assertEqual(entry["category_count"] + entry["absent_category_count"], len(MASTER))
+
+    async def test_trade_areas_are_empty_outside_seoul(self):
+        task = AnalysisTask.model_validate(
+            {
+                "request_id": "request-busan",
+                "site": {**SITE, "latitude": 35.1796, "longitude": 129.0756},
+            }
+        )
+        result = await analyze(
+            task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+
+        self.assertEqual(result.data["trade_areas"], [])
+        self.assertIsNone(result.data["restaurant_density"]["seoul_percentile"])
 
     async def test_summary_absent_without_llm_settings(self):
         result = await analyze(

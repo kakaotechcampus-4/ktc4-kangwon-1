@@ -1,0 +1,81 @@
+{
+  "VwsmAdstrdStorW": {
+    "list_total_count": 775084,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "SVC_INDUTY_CD": "CS100003",
+        "SVC_INDUTY_CD_NM": "일식음식점",
+        "SIMILR_INDUTY_STOR_CO": 19.0,
+        "STOR_CO": 18.0,
+        "FRC_STOR_CO": 1.0,
+        "OPBIZ_RT": 11.0,
+        "OPBIZ_STOR_CO": 2.0,
+        "CLSBIZ_RT": 11.0,
+        "CLSBIZ_STOR_CO": 2.0
+      },
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "SVC_INDUTY_CD": "CS100009",
+        "SVC_INDUTY_CD_NM": "호프-간이주점",
+        "SIMILR_INDUTY_STOR_CO": 25.0,
+        "STOR_CO": 25.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "SVC_INDUTY_CD": "CS200003",
+        "SVC_INDUTY_CD_NM": "예술학원",
+        "SIMILR_INDUTY_STOR_CO": 13.0,
+        "STOR_CO": 12.0,
+        "FRC_STOR_CO": 1.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "SVC_INDUTY_CD": "CS200028",
+        "SVC_INDUTY_CD_NM": "미용실",
+        "SIMILR_INDUTY_STOR_CO": 17.0,
+        "STOR_CO": 17.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20241",
+        "ADSTRD_CD": "11110515",
+        "ADSTRD_CD_NM": "청운효자동",
+        "SVC_INDUTY_CD": "CS200005",
+        "SVC_INDUTY_CD_NM": "스포츠 강습",
+        "SIMILR_INDUTY_STOR_CO": 17.0,
+        "STOR_CO": 17.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      }
+    ]
+  }
+}
