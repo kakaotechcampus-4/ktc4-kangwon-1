@@ -3,10 +3,14 @@ import {
   Camera,
   Coffee,
   Croissant,
+  Dumbbell,
   Flame,
   FlaskConical,
+  Mic2,
   Monitor,
+  PawPrint,
   Store,
+  WashingMachine,
   type LucideIcon,
 } from 'lucide-react';
 import Card from '@/components/ui/Card';
@@ -32,9 +36,13 @@ const industryIcons: Record<string, LucideIcon> = {
   '네일·뷰티': FlaskConical,
   무인점포: Monitor,
   '소형 스튜디오': Camera,
+  코인세탁실: WashingMachine,
+  '반려동물 미용': PawPrint,
   고깃집: Flame,
   '대형 카페': Coffee,
   베이커리: Croissant,
+  노래방: Mic2,
+  헬스장: Dumbbell,
 };
 
 type Column = {
@@ -53,7 +61,7 @@ const columns: Column[] = [
   {
     id: 'recommended',
     title: '추천 업종',
-    badgeLabel: 'TOP 3',
+    badgeLabel: 'TOP 5',
     tint: `${colors.brand.primary}1A`,
     accent: colors.brand.primary,
     tagBg: `${colors.brand.primary}1A`,
@@ -64,7 +72,7 @@ const columns: Column[] = [
   {
     id: 'not-recommended',
     title: '비추천 업종',
-    badgeLabel: 'BOTTOM 3',
+    badgeLabel: 'BOTTOM 5',
     tint: `${colors.status.notRecommend}1A`,
     accent: colors.status.notRecommend,
     tagBg: `${colors.status.notRecommend}1A`,

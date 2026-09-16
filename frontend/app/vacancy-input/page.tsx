@@ -12,12 +12,12 @@ export default function VacancyInputPage() {
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-8 px-5 py-8 sm:px-8 sm:py-10">
+      <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
         <StepIndicator />
 
         <div className="flex flex-col items-start gap-3">
           <h1
-            className="text-[26px] font-bold sm:text-[32px]"
+            className="text-[32px] font-bold"
             style={{ color: colors.neutral.black }}
           >
             분석할 공실 정보를 입력해 주세요
@@ -28,8 +28,8 @@ export default function VacancyInputPage() {
           </p>
         </div>
 
-        <div className="flex w-full flex-col items-start gap-8 lg:flex-row">
-          <div className="flex flex-1">
+        <div className="flex w-full flex-col items-start gap-8 md:flex-row">
+          <div className="flex w-full md:flex-1">
             <AddressInput />
           </div>
           <AnalysisPreviewPanel />
