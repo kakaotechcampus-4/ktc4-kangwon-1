@@ -38,7 +38,7 @@ const fluid = (min: number, max: number) =>
  * 비교라 별도 렌더 시나리오 없이도 충분하다고 판단).
  */
 export function getSectionVisibility(
-  status: AgentStatus,
+  status: AgentStatus
 ): 'visible' | 'hidden' {
   return status === 'no_data' || status === 'error' ? 'hidden' : 'visible';
 }
@@ -81,7 +81,9 @@ function SectionCard({
         >
           {title}
         </p>
-        {description && <p className="fp-card-desc text-gray-500">{description}</p>}
+        {description && (
+          <p className="fp-card-desc text-gray-500">{description}</p>
+        )}
       </div>
       <div className="fp-card-body flex w-full flex-col items-start">
         {children}
@@ -491,7 +493,7 @@ export default function FloatingPopulationSection({
         .fp-card-head {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -502,24 +504,16 @@ export default function FloatingPopulationSection({
           gap: 2px;
         }
         .fp-card-title {
-          font-size: clamp(
-            15px,
-            calc(15px + (100vw - 375px) * 0.003756),
-            19px
-          );
+          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
         }
         .fp-card-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           line-height: 1.5;
         }
         .fp-card-body {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -531,11 +525,7 @@ export default function FloatingPopulationSection({
         }
 
         .fp-empty-note {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.001878),
-            14px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
           color: var(--color-gray-500);
           padding-block: 8px;
           line-height: 1.6;
@@ -546,7 +536,7 @@ export default function FloatingPopulationSection({
           display: flex;
           flex-direction: column;
           gap: clamp(10px, calc(10px + (100vw - 375px) * 0.005634), 16px);
-          padding: clamp(16px, calc(16px + (100vw - 375px) * 0.009390), 26px);
+          padding: clamp(16px, calc(16px + (100vw - 375px) * 0.00939), 26px);
         }
         .fp-type-head {
           display: flex;
@@ -568,11 +558,7 @@ export default function FloatingPopulationSection({
           list-style: disc;
           padding-left: 18px;
           color: var(--color-gray-600);
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.001878),
-            14px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
           line-height: 1.6;
         }
 
@@ -585,28 +571,16 @@ export default function FloatingPopulationSection({
         }
         .fp-core-value {
           font-weight: 700;
-          font-size: clamp(
-            22px,
-            calc(22px + (100vw - 375px) * 0.007512),
-            34px
-          );
+          font-size: clamp(22px, calc(22px + (100vw - 375px) * 0.007512), 34px);
           line-height: 1.3;
         }
         .fp-core-unit {
-          font-size: clamp(
-            13px,
-            calc(13px + (100vw - 375px) * 0.001878),
-            15px
-          );
+          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.001878), 15px);
           color: var(--color-gray-400);
           margin-left: 4px;
         }
         .fp-core-prefix {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.001878),
-            14px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
           color: var(--color-gray-500);
         }
 
@@ -646,21 +620,13 @@ export default function FloatingPopulationSection({
           flex: 0 0 auto;
         }
         .fp-donut-legend-name {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
           flex: 1 1 auto;
           min-width: 0;
         }
         .fp-donut-legend-value {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
           flex: 0 0 auto;
         }
@@ -671,11 +637,7 @@ export default function FloatingPopulationSection({
           gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
         }
         .fp-age-index-label {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
         }
         @media (min-width: 640px) {
@@ -705,20 +667,12 @@ export default function FloatingPopulationSection({
         */
         .fp-trend-caption,
         .fp-radius-caption {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           color: var(--color-gray-600);
           padding-top: 4px;
         }
         .fp-radius-method {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-400);
         }
 
@@ -745,11 +699,7 @@ export default function FloatingPopulationSection({
           border-bottom: none;
         }
         .fp-trade-area-name {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
         }
 
@@ -758,21 +708,13 @@ export default function FloatingPopulationSection({
           flex-direction: column;
           gap: 2px;
           width: 100%;
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
           padding-top: 4px;
         }
 
         .fp-source {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-400);
           line-height: 1.6;
         }

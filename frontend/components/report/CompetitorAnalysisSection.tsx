@@ -44,7 +44,7 @@ const fluid = (min: number, max: number) =>
  * 판단했다).
  */
 export function getSectionVisibility(
-  status: AgentStatus,
+  status: AgentStatus
 ): 'visible' | 'hidden' {
   return status === 'no_data' || status === 'error' ? 'hidden' : 'visible';
 }
@@ -83,7 +83,9 @@ function SectionCard({
         >
           {title}
         </p>
-        {description && <p className="ca-card-desc text-gray-500">{description}</p>}
+        {description && (
+          <p className="ca-card-desc text-gray-500">{description}</p>
+        )}
       </div>
       <div className="ca-card-body flex w-full flex-col items-start">
         {children}
@@ -132,7 +134,13 @@ const OTHER_COLOR = 'var(--color-gray-500)';
 
 type DonutSlice = { name: string; value: number; color: string };
 
-function Donut({ slices, height = 168 }: { slices: DonutSlice[]; height?: number }) {
+function Donut({
+  slices,
+  height = 168,
+}: {
+  slices: DonutSlice[];
+  height?: number;
+}) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
 
   return (
@@ -313,7 +321,7 @@ function DistrictSpecializationBars({ data }: { data: CommercialAreaData }) {
   }
 
   const values = data.districtSpecialization.map(
-    (item: CommercialAreaSpecializationRank) => item.timesVsSurroundings,
+    (item: CommercialAreaSpecializationRank) => item.timesVsSurroundings
   );
   const max = Math.max(1, ...values);
   const baselinePercent = (1 / max) * 100;
@@ -369,7 +377,7 @@ function IndustryCompetitionCard({
   useEffect(() => {
     if (!middle) {
       console.warn(
-        `[CompetitorAnalysisSection] "${item.name}" 업종은 상권 경쟁 데이터에 매칭되지 않았습니다(중분류 코드 매핑 없음 또는 조회 실패).`,
+        `[CompetitorAnalysisSection] "${item.name}" 업종은 상권 경쟁 데이터에 매칭되지 않았습니다(중분류 코드 매핑 없음 또는 조회 실패).`
       );
     }
   }, [middle, item.name]);
@@ -401,9 +409,7 @@ function IndustryCompetitionCard({
             backgroundColor: recommended
               ? `${colors.brand.primary}1A`
               : `${colors.status.notRecommend}1A`,
-            color: recommended
-              ? colors.brand.dark
-              : colors.status.notRecommend,
+            color: recommended ? colors.brand.dark : colors.status.notRecommend,
             fontFamily: 'inherit',
             textTransform: 'none',
             letterSpacing: 'normal',
@@ -545,7 +551,7 @@ export default function CompetitorAnalysisSection() {
         .ca-card-head {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -556,24 +562,16 @@ export default function CompetitorAnalysisSection() {
           gap: 2px;
         }
         .ca-card-title {
-          font-size: clamp(
-            15px,
-            calc(15px + (100vw - 375px) * 0.003756),
-            19px
-          );
+          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
         }
         .ca-card-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           line-height: 1.5;
         }
         .ca-card-body {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -669,11 +667,7 @@ export default function CompetitorAnalysisSection() {
           flex: 0 0 auto;
         }
         .ca-donut-legend-name {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -682,11 +676,7 @@ export default function CompetitorAnalysisSection() {
           min-width: 0;
         }
         .ca-donut-legend-value {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
           flex: 0 0 auto;
           white-space: nowrap;
@@ -713,37 +703,21 @@ export default function CompetitorAnalysisSection() {
         }
         .ca-diversity-value {
           font-weight: 700;
-          font-size: clamp(
-            28px,
-            calc(28px + (100vw - 375px) * 0.007512),
-            40px
-          );
+          font-size: clamp(28px, calc(28px + (100vw - 375px) * 0.007512), 40px);
         }
         .ca-diversity-unit {
-          font-size: clamp(
-            14px,
-            calc(14px + (100vw - 375px) * 0.001878),
-            16px
-          );
+          font-size: clamp(14px, calc(14px + (100vw - 375px) * 0.001878), 16px);
           color: var(--color-gray-400);
           margin-left: 4px;
         }
         .ca-diversity-caption {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           color: var(--color-gray-500);
         }
 
         /* ---- 프랜차이즈 caveat ---- */
         .ca-franchise-caveat {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
           line-height: 1.5;
         }
@@ -759,11 +733,7 @@ export default function CompetitorAnalysisSection() {
           grid-template-columns:
             clamp(96px, calc(96px + (100vw - 375px) * 0.037559), 136px)
             minmax(0, 1fr);
-          column-gap: clamp(
-            8px,
-            calc(8px + (100vw - 375px) * 0.003756),
-            12px
-          );
+          column-gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
           row-gap: 2px;
           padding-block: clamp(
             6px,
@@ -774,11 +744,7 @@ export default function CompetitorAnalysisSection() {
         .ca-bar-label {
           grid-column: 1;
           grid-row: 1 / span 2;
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -799,11 +765,7 @@ export default function CompetitorAnalysisSection() {
         .ca-bar-note {
           grid-column: 2;
           grid-row: 2;
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
         }
 
@@ -835,11 +797,7 @@ export default function CompetitorAnalysisSection() {
         }
 
         .ca-empty-note {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.001878),
-            14px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
           color: var(--color-gray-500);
           padding-block: 8px;
         }
@@ -874,18 +832,10 @@ export default function CompetitorAnalysisSection() {
           gap: 8px;
         }
         .ca-industry-name {
-          font-size: clamp(
-            13px,
-            calc(13px + (100vw - 375px) * 0.002817),
-            16px
-          );
+          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px);
         }
         .ca-industry-counts {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           color: var(--color-gray-500);
         }
         .ca-industry-counts strong {
@@ -902,21 +852,13 @@ export default function CompetitorAnalysisSection() {
           flex-direction: column;
           gap: 2px;
           width: 100%;
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
           padding-top: 4px;
         }
 
         .ca-source {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-400);
           line-height: 1.6;
         }

@@ -541,8 +541,20 @@ export const mockReportData = {
     dataReferenceDate: '2026.08.22 조회',
 
     byMajor: [
-      { code: 'I2', name: '음식', count: 98, share: 0.2865, densityPerKm2: 124.8 },
-      { code: 'G2', name: '소매', count: 71, share: 0.2076, densityPerKm2: 90.4 },
+      {
+        code: 'I2',
+        name: '음식',
+        count: 98,
+        share: 0.2865,
+        densityPerKm2: 124.8,
+      },
+      {
+        code: 'G2',
+        name: '소매',
+        count: 71,
+        share: 0.2076,
+        densityPerKm2: 90.4,
+      },
       {
         code: 'S2',
         name: '수리·개인',
@@ -550,7 +562,13 @@ export const mockReportData = {
         share: 0.1579,
         densityPerKm2: 68.8,
       },
-      { code: 'P1', name: '교육', count: 38, share: 0.1111, densityPerKm2: 48.4 },
+      {
+        code: 'P1',
+        name: '교육',
+        count: 38,
+        share: 0.1111,
+        densityPerKm2: 48.4,
+      },
       {
         code: 'Q1',
         name: '보건의료',
@@ -558,7 +576,13 @@ export const mockReportData = {
         share: 0.0702,
         densityPerKm2: 30.6,
       },
-      { code: 'L1', name: '부동산', count: 21, share: 0.0614, densityPerKm2: 26.7 },
+      {
+        code: 'L1',
+        name: '부동산',
+        count: 21,
+        share: 0.0614,
+        densityPerKm2: 26.7,
+      },
       {
         code: 'M1',
         name: '과학·기술',
@@ -583,10 +607,34 @@ export const mockReportData = {
     ] as CommercialAreaMajorCategory[],
 
     byRadius: [
-      { radiusM: 50, storeTotal: 9, categoryCount: 7, absentCategoryCount: 68, topByCount: [] },
-      { radiusM: 100, storeTotal: 22, categoryCount: 12, absentCategoryCount: 63, topByCount: [] },
-      { radiusM: 200, storeTotal: 58, categoryCount: 21, absentCategoryCount: 54, topByCount: [] },
-      { radiusM: 300, storeTotal: 118, categoryCount: 29, absentCategoryCount: 46, topByCount: [] },
+      {
+        radiusM: 50,
+        storeTotal: 9,
+        categoryCount: 7,
+        absentCategoryCount: 68,
+        topByCount: [],
+      },
+      {
+        radiusM: 100,
+        storeTotal: 22,
+        categoryCount: 12,
+        absentCategoryCount: 63,
+        topByCount: [],
+      },
+      {
+        radiusM: 200,
+        storeTotal: 58,
+        categoryCount: 21,
+        absentCategoryCount: 54,
+        topByCount: [],
+      },
+      {
+        radiusM: 300,
+        storeTotal: 118,
+        categoryCount: 29,
+        absentCategoryCount: 46,
+        topByCount: [],
+      },
       {
         radiusM: 500,
         storeTotal: 342,
@@ -690,7 +738,9 @@ export const mockReportData = {
       appliedRadiusM: 2000,
     } as CommercialAreaLqBaseline,
 
-    districtBaseline: { signguName: '춘천시' } as CommercialAreaDistrictBaseline,
+    districtBaseline: {
+      signguName: '춘천시',
+    } as CommercialAreaDistrictBaseline,
 
     districtSpecialization: [
       {

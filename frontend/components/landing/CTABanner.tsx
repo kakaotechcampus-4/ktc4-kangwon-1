@@ -102,11 +102,7 @@ export default function CTABanner() {
               calc(12px + (100vw - 900px) * 0.01613),
               14px
             ) !important;
-            padding: clamp(
-                10px,
-                calc(10px + (100vw - 900px) * 0.04839),
-                16px
-              )
+            padding: clamp(10px, calc(10px + (100vw - 900px) * 0.04839), 16px)
               clamp(18px, calc(18px + (100vw - 900px) * 0.1129), 32px) !important;
           }
         }

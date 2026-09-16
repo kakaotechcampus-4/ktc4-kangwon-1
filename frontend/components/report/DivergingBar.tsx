@@ -26,7 +26,7 @@ const SCALE_CAP = 1.5; // |value-1|이 이 값 이상이면 바가 꽉 찬 것�
 
 export function formatDivergingValue(
   value: number | null,
-  suffix = '배',
+  suffix = '배'
 ): string {
   // null은 "비교 기준 없음", 0.0은 "기준은 있지만 배수가 0"이라 문구가
   // 완전히 달라야 한다. === null로만 판별해 0.0이 이 분기로 새지 않게 한다.
@@ -55,9 +55,7 @@ export default function DivergingBar({
     <div className="divbar">
       <p className="divbar-eyebrow">{eyebrow}</p>
       {value === null ? (
-        <p className="divbar-unavailable">
-          {unavailableLabel ?? '비교 불가'}
-        </p>
+        <p className="divbar-unavailable">{unavailableLabel ?? '비교 불가'}</p>
       ) : (
         <div className="divbar-row">
           <div className="divbar-track">
@@ -97,19 +95,11 @@ export default function DivergingBar({
           width: 100%;
         }
         .divbar-eyebrow {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-500);
         }
         .divbar-unavailable {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           color: var(--color-gray-400);
           font-style: italic;
         }
@@ -168,11 +158,7 @@ export default function DivergingBar({
         }
         .divbar-value {
           flex: 0 0 auto;
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           color: ${colors.neutral.black};
           width: 44px;
           text-align: right;

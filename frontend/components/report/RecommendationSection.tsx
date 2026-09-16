@@ -149,8 +149,9 @@ export default function RecommendationSection() {
                       />
                     </div>
                     <p
-                      className={`${outfit.className} text-base font-bold ${column.id === 'recommended' ? '' : 'text-gray-600'
-                        }`}
+                      className={`${outfit.className} text-base font-bold ${
+                        column.id === 'recommended' ? '' : 'text-gray-600'
+                      }`}
                       style={
                         column.id === 'recommended'
                           ? { color: colors.neutral.black }

@@ -129,7 +129,11 @@ export default function AnalysisPreviewPanel() {
 
         @media (min-width: 768px) {
           .analysis-preview-card {
-            width: clamp(230px, calc(230px + (100vw - 768px) * 0.507812), 360px);
+            width: clamp(
+              230px,
+              calc(230px + (100vw - 768px) * 0.507812),
+              360px
+            );
             padding-block: clamp(
               14px,
               calc(14px + (100vw - 768px) * 0.03125),
@@ -156,11 +160,7 @@ export default function AnalysisPreviewPanel() {
             );
           }
           .analysis-preview-badge {
-            font-size: clamp(
-              9px,
-              calc(9px + (100vw - 768px) * 0.007812),
-              11px
-            );
+            font-size: clamp(9px, calc(9px + (100vw - 768px) * 0.007812), 11px);
           }
           .analysis-preview-item-title {
             font-size: clamp(

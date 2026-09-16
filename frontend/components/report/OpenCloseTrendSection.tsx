@@ -37,7 +37,7 @@ const fluid = (min: number, max: number) =>
   ).toFixed(6)}), ${max}px)`;
 
 const recommendedNames = new Set(
-  mockReportData.recommended.map((item) => item.name),
+  mockReportData.recommended.map((item) => item.name)
 );
 
 const indexData = mockReportData.openCloseIndex;
@@ -373,10 +373,22 @@ function StabilityGauge() {
           >
             {selected.score}
           </text>
-          <text x="100" y="108" textAnchor="middle" fontSize="12" fill="var(--color-gray-400)">
+          <text
+            x="100"
+            y="108"
+            textAnchor="middle"
+            fontSize="12"
+            fill="var(--color-gray-400)"
+          >
             / 100점
           </text>
-          <text x="18" y="124" textAnchor="middle" fontSize="11" fill="var(--color-gray-400)">
+          <text
+            x="18"
+            y="124"
+            textAnchor="middle"
+            fontSize="11"
+            fill="var(--color-gray-400)"
+          >
             0
           </text>
           <text
@@ -499,7 +511,7 @@ export default function OpenCloseTrendSection() {
         .oc-card-head {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -510,24 +522,16 @@ export default function OpenCloseTrendSection() {
           gap: 2px;
         }
         .oc-card-title {
-          font-size: clamp(
-            15px,
-            calc(15px + (100vw - 375px) * 0.003756),
-            19px
-          );
+          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
         }
         .oc-card-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           line-height: 1.5;
         }
         .oc-card-body {
           padding-inline: clamp(
             14px,
-            calc(14px + (100vw - 375px) * 0.009390),
+            calc(14px + (100vw - 375px) * 0.00939),
             24px
           );
           padding-block: clamp(
@@ -542,11 +546,7 @@ export default function OpenCloseTrendSection() {
           display: grid;
           width: 100%;
           align-items: center;
-          column-gap: clamp(
-            8px,
-            calc(8px + (100vw - 375px) * 0.003756),
-            12px
-          );
+          column-gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
           row-gap: 6px;
           padding-block: clamp(
             10px,
@@ -605,11 +605,7 @@ export default function OpenCloseTrendSection() {
           (이 프로젝트의 다른 컴포넌트들도 전부 색을 명시해 이 문제를 피한다.)
         */
         .oc-store-name {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.002817),
-            15px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
           font-weight: 600;
           color: ${colors.neutral.black};
           overflow: hidden;
@@ -617,19 +613,11 @@ export default function OpenCloseTrendSection() {
           white-space: nowrap;
         }
         .oc-num {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.002817),
-            15px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
           color: ${colors.neutral.black};
         }
         .oc-cell-label {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
           color: var(--color-gray-400);
           flex: 0 0 auto;
           width: 34px;
@@ -644,11 +632,7 @@ export default function OpenCloseTrendSection() {
           text-align: right;
         }
         .oc-store-net-cell {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.002817),
-            15px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
           color: var(--color-gray-400);
         }
 
@@ -700,14 +684,10 @@ export default function OpenCloseTrendSection() {
           width: 100%;
           align-items: center;
           grid-template-columns:
-            clamp(72px, calc(72px + (100vw - 375px) * 0.045070), 120px)
+            clamp(72px, calc(72px + (100vw - 375px) * 0.04507), 120px)
             minmax(0, 1fr)
             clamp(40px, calc(40px + (100vw - 375px) * 0.011268), 52px);
-          column-gap: clamp(
-            8px,
-            calc(8px + (100vw - 375px) * 0.003756),
-            12px
-          );
+          column-gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
           padding-block: clamp(
             7px,
             calc(7px + (100vw - 375px) * 0.002817),
@@ -715,11 +695,7 @@ export default function OpenCloseTrendSection() {
           );
         }
         .oc-bar-label {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -729,11 +705,7 @@ export default function OpenCloseTrendSection() {
           min-width: 0;
         }
         .oc-bar-value {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.002817),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
           color: ${colors.neutral.black};
           text-align: right;
         }
@@ -743,11 +715,7 @@ export default function OpenCloseTrendSection() {
           gap: 12px;
           padding-top: 10px;
           color: var(--color-gray-400);
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
         }
         .oc-legend-item {
           display: inline-flex;
@@ -778,11 +746,7 @@ export default function OpenCloseTrendSection() {
             background-color 0.15s ease,
             border-color 0.15s ease;
           color: var(--color-gray-500);
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.001878),
-            13px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
           padding-inline: clamp(
             10px,
             calc(10px + (100vw - 375px) * 0.003756),
@@ -816,11 +780,7 @@ export default function OpenCloseTrendSection() {
           gap: 8px;
         }
         .oc-gauge-name {
-          font-size: clamp(
-            15px,
-            calc(15px + (100vw - 375px) * 0.003756),
-            19px
-          );
+          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
         }
         .oc-gauge-badges {
           display: flex;
@@ -840,27 +800,15 @@ export default function OpenCloseTrendSection() {
         }
         .oc-gauge-stats dt {
           color: var(--color-gray-400);
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
         }
         .oc-gauge-stats dd {
-          font-size: clamp(
-            13px,
-            calc(13px + (100vw - 375px) * 0.002817),
-            16px
-          );
+          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px);
           color: ${colors.neutral.black};
         }
 
         .oc-source {
-          font-size: clamp(
-            10px,
-            calc(10px + (100vw - 375px) * 0.001878),
-            12px
-          );
+          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
         }
       `}</style>
     </div>

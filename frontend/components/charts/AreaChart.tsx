@@ -269,19 +269,11 @@ export default function AreaChart({
       */}
       <style jsx global>{`
         .area-chart-point-label {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.000939),
-            12px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.000939), 12px);
           fill: var(--color-gray-500);
         }
         .area-chart-point-label-last {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.000939),
-            13px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.000939), 13px);
           font-weight: 700;
           fill: ${colors.brand.dark};
         }

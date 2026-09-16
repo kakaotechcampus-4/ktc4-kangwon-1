@@ -9,15 +9,15 @@ AI 공실 분석 서비스의 프론트엔드입니다. Next.js App Router 기�
 
 ## 기술 스택
 
-| 영역 | 선택 |
-|---|---|
-| 프레임워크 | Next.js 16.3.4 (App Router) |
-| 런타임 | React 19.2.8 |
-| 언어 | TypeScript |
-| 스타일 | Tailwind CSS v4 (CSS-first config, `tailwind.config.js` 없음) |
-| 차트 | recharts ^3.10.1 |
-| 아이콘 | lucide-react |
-| 포맷/린트 | Prettier 3, ESLint 9 (`eslint-config-next` + `eslint-config-prettier`) |
+| 영역       | 선택                                                                   |
+| ---------- | ---------------------------------------------------------------------- |
+| 프레임워크 | Next.js 16.3.4 (App Router)                                            |
+| 런타임     | React 19.2.8                                                           |
+| 언어       | TypeScript                                                             |
+| 스타일     | Tailwind CSS v4 (CSS-first config, `tailwind.config.js` 없음)          |
+| 차트       | recharts ^3.10.1                                                       |
+| 아이콘     | lucide-react                                                           |
+| 포맷/린트  | Prettier 3, ESLint 9 (`eslint-config-next` + `eslint-config-prettier`) |
 
 ## 시작하기
 
@@ -36,11 +36,11 @@ npm run build    # 프로덕션 빌드
 
 ## 페이지 구성
 
-| 경로 | 파일 | 설명 |
-|---|---|---|
-| `/` | `app/page.tsx` | 랜딩 페이지 (`Hero`, `StatsRow`, `ProblemCards`, `ValueSteps`, `ReportPreview`, `CTABanner`) |
-| `/vacancy-input` | `app/vacancy-input/page.tsx` | 분석할 공실 정보 입력 폼 (`StepIndicator`, `AddressInput`, `AnalysisPreviewPanel`) |
-| `/report` | `app/report/page.tsx` | 분석 리포트 (`ReportHeader`, `RecommendationSection`, `AIAnalysisSummary`, `DetailAnalysisTabs`) |
+| 경로             | 파일                         | 설명                                                                                             |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/`              | `app/page.tsx`               | 랜딩 페이지 (`Hero`, `StatsRow`, `ProblemCards`, `ValueSteps`, `ReportPreview`, `CTABanner`)     |
+| `/vacancy-input` | `app/vacancy-input/page.tsx` | 분석할 공실 정보 입력 폼 (`StepIndicator`, `AddressInput`, `AnalysisPreviewPanel`)               |
+| `/report`        | `app/report/page.tsx`        | 분석 리포트 (`ReportHeader`, `RecommendationSection`, `AIAnalysisSummary`, `DetailAnalysisTabs`) |
 
 ## 디렉터리 구조
 

@@ -69,9 +69,7 @@ export default function ProblemCards() {
         {problems.map(({ id, number, tag, icon: Icon, title, description }) => (
           <Card key={id} className="problem-card shrink-0">
             <div className="flex w-full items-center justify-between">
-              <p
-                className={`problem-number ${dmMono.className} text-gray-300`}
-              >
+              <p className={`problem-number ${dmMono.className} text-gray-300`}>
                 {number}
               </p>
               <Badge className="problem-badge">{tag}</Badge>
@@ -141,23 +139,11 @@ export default function ProblemCards() {
           width: clamp(101px, calc(101px + (100vw - 375px) * 0.2474), 339px);
         }
         .problem-title {
-          font-size: clamp(
-            14px,
-            calc(14px + (100vw - 375px) * 0.00936),
-            23px
-          );
-          line-height: clamp(
-            20px,
-            calc(20px + (100vw - 375px) * 0.0104),
-            30px
-          );
+          font-size: clamp(14px, calc(14px + (100vw - 375px) * 0.00936), 23px);
+          line-height: clamp(20px, calc(20px + (100vw - 375px) * 0.0104), 30px);
         }
         .problem-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.00416),
-            15px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px);
           line-height: clamp(
             16px,
             calc(16px + (100vw - 375px) * 0.00722),

@@ -134,25 +134,13 @@ export default function ValueSteps() {
           gap: clamp(16px, calc(16px + (100vw - 375px) * 0.04574), 60px);
         }
         .value-steps-number {
-          font-size: clamp(
-            24px,
-            calc(24px + (100vw - 375px) * 0.02495),
-            48px
-          );
+          font-size: clamp(24px, calc(24px + (100vw - 375px) * 0.02495), 48px);
         }
         .value-steps-title {
-          font-size: clamp(
-            18px,
-            calc(18px + (100vw - 375px) * 0.01247),
-            30px
-          );
+          font-size: clamp(18px, calc(18px + (100vw - 375px) * 0.01247), 30px);
         }
         .value-steps-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.00416),
-            15px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px);
           line-height: clamp(
             16px,
             calc(16px + (100vw - 375px) * 0.00883),
@@ -160,11 +148,7 @@ export default function ValueSteps() {
           );
         }
         .value-steps-arrow {
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.00624),
-            18px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.00624), 18px);
           padding-inline: clamp(
             8px,
             calc(8px + (100vw - 375px) * 0.00832),

@@ -30,7 +30,6 @@ const defaultRanks: Rank[] = [
 ];
 
 type ReportPreviewProps = {
-
   ranks?: Rank[];
 };
 
@@ -63,7 +62,6 @@ export default function ReportPreview({
         style={{ padding: 0, borderRadius: '12px' }}
       >
         <div
-
           className="rp-header flex w-full items-center justify-between"
           style={{
             backgroundColor: colors.brand.dark,
@@ -71,7 +69,9 @@ export default function ReportPreview({
           }}
         >
           <div className="flex flex-col items-start">
-            <p className={`rp-address ${outfit.className} font-semibold text-white`}>
+            <p
+              className={`rp-address ${outfit.className} font-semibold text-white`}
+            >
               강원도 춘천시 후평동 234-5 · 2층
             </p>
             <p className="rp-address-sub pt-0.5 text-white/60">
@@ -129,7 +129,6 @@ export default function ReportPreview({
                   className={`rp-rank-score ${dmMono.className} font-medium`}
                   style={{ color: colors.brand.primary }}
                 >
-
                   {score}점
                 </p>
               </div>
@@ -162,7 +161,6 @@ export default function ReportPreview({
           padding-inline: clamp(
             20px,
             calc(20px + (100vw - 375px) * 0.0832),
-
             100px
           );
         }
@@ -176,11 +174,7 @@ export default function ReportPreview({
           line-height: calc(var(--headline-fs) * 1.13636);
         }
         .rp-cta {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.003119),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
         }
         .rp-header {
           padding-inline: clamp(
@@ -195,26 +189,13 @@ export default function ReportPreview({
           );
         }
         .rp-address {
-
-          font-size: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.004158),
-            16px
-          );
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.004158), 16px);
         }
         .rp-address-sub {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.003119),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
         }
         .rp-badge {
-          font-size: clamp(
-            9px,
-            calc(9px + (100vw - 375px) * 0.003119),
-            12px
-          );
+          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px);
         }
         .rp-section {
           padding-inline: clamp(
@@ -230,11 +211,7 @@ export default function ReportPreview({
         }
 
         .rp-section-label {
-          font-size: clamp(
-            9px,
-            calc(9px + (100vw - 375px) * 0.003119),
-            12px
-          );
+          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px);
         }
         .rp-conclusion {
           --rp-conclusion-fs: clamp(
@@ -246,11 +223,7 @@ export default function ReportPreview({
           line-height: calc(var(--rp-conclusion-fs) * 1.19565);
         }
         .rp-desc {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.004158),
-            15px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.004158), 15px);
         }
         .rp-ranks {
           gap: clamp(16px, calc(16px + (100vw - 375px) * 0.010395), 24px);
@@ -261,31 +234,18 @@ export default function ReportPreview({
           );
           padding-block: clamp(
             14px,
-
             calc(14px + (100vw - 375px) * 0.010395),
             24px
           );
         }
         .rp-rank-label {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.003119),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
         }
         .rp-rank-score {
-          font-size: clamp(
-            11px,
-            calc(11px + (100vw - 375px) * 0.003119),
-            14px
-          );
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
         }
         .rp-rank-number {
-          font-size: clamp(
-            13px,
-            calc(13px + (100vw - 375px) * 0.005199),
-            18px
-          );
+          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.005199), 18px);
         }
       `}</style>
     </div>
