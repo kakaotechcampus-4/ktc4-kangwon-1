@@ -1,3 +1,4 @@
+import argparse
 import json
 import uuid
 from pathlib import Path
@@ -5,371 +6,378 @@ from typing import Any
 
 import pandas as pd
 
-# ============================================================
-# 기본 설정
-# ============================================================
-
-BASE_DIR = Path(__file__).resolve().parent
-
-INPUT_FILE = (
-    BASE_DIR
-    / "개롱역_2025Q2_70업종_점수결과.csv"
-)
-
-OUTPUT_FILE = (
-    BASE_DIR
-    / "business_lifecycle_agent_input.json"
+from .client import get_recent_quarters
+from .scoring import (
+    CLOSE_TREND_WEIGHT,
+    NET_CHANGE_WEIGHT,
+    RECENT_CLOSE_RATE_WEIGHT,
+    TURNOVER_WEIGHT,
+    score_business_lifecycle,
 )
 
 
-AREA_CODE = "3120240"
-AREA_NAME = "개롱역"
-PERIOD = "2025Q2"
-
-
-# ============================================================
-# Lifecycle Score 설정
-# ============================================================
-
-SCORING_METHOD: dict[str, Any] = {
-    "description": (
-        "개롱역 2025년 2분기 데이터가 존재하는 업종 간 "
-        "상대 순위를 기반으로 계산한 개폐업 안정성 점수"
-    ),
-    "score_type": "relative",
-    "weights": {
-        "close_rate": 0.50,
-        "net_change_rate": 0.30,
-        "turnover_stability": 0.20,
-    },
-    "notes": [
-        "lifecycle_score는 미래 생존 확률이 아니다.",
-        "데이터가 존재하는 업종끼리 상대 비교한 점수이다.",
-        "폐업률이 낮을수록 높은 점수를 받는다.",
-        "순증감률이 높을수록 높은 점수를 받는다.",
-        "개업률과 폐업률을 합한 회전율이 낮을수록 안정적으로 평가한다.",
-    ],
-}
-
-
-# ============================================================
-# 숫자 변환 함수
-#
-# pandas / numpy 타입을 JSON에서 안전하게 사용할 수 있도록 변환
-# ============================================================
-
-def to_int(value):
+def to_int(value: Any) -> int | None:
+    """
+    pandas NaN 값을 JSON의 null로 변환하기 위한 함수.
+    """
     if pd.isna(value):
         return None
 
     return int(value)
 
 
-def to_float(value):
+def to_float(value: Any) -> float | None:
+    """
+    pandas NaN 값을 JSON의 null로 변환하기 위한 함수.
+    """
     if pd.isna(value):
         return None
 
-    return float(value)
+    return round(float(value), 2)
 
 
-def to_bool(value):
-    if isinstance(value, bool):
-        return value
+def get_score_missing_reason(
+    row: pd.Series,
+    quarter_count: int,
+) -> str:
+    """
+    Lifecycle Score를 계산하지 못한 이유를 정리한다.
+    """
 
-    if isinstance(value, str):
-        return value.strip().lower() == "true"
+    # ========================================================
+    # 1. 서울시 데이터 자체가 없는 경우
+    # ========================================================
 
-    return bool(value)
+    if not bool(row["data_available"]):
+        missing_reason = row.get("missing_reason")
 
+        if pd.isna(missing_reason):
+            return "분석 가능한 개폐업 데이터가 없습니다."
 
-# ============================================================
-# 1. 점수 결과 CSV 읽기
-# ============================================================
+        return str(missing_reason)
 
-df = pd.read_csv(
-    INPUT_FILE,
-    encoding="utf-8-sig",
-)
+    # ========================================================
+    # 2. 데이터는 있지만 충분한 기간이 없는 경우
+    # ========================================================
 
+    observed_quarters = row.get("observed_quarters")
 
-print("전체 서비스 업종 수:", len(df))
-
-
-# ============================================================
-# 2. data_available 안전하게 정리
-# ============================================================
-
-df["data_available"] = (
-    df["data_available"]
-    .apply(to_bool)
-)
-
-
-# ============================================================
-# 3. 실제 분석 가능한 업종
-#
-# GPT Agent에는 lifecycle_score가 존재하는 업종만 전달
-# ============================================================
-
-available_df = df[
-    df["data_available"]
-    & df["lifecycle_score"].notna()
-].copy()
-
-
-# ============================================================
-# 4. 데이터가 없는 업종
-#
-# 이 업종들은 GPT에게 보내지 않는다.
-# 최종 결과에서 판단 보류 처리하기 위해 별도로 저장
-# ============================================================
-
-unavailable_df = df[
-    ~(
-        df["data_available"]
-        & df["lifecycle_score"].notna()
-    )
-].copy()
-
-
-print(
-    "Agent 분석 대상 업종 수:",
-    len(available_df)
-)
-
-print(
-    "데이터 없는 업종 수:",
-    len(unavailable_df)
-)
-
-
-# ============================================================
-# 5. Agent 분석 대상 업종 JSON 생성
-# ============================================================
-
-industries: list[dict[str, Any]] = []
-
-
-for _, row in available_df.iterrows():
-
-    industry = {
-        "industry_id": to_int(
-            row["service_id"]
-        ),
-
-        "industry_name": row[
-            "service_name"
-        ],
-
-        "metrics": {
-            "store_count": to_int(
-                row["store_count"]
-            ),
-
-            "open_count": to_int(
-                row["open_count"]
-            ),
-
-            "close_count": to_int(
-                row["close_count"]
-            ),
-
-            "open_rate": to_float(
-                row["open_rate"]
-            ),
-
-            "close_rate": to_float(
-                row["close_rate"]
-            ),
-
-            "net_change": to_int(
-                row["net_change"]
-            ),
-
-            "net_change_rate": to_float(
-                row["net_change_rate"]
-            ),
-
-            "turnover_rate": to_float(
-                row["turnover_rate"]
-            ),
-        },
-
-        "component_scores": {
-            "close_rate_score": to_float(
-                row["close_rate_score"]
-            ),
-
-            "net_change_score": to_float(
-                row["net_change_score"]
-            ),
-
-            "turnover_score": to_float(
-                row["turnover_score"]
-            ),
-        },
-
-        "lifecycle_score": to_float(
-            row["lifecycle_score"]
-        ),
-
-        "confidence": row[
-            "confidence"
-        ],
-    }
-
-    industries.append(industry)
-
-
-# ============================================================
-# 6. 데이터 없는 업종 JSON 생성
-# ============================================================
-
-unavailable_industries: list[dict[str, Any]] = []
-
-
-for _, row in unavailable_df.iterrows():
-
-    missing_reason = row.get(
-        "missing_reason"
-    )
-
-    if pd.isna(missing_reason):
-        missing_reason = (
-            "분석 가능한 개폐업 데이터 없음"
+    if pd.notna(observed_quarters) and int(observed_quarters) < quarter_count:
+        return (
+            f"최근 {quarter_count}개 분기 중 "
+            f"{int(observed_quarters)}개 분기에만 데이터가 있어 "
+            "안정적인 추세 점수를 계산하기 어렵습니다."
         )
 
-    unavailable_industries.append(
-        {
-            "industry_id": to_int(
-                row["service_id"]
-            ),
+    # ========================================================
+    # 3. 최근 1년 지표 부족
+    # ========================================================
 
-            "industry_name": row[
-                "service_name"
-            ],
+    if pd.isna(row.get("recent_year_close_rate")):
+        return "최근 1년 폐업률을 계산하기 위한 데이터가 부족합니다."
 
-            "data_available": False,
+    # ========================================================
+    # 4. 장기 추세 지표 부족
+    # ========================================================
 
-            "missing_reason": str(
-                missing_reason
-            ),
+    if pd.isna(row.get("close_rate_trend")):
+        return "과거 대비 최근 폐업률 변화를 계산하기 위한 데이터가 부족합니다."
+
+    return "Lifecycle Score 계산에 필요한 데이터가 부족합니다."
+
+
+def build_agent_input(
+    area_code: str,
+    base_quarter: str,
+    quarter_count: int = 12,
+    request_id: str | None = None,
+    area_name: str | None = None,
+) -> dict[str, Any]:
+    """
+    서울시 API 조회 → 전처리 → 점수 계산 결과를 이용해
+    Business Lifecycle Agent 입력 JSON을 생성한다.
+    """
+
+    # ========================================================
+    # 1. Lifecycle Score 계산
+    #
+    # scoring.py
+    #   → preprocess.py
+    #       → client.py
+    #
+    # 순서로 자동 호출된다.
+    # ========================================================
+
+    df = score_business_lifecycle(
+        area_code=area_code,
+        base_quarter=base_quarter,
+        quarter_count=quarter_count,
+    )
+
+    # ========================================================
+    # 2. 실제 분석 기간 확인
+    # ========================================================
+
+    quarters = get_recent_quarters(
+        base_quarter=base_quarter,
+        count=quarter_count,
+    )
+
+    # ========================================================
+    # 3. 점수 계산 가능한 업종
+    # ========================================================
+
+    scored_df = df[df["lifecycle_score"].notna()].copy()
+
+    # ========================================================
+    # 4. 판단 보류 업종
+    # ========================================================
+
+    unscored_df = df[df["lifecycle_score"].isna()].copy()
+
+    industries: list[dict[str, Any]] = []
+
+    # ========================================================
+    # 5. LLM이 실제로 분석할 업종
+    # ========================================================
+
+    for _, row in scored_df.iterrows():
+        industry = {
+            "industry_id": to_int(row["service_id"]),
+            "industry_name": str(row["service_name"]),
+            "data_available": True,
+            "score_available": True,
+            # =================================================
+            # 실제 개폐업 데이터
+            # =================================================
+            "metrics": {
+                # 데이터 확보 정도
+                "observed_quarters": to_int(row["observed_quarters"]),
+                # 현재 규모
+                "latest_store_count": to_int(row["latest_store_count"]),
+                "avg_store_count": to_float(row["avg_store_count"]),
+                # 전체 분석기간
+                "period_open_count": to_int(row["period_open_count"]),
+                "period_close_count": to_int(row["period_close_count"]),
+                "period_net_change": to_int(row["period_net_change"]),
+                "avg_open_rate": to_float(row["avg_open_rate"]),
+                "avg_close_rate": to_float(row["avg_close_rate"]),
+                "net_change_rate": to_float(row["net_change_rate"]),
+                "turnover_rate": to_float(row["turnover_rate"]),
+                # 최근 1년
+                "recent_year_open_count": to_int(row["recent_year_open_count"]),
+                "recent_year_close_count": to_int(row["recent_year_close_count"]),
+                "recent_year_net_change": to_int(row["recent_year_net_change"]),
+                "recent_year_close_rate": to_float(row["recent_year_close_rate"]),
+                "recent_year_net_change_rate": to_float(row["recent_year_net_change_rate"]),
+                # 과거와 최근의 비교
+                "oldest_year_close_rate": to_float(row["oldest_year_close_rate"]),
+                "close_rate_trend": to_float(row["close_rate_trend"]),
+            },
+            # =================================================
+            # Python에서 계산한 상대평가 점수
+            # =================================================
+            "component_scores": {
+                "recent_close_rate_score": to_float(row["recent_close_rate_score"]),
+                "net_change_score": to_float(row["net_change_score"]),
+                "turnover_score": to_float(row["turnover_score"]),
+                "close_trend_score": to_float(row["close_trend_score"]),
+            },
+            "lifecycle_score": to_float(row["lifecycle_score"]),
+            "confidence": str(row["confidence"]),
         }
+
+        industries.append(industry)
+
+    # ========================================================
+    # 6. 판단 보류 업종
+    #
+    # 이 업종들은 LLM 분석 대상에서 제외한다.
+    # ========================================================
+
+    unavailable_industries: list[dict[str, Any]] = []
+
+    for _, row in unscored_df.iterrows():
+        unavailable_industries.append(
+            {
+                "industry_id": to_int(row["service_id"]),
+                "industry_name": str(row["service_name"]),
+                "data_available": bool(row["data_available"]),
+                "score_available": False,
+                "observed_quarters": to_int(row.get("observed_quarters")),
+                "lifecycle_score": None,
+                "confidence": "none",
+                "missing_reason": (
+                    get_score_missing_reason(
+                        row=row,
+                        quarter_count=quarter_count,
+                    )
+                ),
+            }
+        )
+
+    # ========================================================
+    # 7. Agent 입력 JSON
+    # ========================================================
+
+    agent_input: dict[str, Any] = {
+        "request_id": request_id or str(uuid.uuid4()),
+        "analysis_type": "business_lifecycle",
+        "scope": {
+            "area_code": area_code,
+            "area_name": area_name,
+            "base_quarter": base_quarter,
+            "period": {
+                "start_quarter": quarters[0],
+                "end_quarter": quarters[-1],
+                "quarter_count": quarter_count,
+            },
+        },
+        # ====================================================
+        # 점수 계산 방식 설명
+        # ====================================================
+        "scoring_method": {
+            "score_type": "relative",
+            "description": (
+                "최근 개폐업 데이터와 폐업률 변화 추세를 "
+                "기반으로 분석 가능한 업종끼리 상대 비교한 "
+                "Lifecycle Score"
+            ),
+            "weights": {
+                "recent_year_close_rate": (RECENT_CLOSE_RATE_WEIGHT),
+                "net_change_rate": (NET_CHANGE_WEIGHT),
+                "turnover_stability": (TURNOVER_WEIGHT),
+                "close_rate_trend": (CLOSE_TREND_WEIGHT),
+            },
+            "notes": [
+                ("lifecycle_score는 미래 생존확률이 아니다."),
+                ("lifecycle_score는 분석 가능한 업종끼리 상대 비교한 점수이다."),
+                ("최근 1년 폐업률은 낮을수록 긍정적으로 평가한다."),
+                ("전체 분석기간 순증감률은 높을수록 긍정적으로 평가한다."),
+                ("회전율은 낮을수록 안정적으로 평가한다."),
+                ("close_rate_trend가 음수이면 과거보다 최근 폐업률이 낮아진 것이다."),
+                ("close_rate_trend가 양수이면 과거보다 최근 폐업률이 높아진 것이다."),
+            ],
+        },
+        # ====================================================
+        # Coverage
+        # ====================================================
+        "coverage": {
+            "target_industries": 70,
+            "scored_industries": len(scored_df),
+            "unscored_industries": len(unscored_df),
+        },
+        # LLM 분석 대상
+        "industries": industries,
+        # 판단 보류 대상
+        "unavailable_industries": (unavailable_industries),
+    }
+
+    return agent_input
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=("Business Lifecycle Agent 입력 JSON 생성"))
+
+    parser.add_argument(
+        "--area-code",
+        required=True,
+        help="서울시 상권코드",
     )
 
-
-# ============================================================
-# 7. Agent 입력 전체 JSON
-# ============================================================
-
-agent_input: dict[str, Any] = {
-
-    "request_id": str(uuid.uuid4()),
-
-    "analysis_type": "business_lifecycle",
-
-    "scope": {
-        "area_code": AREA_CODE,
-        "area_name": AREA_NAME,
-        "period": PERIOD,
-    },
-
-    "scoring_method": SCORING_METHOD,
-
-    "coverage": {
-        "target_industries": 70,
-        "available_industries": len(
-            available_df
-        ),
-        "unavailable_industries": len(
-            unavailable_df
-        ),
-        "analyzed_industries": len(
-            available_df
-        ),
-    },
-
-    # GPT가 실제 분석할 업종
-    "industries": industries,
-
-    # GPT 분석에서는 제외
-    "unavailable_industries": (
-        unavailable_industries
-    ),
-}
-
-
-# ============================================================
-# 8. JSON 저장
-# ============================================================
-
-with open(
-    OUTPUT_FILE,
-    "w",
-    encoding="utf-8",
-) as f:
-
-    json.dump(
-        agent_input,
-        f,
-        ensure_ascii=False,
-        indent=2,
+    parser.add_argument(
+        "--base-quarter",
+        required=True,
+        help="기준 분기. 예: 20252",
     )
 
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=12,
+        help="분석할 분기 수. 기본값 12",
+    )
 
-# ============================================================
-# 9. 검증
-# ============================================================
+    parser.add_argument(
+        "--output",
+        help=("테스트용 JSON 저장 경로. 생략하면 파일을 저장하지 않습니다."),
+    )
 
-print()
-print("===== Agent Input 생성 결과 =====")
+    args = parser.parse_args()
 
-print(
-    "전체 목표 업종:",
-    agent_input["coverage"][
-        "target_industries"
-    ],
-)
+    agent_input = build_agent_input(
+        area_code=args.area_code,
+        base_quarter=args.base_quarter,
+        quarter_count=args.count,
+    )
 
-print(
-    "Agent 분석 대상:",
-    agent_input["coverage"][
-        "available_industries"
-    ],
-)
+    # ========================================================
+    # 테스트 출력
+    # ========================================================
 
-print(
-    "데이터 없는 업종:",
-    agent_input["coverage"][
-        "unavailable_industries"
-    ],
-)
+    coverage = agent_input["coverage"]
+    period = agent_input["scope"]["period"]
+
+    print()
+    print("===== Agent Input 생성 결과 =====")
+
+    print(
+        "전체 목표 업종:",
+        coverage["target_industries"],
+    )
+
+    print(
+        "점수 계산 업종:",
+        coverage["scored_industries"],
+    )
+
+    print(
+        "판단 보류 업종:",
+        coverage["unscored_industries"],
+    )
+
+    print(
+        "분석 시작 분기:",
+        period["start_quarter"],
+    )
+
+    print(
+        "분석 종료 분기:",
+        period["end_quarter"],
+    )
+
+    print(
+        "분석 분기 수:",
+        period["quarter_count"],
+    )
+
+    # 70개가 제대로 유지되는지 확인
+    assert coverage["scored_industries"] + coverage["unscored_industries"] == 70
+
+    # ========================================================
+    # 테스트용 JSON 저장
+    # ========================================================
+
+    if args.output:
+        output_path = Path(args.output)
+
+        with output_path.open(
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                agent_input,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+        print()
+        print(
+            "Agent Input JSON 저장 완료:",
+            output_path,
+        )
 
 
-# 분석 대상 + 데이터 없음 = 70인지 검증
-assert (
-    agent_input["coverage"][
-        "available_industries"
-    ]
-    + agent_input["coverage"][
-        "unavailable_industries"
-    ]
-    == 70
-)
-
-
-# 실제 industries 개수 검증
-assert (
-    len(agent_input["industries"])
-    == agent_input["coverage"][
-        "available_industries"
-    ]
-)
-
-
-print()
-print("검증 완료")
-
-print()
-print("저장 완료:")
-print(OUTPUT_FILE)
+if __name__ == "__main__":
+    main()
