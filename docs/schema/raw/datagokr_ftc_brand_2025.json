@@ -1,0 +1,79 @@
+{
+  "resultCode": "00",
+  "resultMsg": "NORMAL SERVICE",
+  "numOfRows": "5",
+  "pageNo": "1",
+  "totalCount": 11724,
+  "items": [
+    {
+      "yr": "2025",
+      "indutyLclasNm": "외식",
+      "indutyMlsfcNm": "한식",
+      "corpNm": "민이네",
+      "brandNm": "브라더 부대찌개",
+      "frcsCnt": 0,
+      "newFrcsRgsCnt": 0,
+      "ctrtEndCnt": 0,
+      "ctrtCncltnCnt": 0,
+      "nmChgCnt": 0,
+      "avrgSlsAmt": 0,
+      "arUnitAvrgSlsAmt": 0
+    },
+    {
+      "yr": "2025",
+      "indutyLclasNm": "외식",
+      "indutyMlsfcNm": "한식",
+      "corpNm": "(주)장충동왕족발",
+      "brandNm": "미식낙곱새",
+      "frcsCnt": 0,
+      "newFrcsRgsCnt": 0,
+      "ctrtEndCnt": 0,
+      "ctrtCncltnCnt": 0,
+      "nmChgCnt": 0,
+      "avrgSlsAmt": 0,
+      "arUnitAvrgSlsAmt": 0
+    },
+    {
+      "yr": "2025",
+      "indutyLclasNm": "외식",
+      "indutyMlsfcNm": "한식",
+      "corpNm": "미쓰리(주)",
+      "brandNm": "미쓰리냉삼집",
+      "frcsCnt": 0,
+      "newFrcsRgsCnt": 0,
+      "ctrtEndCnt": 0,
+      "ctrtCncltnCnt": 0,
+      "nmChgCnt": 0,
+      "avrgSlsAmt": 0,
+      "arUnitAvrgSlsAmt": 0
+    },
+    {
+      "yr": "2025",
+      "indutyLclasNm": "외식",
+      "indutyMlsfcNm": "한식",
+      "corpNm": "(주)제이에스알컴퍼니",
+      "brandNm": "미아리우동집",
+      "frcsCnt": 35,
+      "newFrcsRgsCnt": 5,
+      "ctrtEndCnt": 0,
+      "ctrtCncltnCnt": 2,
+      "nmChgCnt": 0,
+      "avrgSlsAmt": 582497,
+      "arUnitAvrgSlsAmt": 29572
+    },
+    {
+      "yr": "2025",
+      "indutyLclasNm": "외식",
+      "indutyMlsfcNm": "한식",
+      "corpNm": "미인계",
+      "brandNm": "미인계",
+      "frcsCnt": 3,
+      "newFrcsRgsCnt": 2,
+      "ctrtEndCnt": 0,
+      "ctrtCncltnCnt": 0,
+      "nmChgCnt": 0,
+      "avrgSlsAmt": 0,
+      "arUnitAvrgSlsAmt": 0
+    }
+  ]
+}

@@ -1,0 +1,1880 @@
+{
+  "header": {
+    "description": "소상공인시장진흥공단 상권정보 업종중분류 코드",
+    "columns": [
+      "상권업종대분류코드",
+      "상권업종대분류코드명",
+      "상권업종중분류코드",
+      "상권업종중분류코드명",
+      "데이터기준일자"
+    ],
+    "resultCode": "00",
+    "resultMsg": "NORMAL SERVICE"
+  },
+  "body": {
+    "items": [
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F101",
+        "indsMclsNm": "건물건설",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F104",
+        "indsMclsNm": "건물설비",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F108",
+        "indsMclsNm": "건설장비운영",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F103",
+        "indsMclsNm": "기반조성·축조",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F107",
+        "indsMclsNm": "시설물 유지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F106",
+        "indsMclsNm": "실내건축·마무리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F105",
+        "indsMclsNm": "전기·통신",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "F1",
+        "indsLclsNm": "건설업",
+        "indsMclsCd": "F102",
+        "indsMclsNm": "토목건설",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "O1",
+        "indsLclsNm": "공공 행정·국방",
+        "indsMclsCd": "O104",
+        "indsMclsNm": "사법 질서",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "O1",
+        "indsLclsNm": "공공 행정·국방",
+        "indsMclsCd": "O105",
+        "indsMclsNm": "사회 보장 ",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "O1",
+        "indsLclsNm": "공공 행정·국방",
+        "indsMclsCd": "O102",
+        "indsMclsNm": "산업정책",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "O1",
+        "indsLclsNm": "공공 행정·국방",
+        "indsMclsCd": "O103",
+        "indsMclsNm": "외무·국방",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "O1",
+        "indsLclsNm": "공공 행정·국방",
+        "indsMclsCd": "O101",
+        "indsMclsNm": "일반정부",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M105",
+        "indsMclsNm": "광고",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M109",
+        "indsMclsNm": "기술 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M110",
+        "indsMclsNm": "기타 과학 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M108",
+        "indsMclsNm": "기타 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M115",
+        "indsMclsNm": "기타 전문 과학",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M103",
+        "indsMclsNm": "법무관련 ",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M107",
+        "indsMclsNm": "본사·경영 컨설팅",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M113",
+        "indsMclsNm": "사진 촬영",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M111",
+        "indsMclsNm": "수의",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M106",
+        "indsMclsNm": "시장 조사",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M114",
+        "indsMclsNm": "인쇄·제품제작",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M101",
+        "indsMclsNm": "자연과학연구",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M102",
+        "indsMclsNm": "자연과학연구",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M112",
+        "indsMclsNm": "전문 디자인",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "M1",
+        "indsLclsNm": "과학·기술",
+        "indsMclsCd": "M104",
+        "indsMclsNm": "회계·세무",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B106",
+        "indsMclsNm": "기타 비금속",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B104",
+        "indsMclsNm": "비철금속",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B101",
+        "indsMclsNm": "석탄 광업",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B102",
+        "indsMclsNm": "원유·가스 채굴",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B107",
+        "indsMclsNm": "지원 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B103",
+        "indsMclsNm": "철",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "B1",
+        "indsLclsNm": "광업",
+        "indsMclsCd": "B105",
+        "indsMclsNm": "토사석",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P103",
+        "indsMclsNm": "고등 교육",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P107",
+        "indsMclsNm": "교육 지원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P106",
+        "indsMclsNm": "기타 교육",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P105",
+        "indsMclsNm": "일반 교육",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P102",
+        "indsMclsNm": "중등 교육",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P101",
+        "indsMclsNm": "초등 교육",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "P1",
+        "indsLclsNm": "교육",
+        "indsMclsCd": "P104",
+        "indsMclsNm": "특수·외국인·대안 학교",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "U1",
+        "indsLclsNm": "국제기관",
+        "indsMclsCd": "U101",
+        "indsMclsNm": "국제기관",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K107",
+        "indsMclsNm": "금융 지원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K103",
+        "indsMclsNm": "기타 금융",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K104",
+        "indsMclsNm": "보험",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K105",
+        "indsMclsNm": "보험",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K108",
+        "indsMclsNm": "보험·연금",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K102",
+        "indsMclsNm": "신탁·집합투자",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K106",
+        "indsMclsNm": "연금·공제",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "K1",
+        "indsLclsNm": "금융·보험",
+        "indsMclsCd": "K101",
+        "indsMclsNm": "은행·저축",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A105",
+        "indsMclsNm": "수렵",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A108",
+        "indsMclsNm": "양식업",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A107",
+        "indsMclsNm": "어업",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A106",
+        "indsMclsNm": "임업",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A101",
+        "indsMclsNm": "작물재배",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A104",
+        "indsMclsNm": "작물재배·축산",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A103",
+        "indsMclsNm": "작불재배·복합농업",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "A1",
+        "indsLclsNm": "농업·임업·어업",
+        "indsMclsCd": "A102",
+        "indsMclsNm": "축산",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G109",
+        "indsMclsNm": "건축자재·난방 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G108",
+        "indsMclsNm": "기계장비 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G110",
+        "indsMclsNm": "기타 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G105",
+        "indsMclsNm": "농축산 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G103",
+        "indsMclsNm": "모터사이클 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G111",
+        "indsMclsNm": "상품종합 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G104",
+        "indsMclsNm": "상품중계",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G107",
+        "indsMclsNm": "생활용품 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G106",
+        "indsMclsNm": "음식료·담배 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G102",
+        "indsMclsNm": "자동차 부품 도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G1",
+        "indsLclsNm": "도매업",
+        "indsMclsCd": "G101",
+        "indsMclsNm": "자동차도매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q1",
+        "indsLclsNm": "보건의료",
+        "indsMclsCd": "Q103",
+        "indsMclsNm": "공중 보건",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q1",
+        "indsLclsNm": "보건의료",
+        "indsMclsCd": "Q104",
+        "indsMclsNm": "기타 보건",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q1",
+        "indsLclsNm": "보건의료",
+        "indsMclsCd": "Q101",
+        "indsMclsNm": "병원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q1",
+        "indsLclsNm": "보건의료",
+        "indsMclsCd": "Q102",
+        "indsMclsNm": "의원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q2",
+        "indsLclsNm": "복지 서비스",
+        "indsMclsCd": "Q201",
+        "indsMclsNm": "거주 복지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "Q2",
+        "indsLclsNm": "복지 서비스",
+        "indsMclsCd": "Q202",
+        "indsMclsNm": "비거주 복지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "L1",
+        "indsLclsNm": "부동산",
+        "indsMclsCd": "L102",
+        "indsMclsNm": "부동산 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "L1",
+        "indsLclsNm": "부동산",
+        "indsMclsCd": "L101",
+        "indsMclsNm": "부동산 임대·공급",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G211",
+        "indsMclsNm": "가구 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G208",
+        "indsMclsNm": "가전·통신 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G221",
+        "indsMclsNm": "기타 상품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G212",
+        "indsMclsNm": "기타 생활용품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G207",
+        "indsMclsNm": "담배 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G203",
+        "indsMclsNm": "모터사이클 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G223",
+        "indsMclsNm": "무점포 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G209",
+        "indsMclsNm": "섬유·의복·신발 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G217",
+        "indsMclsNm": "시계·귀금속 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G205",
+        "indsMclsNm": "식료품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G219",
+        "indsMclsNm": "식물 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G216",
+        "indsMclsNm": "안경·정밀기기 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G220",
+        "indsMclsNm": "애완동물·용품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G214",
+        "indsMclsNm": "연료 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G213",
+        "indsMclsNm": "오락용품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G206",
+        "indsMclsNm": "음료 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G215",
+        "indsMclsNm": "의약·화장품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G202",
+        "indsMclsNm": "자동차 부품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G201",
+        "indsMclsNm": "자동차소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G218",
+        "indsMclsNm": "장식품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G204",
+        "indsMclsNm": "종합 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G222",
+        "indsMclsNm": "중고 상품 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "G2",
+        "indsLclsNm": "소매",
+        "indsMclsCd": "G210",
+        "indsMclsNm": "철물·건설자재 소매",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E101",
+        "indsMclsNm": "수도",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E105",
+        "indsMclsNm": "원료재생",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E103",
+        "indsMclsNm": "폐기물 수집·운반",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E104",
+        "indsMclsNm": "폐기물 처리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E102",
+        "indsMclsNm": "하수·분뇨",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "E1",
+        "indsLclsNm": "수도·하수 처리·원료 재생업",
+        "indsMclsCd": "E106",
+        "indsMclsNm": "환경 정화·복원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S205",
+        "indsMclsNm": "가전제품 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S206",
+        "indsMclsNm": "기타 가정용품 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S211",
+        "indsMclsNm": "기타 개인",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S204",
+        "indsMclsNm": "모터사이클 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S209",
+        "indsMclsNm": "세탁",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S208",
+        "indsMclsNm": "욕탕·신체관리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S207",
+        "indsMclsNm": "이용·미용",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S203",
+        "indsMclsNm": "자동차 수리·세차",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S210",
+        "indsMclsNm": "장례식장 ",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S201",
+        "indsMclsNm": "컴퓨터 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S2",
+        "indsLclsNm": "수리·개인",
+        "indsMclsCd": "S202",
+        "indsMclsNm": "통신장비 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I1",
+        "indsLclsNm": "숙박",
+        "indsMclsCd": "I102",
+        "indsMclsNm": "기타 숙박",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I1",
+        "indsLclsNm": "숙박",
+        "indsMclsCd": "I101",
+        "indsMclsNm": "일반 숙박",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N110",
+        "indsMclsNm": "가정용품 대여",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N106",
+        "indsMclsNm": "경비·경호",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N104",
+        "indsMclsNm": "고용 알선",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N108",
+        "indsMclsNm": "기타 사업 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N112",
+        "indsMclsNm": "무형재산 대여",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N107",
+        "indsMclsNm": "사무 지원",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N111",
+        "indsMclsNm": "산업용품 대여",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N101",
+        "indsMclsNm": "시설관리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N105",
+        "indsMclsNm": "여행사·보조",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N109",
+        "indsMclsNm": "운송장비 대여",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N103",
+        "indsMclsNm": "조경·유지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "N1",
+        "indsLclsNm": "시설관리·임대",
+        "indsMclsCd": "N102",
+        "indsMclsNm": "청소·방제",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "R1",
+        "indsLclsNm": "예술·스포츠",
+        "indsMclsCd": "R102",
+        "indsMclsNm": "도서관·사적지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "R1",
+        "indsLclsNm": "예술·스포츠",
+        "indsMclsCd": "R103",
+        "indsMclsNm": "스포츠 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "R1",
+        "indsLclsNm": "예술·스포츠",
+        "indsMclsCd": "R104",
+        "indsMclsNm": "유원지·오락",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "R1",
+        "indsLclsNm": "예술·스포츠",
+        "indsMclsCd": "R101",
+        "indsMclsNm": "창작·예술",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H111",
+        "indsMclsNm": "기타 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H107",
+        "indsMclsNm": "내륙수상·항만 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H103",
+        "indsMclsNm": "도로 화물 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H110",
+        "indsMclsNm": "보관·창고",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H104",
+        "indsMclsNm": "소화물 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H102",
+        "indsMclsNm": "육상 여객 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H101",
+        "indsMclsNm": "철도 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H105",
+        "indsMclsNm": "파이프라인",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H108",
+        "indsMclsNm": "항공 여객 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H109",
+        "indsMclsNm": "항공 화물 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "H1",
+        "indsLclsNm": "운수·창고",
+        "indsMclsCd": "H106",
+        "indsMclsNm": "해상 운송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I207",
+        "indsMclsNm": "구내식당·뷔페",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I210",
+        "indsMclsNm": "기타 간이",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I206",
+        "indsMclsNm": "기타 외국",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I205",
+        "indsMclsNm": "동남아시아",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I212",
+        "indsMclsNm": "비알코올 ",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I204",
+        "indsMclsNm": "서양식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I209",
+        "indsMclsNm": "이동 음식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I203",
+        "indsMclsNm": "일식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I211",
+        "indsMclsNm": "주점",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I202",
+        "indsMclsNm": "중식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I208",
+        "indsMclsNm": "출장 음식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "I2",
+        "indsLclsNm": "음식",
+        "indsMclsCd": "I201",
+        "indsMclsNm": "한식",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "T1",
+        "indsLclsNm": "자가 생산활동",
+        "indsMclsCd": "T101",
+        "indsMclsNm": "가구내고용",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "T1",
+        "indsLclsNm": "자가 생산활동",
+        "indsMclsCd": "T102",
+        "indsMclsNm": "자가 소비 생산",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "T1",
+        "indsLclsNm": "자가 생산활동",
+        "indsMclsCd": "T103",
+        "indsMclsNm": "자가 소비 서비스",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "D1",
+        "indsLclsNm": "전기·가스·증기 공급",
+        "indsMclsCd": "D103",
+        "indsMclsNm": "냉온수·공기조절",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "D1",
+        "indsLclsNm": "전기·가스·증기 공급",
+        "indsMclsCd": "D102",
+        "indsMclsNm": "연료가스·배관",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "D1",
+        "indsLclsNm": "전기·가스·증기 공급",
+        "indsMclsCd": "D101",
+        "indsMclsNm": "전기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J109",
+        "indsMclsNm": "기타 정보",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J105",
+        "indsMclsNm": "방송",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J102",
+        "indsMclsNm": "소프트웨어",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J103",
+        "indsMclsNm": "영상·기록물 제작",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J104",
+        "indsMclsNm": "오디오·출판",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J106",
+        "indsMclsNm": "우편·통신",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J108",
+        "indsMclsNm": "자료 처리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J101",
+        "indsMclsNm": "출판",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "J1",
+        "indsLclsNm": "정보통신",
+        "indsMclsCd": "J107",
+        "indsMclsNm": "프로그래밍",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C148",
+        "indsMclsNm": "1차비철금속",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C147",
+        "indsMclsNm": "1차철강",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C179",
+        "indsMclsNm": "가구",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C167",
+        "indsMclsNm": "가정용기기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C121",
+        "indsMclsNm": "가죽·가방",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C141",
+        "indsMclsNm": "고무제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C106",
+        "indsMclsNm": "곡물·전분",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C127",
+        "indsMclsNm": "골판지·종이상자",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C103",
+        "indsMclsNm": "과실·채소",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C158",
+        "indsMclsNm": "광학매체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C150",
+        "indsMclsNm": "구조용 금속 등",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C180",
+        "indsMclsNm": "귀금속",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C149",
+        "indsMclsNm": "금속주조",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C130",
+        "indsMclsNm": "기록매체 복제",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C138",
+        "indsMclsNm": "기초의약",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C133",
+        "indsMclsNm": "기초화학",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C152",
+        "indsMclsNm": "기타 금속 가공",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C146",
+        "indsMclsNm": "기타 비금속광물",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C116",
+        "indsMclsNm": "기타 섬유",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C107",
+        "indsMclsNm": "기타 식품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C178",
+        "indsMclsNm": "기타 운송장비",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C168",
+        "indsMclsNm": "기타 전기장비",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C184",
+        "indsMclsNm": "기타 제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C128",
+        "indsMclsNm": "기타 종이",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C136",
+        "indsMclsNm": "기타 화학",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C124",
+        "indsMclsNm": "나무제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C105",
+        "indsMclsNm": "낙농 빙과",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C111",
+        "indsMclsNm": "담배",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C108",
+        "indsMclsNm": "동물 사료",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C104",
+        "indsMclsNm": "동식물 유지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C118",
+        "indsMclsNm": "모피",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C123",
+        "indsMclsNm": "목재가공",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C151",
+        "indsMclsNm": "무기·총포",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C153",
+        "indsMclsNm": "반도체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C112",
+        "indsMclsNm": "방적·가공",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C117",
+        "indsMclsNm": "봉제의복",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C135",
+        "indsMclsNm": "비료·농약",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C110",
+        "indsMclsNm": "비알코올 음료",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C161",
+        "indsMclsNm": "사진·광학기기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C185",
+        "indsMclsNm": "산업기계 수리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C132",
+        "indsMclsNm": "석유정제",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C175",
+        "indsMclsNm": "선박·보트",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C115",
+        "indsMclsNm": "섬유 염색·마무리",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C102",
+        "indsMclsNm": "수산",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C162",
+        "indsMclsNm": "시계·부품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C145",
+        "indsMclsNm": "시멘트·석회",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C122",
+        "indsMclsNm": "신발·부분품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C181",
+        "indsMclsNm": "악기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C109",
+        "indsMclsNm": "알코올 음료",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C157",
+        "indsMclsNm": "영상·음향 기기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C144",
+        "indsMclsNm": "요업제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C182",
+        "indsMclsNm": "운동 용구",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C143",
+        "indsMclsNm": "유리제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C101",
+        "indsMclsNm": "육류",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C159",
+        "indsMclsNm": "의료용 기기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C140",
+        "indsMclsNm": "의료용품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C120",
+        "indsMclsNm": "의복부속품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C139",
+        "indsMclsNm": "의약품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C129",
+        "indsMclsNm": "인쇄 관련",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C183",
+        "indsMclsNm": "인형·장난감·오락",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C169",
+        "indsMclsNm": "일반목적기계",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C164",
+        "indsMclsNm": "일차전지",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C174",
+        "indsMclsNm": "자동차 구부품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C173",
+        "indsMclsNm": "자동차 신부품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C171",
+        "indsMclsNm": "자동차·엔진",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C172",
+        "indsMclsNm": "자동차차체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C166",
+        "indsMclsNm": "전구·조명",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C163",
+        "indsMclsNm": "전동기·발전기 관련",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C154",
+        "indsMclsNm": "전자부품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C165",
+        "indsMclsNm": "절연선",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C160",
+        "indsMclsNm": "정밀기기",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C113",
+        "indsMclsNm": "직물 직조",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C176",
+        "indsMclsNm": "철도장비",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C155",
+        "indsMclsNm": "컴퓨터 등",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C125",
+        "indsMclsNm": "코르크·조물",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C131",
+        "indsMclsNm": "코크스·연탄",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C156",
+        "indsMclsNm": "통신·방송 장비",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C170",
+        "indsMclsNm": "특수목적기계",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C126",
+        "indsMclsNm": "펄프·종이",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C114",
+        "indsMclsNm": "편조 원단",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C119",
+        "indsMclsNm": "편조의복",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C142",
+        "indsMclsNm": "플라스틱제품",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C134",
+        "indsMclsNm": "합성고무",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C177",
+        "indsMclsNm": "항공기·우주선",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "C1",
+        "indsLclsNm": "제조업",
+        "indsMclsCd": "C137",
+        "indsMclsNm": "화학섬유",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S107",
+        "indsMclsNm": "기타 협회",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S103",
+        "indsMclsNm": "노동 조합",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S101",
+        "indsMclsNm": "산업 단체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S106",
+        "indsMclsNm": "시민운동 ",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S102",
+        "indsMclsNm": "전문가 단체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S105",
+        "indsMclsNm": "정치 단체",
+        "stdrDt": "2023-02-28"
+      },
+      {
+        "indsLclsCd": "S1",
+        "indsLclsNm": "협회·단체",
+        "indsMclsCd": "S104",
+        "indsMclsNm": "종교 단체",
+        "stdrDt": "2023-02-28"
+      }
+    ]
+  }
+}

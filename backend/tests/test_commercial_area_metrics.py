@@ -4,6 +4,7 @@ import math
 import unittest
 
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.franchise import build_franchise
 from app.agents.commercial_area.metrics import (
     area_km2,
     build_diversity,
@@ -27,8 +28,17 @@ MASTER = [
 ]
 
 
-def store(code, name, major_code, major_name, label, lat=37.5, lon=127.0,
-          district_code=None, district_name=None):
+def store(
+    code,
+    name,
+    major_code,
+    major_name,
+    label,
+    lat=37.5,
+    lon=127.0,
+    district_code=None,
+    district_name=None,
+):
     return Store(
         store_id=f"{code}-{label}",
         name=label,
@@ -56,10 +66,7 @@ def sample_stores():
 
 def ring_stores():
     near = [store("I201", "한식", "I2", "음식점업", f"가까운{i}") for i in range(4)]
-    far = [
-        store("I212", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027)
-        for i in range(3)
-    ]
+    far = [store("I212", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027) for i in range(3)]
     return near + far
 
 
@@ -101,7 +108,9 @@ class MetricsTests(unittest.TestCase):
         self.assertTrue(0 < diversity.hhi_middle <= 1)
 
     def test_lq_uses_baseline_shares(self):
-        rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100, "I212": 100, "G204": 200})
+        rows = build_middle_rows(
+            sample_stores(), 500, MASTER, {"I201": 100, "I212": 100, "G204": 200}
+        )
         han = next(r for r in rows if r.code == "I201")
         self.assertTrue(math.isclose(han.lq, (6 / 10) / (100 / 400), rel_tol=1e-3))
         self.assertIsNone(next(r for r in rows if r.code == "R102").lq)
@@ -143,6 +152,60 @@ class DistrictComparisonTests(unittest.TestCase):
         self.assertTrue(ranks)
         self.assertIn("송파구 전체", ranks[0].note)
         self.assertTrue(all(r.count >= Settings().min_count_for_specialization for r in ranks))
+
+
+class ClusterAttractionTests(unittest.TestCase):
+    def test_cluster_count_is_the_whole_major(self):
+        rows = build_middle_rows(sample_stores(), 500, MASTER)
+        counts = {r.code: r.major_cluster_count for r in rows}
+        self.assertEqual(counts["I201"], 9)
+        self.assertEqual(counts["I212"], 9)
+        self.assertEqual(counts["G204"], 1)
+        self.assertEqual(counts["R102"], 0)
+
+    def test_zero_count_category_still_reports_its_cluster(self):
+        rows = build_middle_rows(sample_stores(), 500, MASTER)
+        jung = next(r for r in rows if r.code == "I202")
+        han = next(r for r in rows if r.code == "I201")
+        self.assertEqual(jung.count, 0)
+        self.assertEqual(jung.major_cluster_count, han.major_cluster_count)
+        self.assertEqual(jung.major_cluster_diversity, han.major_cluster_diversity)
+
+    def test_diversity_counts_only_inside_the_major(self):
+        rows = build_middle_rows(sample_stores(), 500, MASTER)
+        han = next(r for r in rows if r.code == "I201")
+        self.assertAlmostEqual(
+            han.major_cluster_diversity, effective_categories(hhi([6, 3])), places=4
+        )
+        self.assertLess(han.major_cluster_diversity, 3.0)
+        self.assertEqual(next(r for r in rows if r.code == "G204").major_cluster_diversity, 1.0)
+        self.assertEqual(next(r for r in rows if r.code == "R102").major_cluster_diversity, 0.0)
+
+    def test_unknown_category_joins_its_own_major(self):
+        stores = sample_stores()
+        stores.append(store("Z999", "미확인업종", "Z9", "미확인", "신규"))
+        row = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "Z999")
+        self.assertEqual(row.major_cluster_count, 1)
+        self.assertEqual(row.major_cluster_diversity, 1.0)
+
+
+class FranchiseTests(unittest.TestCase):
+    def test_independent_is_the_rest_of_the_stores(self):
+        stores = sample_stores()
+        rows = build_middle_rows(stores, 500, MASTER)
+        result = build_franchise(stores, ["한식0", "한식1"], rows, base_year=2025)
+
+        self.assertEqual(result.count, 2)
+        self.assertEqual(result.count + result.independent_count, len(stores))
+        self.assertAlmostEqual(result.ratio + result.independent_ratio, 1.0, places=4)
+        self.assertEqual(result.base_year, 2025)
+
+    def test_empty_store_list_does_not_divide_by_zero(self):
+        result = build_franchise([], ["한식0"], [])
+        self.assertEqual(result.count, 0)
+        self.assertEqual(result.independent_count, 0)
+        self.assertEqual(result.independent_ratio, 0.0)
+        self.assertIsNone(result.base_year)
 
 
 class RadiusSliceTests(unittest.TestCase):

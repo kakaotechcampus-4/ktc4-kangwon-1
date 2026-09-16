@@ -1,6 +1,7 @@
 """샘플 또는 실제 모델로 중재 에이전트를 실행합니다."""
 
 import argparse
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -9,7 +10,6 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from app.agents.decision import analyze
-
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples" / "decision"
@@ -31,7 +31,7 @@ def main() -> int:
     try:
         input_path = EXAMPLES / "input.json" if args.mock else args.input
         request = json.loads(input_path.read_text(encoding="utf-8-sig"))
-        result = analyze(request)
+        result = asyncio.run(analyze(request))
         output = result.model_dump_json(indent=2, exclude_none=True)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)

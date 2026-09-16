@@ -23,17 +23,17 @@ NOMINATIM_HIT = [
 ]
 
 
-class GeocodeTests(unittest.TestCase):
+class GeocodeTests(unittest.IsolatedAsyncioTestCase):
     def _patched(self, handler):
-        original = httpx.Client
+        original = httpx.AsyncClient
 
         def factory(*args, **kwargs):
             kwargs.pop("timeout", None)
             return original(transport=httpx.MockTransport(handler), **kwargs)
 
-        return patch.object(httpx, "Client", factory)
+        return patch.object(httpx, "AsyncClient", factory)
 
-    def test_uses_geocoding_key_when_present(self):
+    async def test_uses_geocoding_key_when_present(self):
         seen = {}
 
         def handler(request):
@@ -42,7 +42,7 @@ class GeocodeTests(unittest.TestCase):
             return httpx.Response(200, json=KAKAO_HIT)
 
         with self._patched(handler):
-            result = geocode(
+            result = await geocode(
                 "서울특별시 송파구 위례광장로 120 155호", Settings(geocoding_api_key="test-key")
             )
 
@@ -51,27 +51,27 @@ class GeocodeTests(unittest.TestCase):
         self.assertEqual(round(result.latitude, 5), 37.47475)
         self.assertEqual(seen["auth"], "KakaoAK test-key")
 
-    def test_falls_back_to_open_map_without_key(self):
+    async def test_falls_back_to_open_map_without_key(self):
         with self._patched(lambda request: httpx.Response(200, json=NOMINATIM_HIT)):
-            result = geocode("서울특별시 송파구 위례광장로 120", Settings())
+            result = await geocode("서울특별시 송파구 위례광장로 120", Settings())
         self.assertEqual(result.provider, "nominatim")
         self.assertEqual(result.confidence, "low")
 
-    def test_not_found_is_reported(self):
+    async def test_not_found_is_reported(self):
         with self._patched(lambda request: httpx.Response(200, json=[])):
             with self.assertRaises(GeocodeError) as ctx:
-                geocode("없는주소", Settings())
+                await geocode("없는주소", Settings())
         self.assertEqual(ctx.exception.code, "NOT_FOUND")
 
-    def test_rejected_key_is_reported(self):
+    async def test_rejected_key_is_reported(self):
         with self._patched(lambda request: httpx.Response(401, json={})):
             with self.assertRaises(GeocodeError) as ctx:
-                geocode("서울특별시 송파구 위례광장로 120", Settings(geocoding_api_key="bad"))
+                await geocode("서울특별시 송파구 위례광장로 120", Settings(geocoding_api_key="bad"))
         self.assertEqual(ctx.exception.code, "KAKAO_AUTH")
 
-    def test_empty_address_rejected(self):
+    async def test_empty_address_rejected(self):
         with self.assertRaises(GeocodeError) as ctx:
-            geocode("   ", Settings())
+            await geocode("   ", Settings())
         self.assertEqual(ctx.exception.code, "EMPTY_ADDRESS")
 
 

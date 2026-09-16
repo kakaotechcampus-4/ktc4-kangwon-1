@@ -1,0 +1,81 @@
+{
+  "VwsmSignguStorW": {
+    "list_total_count": 54765,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다"
+    },
+    "row": [
+      {
+        "STDR_YYQU_CD": "20262",
+        "SIGNGU_CD": "11740",
+        "SIGNGU_CD_NM": "강동구",
+        "SVC_INDUTY_CD": "CS300043",
+        "SVC_INDUTY_CD_NM": "전자상거래업",
+        "SIMILR_INDUTY_STOR_CO": 749.0,
+        "STOR_CO": 749.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 4.0,
+        "CLSBIZ_STOR_CO": 30.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "SIGNGU_CD": "11740",
+        "SIGNGU_CD_NM": "강동구",
+        "SVC_INDUTY_CD": "CS300042",
+        "SVC_INDUTY_CD_NM": "주유소",
+        "SIMILR_INDUTY_STOR_CO": 43.0,
+        "STOR_CO": 43.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "SIGNGU_CD": "11740",
+        "SIGNGU_CD_NM": "강동구",
+        "SVC_INDUTY_CD": "CS300041",
+        "SVC_INDUTY_CD_NM": "예술품",
+        "SIMILR_INDUTY_STOR_CO": 32.0,
+        "STOR_CO": 32.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 6.3,
+        "OPBIZ_STOR_CO": 2.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "SIGNGU_CD": "11740",
+        "SIGNGU_CD_NM": "강동구",
+        "SVC_INDUTY_CD": "CS300040",
+        "SVC_INDUTY_CD_NM": "재생용품 판매점",
+        "SIMILR_INDUTY_STOR_CO": 42.0,
+        "STOR_CO": 42.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      },
+      {
+        "STDR_YYQU_CD": "20262",
+        "SIGNGU_CD": "11740",
+        "SIGNGU_CD_NM": "강동구",
+        "SVC_INDUTY_CD": "CS300039",
+        "SVC_INDUTY_CD_NM": "모터사이클및부품",
+        "SIMILR_INDUTY_STOR_CO": 20.0,
+        "STOR_CO": 20.0,
+        "FRC_STOR_CO": 0.0,
+        "OPBIZ_RT": 0.0,
+        "OPBIZ_STOR_CO": 0.0,
+        "CLSBIZ_RT": 0.0,
+        "CLSBIZ_STOR_CO": 0.0
+      }
+    ]
+  }
+}

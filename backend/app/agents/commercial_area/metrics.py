@@ -6,6 +6,7 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
+from .baseline import seoul_percentile
 from .config import RESTAURANT_MAJOR_NAMES, Settings
 from .schemas import (
     CategoryRank,
@@ -110,6 +111,17 @@ def build_middle_rows(
                 major_name=store.major_name,
             )
 
+    # 누적 유인(Nelson 2원칙)용 대분류 집계. 중분류 75회를 도는 루프 안에서 매번 다시 세지 않도록
+    # 여기서 한 번만 만든다.
+    major_counts = count_by_major(stores)
+    middle_counts_by_major: dict[str, list[int]] = {}
+    for code, entry in known.items():
+        middle_counts_by_major.setdefault(entry.major_code, []).append(counts.get(code, 0))
+    cluster_diversity = {
+        major: round(effective_categories(hhi(values)), 4)
+        for major, values in middle_counts_by_major.items()
+    }
+
     rows: list[MiddleCategory] = []
     for code in sorted(known):
         entry = known[code]
@@ -137,6 +149,8 @@ def build_middle_rows(
                 diff_type_count=diff_count,
                 marshallian=round(density, 4),
                 jacobian=round(effective_categories(hhi(other_counts)), 4),
+                major_cluster_count=major_counts.get(entry.major_code, 0),
+                major_cluster_diversity=cluster_diversity.get(entry.major_code, 0.0),
             )
         )
     return sorted(rows, key=lambda r: (-r.count, r.code))
@@ -253,7 +267,9 @@ def _concentration_rank(row: MiddleCategory, index: int) -> CategoryRank:
     )
 
 
-def _specialization_rank(row: MiddleCategory, index: int, baseline_radius_m: int) -> SpecializationRank:
+def _specialization_rank(
+    row: MiddleCategory, index: int, baseline_radius_m: int
+) -> SpecializationRank:
     times = row.lq or 0.0
     if 0.95 <= times <= 1.05:
         note = f"주변 {baseline_radius_m:,}m와 비슷한 수준입니다"
@@ -297,16 +313,13 @@ def _build_explanations(
 ) -> SliceExplanations:
     store_total = f"반경 {radius_m:,}m 안에 점포가 {total:,}개 있습니다."
 
-    top_text = (
-        f"가장 많은 업종은 {_names(top)} 순입니다."
-        if top
-        else "집계된 업종이 없습니다."
-    )
+    top_text = f"가장 많은 업종은 {_names(top)} 순입니다." if top else "집계된 업종이 없습니다."
 
     least = [r for r in bottom if r.count > 0]
     if absent_count and least:
         bottom_text = (
-            f"가장 적은 업종은 {_names(least)}이고, 이 반경에 아예 없는 업종이 {absent_count}개입니다."
+            f"가장 적은 업종은 {_names(least)}이고, "
+            f"이 반경에 아예 없는 업종이 {absent_count}개입니다."
         )
     elif absent_count:
         bottom_text = f"이 반경에 아예 없는 업종이 {absent_count}개입니다."
@@ -321,17 +334,19 @@ def _build_explanations(
             "집적도는 같은 면적에 얼마나 빽빽하게 모여 있는지를 뜻합니다. "
             f"여기서는 {head.name}{subject_particle(head.name)} "
             f"1km²당 {head.density_per_km2:,.0f}개로 가장 빽빽합니다. "
-            "같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, 그 동네를 찾는 이유가 되기도 합니다."
+            "같은 업종이 몰려 있으면 손님을 서로 뺏기도 하지만, "
+            "그 동네를 찾는 이유가 되기도 합니다."
         )
     else:
         concentration_text = "집적도를 계산할 점포가 없습니다."
 
     if specialization:
-        head = specialization[0]
+        top_special = specialization[0]
         specialization_text = (
-            f"특화도는 주변 {baseline_radius_m:,}m와 비교해 이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. "
-            f"{head.name}{subject_particle(head.name)} 주변보다 "
-            f"{head.times_vs_surroundings:.1f}배 많아 가장 두드러집니다. "
+            f"특화도는 주변 {baseline_radius_m:,}m와 비교해 "
+            "이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. "
+            f"{top_special.name}{subject_particle(top_special.name)} 주변보다 "
+            f"{top_special.times_vs_surroundings:.1f}배 많아 가장 두드러집니다. "
             f"점포가 {threshold_note}개 미만인 업종은 숫자가 튀어 제외했습니다."
         )
     else:
@@ -415,6 +430,7 @@ def build_restaurant_density(
     stores: Sequence[Store],
     radius_m: int,
     settings: Settings,
+    in_seoul: bool = False,
 ) -> RestaurantDensity:
     count = sum(1 for s in stores if s.major_name in RESTAURANT_MAJOR_NAMES)
     density = _density(count, radius_m)
@@ -423,4 +439,5 @@ def build_restaurant_density(
         squared=round(density**2, 4),
         unit="stores_per_km2",
         store_count=count,
+        seoul_percentile=seoul_percentile(density) if in_seoul else None,
     )

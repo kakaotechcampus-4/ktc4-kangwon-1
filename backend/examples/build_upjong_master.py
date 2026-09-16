@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import csv
 import io
 import sys
@@ -66,17 +67,17 @@ def from_official_csv(path: Path) -> list[MiddleCode]:
     return sorted(unique.values(), key=lambda r: r.code)
 
 
-def from_api(settings: Settings, radius: int) -> list[MiddleCode]:
+async def from_api(settings: Settings, radius: int) -> list[MiddleCode]:
     client = StoreClient(settings)
     collected: dict[str, MiddleCode] = {}
     try:
         for lat, lon in SAMPLE_POINTS:
-            stores, meta = client.stores_in_radius(lat, lon, radius)
+            stores, _meta = await client.stores_in_radius(lat, lon, radius)
             for row in master_from_stores(stores):
                 collected.setdefault(row.code, row)
             print(f"  ({lat}, {lon}) 점포 {len(stores)}건 → 누적 중분류 {len(collected)}개")
     finally:
-        client.close()
+        await client.aclose()
     return sorted(collected.values(), key=lambda r: r.code)
 
 
@@ -95,10 +96,13 @@ def main() -> int:
         source = f"공식 CSV {args.official_csv.name}"
     else:
         if not settings.sbiz_service_key:
-            print("SBIZ_SERVICE_KEY가 없습니다. --official-csv 로 공식 업종코드 파일을 넘기거나 키를 설정하세요.")
+            print(
+                "SBIZ_SERVICE_KEY가 없습니다. "
+                "--official-csv 로 공식 업종코드 파일을 넘기거나 키를 설정하세요."
+            )
             return 1
         print("API 응답에서 업종 코드를 수집합니다. 공식 파일보다 누락 가능성이 있습니다.")
-        rows = from_api(settings, args.radius)
+        rows = asyncio.run(from_api(settings, args.radius))
         source = "API 응답 수집"
 
     write_master(settings.upjong_master_path, rows)
