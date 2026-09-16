@@ -1,6 +1,6 @@
 import { DM_Mono } from 'next/font/google';
 import Header from '@/components/layout/Header';
-import ReportHeader from '@/components/report/ReportHeader';
+import ReportHeaderV2 from '@/components/report-v2/ReportHeaderV2';
 import RecommendationSectionV2 from '@/components/report-v2/RecommendationSectionV2';
 import AIAnalysisSummary from '@/components/report-v2/AIAnalysisSummary';
 import DetailAnalysisTabs from '@/components/report-v2/DetailAnalysisTabs';
@@ -20,7 +20,7 @@ export default function ReportV2Page() {
       style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
-      <ReportHeader />
+      <ReportHeaderV2 />
       <RecommendationSectionV2 />
       <AIAnalysisSummary />
       <DetailAnalysisTabs />
