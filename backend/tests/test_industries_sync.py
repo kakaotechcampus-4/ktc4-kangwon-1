@@ -11,7 +11,7 @@ from pathlib import Path
 from app.industries import DATA_DIR
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-BUILDER = BACKEND_DIR / "examples" / "build_industry_catalog.py"
+BUILDER = BACKEND_DIR / "scripts" / "build_industry_catalog.py"
 
 
 @unittest.skipUnless(DATA_DIR.exists(), "설치본에는 원본 CSV가 없습니다")

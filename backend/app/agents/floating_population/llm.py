@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 import json
-import math
-import os
 from pathlib import Path
+
+from app.llm import client
+from app.llm.config import LLMSettings
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROMPT_PATH = PACKAGE_DIR / "prompt.md"
@@ -32,24 +33,6 @@ class SelectionUnavailable(RuntimeError):
 
 def load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
-
-
-def _env() -> tuple[str, str, str, int, float]:
-    model = os.getenv("ELICE_MODEL", "").strip()
-    api_key = os.getenv("ELICE_API_KEY", "").strip()
-    base_url = os.getenv("ELICE_BASE_URL", "").strip()
-    if not (model and api_key and base_url):
-        raise SelectionUnavailable(
-            "ELICE_MODEL·ELICE_API_KEY·ELICE_BASE_URL 이 있어야 블록 선별을 합니다."
-        )
-    try:
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS", "8192"))
-        timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
-    except ValueError as exc:
-        raise SelectionUnavailable("응답 길이와 대기 시간은 양수여야 합니다.") from exc
-    if max_tokens <= 0 or not math.isfinite(timeout) or timeout <= 0:
-        raise SelectionUnavailable("응답 길이와 대기 시간은 양수여야 합니다.")
-    return model, api_key, base_url, max_tokens, timeout
 
 
 def parse_selection(content: str) -> tuple[list[str], str]:
@@ -81,33 +64,14 @@ def parse_selection(content: str) -> tuple[list[str], str]:
     return [b for b in SELECTABLE if b in include], reason.strip()
 
 
-async def select_blocks(payload: str) -> tuple[list[str], str]:
-    """`payload`(선별용 요약 JSON)를 보고 실을 블록을 고른다."""
-    model, api_key, base_url, max_tokens, timeout = _env()
+async def select_blocks(payload: str, settings: LLMSettings | None = None) -> tuple[list[str], str]:
+    """선별 실패는 분석 단계에서 모든 계산 블록을 유지하는 경고로 바뀝니다."""
     try:
-        from openai import APIError, AsyncOpenAI
-    except ImportError as exc:
-        raise SelectionUnavailable("openai 패키지가 없습니다.") from exc
-
-    try:
-        async with AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=1
-        ) as client:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": load_prompt()},
-                    {"role": "user", "content": payload},
-                ],
-                response_format={"type": "json_object"},
-                max_completion_tokens=max_tokens,
-            )
-    except APIError as exc:
-        raise SelectionUnavailable(f"모델 요청에 실패했습니다: {exc}") from exc
-
-    if not response.choices:
-        raise SelectionUnavailable("모델이 응답을 내지 못했습니다.")
-    choice = response.choices[0]
-    if choice.finish_reason != "stop" or not choice.message.content:
-        raise SelectionUnavailable("모델이 응답을 끝맺지 못했습니다(길이 제한 또는 거절).")
-    return parse_selection(choice.message.content)
+        result = await client.complete_json(
+            load_prompt(), payload, settings or LLMSettings.from_env("FLOATING_POPULATION")
+        )
+        return parse_selection(json.dumps(result, ensure_ascii=False))
+    except (RuntimeError, ValueError):
+        raise SelectionUnavailable(
+            "모델 선별을 완료하지 못했습니다. 설정과 응답을 확인해 주세요."
+        ) from None

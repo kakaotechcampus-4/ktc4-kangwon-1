@@ -4,16 +4,24 @@ import asyncio
 import json
 import sqlite3
 import tempfile
+import threading
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
+from pydantic import ValidationError
+from test_business_lifecycle_agent import fake_area
+from test_industry_pipeline import raw_rows
 from test_orchestration_react import action
 
+from app.agents.business_lifecycle.agent import analyze as analyze_lifecycle
+from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.db import repository as repo
 from app.db.connection import initialize
 from app.schemas import AGENT_IDS, AgentAnalysis, Scope, Site
 from app.services.analysis import execute_analysis
+from app.services.settings import ExecutionSettings
 
 
 class ServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -31,7 +39,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                 "summary": "시험 판단",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점", "middle": "중식"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
                         "score": 60,
                         "reasons": ["시험 자료"],
                         "risks": [],
@@ -58,7 +66,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
 
         return {agent_id: make(agent_id) for agent_id in AGENT_IDS}
 
-    async def run_service(self, *, agents=None, request_id="request"):
+    async def run_service(self, *, agents=None, request_id="request", **kwargs):
         return await execute_analysis(
             "시험 주소",
             db_path=self.path,
@@ -73,7 +81,130 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                     action("make_decision"),
                 ]
             ),
+            **kwargs,
         )
+
+    async def test_agent_deadline_collects_timeout_and_other_results(self):
+        agents = self.agents()
+        stopped = asyncio.Event()
+
+        async def slow(task):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+        agents["floating_population"] = slow
+        result = await self.run_service(agents=agents, agent_timeout=0.02)
+        self.assertTrue(stopped.is_set())
+        self.assertEqual(result.source_analyses[0].error.code, "AGENT_TIMEOUT")
+        self.assertEqual(len(repo.list_agent_results("request", db_path=self.path)), 3)
+
+    async def test_overall_timeout_and_cancellation_fail_owned_request(self):
+        for cancel in (False, True):
+            entered, stopped = asyncio.Event(), asyncio.Event()
+
+            async def resolve(address, entered=entered, stopped=stopped):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    stopped.set()
+
+            self.resolve.side_effect = resolve
+            task = asyncio.create_task(
+                self.run_service(request_id=str(cancel), overall_timeout=0.3)
+            )
+            await asyncio.wait_for(entered.wait(), 1)
+            if cancel:
+                task.cancel()
+            with self.assertRaises(asyncio.CancelledError if cancel else TimeoutError):
+                await task
+            self.assertTrue(stopped.is_set())
+            row = repo.get_request(str(cancel), db_path=self.path)
+            self.assertEqual(row["status"], "failed")
+            self.assertEqual(
+                json.loads(row["error_json"])["code"],
+                "ANALYSIS_CANCELLED" if cancel else "ANALYSIS_TIMEOUT",
+            )
+
+    async def test_cancel_waits_for_insert_or_commit_and_preserves_ownership(self):
+        for operation, duplicate, expected in (
+            ("create_request", False, "failed"),
+            ("create_request", True, "pending"),
+            ("complete_request", False, "completed"),
+        ):
+            request_id = f"{operation}-{duplicate}"
+            if duplicate:
+                initialize(self.path)
+                repo.create_request(request_id, "기존 요청", db_path=self.path)
+            original = getattr(repo, operation)
+            entered, release = threading.Event(), threading.Event()
+
+            def blocked(*args, entered=entered, release=release, original=original, **kwargs):
+                entered.set()
+                if not release.wait(3):
+                    raise AssertionError("시험 쓰기 해제 시간 초과")
+                return original(*args, **kwargs)
+
+            with patch.object(repo, operation, side_effect=blocked):
+                task = asyncio.create_task(self.run_service(request_id=request_id))
+                self.assertTrue(await asyncio.to_thread(entered.wait, 3))
+                task.cancel()
+                await asyncio.sleep(0)
+                task.cancel()
+                release.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+            self.assertEqual(repo.get_request(request_id, db_path=self.path)["status"], expected)
+
+    async def test_cancel_before_completion_write_leaves_failed_not_success(self):
+        started = asyncio.Event()
+
+        async def decision(*args):
+            started.set()
+            await asyncio.Event().wait()
+
+        self.generate = decision
+        task = asyncio.create_task(self.run_service())
+        await started.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        row = repo.get_request("request", db_path=self.path)
+        self.assertEqual(row["status"], "failed")
+        self.assertIsNone(row["result_json"])
+
+    async def test_cancel_during_failure_recording_propagates_after_write(self):
+        entered, release = threading.Event(), threading.Event()
+        original = repo.fail_request
+
+        def blocked(*args, **kwargs):
+            entered.set()
+            if not release.wait(3):
+                raise AssertionError("시험 쓰기 해제 시간 초과")
+            return original(*args, **kwargs)
+
+        with (
+            patch.object(
+                repo, "complete_request", side_effect=sqlite3.OperationalError("시험 오류")
+            ),
+            patch.object(repo, "fail_request", side_effect=blocked),
+        ):
+            task = asyncio.create_task(self.run_service())
+            self.assertTrue(await asyncio.to_thread(entered.wait, 3))
+            task.cancel()
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "failed")
+
+    async def test_invalid_deadlines_never_create_database(self):
+        for value in (0, -1, float("inf"), float("nan"), True):
+            for key in ("agent_timeout", "overall_timeout"):
+                with self.assertRaises(ValueError):
+                    await self.run_service(**{key: value})
+        self.assertFalse(self.path.exists())
 
     async def test_success_partial_and_no_data_are_completed(self):
         for status in ("ok", "partial", "no_data"):
@@ -168,6 +299,72 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(rows), 2)
             self.assertNotIn("floating_population", [r["agent_id"] for r in rows])
         self.generate.assert_not_called()
+
+    async def test_internal_contract_error_is_not_collected_as_operational_failure(self):
+        from pydantic import ValidationError
+
+        async def invalid(task):
+            return AgentAnalysis.model_validate({"request_id": task.request_id})
+
+        agents = self.agents()
+        agents["floating_population"] = invalid
+        with self.assertRaises(ValidationError):
+            await self.run_service(agents=agents)
+        self.generate.assert_not_called()
+        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "failed")
+        self.assertEqual(
+            {row["agent_id"] for row in repo.list_agent_results("request", db_path=self.path)},
+            {"business_lifecycle", "commercial_area"},
+        )
+
+    async def test_real_lifecycle_contract_error_fails_request_and_keeps_other_results(self):
+        async def completion(prompt, input_json, settings):
+            payload = json.loads(input_json)
+            return {
+                "industry_scores": [
+                    dict(row, type="안정형", evidence=[], warning=None)
+                    for row in payload["industries"]
+                ]
+            }
+
+        settings = ExecutionSettings(
+            lifecycle=LifecycleSettings(base_quarter_override="20244", quarter_count=4)
+        )
+        agents = self.agents()
+        agents["business_lifecycle"] = partial(
+            analyze_lifecycle,
+            settings=settings.lifecycle,
+            llm_settings=settings.lifecycle_llm,
+            area_resolver=fake_area,
+        )
+        with (
+            patch(
+                "app.agents.business_lifecycle.preprocess.fetch_recent_store_data",
+                return_value=raw_rows(),
+            ),
+            patch("app.llm.client.complete_json", side_effect=completion),
+            # 실제 계산·포맷을 통과한 공통 응답의 계약 위반을 주입합니다.
+            patch(
+                "app.agents.business_lifecycle.formatter.determine_status",
+                return_value="invalid-status",
+            ),
+            self.assertRaises(ValidationError) as raised,
+        ):
+            await self.run_service(agents=agents, settings=settings)
+
+        self.assertEqual(raised.exception.errors()[0]["loc"], ("status",))
+        self.generate.assert_not_called()
+        request = repo.get_request("request", db_path=self.path)
+        self.assertEqual(request["status"], "failed")
+        self.assertIsNone(request["result_json"])
+        rows = repo.list_agent_results("request", db_path=self.path)
+        self.assertEqual(
+            {row["agent_id"] for row in rows}, {"floating_population", "commercial_area"}
+        )
+        for row in rows:
+            analysis = json.loads(row["analysis_json"])
+            self.assertEqual(analysis["status"], "ok")
+            self.assertEqual(analysis["data"], {"count": 1})
 
     async def test_storage_failure_is_not_agent_failure(self):
         original = repo.save_agent

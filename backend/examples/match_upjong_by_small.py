@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
-import json
 import re
 import sys
 from collections import defaultdict
@@ -187,7 +186,7 @@ def main() -> int:
 
 
 async def fill_with_model(settings, small, pending, picks, hints) -> None:
-    from openai import AsyncOpenAI
+    from app.llm import client
 
     listing = "\n".join(f"{c}\t{n}\t{m}" for c, (n, m) in sorted(small.items()))
 
@@ -200,28 +199,11 @@ async def fill_with_model(settings, small, pending, picks, hints) -> None:
 
     async def ask(chunk):
         targets = "\n".join(describe(r) for r in chunk)
-        async with AsyncOpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-            timeout=settings.llm_timeout_s,
-            max_retries=2,
-        ) as client:
-            response = await client.chat.completions.create(
-                model=settings.llm_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"[소상공인 소분류 {len(small)}종]\n소분류코드\t소분류명\t중분류코드\n"
-                            f"{listing}\n\n[분류할 서울시 업종]\n코드\t업종명\n{targets}"
-                        ),
-                    },
-                ],
-                response_format={"type": "json_object"},
-                max_completion_tokens=settings.llm_max_tokens,
-            )
-        payload = json.loads(response.choices[0].message.content or "{}")
+        user = (
+            f"[소상공인 소분류 {len(small)}종]\n소분류코드\t소분류명\t중분류코드\n"
+            f"{listing}\n\n[분류할 서울시 업종]\n코드\t업종명\n{targets}"
+        )
+        payload = await client.complete_json(SYSTEM, user, settings.llm_settings())
         for row in payload.get("matches") or []:
             kept = [c for c in (row.get("small_codes") or []) if c in small]
             if kept:

@@ -6,7 +6,7 @@
 쓰는 사람은 상권 분석을 배운 적 없는 임대인입니다.
 
 ```
-주소 입력 → 좌표 변환 → 분석 에이전트 3종 병렬 실행 → 중재(업종 판단) → 리포트
+주소 입력 → 좌표 변환 → 분석 에이전트 3종 병렬 실행 → 최종 업종 판단 → SQLite 저장·조회
 ```
 
 ## 구조
@@ -33,7 +33,7 @@
 cd backend
 py -3.12 -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
-MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:app --reload
+MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:create_app --factory --reload
 
 # 2) 프론트엔드 (터미널 B)
 cd frontend
@@ -55,9 +55,10 @@ npm run dev
 | 중재(업종 판단) 에이전트 | ✅ |
 | 오케스트레이터 · `POST /api/v1/analyses` · CORS | ✅ |
 | 랜딩 · 공실 입력 화면 | ✅ (백엔드 연동 전) |
-| 유동인구 에이전트 | ⬜ |
+| 유동인구 에이전트 | ✅ |
 | 개폐업 에이전트 | ✅ |
-| 리포트 에이전트 · 결과 화면 | ⬜ |
+| 최종 판단 API · 저장 결과 조회 | ✅ |
+| 결과 화면 | ⬜ |
 | 프론트 ↔ 백엔드 실제 연동 | ⬜ |
 
 ## 검사

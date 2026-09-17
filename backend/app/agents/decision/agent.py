@@ -1,11 +1,15 @@
 """분석 결과를 모아 검증된 최종 판단을 반환합니다."""
 
 import inspect
+import json
 import re
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
 from typing import Any
 
+from app.agents.floating_population.llm import SELECTABLE
+from app.industries import lookup
+from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.schemas import AGENT_IDS, AgentAnalysis, DecisionContent, DecisionRequest, DecisionResult
 
 from .llm import generate_decision
@@ -48,10 +52,15 @@ async def analyze(
 
     if available:
         prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
-        produced = (generate or generate_decision)(prompt, request.model_dump_json())
+        prompt += "\n\n## 공통 중분류 목록 (코드 | 대분류 공식명 | 중분류 공식명)\n"
+        prompt += "\n".join(
+            f"{code} | {INDUSTRY_MAJORS[code][1]} | {name}" for code, name in INDUSTRIES.items()
+        )
+        produced = (generate or generate_decision)(prompt, _decision_input(request))
         if inspect.isawaitable(produced):
             produced = await produced
         content = DecisionContent.model_validate(produced)
+        _validate_categories(content)
         _validate_evidence(content, available)
     else:
         content = DecisionContent(
@@ -79,6 +88,44 @@ async def analyze(
     )
 
 
+def _decision_input(request: DecisionRequest) -> str:
+    """선별은 직렬화된 복사본에만 적용해 반환·저장용 원본과 배열 위치를 보존합니다."""
+    payload = request.model_dump(mode="json")
+    for source in payload["analyses"]:
+        if source["agent_id"] != "floating_population":
+            continue
+        data = source["data"]
+        selection = data.get("selection")
+        if not isinstance(selection, dict) or selection.get("applied") is not True:
+            continue
+        included = selection.get("included")
+        # 과거·자유 형식 자료의 선별 메타데이터가 불완전하면 원본을 전부 전달합니다.
+        if not isinstance(included, list) or any(block not in SELECTABLE for block in included):
+            continue
+        for block in ("trade_areas", "trend", "radius_profile"):
+            if block not in included:
+                data.pop(block, None)
+        if "population_raw" not in included and isinstance(data.get("population"), dict):
+            for field in ("by_age", "by_time", "by_day"):
+                data["population"].pop(field, None)
+    return json.dumps(payload, ensure_ascii=False, allow_nan=False)
+
+
+def _validate_categories(content: DecisionContent) -> None:
+    """기존 이름 조회로 코드를 확인하고 두 목록을 통틀어 중복을 거절합니다."""
+    seen = set()
+    for item in content.recommendations + content.not_recommended:
+        industry = lookup.find_by_name(item.category.middle)
+        if industry is None:
+            raise ValueError(f"공통 목록에 없는 중분류 업종입니다: {item.category.middle}")
+        if item.category.major != industry.major_name:
+            raise ValueError(f"업종의 대분류가 일치하지 않습니다: {item.category.middle}")
+        if industry.code in seen:
+            raise ValueError(f"같은 중분류 업종을 여러 번 판단할 수 없습니다: {industry.code}")
+        seen.add(industry.code)
+        item.category.middle = industry.name
+
+
 def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysis]) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
     for item in content.recommendations + content.not_recommended:
@@ -100,3 +147,11 @@ def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysi
                         raise KeyError(key)
             except (KeyError, IndexError, ValueError) as exc:
                 raise ValueError(f"입력에 없는 근거입니다: {evidence.agent_id}{path}") from exc
+            if (
+                value is None
+                or isinstance(value, str)
+                and not value.strip()
+                or isinstance(value, (list, dict))
+                and not value
+            ):
+                raise ValueError(f"빈 자료는 근거로 사용할 수 없습니다: {evidence.agent_id}{path}")

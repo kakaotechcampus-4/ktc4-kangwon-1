@@ -26,7 +26,7 @@ from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 from . import baseline, llm
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
-from .config import Settings, load_dotenv_if_present
+from .config import Settings
 from .geo import circle_overlap_ratio, to_epsg5181
 from .models import (
     AGE_BANDS,
@@ -236,28 +236,40 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
     변화율은 `daily_avg` 로 잰다. 분기 합계는 분기 일수(90~92일)가 달라 그대로 비교하면
     최대 2% 의 가짜 증감이 섞인다.
     """
-    points: list[QuarterPoint] = []
+    points_by_quarter: dict[str, QuarterPoint] = {}
+    requested_quarters = {quarter for quarter, _ in series}
+    latest_quarter = max(requested_quarters, default=None)
     for quarter, records in series:
         rs = [r for r in records if r.trdar_cd in main_codes]
         if not rs:
             continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
         pop = _aggregate(rs, quarter)
-        points.append(
-            QuarterPoint(
-                period_code=quarter,
-                period=period_ko(quarter),
-                daily_avg=round(pop.daily_avg, 1),
-                trade_area_count=len(rs),
-                age_share=pop.age_share,
-                time_per_hour_share=pop.time_per_hour_share,
-            )
+        points_by_quarter[quarter] = QuarterPoint(
+            period_code=quarter,
+            period=period_ko(quarter),
+            daily_avg=round(pop.daily_avg, 1),
+            trade_area_count=len(rs),
+            age_share=pop.age_share,
+            time_per_hour_share=pop.time_per_hour_share,
         )
+
+    points = [points_by_quarter[quarter] for quarter in sorted(points_by_quarter)]
 
     def change(new: float, old: float) -> float | None:
         return round((new - old) / old, 4) if old else None
 
-    qoq = change(points[-1].daily_avg, points[-2].daily_avg) if len(points) >= 2 else None
-    yoy = change(points[-1].daily_avg, points[-5].daily_avg) if len(points) >= 5 else None
+    def previous_quarter(quarter: str, count: int = 1) -> str:
+        year, number = int(quarter[:4]), int(quarter[4])
+        index = year * 4 + number - 1 - count
+        return f"{index // 4}{index % 4 + 1}"
+
+    latest = points_by_quarter.get(latest_quarter or "")
+    previous = points_by_quarter.get(previous_quarter(latest_quarter)) if latest_quarter else None
+    previous_year = (
+        points_by_quarter.get(previous_quarter(latest_quarter, 4)) if latest_quarter else None
+    )
+    qoq = change(latest.daily_avg, previous.daily_avg) if latest and previous else None
+    yoy = change(latest.daily_avg, previous_year.daily_avg) if latest and previous_year else None
 
     # 전년 동기가 있으면 그걸로 본다 — 계절성이 빠져서 판단에 낫다.
     basis = yoy if yoy is not None else qoq
@@ -380,33 +392,6 @@ def _selection_digest(data: FloatingPopulationData) -> str:
     return json.dumps(digest, ensure_ascii=False)
 
 
-def _apply_selection(data: FloatingPopulationData, included: list[str]) -> None:
-    """고르지 않은 블록을 `None` 으로 비운다. **키는 지우지 않는다.**
-
-    결정 에이전트가 `evidence.path` 로 내부를 탐색하는데(`decision/agent.py:86-95`), 키가
-    없으면 `KeyError` → `ValueError` 가 되어 리포트 전체가 죽는다. 실측으로 확인한 차이:
-
-    | 인용 경로 | 키를 지웠을 때 | `None` 으로 뒀을 때 |
-    | --- | --- | --- |
-    | `/trade_areas` | 죽는다 | **통과**(값이 null) |
-    | `/trade_areas/0` | 죽는다 | 죽는다 |
-
-    `None` 은 **리프 경로만** 살린다. 한 단계 더 들어가는 인용은 여전히 죽는다. 그래도 이쪽이
-    나은 이유는, 결정 에이전트가 **내가 보낸 것만 보기 때문**이다 — null 인 블록 안쪽을
-    인용할 이유가 없고, 혹시 리프를 인용해도 죽지 않는다.
-    """
-    if "trade_areas" not in included:
-        data.trade_areas = None
-    if "trend" not in included:
-        data.trend = None
-    if "radius_profile" not in included:
-        data.radius_profile = None
-    if "population_raw" not in included:
-        data.population.by_age = None
-        data.population.by_time = None
-        data.population.by_day = None
-
-
 async def _select(
     data: FloatingPopulationData,
     select: SelectBlocks | None,
@@ -415,27 +400,27 @@ async def _select(
     selectable = list(llm.SELECTABLE)
     try:
         included, reason = await (select or llm.select_blocks)(_selection_digest(data))
-    except llm.SelectionUnavailable as e:
+    except llm.SelectionUnavailable:
         return (
             Selection(
                 applied=False,
                 selectable=selectable,
                 included=selectable,
                 dropped=[],
-                unavailable_reason=str(e),
+                unavailable_reason="자료 선별 기능을 사용할 수 없습니다.",
             ),
             None,  # 키가 없어 못 한 경우까지 경고로 띄우면 시끄럽다
         )
-    except Exception as e:  # 모델 쪽 어떤 실패도 분석을 막지 않는다
+    except Exception:  # 모델 쪽 어떤 실패도 분석을 막지 않는다
         return (
             Selection(
                 applied=False,
                 selectable=selectable,
                 included=selectable,
                 dropped=[],
-                unavailable_reason=f"{type(e).__name__}: {e}",
+                unavailable_reason="자료 선별 중 오류가 발생했습니다.",
             ),
-            f"자료 선별에 실패해 전부 실었습니다: {type(e).__name__}",
+            "자료 선별에 실패해 전부 실었습니다.",
         )
 
     dropped = [b for b in selectable if b not in included]
@@ -478,7 +463,6 @@ async def analyze(
     """
     site = task.site
     if settings is None:
-        load_dotenv_if_present()
         settings = Settings.from_env()
     radius = settings.analysis_radius_m
     # ⚠️ 이 문자열은 `commercial_area` 와 **글자까지 같아야 한다.** 결정 에이전트가
@@ -514,8 +498,8 @@ async def analyze(
     owns_client = client is None
     try:
         client = client or SeoulOpenDataClient(settings)
-    except MissingApiKeyError as e:
-        return failed("CONFIG_ERROR", str(e))
+    except MissingApiKeyError:
+        return failed("CONFIG_ERROR", "유동인구 API 설정을 확인해 주세요.")
 
     x, y = to_epsg5181(site.latitude, site.longitude)
 
@@ -538,10 +522,10 @@ async def analyze(
         series = await client.fetch_flpop_series(wanted, settings.trend_quarters)
         quarter, latest = series[-1]
         records = [r for r in latest if r.trdar_cd in main_codes]
-    except httpx.TimeoutException as e:
-        return failed("UPSTREAM_TIMEOUT", f"서울시 API 응답 시간이 초과되었습니다: {e}")
-    except (SeoulOpenApiError, httpx.HTTPError) as e:
-        return failed("UPSTREAM_ERROR", f"서울시 API 오류: {e}")
+    except httpx.TimeoutException:
+        return failed("UPSTREAM_TIMEOUT", "서울시 API 응답 시간이 초과되었습니다.")
+    except (SeoulOpenApiError, httpx.HTTPError):
+        return failed("UPSTREAM_ERROR", "서울시 API 조회에 실패했습니다.")
     finally:
         if owns_client:
             await client.aclose()
@@ -639,13 +623,12 @@ async def analyze(
     # 넘길 블록을 고른다. 숫자는 이미 다 계산돼 있고 모델은 고르기만 한다.
     selection, select_warning = await _select(data, select)
     data.selection = selection
-    if selection.applied:
-        _apply_selection(data, selection.included)
-        if selection.dropped:
-            warnings.append(
-                f"판단에 쓰이지 않는 자료 {len(selection.dropped)}개를 뺐습니다"
-                f"({', '.join(selection.dropped)}). {selection.reason}".strip()
-            )
+    # 원본 차트는 반환·저장하고 최종판단이 프롬프트 복사본에만 선별을 적용합니다.
+    if selection.applied and selection.dropped:
+        warnings.append(
+            f"최종판단 입력에서만 자료 {len(selection.dropped)}개를 제외합니다"
+            f"({', '.join(selection.dropped)}). {selection.reason}".strip()
+        )
     if select_warning:
         warnings.append(select_warning)
 

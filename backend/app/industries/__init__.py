@@ -16,7 +16,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .catalog import CATALOG_VERSION, EXPECTED_INDUSTRY_COUNT
 from .models import Industry
+
+MAPPING_REVIEW_WARNING = "서울시 업종 연결 중 53건은 모델 판정이며 사람 검수가 완료되지 않았습니다."
+TAXONOMY = {
+    "id": "sbiz-middle-75",
+    "version": CATALOG_VERSION,
+    "industry_count": EXPECTED_INDUSTRY_COUNT,
+    "seoul_mapping_review": "pending",
+    "unreviewed_mapping_count": 53,
+}
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DATA_DIR = PACKAGE_DIR / "data"

@@ -102,15 +102,6 @@ def build_middle_rows(
     district_total = sum(district_counts.values()) if district_counts else 0
 
     known = {m.code: m for m in master}
-    for store in stores:
-        if store.middle_code and store.middle_code not in known:
-            known[store.middle_code] = MiddleCode(
-                code=store.middle_code,
-                name=store.middle_name or store.middle_code,
-                major_code=store.major_code,
-                major_name=store.major_name,
-            )
-
     # 누적 유인(Nelson 2원칙)용 대분류 집계. 중분류 75회를 도는 루프 안에서 매번 다시 세지 않도록
     # 여기서 한 번만 만든다.
     major_counts = count_by_major(stores)
@@ -268,15 +259,16 @@ def _concentration_rank(row: MiddleCategory, index: int) -> CategoryRank:
 
 
 def _specialization_rank(
-    row: MiddleCategory, index: int, baseline_radius_m: int
+    row: MiddleCategory, index: int, baseline_radius_m: int | None
 ) -> SpecializationRank:
     times = row.lq or 0.0
+    surroundings = f"주변 {baseline_radius_m:,}m" if baseline_radius_m is not None else "주변"
     if 0.95 <= times <= 1.05:
-        note = f"주변 {baseline_radius_m:,}m와 비슷한 수준입니다"
+        note = f"{surroundings}과 비슷한 수준입니다"
     elif times > 1.05:
-        note = f"주변 {baseline_radius_m:,}m 평균보다 {times:.1f}배 많습니다"
+        note = f"{surroundings} 평균보다 {times:.1f}배 많습니다"
     else:
-        note = f"주변 {baseline_radius_m:,}m 평균의 {times:.1f}배에 그칩니다"
+        note = f"{surroundings} 평균의 {times:.1f}배에 그칩니다"
     return SpecializationRank(
         rank=index,
         code=row.code,
@@ -342,8 +334,9 @@ def _build_explanations(
 
     if specialization:
         top_special = specialization[0]
+        surroundings = f"주변 {baseline_radius_m:,}m" if baseline_radius_m is not None else "주변"
         specialization_text = (
-            f"특화도는 주변 {baseline_radius_m:,}m와 비교해 "
+            f"특화도는 {surroundings}과 비교해 "
             "이 자리에 유난히 많은 업종이 무엇인지를 뜻합니다. "
             f"{top_special.name}{subject_particle(top_special.name)} 주변보다 "
             f"{top_special.times_vs_surroundings:.1f}배 많아 가장 두드러집니다. "
@@ -396,7 +389,7 @@ def build_radius_slices(
         bottom = [_count_rank(r, i, total) for i, r in enumerate(bottom_rows, 1)]
         concentration = [_concentration_rank(r, i) for i, r in enumerate(concentration_rows, 1)]
         specialization = [
-            _specialization_rank(r, i, baseline_radius_m or 0)
+            _specialization_rank(r, i, baseline_radius_m)
             for i, r in enumerate(specialization_rows, 1)
         ]
 

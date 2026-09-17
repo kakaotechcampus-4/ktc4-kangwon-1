@@ -19,10 +19,10 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 
 ```
 주소 → 좌표(address.py)
-     → 분석 에이전트 3종 병렬 실행(orchestrator.py)
+     → 분석 에이전트 3종 병렬 실행(agents/orchestration)
           floating_population · business_lifecycle · commercial_area
-     → 중재(decision) : 추천·비추천 업종과 근거
-     → 리포트(report)  : 화면용 구성          ← 아직 미구현
+     → 최종 판단(decision) : 추천·비추천 업종과 근거
+     → SQLite 저장 → API 조회
 ```
 
 ## 반드시 지킬 것
@@ -35,9 +35,12 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 2. **외부 호출은 전부 비동기다.** `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
    `httpx.Client`, `time.sleep`을 새로 넣지 마세요 — 분석 한 번이 100회 넘는 HTTP 요청을 만들고,
    동기 호출은 FastAPI 이벤트 루프를 통째로 멈춥니다.
+   기존 개폐업 동기 I/O 파이프라인은 `asyncio.to_thread()`로 격리해 이벤트 루프를 막지 않습니다.
 
-3. **에이전트는 예외를 밖으로 던지지 않는다.** 실패는 `status="error"`와 `error`로 표현합니다.
-   부분 실패는 `status="partial"` + `warnings`입니다. 한 에이전트가 죽어도 나머지는 계속 돕니다.
+3. **일반 분석 실패는 에이전트 결과로 수집한다.** 외부 API 실패는 `status="error"`와 `error`,
+   부분 실패는 `status="partial"` + `warnings`로 표현해 다른 에이전트를 계속 실행합니다.
+   단, 공통 계약 검증 오류는 잘못된 결과로 숨기지 않고 요청 경계까지 전파해 failed로 저장합니다.
+   저장소 오류도 서비스 계층에서 전파하며 에이전트 오류로 바꾸지 않습니다.
 
 4. **모델 응답을 그대로 믿지 않는다.** 구조는 pydantic으로 검증하고,
    근거(`evidence.path`)는 실제 입력 자료에 있는 필드인지 확인합니다(`decision/agent.py`).

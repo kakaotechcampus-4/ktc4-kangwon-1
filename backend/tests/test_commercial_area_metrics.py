@@ -121,11 +121,12 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(density.unit, "stores_per_km2")
         self.assertEqual(density.store_count, 9)
 
-    def test_unknown_category_from_api_is_added(self):
+    def test_unknown_category_does_not_expand_master(self):
         stores = sample_stores()
         stores.append(store("Z999", "미확인업종", "Z9", "미확인", "신규"))
         rows = build_middle_rows(stores, 500, MASTER)
-        self.assertEqual(len(rows), len(MASTER) + 1)
+        self.assertEqual(len(rows), len(MASTER))
+        self.assertEqual(sum(row.count for row in rows), 10)
 
 
 class DistrictComparisonTests(unittest.TestCase):
@@ -181,12 +182,12 @@ class ClusterAttractionTests(unittest.TestCase):
         self.assertEqual(next(r for r in rows if r.code == "G204").major_cluster_diversity, 1.0)
         self.assertEqual(next(r for r in rows if r.code == "R102").major_cluster_diversity, 0.0)
 
-    def test_unknown_category_joins_its_own_major(self):
+    def test_unknown_category_is_not_assigned_to_known_cluster(self):
         stores = sample_stores()
         stores.append(store("Z999", "미확인업종", "Z9", "미확인", "신규"))
-        row = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "Z999")
-        self.assertEqual(row.major_cluster_count, 1)
-        self.assertEqual(row.major_cluster_diversity, 1.0)
+        row = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "I201")
+        self.assertEqual(row.major_cluster_count, 9)
+        self.assertAlmostEqual(row.major_cluster_diversity, 1.8, places=4)
 
 
 class FranchiseTests(unittest.TestCase):

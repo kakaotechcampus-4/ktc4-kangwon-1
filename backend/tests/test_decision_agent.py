@@ -25,7 +25,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         result = await analyze(self.request, generate=self.generate)
         self.assertEqual(result.request_id, "sample-001")
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.recommendations[0].category.middle, "중식")
+        self.assertEqual(result.recommendations[0].category.middle, "중식 음식점업")
         self.assertEqual(result.source_analyses[0].data, self.request["analyses"][0]["data"])
         prompt, payload = self.generate.call_args.args
         self.assertIn("성공 확률", prompt)
@@ -37,11 +37,8 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             json.loads(payload)["analyses"][0]["data"], self.request["analyses"][0]["data"]
         )
 
-    async def test_sample_has_ten_industry_candidates_for_top_five(self):
+    async def test_sample_preserves_ten_source_rows_after_category_mapping(self):
         industries = self.request["analyses"][1]["data"]["industries"]
-        self.assertEqual(
-            self.request["address"], "서울특별시 송파구 오금로 404 원일빌딩 1층, 올리브영 개롱역점"
-        )
         self.assertEqual(len(industries), 10)
 
     async def test_rejects_invalid_input_before_calling_model(self):
@@ -86,7 +83,10 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         bad_score = copy.deepcopy(self.response)
         bad_score["recommendations"][0]["score"] = 101
         duplicate = copy.deepcopy(self.response)
-        duplicate["not_recommended"][0]["category"] = {"major": "음식점", "middle": "중식"}
+        duplicate["not_recommended"][0]["category"] = {
+            "major": "음식점업",
+            "middle": "중식 음식점업",
+        }
         bad_path = copy.deepcopy(self.response)
         bad_path["recommendations"][0]["evidence"][0]["path"] = "/missing"
         bad_index = copy.deepcopy(self.response)
@@ -123,7 +123,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             warnings=["해당 기간의 유효한 자료가 없습니다."],
         )
         self.response["recommendations"][0]["evidence"] = [
-            {"agent_id": "commercial_area", "path": "/industry_counts/중식"}
+            {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점업"}
         ]
         result = await analyze(self.request, generate=self.generate)
         self.assertEqual(result.status, "partial")

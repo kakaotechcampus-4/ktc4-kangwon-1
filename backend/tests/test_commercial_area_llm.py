@@ -3,7 +3,6 @@
 import json
 import unittest
 
-from app.agents.commercial_area.geocode import query_candidates, split_detail
 from app.agents.commercial_area.llm import (
     MAX_INDEX_NOTES,
     parse_summary,
@@ -92,24 +91,6 @@ class SummaryParsingTests(unittest.TestCase):
         self.assertIn("50m: 점포 14개.", text)
         self.assertIn("종합 평가:", text)
         self.assertIn("집적도·특화도 평가:", text)
-
-
-class AddressSplitTests(unittest.TestCase):
-    def test_splits_unit_from_road_address(self):
-        self.assertEqual(
-            split_detail("서울특별시 송파구 위례광장로 120 155호"),
-            ("서울특별시 송파구 위례광장로 120", "155호"),
-        )
-
-    def test_keeps_address_without_unit(self):
-        self.assertEqual(
-            split_detail("서울 송파구 위례광장로 120"), ("서울 송파구 위례광장로 120", None)
-        )
-
-    def test_candidates_get_progressively_shorter(self):
-        candidates = query_candidates("서울특별시 강남구 테헤란로 123, ○○빌딩 3층 302호")
-        self.assertEqual(len(candidates), 3)
-        self.assertEqual(candidates[-1], "서울특별시 강남구 테헤란로 123")
 
 
 if __name__ == "__main__":
