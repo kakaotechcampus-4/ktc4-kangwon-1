@@ -10,6 +10,50 @@ from openai.types.chat.chat_completion import Choice
 from .config import LLMSettings
 
 
+class LLMHTTPError(RuntimeError):
+    """서버 원문 대신 허용된 진단 항목만 전달합니다."""
+
+    def __init__(self, status: int, body: Any):
+        super().__init__(f"모델 요청이 HTTP {status}로 거절되었습니다.")
+        error = body.get("error", body) if isinstance(body, dict) else {}
+        error = error if isinstance(error, dict) else {}
+        codes = {
+            "unsupported_value",
+            "unsupported_parameter",
+            "invalid_value",
+            "invalid_parameter",
+            "invalid_request_error",
+            "missing_required_parameter",
+            "model_not_found",
+            "invalid_api_key",
+            "insufficient_quota",
+            "rate_limit_exceeded",
+            "context_length_exceeded",
+            "permission_denied",
+        }
+        parameters = {
+            "reasoning_effort",
+            "model",
+            "messages",
+            "tools",
+            "tool_choice",
+            "parallel_tool_calls",
+            "response_format",
+            "max_tokens",
+            "max_completion_tokens",
+            "temperature",
+            "top_p",
+        }
+        code, parameter = error.get("code"), error.get("param")
+        self.diagnostics = {
+            "http_status": status,
+            "provider_code": code if isinstance(code, str) and code in codes else "unknown",
+            "parameter": parameter
+            if isinstance(parameter, str) and parameter in parameters
+            else "unknown",
+        }
+
+
 async def _complete(
     messages: list[Any], settings: LLMSettings, *, tools: list[Any] | None = None
 ) -> ChatCompletionMessage:
@@ -34,7 +78,7 @@ async def _complete(
                 model=settings.model or "", messages=messages, **options
             )
     except openai.APIStatusError as exc:
-        raise RuntimeError(f"모델 요청이 HTTP {exc.status_code}로 거절되었습니다.") from None
+        raise LLMHTTPError(exc.status_code, exc.body) from None
     except (openai.APIError, ValueError, TypeError):
         raise RuntimeError(
             "모델 요청에 실패했습니다. 연결 상태와 모델 설정을 확인해 주세요."

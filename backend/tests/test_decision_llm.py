@@ -215,6 +215,8 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
                 "error": {
                     "message": "FAKE-SECRET-KEY",
                     "type": "invalid_request_error",
+                    "code": "unsupported_value",
+                    "param": "reasoning_effort",
                 }
             }
             return constructor(
@@ -238,6 +240,9 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "HTTP 400") as raised:
                 await generate_decision("시험용 지침", "{}")
         self.assertNotIn("FAKE-SECRET-KEY", str(raised.exception))
+        self.assertEqual(raised.exception.diagnostics["http_status"], 400)
+        self.assertEqual(raised.exception.diagnostics["provider_code"], "unsupported_value")
+        self.assertEqual(raised.exception.diagnostics["parameter"], "reasoning_effort")
 
 
 if __name__ == "__main__":
