@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.geo import to_epsg5181
+
 from .config import PACKAGE_DIR
 from .schemas import TradeArea
 
@@ -34,63 +36,6 @@ REQUIRED_COLUMNS = {"code", "name", "kind", "signgu", "x", "y", "area_m2"}
 # 등가 반지름을 반경의 절반까지만 인정한다. 큰 상권이 멀리서도 걸리는 걸 막는 상한이다.
 MAX_REACH_RATIO = 0.5
 MAX_RESULTS = 8
-
-# ── EPSG:5181 (중부원점 TM) ─────────────────────────────────
-# 서울시 상권 좌표가 이 계다. 변환이 한 방향뿐이라 pyproj(26.5MB) 대신 투영식을 직접 쓴다.
-# 같은 식이 floating_population/geo.py 에도 있다 — 에이전트끼리 import 하지 않기로 해서 두 벌이다.
-_LAT0 = math.radians(38.0)
-_LON0 = math.radians(127.0)
-_FALSE_EASTING = 200000.0
-_FALSE_NORTHING = 500000.0
-
-# GRS80
-_A = 6378137.0
-_F = 1 / 298.257222101
-_E2 = 2 * _F - _F * _F
-_EP2 = _E2 / (1 - _E2)
-
-
-def _meridian_arc(phi: float) -> float:
-    return _A * (
-        (1 - _E2 / 4 - 3 * _E2**2 / 64 - 5 * _E2**3 / 256) * phi
-        - (3 * _E2 / 8 + 3 * _E2**2 / 32 + 45 * _E2**3 / 1024) * math.sin(2 * phi)
-        + (15 * _E2**2 / 256 + 45 * _E2**3 / 1024) * math.sin(4 * phi)
-        - (35 * _E2**3 / 3072) * math.sin(6 * phi)
-    )
-
-
-_M0 = _meridian_arc(_LAT0)
-
-
-def to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
-    """WGS84 위경도 → EPSG:5181 (x, y) 미터."""
-    phi = math.radians(latitude)
-    lam = math.radians(longitude)
-
-    sin_phi = math.sin(phi)
-    cos_phi = math.cos(phi)
-    tan_phi = math.tan(phi)
-
-    n = _A / math.sqrt(1 - _E2 * sin_phi**2)
-    t = tan_phi**2
-    c = _EP2 * cos_phi**2
-    a_ = (lam - _LON0) * cos_phi
-
-    x = _FALSE_EASTING + n * (
-        a_ + (1 - t + c) * a_**3 / 6 + (5 - 18 * t + t**2 + 72 * c - 58 * _EP2) * a_**5 / 120
-    )
-    y = _FALSE_NORTHING + (
-        _meridian_arc(phi)
-        - _M0
-        + n
-        * tan_phi
-        * (
-            a_**2 / 2
-            + (5 - 4 * t + 9 * c + 4 * c**2) * a_**4 / 24
-            + (61 - 58 * t + t**2 + 600 * c - 330 * _EP2) * a_**6 / 720
-        )
-    )
-    return x, y
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,6 +8,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.geo import to_epsg5181
 from app.schemas import Site
 
 from .config import PACKAGE_DIR, Settings
@@ -61,7 +62,7 @@ class BusinessAreaResolverError(RuntimeError):
 def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
     """서울시 공식 상권영역 SHP에서 입력 좌표가 포함된 상권을 찾습니다."""
     settings = settings or Settings.from_env()
-    target_x, target_y = wgs84_to_epsg5181(site.latitude, site.longitude)
+    target_x, target_y = to_epsg5181(site.latitude, site.longitude)
     features = load_shape_features(settings.area_shape_path)
     matches = [
         feature
@@ -397,58 +398,3 @@ def _clean(row: dict[str, str | None], *keys: str) -> str | None:
 
 def _normalize_key(key: str) -> str:
     return key.upper().replace("_", "")
-
-
-def wgs84_to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
-    """WGS84 위경도를 EPSG:5181 평면 좌표로 변환합니다."""
-    lat = math.radians(latitude)
-    lon = math.radians(longitude)
-    lat0 = math.radians(38.0)
-    lon0 = math.radians(127.0)
-    semi_major = 6378137.0
-    flattening = 1 / 298.257222101
-    false_easting = 200000.0
-    false_northing = 500000.0
-    scale = 1.0
-
-    eccentricity_sq = 2 * flattening - flattening * flattening
-    second_eccentricity_sq = eccentricity_sq / (1 - eccentricity_sq)
-
-    def meridian_arc(phi: float) -> float:
-        e2 = eccentricity_sq
-        e4 = e2 * e2
-        e6 = e4 * e2
-        return semi_major * (
-            (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * phi
-            - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * math.sin(2 * phi)
-            + (15 * e4 / 256 + 45 * e6 / 1024) * math.sin(4 * phi)
-            - (35 * e6 / 3072) * math.sin(6 * phi)
-        )
-
-    sin_lat = math.sin(lat)
-    cos_lat = math.cos(lat)
-    tan_lat = math.tan(lat)
-    n = semi_major / math.sqrt(1 - eccentricity_sq * sin_lat * sin_lat)
-    t = tan_lat * tan_lat
-    c = second_eccentricity_sq * cos_lat * cos_lat
-    a = (lon - lon0) * cos_lat
-    m = meridian_arc(lat)
-    m0 = meridian_arc(lat0)
-
-    x = false_easting + scale * n * (
-        a
-        + (1 - t + c) * a**3 / 6
-        + (5 - 18 * t + t**2 + 72 * c - 58 * second_eccentricity_sq) * a**5 / 120
-    )
-    y = false_northing + scale * (
-        m
-        - m0
-        + n
-        * tan_lat
-        * (
-            a**2 / 2
-            + (5 - t + 9 * c + 4 * c**2) * a**4 / 24
-            + (61 - 58 * t + t**2 + 600 * c - 330 * second_eccentricity_sq) * a**6 / 720
-        )
-    )
-    return x, y

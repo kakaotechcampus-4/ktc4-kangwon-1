@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, Mock
 from app.agents.decision import analyze
 from app.agents.floating_population import analyze as analyze_population
 from app.agents.floating_population.config import Settings
-from app.agents.floating_population.geo import to_epsg5181
 from app.agents.floating_population.models import (
     AGE_BANDS,
     DAYS,
@@ -16,6 +15,7 @@ from app.agents.floating_population.models import (
     FlpopRecord,
     TrdarArea,
 )
+from app.geo import to_epsg5181
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.schemas import AnalysisTask, DecisionRequest, Site
 

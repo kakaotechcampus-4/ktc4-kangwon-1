@@ -154,8 +154,9 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             FlpopRecord,
             TrdarArea,
         )
+        from app.geo import to_epsg5181
 
-        x, y = floating.to_epsg5181(self.site.latitude, self.site.longitude)
+        x, y = to_epsg5181(self.site.latitude, self.site.longitude)
         record = FlpopRecord(
             trdar_cd="test",
             stdr_yyqu_cd="20262",
