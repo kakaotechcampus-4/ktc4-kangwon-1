@@ -197,6 +197,8 @@ export default function ReportPage() {
             ? {
                 data: competitorData ?? undefined,
                 unavailable: !competitorData,
+                recommendations: analysisResult.recommendations,
+                notRecommended: analysisResult.not_recommended,
               }
             : undefined
         }

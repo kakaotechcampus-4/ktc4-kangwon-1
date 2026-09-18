@@ -17,6 +17,7 @@ import {
   type CommercialAreaSpecializationRank,
   type RecommendedIndustry,
 } from '@/lib/mockData/report';
+import type { IndustryAssessment } from '@/lib/api/types';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -359,20 +360,61 @@ function DistrictSpecializationBars({ data }: { data: CommercialAreaData }) {
   );
 }
 
+/**
+ * B섹션 카드가 실제로 필요로 하는 최소 정보. 목업(RecommendedIndustry)과
+ * 실제 중재 결과(IndustryAssessment)가 서로 다른 구조라, 카드 쪽은 어느
+ * 소스에서 왔는지 모르게 이 형태로 통일해서 받는다.
+ */
+type CompetitionItem = { key: string; name: string };
+
+function toCompetitionItems(
+  fromApi: IndustryAssessment[] | undefined,
+  fallback: RecommendedIndustry[]
+): CompetitionItem[] {
+  if (fromApi) {
+    return fromApi.map((item, i) => ({
+      key: `${item.category.middle}-${i}`,
+      name: item.category.middle,
+    }));
+  }
+  return fallback.map((item) => ({
+    key: `${item.name}-${item.rank}`,
+    name: item.name,
+  }));
+}
+
+/**
+ * 업종명으로 상권 중분류 항목을 찾는다. 두 체계가 섞여 들어오기 때문에
+ * 두 단계로 시도한다:
+ *   1. 목업 업종명("네일·뷰티" 등)은 이름이 중분류명과 달라
+ *      RECOMMENDED_NAME_TO_MIDDLE_CODE로 code를 거쳐 찾는다.
+ *   2. 실제 중재 결과의 category.middle은 상권 에이전트와 같은 공통 업종
+ *      어휘를 쓰므로 이름으로 바로 매칭된다.
+ * 둘 다 실패하면 undefined — 카드가 "경쟁 데이터 매칭 안 됨"을 보여준다.
+ */
+function findMiddleCategory(
+  name: string,
+  data: CommercialAreaData
+): CommercialAreaMiddleCategory | undefined {
+  const code = RECOMMENDED_NAME_TO_MIDDLE_CODE[name];
+  if (code) {
+    const byCode = data.byMiddleForRecommendations.find((m) => m.code === code);
+    if (byCode) return byCode;
+  }
+  return data.byMiddleForRecommendations.find((m) => m.name === name);
+}
+
 /** B. 추천/비추천 업종별 경쟁 지표 카드 */
 function IndustryCompetitionCard({
   item,
   recommended,
   data,
 }: {
-  item: RecommendedIndustry;
+  item: CompetitionItem;
   recommended: boolean;
   data: CommercialAreaData;
 }) {
-  const code = RECOMMENDED_NAME_TO_MIDDLE_CODE[item.name];
-  const middle: CommercialAreaMiddleCategory | undefined = code
-    ? data.byMiddleForRecommendations.find((m) => m.code === code)
-    : undefined;
+  const middle = findMiddleCategory(item.name, data);
 
   useEffect(() => {
     if (!middle) {
@@ -440,15 +482,15 @@ function IndustryCompetitionCard({
   );
 }
 
-function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
-  // data(상권 에이전트 결과)와 달리 추천/비추천 업종 목록은 여전히
-  // mockReportData에서 가져온다. 실제 중재 결과(DecisionResult.recommendations)를
-  // 여기로 연결하는 건 이번 통합 범위 밖이다 — RECOMMENDED_NAME_TO_MIDDLE_CODE가
-  // mockReportData의 업종명을 기준으로 만들어져 있어, 실제 category.middle
-  // 값과 매핑하려면 이 상수 자체를 다시 설계해야 한다.
-  const recommended = mockReportData.recommended;
-  const notRecommended = mockReportData.notRecommended;
-
+function IndustryCompetitionGrid({
+  data,
+  recommended,
+  notRecommended,
+}: {
+  data: CommercialAreaData;
+  recommended: CompetitionItem[];
+  notRecommended: CompetitionItem[];
+}) {
   return (
     <SectionCard
       title="업종별 경쟁 지표"
@@ -457,7 +499,7 @@ function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
       <div className="ca-industry-grid">
         {recommended.map((item) => (
           <IndustryCompetitionCard
-            key={`rec-${item.rank}`}
+            key={item.key}
             item={item}
             recommended
             data={data}
@@ -465,7 +507,7 @@ function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
         ))}
         {notRecommended.map((item) => (
           <IndustryCompetitionCard
-            key={`not-${item.rank}`}
+            key={item.key}
             item={item}
             recommended={false}
             data={data}
@@ -478,8 +520,12 @@ function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
 
 export default function CompetitorAnalysisSection({
   data = mockReportData.commercialArea as CommercialAreaData,
+  recommendations,
+  notRecommended,
 }: {
   data?: CommercialAreaData;
+  recommendations?: IndustryAssessment[];
+  notRecommended?: IndustryAssessment[];
 }) {
   const visibility = getSectionVisibility(data.status);
 
@@ -509,7 +555,17 @@ export default function CompetitorAnalysisSection({
       <FranchiseDonut data={data} />
       <TopByCountBars data={data} />
       <DistrictSpecializationBars data={data} />
-      <IndustryCompetitionGrid data={data} />
+      <IndustryCompetitionGrid
+        data={data}
+        recommended={toCompetitionItems(
+          recommendations,
+          mockReportData.recommended
+        )}
+        notRecommended={toCompetitionItems(
+          notRecommended,
+          mockReportData.notRecommended
+        )}
+      />
 
       {shouldShowWarnings(data.status) && data.warnings.length > 0 && (
         <ul className="ca-warnings">

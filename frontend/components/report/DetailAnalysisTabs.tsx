@@ -9,6 +9,7 @@ import type {
   CommercialAreaData,
   FloatingPopulationData,
 } from '@/lib/mockData/report';
+import type { IndustryAssessment } from '@/lib/api/types';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -33,6 +34,17 @@ type SectionProps<T> = {
   unavailable?: boolean;
 };
 
+/**
+ * 경쟁업체 탭은 상권 데이터(data) 외에 추천·비추천 업종 목록도 필요하다
+ * — "업종별 경쟁 지표" 카드가 그 업종들을 기준으로 그려지기 때문.
+ * 나머지 두 탭과 같은 { data, unavailable } 구조를 유지하면서 두 필드만
+ * 덧붙인다.
+ */
+type CompetitorSectionProps = SectionProps<CommercialAreaData> & {
+  recommendations?: IndustryAssessment[];
+  notRecommended?: IndustryAssessment[];
+};
+
 // FloatingPopulationSection, CompetitorAnalysisSection, OpenCloseTrendSection
 // 모두 자체적으로 좌우/상하 여백을 갖고 있어 별도 래퍼 없이 그대로 배치한다.
 export default function DetailAnalysisTabs({
@@ -41,7 +53,7 @@ export default function DetailAnalysisTabs({
   openClose,
 }: {
   floatingPopulation?: SectionProps<FloatingPopulationData>;
-  competitor?: SectionProps<CommercialAreaData>;
+  competitor?: CompetitorSectionProps;
   openClose?: SectionProps<BusinessLifecycleData>;
 }) {
   const tabs: TabItem[] = [
@@ -60,7 +72,11 @@ export default function DetailAnalysisTabs({
       content: competitor?.unavailable ? (
         <UnavailableNote message="경쟁업체 분석 데이터를 아직 받아오지 못했습니다." />
       ) : (
-        <CompetitorAnalysisSection data={competitor?.data} />
+        <CompetitorAnalysisSection
+          data={competitor?.data}
+          recommendations={competitor?.recommendations}
+          notRecommended={competitor?.notRecommended}
+        />
       ),
     },
     {
