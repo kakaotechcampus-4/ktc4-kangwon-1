@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import httpx
 
+from app.geo import to_epsg5181
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from . import llm
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
 from .config import Settings
-from .geo import _overlapping_areas, to_epsg5181
+from .geo import _overlapping_areas
 from .llm import SelectBlocks
 from .metrics import _aggregate, _benchmark, _radius_profile, _reliability, _trend
 from .models import period_ko, quarter_days

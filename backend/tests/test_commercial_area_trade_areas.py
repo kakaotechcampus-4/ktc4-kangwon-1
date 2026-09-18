@@ -7,30 +7,10 @@ from app.agents.commercial_area.trade_areas import (
     DATA_PATH,
     build_trade_areas,
     load_trade_areas,
-    to_epsg5181,
 )
 
 SEOUL_CITY_HALL = (37.5665, 126.9780)
 BUSAN_SEOMYEON = (35.1796, 129.0756)
-
-
-class ProjectionTests(unittest.TestCase):
-    def test_matches_the_documented_reference_point(self):
-        # floating_population/geo.py 가 pyproj 로 검증해 문서에 남긴 값.
-        # 투영식이 두 벌이라 어긋나면 여기서 잡힌다.
-        x, y = to_epsg5181(37.5183291, 127.1051123)
-        self.assertAlmostEqual(x, 209292.3, delta=0.5)
-        self.assertAlmostEqual(y, 446543.6, delta=0.5)
-
-    def test_origin_maps_to_false_easting_and_northing(self):
-        x, y = to_epsg5181(38.0, 127.0)
-        self.assertAlmostEqual(x, 200000.0, delta=0.01)
-        self.assertAlmostEqual(y, 500000.0, delta=0.01)
-
-    def test_moving_east_increases_x(self):
-        west, _ = to_epsg5181(37.5, 126.9)
-        east, _ = to_epsg5181(37.5, 127.1)
-        self.assertLess(west, east)
 
 
 @unittest.skipUnless(DATA_PATH.exists(), "seoul_trade_areas.csv 가 없습니다")
