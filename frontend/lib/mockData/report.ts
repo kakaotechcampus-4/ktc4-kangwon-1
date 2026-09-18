@@ -27,24 +27,148 @@ export interface OpenCloseQuarter {
   closed: number;
 }
 
-export type LifecycleConfidence = 'high' | 'medium' | 'low';
+export type AgentStatus = 'ok' | 'partial' | 'no_data' | 'error';
 
 /**
- * 개폐업(business_lifecycle) 에이전트가 업종별로 내려주는 지표.
- * 백엔드 원본은 snake_case + metrics 중첩 구조이고, 이 파일의 다른 목업과
- * 표기를 맞추기 위해 camelCase로 평탄화했다. 실제 API 연동 시 매핑 기준:
- *   storeCount   ← industry_scores[].metrics.avg_store_count
- *   openCount    ← industry_scores[].metrics.annual_open_count
- *   closeCount   ← industry_scores[].metrics.annual_close_count
- *   netChange    ← industry_scores[].metrics.net_change
- *   closeRate    ← industry_scores[].metrics.avg_close_rate
- *   turnoverRate ← industry_scores[].metrics.turnover_rate
- *   score        ← industry_scores[].score  (= lifecycle_score)
- *   confidence   ← industry_scores[].confidence
- * 추천/비추천 구분은 이 에이전트가 내려주지 않으므로, 결정 에이전트 결과인
- * recommended / notRecommended 목록에서 업종명으로 파생한다.
+ * 개폐업(business_lifecycle) 에이전트 원본 스키마.
+ *
+ * 지난 버전은 backend/app/agents/business_lifecycle/business_lifecycle_agent_output.json
+ * (예전 설계 단계 예시 파일)을 기준으로 만들었는데, 실제로 AgentAnalysis.data를
+ * 만드는 코드(feature/mvp1-refact 브랜치의 input_builder.py의
+ * build_agent_input() → formatter.py의 format_for_mediator())를 직접 추적한
+ * 결과 구조가 전혀 다름을 확인했다. 그 예시 파일은 지금도 저장소에 그대로
+ * 남아 있지만(backend/examples/fixtures/business_lifecycle_agent_output.json),
+ * 코드가 실제로 만드는 값과 안 맞는 stale한 문서다 — 아래는 코드를 기준으로
+ * 다시 옮긴 것이다. 필드명은 camelCase로 바꾸지 않고 원본 snake_case를
+ * 그대로 쓴다(commercial_area와 달리, 이 에이전트는 화면에 쓸 문장(evidence)·
+ * 배지 라벨(type)까지 이미 만들어 내려준다).
  */
-export type AgentStatus = 'ok' | 'partial' | 'no_data' | 'error';
+export type BusinessLifecycleConfidence = 'high' | 'medium' | 'low' | 'none';
+
+// input_builder.py의 preprocess 단계(row["data_status"])가 매기는 값 4종.
+// unsupported: 서울시 생활밀접업종에 대응 항목 자체가 없음
+// missing: 대응 항목은 있지만 최근 분기에 관측된 자료가 없음
+// incomplete: 일부 분기·원천업종이 빠져 완전 집계가 안 됨
+// observed: 정상 관측
+export type BusinessLifecycleDataStatus =
+  'observed' | 'unsupported' | 'missing' | 'incomplete';
+
+/**
+ * 점수 계산 업종은 17개 필드가 전부 채워지고, 판단 보류 업종은 이 중
+ * 11개(observed_quarters·recent_year_open_count·recent_year_close_count·
+ * recent_year_net_change·recent_year_net_change_rate·oldest_year_close_rate
+ * 제외)만 온다 — input_builder.py의 build_agent_input()에서 두 그룹의 metrics
+ * 딕셔너리를 서로 다른 키 집합으로 만든다. 그래서 전부 optional + nullable로
+ * 둔다(pandas NaN은 JSON null로 변환된다).
+ */
+export interface BusinessLifecycleMetrics {
+  observed_quarters?: number | null;
+  latest_store_count?: number | null;
+  avg_store_count?: number | null;
+  period_open_count?: number | null;
+  period_close_count?: number | null;
+  period_net_change?: number | null;
+  avg_open_rate?: number | null;
+  avg_close_rate?: number | null;
+  net_change_rate?: number | null;
+  turnover_rate?: number | null;
+  recent_year_open_count?: number | null;
+  recent_year_close_count?: number | null;
+  recent_year_net_change?: number | null;
+  recent_year_close_rate?: number | null;
+  recent_year_net_change_rate?: number | null;
+  oldest_year_close_rate?: number | null;
+  close_rate_trend?: number | null;
+}
+
+/**
+ * 판단 보류 업종에만 있다. formatter.py의 format_unscored_industry()가
+ * input_builder.py가 만든 source_coverage(expected_source_count/
+ * observed_source_rows/expected_source_rows)에 observed_quarters를
+ * 합쳐 넣는다 — 그래서 이 네 필드가 실제로는 한 객체에 같이 들어온다.
+ */
+export interface BusinessLifecycleSourceCoverage {
+  expected_source_count?: number | null;
+  observed_source_rows?: number | null;
+  expected_source_rows?: number | null;
+  observed_quarters?: number | null;
+}
+
+export interface BusinessLifecycleIndustryResult {
+  // input_builder.py: industry_id = str(row["service_id"]) — 소상공인
+  // 상권업종 중분류 공통 코드(예: "I201"). 숫자가 아니라 문자열이다.
+  industry_id: string;
+  industry_name: string;
+  // 판단 보류 업종은 null("판단 보류"). lifecycle_score가 아니라 score다.
+  score: number | null;
+  type: string;
+  confidence: BusinessLifecycleConfidence;
+  data_available: boolean;
+  score_available: boolean;
+  data_status?: BusinessLifecycleDataStatus;
+  data_complete?: boolean;
+  metrics: BusinessLifecycleMetrics;
+  // 점수 계산 업종에는 없다("판단보류 업종만" — formatter.py가 이 필드를
+  // score_available: true인 쪽에는 아예 안 만든다).
+  source_coverage?: BusinessLifecycleSourceCoverage;
+  evidence: string[];
+  warning: string | null;
+}
+
+// formatter.py: coverage = {target_industries, scored_industries,
+// unscored_industries} — available_industries/analyzed_industries 같은
+// 필드는 없다.
+export interface BusinessLifecycleCoverage {
+  target_industries: number;
+  scored_industries: number;
+  unscored_industries: number;
+}
+
+/**
+ * input_builder.py의 scoring.py 가중치(RECENT_CLOSE_RATE_WEIGHT=0.35 ·
+ * NET_CHANGE_WEIGHT=0.25 · TURNOVER_WEIGHT=0.20 · CLOSE_TREND_WEIGHT=0.20)를
+ * 그대로 옮긴 4개 필드다. 예전 버전은 3개(close_rate/net_change_rate/
+ * turnover_stability)로 잘못 알고 있었다 — close_rate_trend(폐업률 변화
+ * 추세)가 실제로는 네 번째 축이고, close_rate 자체가 아니라
+ * recent_year_close_rate(최근 1년 폐업률)를 본다.
+ */
+export interface BusinessLifecycleScoringWeights {
+  recent_year_close_rate: number;
+  net_change_rate: number;
+  turnover_stability: number;
+  close_rate_trend: number;
+}
+
+export interface BusinessLifecycleScoringMethod {
+  description: string;
+  score_type: string;
+  weights: BusinessLifecycleScoringWeights;
+  notes: string[];
+}
+
+/**
+ * 추천/비추천 10개 업종으로 이미 필터링된 결과.
+ * lib/api/adapters/businessLifecycle.ts의 adaptBusinessLifecycle()이
+ * industries(공통 업종 코드 75개) 중 이름이 일치하는 것만 골라 이 형태로
+ * 만든다 — coverage/scoring_method는 필터링 없이 원본 그대로다.
+ *
+ * summary/metadata/taxonomy는 실제 응답에 있지만 화면이 아직 쓰지 않는다
+ * (summary는 요약 카드 첫 줄로 보여주는 정도만 — CoverageSummary 참고).
+ * 내부 구조가 화면 로직에 영향을 주지 않아 굳이 세부 타입을 만들지 않고
+ * 느슨하게 둔다. metadata/taxonomy 필드가 실제로 필요해지면 그때 구체화한다.
+ *
+ * 최상위 "overall"(상권 전체 개업/폐업 합계)은 실제 데이터에 없어서
+ * 삭제했다 — 필요해지면 industries 배열을 순회해 프론트에서 직접
+ * 합산해야 한다(지금은 범위 밖).
+ */
+export interface BusinessLifecycleData {
+  summary?: string;
+  metadata?: Record<string, unknown>;
+  coverage: BusinessLifecycleCoverage;
+  taxonomy?: Record<string, unknown>;
+  scoring_method: BusinessLifecycleScoringMethod;
+  industries: BusinessLifecycleIndustryResult[];
+}
 
 /**
  * 경쟁업체(commercial_area) 에이전트 원본 스키마
@@ -260,19 +384,6 @@ export interface FloatingPopulationData {
   selection: FloatingPopulationSelection;
 }
 
-export interface OpenCloseIndustryIndex {
-  industryCode: string; // 실제 업종코드로 교체 예정(현재는 목업용 placeholder)
-  industryName: string;
-  storeCount: number;
-  openCount: number;
-  closeCount: number;
-  netChange: number;
-  closeRate: number;
-  turnoverRate: number;
-  score: number;
-  confidence: LifecycleConfidence;
-}
-
 export const mockReportData = {
   address: '강원도 춘천시 후평동 234-5',
   floor: '2층',
@@ -401,130 +512,364 @@ export const mockReportData = {
   averageCloseRate: 12.4,
   openCloseSource: '국세청 사업자현황통계 2024',
 
-  // 추천 5 + 비추천 5, 총 10개 업종의 개폐업 지표.
-  // confidence는 백엔드와 동일한 기준(점포수 20 이상 high / 5 이상 medium / 그 외 low)으로 맞췄다.
-  openCloseIndex: [
-    {
-      industryCode: 'NB01',
-      industryName: '네일·뷰티',
-      storeCount: 24.5,
-      openCount: 9,
-      closeCount: 4,
-      netChange: 5,
-      closeRate: 8.2,
-      turnoverRate: 26.5,
-      score: 78.4,
-      confidence: 'high',
+  // 추천 5 업종 중 "무인점포"는 여기서도 의도적으로 뺐다 — commercial_area의
+  // RECOMMENDED_NAME_TO_MIDDLE_CODE와 같은 이유로, 공통 업종 코드 75종에도
+  // "무인점포"에 정확히 대응하는 항목이 없다. 기본 렌더링(props 없이 이
+  // 목업을 쓸 때)에서도 adaptBusinessLifecycle()의 "이름 매칭 실패" 경로가
+  // 실제로 걸리는 걸 보여주려고 남겨뒀다.
+  // "코인세탁실"은 판단 보류(score: null, confidence: 'none',
+  // data_status: 'unsupported') 케이스를 기본 화면에서도 보여주려고
+  // 일부러 넣어뒀다 — 실제 응답도 75개 중 19개가 이 상태다.
+  businessLifecycle: {
+    summary:
+      '네일·뷰티·소형 스튜디오는 개업이 활발하고 최근 폐업률도 낮아 안정적이며, 고깃집·노래방·베이커리는 폐업이 빠르게 늘고 폐업률도 과거보다 상승해 위험 신호가 뚜렷합니다.',
+    coverage: {
+      target_industries: 75,
+      scored_industries: 56,
+      unscored_industries: 19,
     },
-    {
-      industryCode: 'UM01',
-      industryName: '무인점포',
-      storeCount: 18.2,
-      openCount: 11,
-      closeCount: 5,
-      netChange: 6,
-      closeRate: 9.6,
-      turnoverRate: 31.2,
-      score: 74.1,
-      confidence: 'medium',
+    scoring_method: {
+      description:
+        '최근 개폐업 데이터와 폐업률 변화 추세를 기반으로 분석 가능한 업종끼리 상대 비교한 Lifecycle Score',
+      score_type: 'relative',
+      weights: {
+        recent_year_close_rate: 0.35,
+        net_change_rate: 0.25,
+        turnover_stability: 0.2,
+        close_rate_trend: 0.2,
+      },
+      notes: [
+        'lifecycle_score는 미래 생존확률이 아니다.',
+        'lifecycle_score는 분석 가능한 업종끼리 상대 비교한 점수이다.',
+        '최근 1년 폐업률은 낮을수록 긍정적으로 평가한다.',
+        '전체 분석기간 순증감률은 높을수록 긍정적으로 평가한다.',
+        '회전율은 낮을수록 안정적으로 평가한다.',
+        'close_rate_trend가 음수이면 과거보다 최근 폐업률이 낮아진 것이다.',
+        'close_rate_trend가 양수이면 과거보다 최근 폐업률이 높아진 것이다.',
+      ],
     },
-    {
-      industryCode: 'ST01',
-      industryName: '소형 스튜디오',
-      storeCount: 12.8,
-      openCount: 6,
-      closeCount: 4,
-      netChange: 2,
-      closeRate: 11.4,
-      turnoverRate: 24.8,
-      score: 66.7,
-      confidence: 'medium',
-    },
-    {
-      industryCode: 'CL01',
-      industryName: '코인세탁실',
-      storeCount: 8.4,
-      openCount: 4,
-      closeCount: 2,
-      netChange: 2,
-      closeRate: 7.1,
-      turnoverRate: 19.3,
-      score: 71.2,
-      confidence: 'medium',
-    },
-    {
-      industryCode: 'PG01',
-      industryName: '반려동물 미용',
-      storeCount: 6.2,
-      openCount: 3,
-      closeCount: 3,
-      netChange: 0,
-      closeRate: 12.8,
-      turnoverRate: 22.6,
-      score: 58.9,
-      confidence: 'medium',
-    },
-    {
-      industryCode: 'GJ01',
-      industryName: '고깃집',
-      storeCount: 31.6,
-      openCount: 8,
-      closeCount: 13,
-      netChange: -5,
-      closeRate: 19.4,
-      turnoverRate: 38.7,
-      score: 32.5,
-      confidence: 'high',
-    },
-    {
-      industryCode: 'CF01',
-      industryName: '대형 카페',
-      storeCount: 27.3,
-      openCount: 10,
-      closeCount: 12,
-      netChange: -2,
-      closeRate: 17.2,
-      turnoverRate: 41.5,
-      score: 38.8,
-      confidence: 'high',
-    },
-    {
-      industryCode: 'BK01',
-      industryName: '베이커리',
-      storeCount: 15.7,
-      openCount: 5,
-      closeCount: 7,
-      netChange: -2,
-      closeRate: 15.6,
-      turnoverRate: 29.4,
-      score: 44.3,
-      confidence: 'medium',
-    },
-    {
-      industryCode: 'KR01',
-      industryName: '노래방',
-      storeCount: 9.8,
-      openCount: 2,
-      closeCount: 6,
-      netChange: -4,
-      closeRate: 22.7,
-      turnoverRate: 33.1,
-      score: 24.6,
-      confidence: 'medium',
-    },
-    {
-      industryCode: 'GY01',
-      industryName: '헬스장',
-      storeCount: 4.3,
-      openCount: 2,
-      closeCount: 3,
-      netChange: -1,
-      closeRate: 16.9,
-      turnoverRate: 27.8,
-      score: 41.2,
-      confidence: 'low',
-    },
-  ] as OpenCloseIndustryIndex[],
+    industries: [
+      {
+        industry_id: 'S209',
+        industry_name: '네일·뷰티',
+        score: 78.4,
+        type: '성장·안정형',
+        confidence: 'high',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 27,
+          avg_store_count: 25.4,
+          period_open_count: 20,
+          period_close_count: 9,
+          period_net_change: 11,
+          avg_open_rate: 26.2,
+          avg_close_rate: 11.8,
+          net_change_rate: 14.4,
+          turnover_rate: 38.0,
+          recent_year_open_count: 7,
+          recent_year_close_count: 2,
+          recent_year_net_change: 5,
+          recent_year_close_rate: 7.4,
+          recent_year_net_change_rate: 18.5,
+          oldest_year_close_rate: 15.8,
+          close_rate_trend: -8.4,
+        },
+        evidence: [
+          '최근 3년 동안 개업 20건, 폐업 9건으로 순증감은 +11건입니다.',
+          '최근 1년 폐업률은 7.4%로, 3년 전 15.8%보다 낮아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 38.0%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'N102',
+        industry_name: '소형 스튜디오',
+        score: 66.7,
+        type: '성장·안정형',
+        confidence: 'medium',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 10,
+          latest_store_count: 14,
+          avg_store_count: 12.6,
+          period_open_count: 9,
+          period_close_count: 4,
+          period_net_change: 5,
+          avg_open_rate: 23.8,
+          avg_close_rate: 10.6,
+          net_change_rate: 13.2,
+          turnover_rate: 34.4,
+          recent_year_open_count: 4,
+          recent_year_close_count: 1,
+          recent_year_net_change: 3,
+          recent_year_close_rate: 7.9,
+          recent_year_net_change_rate: 23.6,
+          oldest_year_close_rate: 13.2,
+          close_rate_trend: -5.3,
+        },
+        evidence: [
+          '최근 3년 동안 개업 9건, 폐업 4건으로 순증감은 +5건입니다.',
+          '최근 1년 폐업률은 7.9%로, 3년 전 13.2%보다 낮아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 34.4%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'S208',
+        industry_name: '코인세탁실',
+        score: null,
+        type: '판단 보류',
+        confidence: 'none',
+        data_available: false,
+        score_available: false,
+        data_status: 'unsupported',
+        data_complete: false,
+        metrics: {
+          latest_store_count: null,
+          avg_store_count: null,
+          period_open_count: null,
+          period_close_count: null,
+          period_net_change: null,
+          avg_open_rate: null,
+          avg_close_rate: null,
+          recent_year_close_rate: null,
+          net_change_rate: null,
+          turnover_rate: null,
+          close_rate_trend: null,
+        },
+        source_coverage: {
+          expected_source_count: 0,
+          observed_source_rows: 0,
+          expected_source_rows: 0,
+          observed_quarters: 0,
+        },
+        evidence: [],
+        warning: '서울시 생활밀접업종 데이터에 직접 대응 업종 없음',
+      },
+      {
+        industry_id: 'S203',
+        industry_name: '반려동물 미용',
+        score: 58.9,
+        type: '안정 유지형',
+        confidence: 'medium',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 6,
+          avg_store_count: 6.2,
+          period_open_count: 3,
+          period_close_count: 3,
+          period_net_change: 0,
+          avg_open_rate: 16.1,
+          avg_close_rate: 16.1,
+          net_change_rate: 0.0,
+          turnover_rate: 32.2,
+          recent_year_open_count: 1,
+          recent_year_close_count: 1,
+          recent_year_net_change: 0,
+          recent_year_close_rate: 16.7,
+          recent_year_net_change_rate: 0.0,
+          oldest_year_close_rate: 16.7,
+          close_rate_trend: 0.0,
+        },
+        evidence: [
+          '최근 3년 동안 개업 3건, 폐업 3건으로 순증감은 0건입니다.',
+          '최근 1년 폐업률은 16.7%로, 3년 전과 같은 수준입니다.',
+          '개업률과 폐업률을 합한 회전율은 32.2%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'I201',
+        industry_name: '고깃집',
+        score: 32.5,
+        type: '쇠퇴·위험형',
+        confidence: 'high',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 32,
+          avg_store_count: 34.1,
+          period_open_count: 18,
+          period_close_count: 29,
+          period_net_change: -11,
+          avg_open_rate: 17.6,
+          avg_close_rate: 28.4,
+          net_change_rate: -10.8,
+          turnover_rate: 46.0,
+          recent_year_open_count: 4,
+          recent_year_close_count: 9,
+          recent_year_net_change: -5,
+          recent_year_close_rate: 26.4,
+          recent_year_net_change_rate: -14.7,
+          oldest_year_close_rate: 18.0,
+          close_rate_trend: 8.4,
+        },
+        evidence: [
+          '최근 3년 동안 개업 18건, 폐업 29건으로 순증감은 -11건입니다.',
+          '최근 1년 폐업률은 26.4%로, 3년 전 18.0%보다 높아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 46.0%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'I212',
+        industry_name: '대형 카페',
+        score: 38.8,
+        type: '과열·회전형',
+        confidence: 'high',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 27,
+          avg_store_count: 25.0,
+          period_open_count: 22,
+          period_close_count: 25,
+          period_net_change: -3,
+          avg_open_rate: 35.2,
+          avg_close_rate: 40.0,
+          net_change_rate: -4.8,
+          turnover_rate: 75.2,
+          recent_year_open_count: 8,
+          recent_year_close_count: 9,
+          recent_year_net_change: -1,
+          recent_year_close_rate: 33.3,
+          recent_year_net_change_rate: -3.7,
+          oldest_year_close_rate: 25.0,
+          close_rate_trend: 8.3,
+        },
+        evidence: [
+          '최근 3년 동안 개업 22건, 폐업 25건으로 순증감은 -3건입니다.',
+          '최근 1년 폐업률은 33.3%로, 3년 전 25.0%보다 높아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 75.2%로 업종 교체가 빈번합니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'I211',
+        industry_name: '베이커리',
+        score: 44.3,
+        type: '쇠퇴·위험형',
+        confidence: 'medium',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 16,
+          avg_store_count: 17.4,
+          period_open_count: 9,
+          period_close_count: 15,
+          period_net_change: -6,
+          avg_open_rate: 20.7,
+          avg_close_rate: 34.5,
+          net_change_rate: -13.8,
+          turnover_rate: 55.2,
+          recent_year_open_count: 2,
+          recent_year_close_count: 5,
+          recent_year_net_change: -3,
+          recent_year_close_rate: 31.3,
+          recent_year_net_change_rate: -18.8,
+          oldest_year_close_rate: 20.0,
+          close_rate_trend: 11.3,
+        },
+        evidence: [
+          '최근 3년 동안 개업 9건, 폐업 15건으로 순증감은 -6건입니다.',
+          '최근 1년 폐업률은 31.3%로, 3년 전 20.0%보다 높아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 55.2%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'R208',
+        industry_name: '노래방',
+        score: 24.6,
+        type: '쇠퇴·위험형',
+        confidence: 'medium',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 12,
+          latest_store_count: 10,
+          avg_store_count: 12.9,
+          period_open_count: 4,
+          period_close_count: 15,
+          period_net_change: -11,
+          avg_open_rate: 10.3,
+          avg_close_rate: 38.8,
+          net_change_rate: -28.5,
+          turnover_rate: 49.1,
+          recent_year_open_count: 1,
+          recent_year_close_count: 6,
+          recent_year_net_change: -5,
+          recent_year_close_rate: 46.5,
+          recent_year_net_change_rate: -38.8,
+          oldest_year_close_rate: 30.0,
+          close_rate_trend: 16.5,
+        },
+        evidence: [
+          '최근 3년 동안 개업 4건, 폐업 15건으로 순증감은 -11건입니다.',
+          '최근 1년 폐업률은 46.5%로, 3년 전 30.0%보다 높아졌습니다.',
+          '개업률과 폐업률을 합한 회전율은 49.1%입니다.',
+        ],
+        warning: null,
+      },
+      {
+        industry_id: 'R206',
+        industry_name: '헬스장',
+        score: 41.2,
+        type: '쇠퇴·위험형',
+        confidence: 'low',
+        data_available: true,
+        score_available: true,
+        data_status: 'observed',
+        data_complete: true,
+        metrics: {
+          observed_quarters: 9,
+          latest_store_count: 4,
+          avg_store_count: 4.6,
+          period_open_count: 5,
+          period_close_count: 6,
+          period_net_change: -1,
+          avg_open_rate: 39.3,
+          avg_close_rate: 47.2,
+          net_change_rate: -7.9,
+          turnover_rate: 86.5,
+          recent_year_open_count: 2,
+          recent_year_close_count: 3,
+          recent_year_net_change: -1,
+          recent_year_close_rate: 65.2,
+          recent_year_net_change_rate: -21.7,
+          oldest_year_close_rate: 43.5,
+          close_rate_trend: 21.7,
+        },
+        evidence: [
+          '최근 9개 분기 동안 개업 5건, 폐업 6건으로 순증감은 -1건입니다.',
+          '최근 1년 폐업률은 65.2%로, 과거 43.5%보다 높아졌습니다.',
+        ],
+        warning: '점포 수가 적어 분기별 개폐업 수치의 변동성이 클 수 있습니다.',
+      },
+    ],
+  } as BusinessLifecycleData,
 
   // status를 'partial'로 둔 건 실제 백엔드 샘플(backend/examples/commercial_area/response.json)에서도
   // status가 'ok'인데 top-level warnings에 프랜차이즈 판정 caveat가 함께 내려오는 걸 확인했기 때문에,

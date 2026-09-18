@@ -441,6 +441,11 @@ function IndustryCompetitionCard({
 }
 
 function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
+  // data(상권 에이전트 결과)와 달리 추천/비추천 업종 목록은 여전히
+  // mockReportData에서 가져온다. 실제 중재 결과(DecisionResult.recommendations)를
+  // 여기로 연결하는 건 이번 통합 범위 밖이다 — RECOMMENDED_NAME_TO_MIDDLE_CODE가
+  // mockReportData의 업종명을 기준으로 만들어져 있어, 실제 category.middle
+  // 값과 매핑하려면 이 상수 자체를 다시 설계해야 한다.
   const recommended = mockReportData.recommended;
   const notRecommended = mockReportData.notRecommended;
 
@@ -471,8 +476,11 @@ function IndustryCompetitionGrid({ data }: { data: CommercialAreaData }) {
   );
 }
 
-export default function CompetitorAnalysisSection() {
-  const data = mockReportData.commercialArea as CommercialAreaData;
+export default function CompetitorAnalysisSection({
+  data = mockReportData.commercialArea as CommercialAreaData,
+}: {
+  data?: CommercialAreaData;
+}) {
   const visibility = getSectionVisibility(data.status);
 
   if (visibility === 'hidden') {
