@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from app.agents.business_lifecycle.agent import (
     AGENT_ID,
-    BusinessLifecycleAgentError,
     analyze,
 )
 from app.agents.business_lifecycle.area_resolver import (
@@ -18,6 +17,7 @@ from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaResolverError,
 )
 from app.agents.business_lifecycle.config import Settings
+from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
@@ -109,6 +109,24 @@ def fake_pipeline(
 
 
 class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bundled_area_reaches_pipeline_without_external_calls(self):
+        site = GARAK_SITE.model_copy(
+            update={
+                "latitude": 37.4975927810188,
+                "longitude": 127.135121781578,
+            }
+        )
+        with patch("socket.socket.connect", side_effect=AssertionError("외부 호출 금지")):
+            result = await analyze(
+                AnalysisTask(request_id="bundled-area", site=site),
+                settings=Settings(base_quarter_override="20244"),
+                run_pipeline=fake_pipeline,
+            )
+        self.assertIsNone(result.error)
+        self.assertEqual(result.data["metadata"]["area_code"], "3120240")
+        self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
+        self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "official_polygon")
+
     async def test_analyze_preserves_request_id_and_validates_agent_analysis(self):
         result = await analyze(
             task(),

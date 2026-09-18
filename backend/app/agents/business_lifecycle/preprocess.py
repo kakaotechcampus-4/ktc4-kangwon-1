@@ -3,16 +3,22 @@ from typing import Any
 
 import pandas as pd
 
-from app.industries.catalog import INDUSTRY_TO_SEOUL
+from app.industries.catalog import (
+    EXCLUDED_SEOUL_INDUSTRIES,
+    INDUSTRY_TO_SEOUL,
+)
+from app.industries.catalog import (
+    INDUSTRIES as SERVICE_INDUSTRIES,
+)
+from app.industries.catalog import (
+    INDUSTRIES_WITHOUT_SEOUL as UNSUPPORTED_SERVICE_INDUSTRIES,
+)
+from app.industries.catalog import (
+    SEOUL_TO_INDUSTRY as SEOUL_TO_SERVICE,
+)
 
 from .client import fetch_recent_store_data, get_recent_quarters
 from .config import Settings
-from .mapping import (
-    EXCLUDED_SEOUL_INDUSTRIES,
-    SEOUL_TO_SERVICE,
-    SERVICE_INDUSTRIES,
-    UNSUPPORTED_SERVICE_INDUSTRIES,
-)
 
 
 def calculate_rate(numerator: float, denominator: float) -> float | None:

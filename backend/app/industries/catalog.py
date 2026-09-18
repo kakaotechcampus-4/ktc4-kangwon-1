@@ -3,7 +3,8 @@
 원본은 `app/industries/data/*.csv` 이고, 이 파일은
 `python scripts/build_industry_catalog.py` 로 다시 만듭니다.
 
-개폐업 `mapping.py` 와 같은 모양으로 씁니다 — `INDUSTRIES` 가 `SERVICE_INDUSTRIES` 자리,
+개폐업에서 직접 재사용하는 공통 카탈로그입니다. `INDUSTRIES` 가 기존
+`SERVICE_INDUSTRIES` 자리,
 `SEOUL_TO_INDUSTRY` 가 `SEOUL_TO_SERVICE` 자리입니다.
 """
 

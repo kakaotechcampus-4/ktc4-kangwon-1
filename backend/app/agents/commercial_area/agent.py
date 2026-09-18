@@ -11,6 +11,7 @@ from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 from .client import SbizApiError, StoreClient
 from .config import Settings
 from .franchise import build_franchise, load_brands
+from .industries import load_middle_master
 from .llm import render_summary_text, summarize
 from .metrics import (
     build_district_specialization,
@@ -31,7 +32,6 @@ from .sources import (
     franchise_base_year,
 )
 from .trade_areas import build_trade_areas
-from .upjong import load_middle_master
 
 AGENT_ID: AgentId = "commercial_area"
 DISTRICT_VOTE_SIZE = 10

@@ -10,8 +10,8 @@ from pathlib import Path
 from app.agents.commercial_area import analyze as commercial_area_analyze
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.industries import write_master
 from app.agents.commercial_area.schemas import MiddleCode, Store
-from app.agents.commercial_area.upjong import write_master
 from app.mocks import mock_agents, mock_generate, mock_site
 from app.orchestrator import run_agents, run_analysis
 from app.schemas import AnalysisTask, DecisionResult

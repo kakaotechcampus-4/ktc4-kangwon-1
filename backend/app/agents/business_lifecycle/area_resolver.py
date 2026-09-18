@@ -366,19 +366,19 @@ def _feature_to_business_area(
 ) -> BusinessArea | None:
     row = feature.attributes
     area_code = _clean(row, "TRDAR_CD", "TRDAR_CD_1", "상권_코드")
-    area_name = _clean(row, "TRDAR_CD_NM", "TRDAR_NM", "상권_코드_명")
+    area_name = _clean(row, "TRDAR_CD_NM", "TRDAR_CD_N", "TRDAR_NM", "상권_코드_명")
     if not area_code or not area_name:
         return None
 
     return BusinessArea(
         area_code=area_code,
         area_name=area_name,
-        area_type_code=_clean(row, "TRDAR_SE_C", "TRDAR_SE_CD", "상권_구분_코드"),
-        area_type_name=_clean(row, "TRDAR_SE_1", "TRDAR_SE_CD_NM", "상권_구분_코드_명"),
+        area_type_code=_clean(row, "TRDAR_SE_CD", "TRDAR_SE_C", "상권_구분_코드"),
+        area_type_name=_clean(row, "TRDAR_SE_CD_NM", "TRDAR_SE_1", "상권_구분_코드_명"),
         district_code=_clean(row, "SIGNGU_CD", "시군구_코드"),
-        district_name=_clean(row, "SIGNGU_CD_", "SIGNGU_CD_NM", "시군구_코드_명"),
+        district_name=_clean(row, "SIGNGU_CD_NM", "SIGNGU_CD_", "시군구_코드_명"),
         dong_code=_clean(row, "ADSTRD_CD", "행정동_코드"),
-        dong_name=_clean(row, "ADSTRD_CD_", "ADSTRD_CD_NM", "행정동_코드_명"),
+        dong_name=_clean(row, "ADSTRD_CD_NM", "ADSTRD_CD_", "행정동_코드_명"),
         x=target_x,
         y=target_y,
     )

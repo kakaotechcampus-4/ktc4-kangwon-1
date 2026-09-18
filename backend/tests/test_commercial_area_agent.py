@@ -12,9 +12,9 @@ import httpx
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.industries import write_master
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
-from app.agents.commercial_area.upjong import write_master
 from app.agents.orchestration.workflow import run_agents
 from app.schemas import AgentAnalysis, AnalysisTask
 

@@ -17,12 +17,12 @@ from app.agents.business_lifecycle.formatter import (
     BusinessLifecycleFormatterError,
     format_for_mediator,
 )
-from app.agents.business_lifecycle.make_agent_input import build_agent_input
+from app.agents.business_lifecycle.input_builder import build_agent_input
 from app.agents.business_lifecycle.preprocess import preprocess_business_lifecycle_data
 from app.agents.business_lifecycle.scoring import calculate_lifecycle_scores
 from app.agents.commercial_area.agent import analyze
 from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.upjong import load_middle_master, write_master
+from app.agents.commercial_area.industries import load_middle_master, write_master
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AnalysisTask
@@ -262,7 +262,7 @@ class CommercialMasterTests(unittest.IsolatedAsyncioTestCase):
             path = Path(root) / "master.csv"
             write_master(path, MASTER)
             with (
-                patch("app.agents.commercial_area.upjong.MASTER_PATH", path),
+                patch("app.agents.commercial_area.industries.MASTER_PATH", path),
                 self.assertRaises(ValueError),
             ):
                 load_middle_master(Settings(upjong_master_path=path))

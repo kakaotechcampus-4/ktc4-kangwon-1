@@ -50,9 +50,9 @@ analysis = await analyze(
 ```
 AnalysisTask
   └ 위경도 → EPSG:5181            geo.py       서울시 상권 좌표계와 맞춘다
-  └ 반경과 겹치는 상권 선택        agent.py     상권영역 API, 면적 등가원
+  └ 반경과 겹치는 상권 선택        geo.py       상권영역 API, 면적 등가원
   └ 길단위인구 조회                client.py    최신 분기 자동 탐침
-  └ 합산·분포 계산                 agent.py
+  └ 합산·분포 계산                 metrics.py
   └ 유형 판정                      classify.py  결정론적 규칙(LLM 아님)
   └ 서울 평균 대비 지표            baseline.py  실측 상수
 AgentAnalysis
@@ -68,7 +68,8 @@ AgentAnalysis
 | `models.py` | API 응답 한 행 → 파이썬 객체. 데이터셋 개편 시 여기만 고친다 |
 | `classify.py` | 유형 판정 규칙과 임계치 |
 | `baseline.py` | 서울 전체 상권 기준선(실측 상수) |
-| `geo.py` | WGS84 → EPSG:5181 투영 (pyproj 없이 직접 구현) |
+| `metrics.py` | 합산·기준선 비교·추세·반경별 인구·신뢰도 계산 |
+| `geo.py` | WGS84 → EPSG:5181 투영과 상권 겹침 판정 (pyproj 없이 직접 구현) |
 | `schemas.py` | `data` 본문의 자료 구조 |
 | `llm.py` · `prompt.md` | 넘길 블록 선별 (숫자는 만들지 않는다) |
 

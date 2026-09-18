@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.agents.business_lifecycle.agent import BusinessLifecycleAgentError, validate_llm_result
 from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaResolverError,
     _read_polygon_record,
@@ -19,11 +18,12 @@ from app.agents.business_lifecycle.area_resolver import (
     read_dbf,
     read_polygon_shapes,
 )
+from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError, validate_llm_result
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.agents.commercial_area.metrics import build_radius_slices
 from app.agents.commercial_area.schemas import MiddleCode, Store
-from app.agents.floating_population.agent import _trend
+from app.agents.floating_population.metrics import _trend
 from app.agents.floating_population.models import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
 
 

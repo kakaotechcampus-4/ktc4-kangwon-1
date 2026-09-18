@@ -91,7 +91,7 @@ class CallerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone((await summarize({}, Settings()))[0])
 
     async def test_lifecycle_worker_bridge_preserves_calculated_score(self):
-        agent = importlib.import_module("app.agents.business_lifecycle.agent")
+        lifecycle_llm = importlib.import_module("app.agents.business_lifecycle.llm")
         source = {
             "scope": {"period": {"quarter_count": 4}},
             "scoring_method": {},
@@ -106,12 +106,12 @@ class CallerTests(unittest.IsolatedAsyncioTestCase):
         }
         payload = {"industry_scores": [dict(source["industries"][0], lifecycle_score=999)]}
         with patch("app.llm.client.complete_json", new=AsyncMock(return_value=payload)) as call:
-            result = await asyncio.to_thread(agent.run_llm_analysis, source, self.settings)
+            result = await asyncio.to_thread(lifecycle_llm.run_llm_analysis, source, self.settings)
         self.assertEqual(result["industry_scores"][0]["lifecycle_score"], 55)
         self.assertIs(call.call_args.args[2], self.settings)
         self.assertEqual(json.loads(call.call_args.args[1])["industries"][0]["lifecycle_score"], 55)
         with self.assertRaisesRegex(RuntimeError, "이벤트 루프"):
-            agent.run_llm_analysis(source, self.settings)
+            lifecycle_llm.run_llm_analysis(source, self.settings)
 
     async def test_mapping_examples_share_transport_and_keep_matching_policy(self):
         from examples import match_upjong, match_upjong_by_small

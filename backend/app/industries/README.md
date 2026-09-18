@@ -23,9 +23,9 @@ lookup.from_legacy70(33)  # 개폐업 70업종 ID → 우리 업종 (여럿일 �
 lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Category 에 그대로 넣는다
 ```
 
-표 자체가 필요하면 `catalog.py`를 직접 읽는다. 개폐업 `mapping.py`와 이름을 맞춰 두었다.
+표 자체가 필요하면 `catalog.py`를 직접 읽는다. 개폐업 에이전트도 이 파일을 직접 사용한다.
 
-| `mapping.py` | 여기 |
+| 기존 개폐업 이름 | 여기 |
 | --- | --- |
 | `SERVICE_INDUSTRIES` (75, 공통 상수 별칭) | `INDUSTRIES` (75) |
 | `SEOUL_TO_SERVICE` | `SEOUL_TO_INDUSTRY` |

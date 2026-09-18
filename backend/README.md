@@ -21,6 +21,13 @@ app/
    └─ commercial_area/      상권·경쟁 분석 (구현됨)
 ```
 
+## 에이전트 파일 역할
+
+- 공통: 세 분석 에이전트의 `agent.py`는 공개 `analyze`와 실행 흐름을 유지합니다. `decision/`과 `orchestration/` 구조는 바꾸지 않았습니다.
+- `floating_population`: `metrics.py`는 집계·기준선·추세·반경·신뢰도 계산, `geo.py`는 좌표와 상권 겹침 판정, `llm.py`는 자료 선별과 fallback을 담당합니다.
+- `business_lifecycle`: `input_builder.py`가 모델 입력을 조립하고, `preprocess.py`·`scoring.py`·`formatter.py`가 전처리·점수·출력 변환을 나눕니다. `llm.py`는 배치 호출과 결과 검증, `prompt.md`는 시스템 프롬프트입니다.
+- `commercial_area`: `industries.py`가 업종 마스터를 읽고 씁니다.
+
 ## 흐름
 
 ```
@@ -183,7 +190,7 @@ completed를 보존하고 취소만 전달합니다. INSERT·짧은 저장 작�
 | `COMMERCIAL_AREA_API_KEY` | 소상공인 상가정보 | 상권 분석 `status: error` |
 | `FLOATING_POPULATION_API_KEY` | 서울시 유동인구 | 유동인구 분석 `status: error` |
 | `BUSINESS_LIFECYCLE_API_KEY` | 서울시 개폐업 | 개폐업 분석 `status: error` |
-| `BUSINESS_LIFECYCLE_AREA_SHP_PATH` | 서울시 상권영역 SHP 경로 | 개폐업 상권 판별 설정 오류 |
+| `BUSINESS_LIFECYCLE_AREA_SHP_PATH` | 기본 포함 자료 대신 사용할 서울시 상권영역 SHP 경로 | 패키지에 포함된 기본 자료 사용 |
 | `FRANCHISE_API_KEY` | 공정위 브랜드 목록 | 프랜차이즈 지표 생략 + `partial` |
 | `GEOCODING_API_KEY` | 카카오 REST 키 (주소→좌표) | 주소 설정 오류 |
 | `ELICE_API_KEY` / `ELICE_BASE_URL` / `ELICE_MODEL` | 모델 호출 | 요약·중재 실패 |
@@ -195,7 +202,7 @@ completed를 보존하고 취소만 전달합니다. INSERT·짧은 저장 작�
 ## 알려진 한계
 
 - 서울시 업종 연결 99건 중 53건은 모델 판정이며 아직 사람 검수가 끝나지 않았습니다.
-- 개폐업 상권영역 SHP는 저장소와 wheel에 포함되지 않는 외부 배포 자원입니다. `BUSINESS_LIFECYCLE_AREA_SHP_PATH`로 제공해야 합니다.
+- 개폐업 상권영역 SHP 구성 파일은 패키지에 포함됩니다. 다른 자료를 쓸 때만 `BUSINESS_LIFECYCLE_AREA_SHP_PATH`로 경로를 재정의합니다.
 - 카카오 주소 검색은 명확한 단일 후보만 사용합니다. 후보가 없거나 여러 주소로 해석되면 자동 우회하지 않고 400으로 거절합니다.
 - asyncio 취소는 이미 실행 중인 동기 스레드를 강제 종료하지 못합니다. 취소된 결과는 성공 저장하지 않지만 개폐업 작업 스레드는 끝까지 돌 수 있습니다.
 
