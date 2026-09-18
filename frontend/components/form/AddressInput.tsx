@@ -1,14 +1,44 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
+import { ApiError, postAnalysis } from '@/lib/api';
 
 export default function AddressInput() {
+  const router = useRouter();
   const [roadAddress, setRoadAddress] = useState('');
   const [floorUnit, setFloorUnit] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!roadAddress.trim()) {
+      setError('도로명 주소를 입력해 주세요.');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const address = floorUnit.trim()
+        ? `${roadAddress.trim()} ${floorUnit.trim()}`
+        : roadAddress.trim();
+      const result = await postAnalysis(address);
+      sessionStorage.setItem('chaeum:lastAnalysis', JSON.stringify(result));
+      router.push('/report');
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : '분석 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <Card
@@ -55,12 +85,19 @@ export default function AddressInput() {
         </div>
       </div>
 
+      {error && (
+        <p className="text-sm" style={{ color: colors.status.notRecommend }}>
+          {error}
+        </p>
+      )}
+
       <div className="flex w-full justify-end gap-3 pt-2">
         <Button
           type="button"
           variant="outline"
           className="text-gray-500"
           style={{ padding: '14px 24px' }}
+          disabled={isSubmitting}
         >
           임시 저장
         </Button>
@@ -68,8 +105,10 @@ export default function AddressInput() {
           type="button"
           variant="primary"
           style={{ padding: '14px 24px' }}
+          onClick={handleSubmit}
+          disabled={isSubmitting}
         >
-          다음 · AI 판독 결과 확인
+          {isSubmitting ? '분석 중...' : '다음 · AI 판독 결과 확인'}
         </Button>
       </div>
     </Card>

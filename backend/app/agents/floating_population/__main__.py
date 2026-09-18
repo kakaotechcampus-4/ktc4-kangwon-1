@@ -12,6 +12,7 @@ import asyncio
 import sys
 import uuid
 
+from app.config import load_environment
 from app.schemas import AnalysisTask, Site
 
 from .agent import analyze
@@ -24,6 +25,7 @@ USAGE = (
 
 
 def main() -> int:
+    load_environment()
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")

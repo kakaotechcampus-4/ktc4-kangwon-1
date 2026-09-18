@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from openai.types.chat import ChatCompletionMessage
+
 from app.schemas import AgentAnalysis, AgentId, AnalysisTask, Scope, Site
 
 MOCK_ADDRESS = "서울특별시 송파구 위례광장로 120 155호"
@@ -31,6 +33,27 @@ def mock_site(address: str | None = None) -> Site:
         detail_address="155호",
         latitude=37.4748,
         longitude=127.1416,
+    )
+
+
+async def mock_resolve(address: str) -> Site:
+    return mock_site(address)
+
+
+async def mock_action(messages: list[Any], definitions: list[Any]) -> ChatCompletionMessage:
+    step = sum(message.get("role") == "tool" for message in messages)
+    name = ("prepare_address", "run_analyses", "make_decision")[step]
+    return ChatCompletionMessage.model_validate(
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": f"call-{name}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": "{}"},
+                }
+            ],
+        }
     )
 
 
@@ -66,7 +89,7 @@ async def _business_lifecycle(task: AnalysisTask) -> AgentAnalysis:
             "description": "목업 개폐업 자료입니다.",
             "industries": [
                 {"middle": "한식 음식점업", "open_count": 12, "close_count": 9},
-                {"middle": "커피·음료업", "open_count": 18, "close_count": 16},
+                {"middle": "비알코올 음료점업", "open_count": 18, "close_count": 16},
             ],
         },
     )
@@ -81,7 +104,7 @@ async def _commercial_area(task: AnalysisTask) -> AgentAnalysis:
             "store_total": 1241,
             "by_middle": [
                 {"code": "I201", "name": "한식 음식점업", "count": 96, "lq": 1.24},
-                {"code": "I212", "name": "커피·음료업", "count": 71, "lq": 2.10},
+                {"code": "I212", "name": "비알코올 음료점업", "count": 71, "lq": 2.10},
             ],
         },
     )
@@ -115,7 +138,7 @@ def mock_generate(system_prompt: str, input_json: str) -> dict[str, Any]:
         ],
         "not_recommended": [
             {
-                "category": {"major": "음식점업", "middle": "커피·음료업"},
+                "category": {"major": "음식점업", "middle": "비알코올 음료점업"},
                 "score": 28,
                 "reasons": ["주변 대비 2.1배로 이미 몰려 있고 폐업도 16건입니다."],
                 "evidence": [

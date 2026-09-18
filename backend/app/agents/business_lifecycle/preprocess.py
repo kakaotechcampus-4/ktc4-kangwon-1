@@ -1,380 +1,196 @@
-from pathlib import Path
+import math
+from typing import Any
 
 import pandas as pd
-from mapping import (
+
+from app.industries.catalog import (
     EXCLUDED_SEOUL_INDUSTRIES,
-    SEOUL_TO_SERVICE,
-    SERVICE_INDUSTRIES,
-    UNSUPPORTED_SERVICE_INDUSTRIES,
+    INDUSTRY_TO_SEOUL,
+)
+from app.industries.catalog import (
+    INDUSTRIES as SERVICE_INDUSTRIES,
+)
+from app.industries.catalog import (
+    INDUSTRIES_WITHOUT_SEOUL as UNSUPPORTED_SERVICE_INDUSTRIES,
+)
+from app.industries.catalog import (
+    SEOUL_TO_INDUSTRY as SEOUL_TO_SERVICE,
 )
 
-# ============================================================
-# 기본 설정
-# ============================================================
+from .client import fetch_recent_store_data, get_recent_quarters
+from .config import Settings
 
-BASE_DIR = Path(__file__).resolve().parent
 
-INPUT_FILE = BASE_DIR / "서울시 상권분석서비스(점포-상권)_2025년.csv"
-
-RAW_OUTPUT_FILE = BASE_DIR / "개롱역_2025Q2_원본추출.csv"
-MAPPED_OUTPUT_FILE = BASE_DIR / "개롱역_2025Q2_70업종_매핑결과.csv"
-
-TARGET_AREA_CODE = 3120240
-TARGET_AREA_NAME = "개롱역"
-TARGET_QUARTER = 20252
-
-
-# ============================================================
-# 1. 원본 CSV 읽기
-# ============================================================
-
-df = pd.read_csv(
-    INPUT_FILE,
-    encoding="cp949",
-    dtype={"svc_induty_cd": str},
-)
-
-print("전체 데이터 행 수:", len(df))
-
-
-# ============================================================
-# 2. 개롱역 + 2025년 2분기 추출
-# ============================================================
-
-target_df = df[
-    (df["trdar_cd"] == TARGET_AREA_CODE)
-    & (df["stdr_yyqu_cd"] == TARGET_QUARTER)
-].copy()
-
-
-print()
-print("===== 원본 추출 결과 =====")
-print("상권:", TARGET_AREA_NAME)
-print("상권 코드:", TARGET_AREA_CODE)
-print("기준 분기:", TARGET_QUARTER)
-print("원본 업종 행 수:", len(target_df))
-print("고유 서울시 업종 수:", target_df["svc_induty_cd"].nunique())
-
-
-# ============================================================
-# 3. 필요한 컬럼만 선택
-# ============================================================
-
-target_df = target_df[
-    [
-        "stdr_yyqu_cd",
-        "trdar_cd",
-        "trdar_cd_nm",
-        "svc_induty_cd",
-        "svc_induty_cd_nm",
-        "stor_co",
-        "similr_induty_stor_co",
-        "opbiz_rt",
-        "opbiz_stor_co",
-        "clsbiz_rt",
-        "clsbiz_stor_co",
-        "frc_stor_co",
-    ]
-].copy()
-
-
-# 원본 추출 결과 저장
-target_df.to_csv(
-    RAW_OUTPUT_FILE,
-    index=False,
-    encoding="utf-8-sig",
-)
-
-
-# ============================================================
-# 4. 서울시 업종 → 우리 서비스 업종 매핑
-# ============================================================
-
-target_df["service_id"] = target_df["svc_induty_cd"].map(
-    SEOUL_TO_SERVICE
-)
-
-target_df["service_name"] = target_df["service_id"].map(
-    SERVICE_INDUSTRIES
-)
-
-
-# ============================================================
-# 5. 매핑 상태 확인
-# ============================================================
-
-mapped_df = target_df[
-    target_df["service_id"].notna()
-].copy()
-
-
-excluded_df = target_df[
-    target_df["svc_induty_cd"].isin(
-        EXCLUDED_SEOUL_INDUSTRIES.keys()
-    )
-].copy()
-
-
-unknown_df = target_df[
-    target_df["service_id"].isna()
-    & ~target_df["svc_induty_cd"].isin(
-        EXCLUDED_SEOUL_INDUSTRIES.keys()
-    )
-].copy()
-
-
-print()
-print("===== 매핑 확인 =====")
-print("매핑된 서울시 원본 행:", len(mapped_df))
-print("의도적으로 제외된 행:", len(excluded_df))
-print("매핑되지 않은 미확인 행:", len(unknown_df))
-
-
-if len(excluded_df) > 0:
-    print()
-    print("[의도적으로 제외된 서울시 업종]")
-
-    for _, row in excluded_df.iterrows():
-        print(
-            row["svc_induty_cd"],
-            row["svc_induty_cd_nm"],
-        )
-
-
-if len(unknown_df) > 0:
-    print()
-    print("[주의: mapping.py에 없는 서울시 업종]")
-
-    for _, row in unknown_df.iterrows():
-        print(
-            row["svc_induty_cd"],
-            row["svc_induty_cd_nm"],
-        )
-
-
-# ============================================================
-# 6. 같은 서비스 업종끼리 합산
-# ============================================================
-
-aggregated_df = (
-    mapped_df
-    .groupby(
-        ["service_id", "service_name"],
-        as_index=False
-    )
-    .agg(
-        # 전체 점포수
-        store_count=("similr_induty_stor_co", "sum"),
-
-        # 2025 Q2 개업 / 폐업 수
-        open_count=("opbiz_stor_co", "sum"),
-        close_count=("clsbiz_stor_co", "sum"),
-
-        # 몇 개의 서울시 업종이 합쳐졌는지
-        source_industry_count=("svc_induty_cd", "nunique"),
-
-        # 실제 합쳐진 원업종
-        source_industries=(
-            "svc_induty_cd_nm",
-            lambda x: " | ".join(sorted(set(x)))
-        ),
-    )
-)
-
-
-aggregated_df["service_id"] = (
-    aggregated_df["service_id"].astype(int)
-)
-
-
-# ============================================================
-# 7. 통합 후 개폐업 지표 다시 계산
-#
-# 서울시 원본의 개업률 / 폐업률을 평균하지 않고
-# 통합된 점포수와 개폐업수로 새로 계산
-# ============================================================
-
-aggregated_df["open_rate"] = (
-    aggregated_df["open_count"]
-    / aggregated_df["store_count"]
-    * 100
-)
-
-aggregated_df["close_rate"] = (
-    aggregated_df["close_count"]
-    / aggregated_df["store_count"]
-    * 100
-)
-
-
-aggregated_df["net_change"] = (
-    aggregated_df["open_count"]
-    - aggregated_df["close_count"]
-)
-
-
-aggregated_df["net_change_rate"] = (
-    aggregated_df["net_change"]
-    / aggregated_df["store_count"]
-    * 100
-)
-
-
-aggregated_df["turnover_rate"] = (
-    aggregated_df["open_rate"]
-    + aggregated_df["close_rate"]
-)
-
-
-rate_columns = [
-    "open_rate",
-    "close_rate",
-    "net_change_rate",
-    "turnover_rate",
-]
-
-aggregated_df[rate_columns] = (
-    aggregated_df[rate_columns].round(2)
-)
-
-
-# ============================================================
-# 8. 우리 서비스 70개 Master 생성
-# ============================================================
-
-master_df = pd.DataFrame(
-    [
-        {
-            "service_id": service_id,
-            "service_name": service_name,
-        }
-        for service_id, service_name
-        in SERVICE_INDUSTRIES.items()
-    ]
-)
-
-
-# ============================================================
-# 9. 실제 데이터 LEFT JOIN
-# ============================================================
-
-final_df = master_df.merge(
-    aggregated_df,
-    on=["service_id", "service_name"],
-    how="left",
-)
-
-
-# ============================================================
-# 10. 데이터 존재 여부
-# ============================================================
-
-final_df["data_available"] = (
-    final_df["store_count"].notna()
-)
-
-
-# ============================================================
-# 11. 누락 이유
-# ============================================================
-
-def get_missing_reason(row):
-
-    if row["data_available"]:
+def calculate_rate(numerator: float, denominator: float) -> float | None:
+    """결측 분자와 분모 0은 관측된 비율 0과 구분합니다."""
+    if pd.isna(numerator) or pd.isna(denominator) or denominator <= 0:
         return None
-
-    service_id = row["service_id"]
-
-    if service_id in UNSUPPORTED_SERVICE_INDUSTRIES:
-        return "서울시 생활밀접업종 데이터에 직접 대응 업종 없음"
-
-    return "개롱역 2025Q2에 대응 서울시 업종 데이터 없음"
+    return round(numerator / denominator * 100, 2)
 
 
-final_df["missing_reason"] = final_df.apply(
-    get_missing_reason,
-    axis=1,
-)
+def _number(value: Any, *, count: bool) -> float:
+    if value is None:
+        return float("nan")
+    if isinstance(value, bool):
+        raise ValueError("개폐업 숫자에 bool을 사용할 수 없습니다.")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("개폐업 숫자 형식이 올바르지 않습니다.") from exc
+    if not math.isfinite(number) or number < 0 or (count and not number.is_integer()):
+        raise ValueError("개폐업 숫자 범위가 올바르지 않습니다.")
+    return number
 
 
-# ============================================================
-# 12. 컬럼 순서
-# ============================================================
+def preprocess_business_lifecycle_data(
+    area_code: str,
+    base_quarter: str,
+    quarter_count: int = 12,
+    *,
+    settings: Settings | None = None,
+) -> pd.DataFrame:
+    """원본 건수를 공통 업종으로 합산한 뒤 분자·분모에서 비율을 재계산합니다."""
+    quarters = get_recent_quarters(base_quarter=base_quarter, count=quarter_count)
+    rows = fetch_recent_store_data(
+        area_code=area_code,
+        base_quarter=base_quarter,
+        quarter_count=quarter_count,
+        settings=settings,
+    )
+    if not rows:
+        raise ValueError("서울시 Open API에서 조회된 데이터가 없습니다.")
 
-final_df = final_df[
-    [
-        "service_id",
-        "service_name",
-        "data_available",
+    # 같은 원천키의 값이 다르면 어느 행이 맞는지 추정하지 않습니다.
+    unique: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            str(row.get("stdr_yyqu_cd")),
+            str(row.get("trdar_cd")),
+            str(row.get("svc_induty_cd")),
+        )
+        if key[0] not in quarters or key[1] != str(area_code):
+            raise ValueError("요청 범위 밖 분기 또는 상권 데이터가 섞였습니다.")
+        if key in unique and row != unique[key]:
+            raise ValueError("같은 분기·상권·원본업종에 상충하는 중복 데이터가 있습니다.")
+        unique[key] = row
 
-        "store_count",
-        "open_count",
-        "close_count",
+    numeric = (
+        "similr_induty_stor_co",
+        "stor_co",
+        "frc_stor_co",
+        "opbiz_stor_co",
+        "clsbiz_stor_co",
+        "opbiz_rt",
+        "clsbiz_rt",
+    )
+    groups: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+    for (quarter, _, source), raw in unique.items():
+        if source in EXCLUDED_SEOUL_INDUSTRIES:
+            continue
+        if source not in SEOUL_TO_SERVICE:
+            raise ValueError(f"공통 카탈로그에 없는 서울시 업종입니다: {source}")
+        row = dict(raw)
+        for field in numeric:
+            row[field] = _number(raw.get(field), count=field.endswith("_co"))
+        groups.setdefault(SEOUL_TO_SERVICE[source], {}).setdefault(quarter, {})[source] = row
 
-        "open_rate",
-        "close_rate",
+    results = []
+    for code, name in SERVICE_INDUSTRIES.items():
+        observed = groups.get(code, {})
+        sources = INDUSTRY_TO_SEOUL.get(code, ())
+        quarterly: dict[str, dict[str, float]] = {}
+        for quarter in quarters:
+            source_rows = observed.get(quarter, {})
+            # 일부 원천이 빠지면 업종 전체 합계라고 주장할 수 없습니다.
+            complete_sources = set(source_rows) == set(sources) and bool(sources)
+            quarterly[quarter] = {
+                field: (
+                    sum(row[field] for row in source_rows.values())
+                    if complete_sources
+                    else float("nan")
+                )
+                for field in ("similr_induty_stor_co", "opbiz_stor_co", "clsbiz_stor_co")
+            }
 
-        "net_change",
-        "net_change_rate",
+        def total(
+            field: str,
+            period: list[str],
+            values: dict[str, dict[str, float]] = quarterly,
+        ) -> float:
+            # sum은 NaN을 전파하므로 일부 결측을 0으로 보충하지 않습니다.
+            return sum(values[q][field] for q in period)
 
-        "turnover_rate",
-
-        "source_industry_count",
-        "source_industries",
-
-        "missing_reason",
-    ]
-]
-
-
-# ============================================================
-# 13. 저장
-# ============================================================
-
-final_df.to_csv(
-    MAPPED_OUTPUT_FILE,
-    index=False,
-    encoding="utf-8-sig",
-)
-
-
-# ============================================================
-# 14. 검증
-# ============================================================
-
-available_count = int(
-    final_df["data_available"].sum()
-)
-
-missing_count = (
-    len(final_df) - available_count
-)
-
-
-print()
-print("===== 우리 서비스 70개 변환 결과 =====")
-print("전체 서비스 업종 수:", len(final_df))
-print("데이터 존재 업종 수:", available_count)
-print("데이터 없는 업종 수:", missing_count)
-
-
-print()
-print(
-    "통합 후 총 점포수:",
-    int(final_df["store_count"].fillna(0).sum())
-)
-
-print(
-    "통합 후 총 개업수:",
-    int(final_df["open_count"].fillna(0).sum())
-)
-
-print(
-    "통합 후 총 폐업수:",
-    int(final_df["close_count"].fillna(0).sum())
-)
-
-
-print()
-print("저장 완료:")
-print(MAPPED_OUTPUT_FILE)
+        exposure = total("similr_induty_stor_co", quarters)
+        opened = total("opbiz_stor_co", quarters)
+        closed = total("clsbiz_stor_co", quarters)
+        recent = quarters[-4:]
+        recent_exposure = total("similr_induty_stor_co", recent)
+        recent_opened = total("opbiz_stor_co", recent)
+        recent_closed = total("clsbiz_stor_co", recent)
+        recent_rate = calculate_rate(recent_closed, recent_exposure)
+        oldest_rate = calculate_rate(
+            total("clsbiz_stor_co", quarters[:4]),
+            total("similr_induty_stor_co", quarters[:4]),
+        )
+        complete = all(pd.notna(v) for values in quarterly.values() for v in values.values())
+        if code in UNSUPPORTED_SERVICE_INDUSTRIES:
+            status, reason = "unsupported", "서울시 생활밀접업종 데이터에 직접 대응 업종 없음"
+        elif not observed:
+            status, reason = (
+                "missing",
+                f"최근 {quarter_count}개 분기에 대응 서울시 업종 데이터 없음",
+            )
+        elif not complete:
+            status, reason = (
+                "incomplete",
+                "요청 분기·원본업종 또는 건수 일부 누락으로 완전 집계 불가",
+            )
+        else:
+            status, reason = "observed", None
+        results.append(
+            {
+                "service_id": code,
+                "service_name": name,
+                "data_available": bool(observed),
+                "data_status": status,
+                "data_complete": complete,
+                "observed_quarters": len(observed),
+                "expected_source_count": len(sources),
+                "observed_source_rows": sum(len(values) for values in observed.values()),
+                "expected_source_rows": len(sources) * quarter_count,
+                "latest_store_count": quarterly[base_quarter]["similr_induty_stor_co"],
+                "avg_store_count": exposure / quarter_count,
+                "period_open_count": opened,
+                "period_close_count": closed,
+                "period_net_change": opened - closed,
+                "avg_open_rate": calculate_rate(opened, exposure),
+                "avg_close_rate": calculate_rate(closed, exposure),
+                "net_change_rate": calculate_rate(opened - closed, exposure),
+                "turnover_rate": calculate_rate(opened + closed, exposure),
+                "recent_year_open_count": recent_opened,
+                "recent_year_close_count": recent_closed,
+                "recent_year_net_change": recent_opened - recent_closed,
+                "recent_year_close_rate": recent_rate,
+                "recent_year_net_change_rate": calculate_rate(
+                    recent_opened - recent_closed, recent_exposure
+                ),
+                "oldest_year_close_rate": oldest_rate,
+                "close_rate_trend": (
+                    round(recent_rate - oldest_rate, 2)
+                    if recent_rate is not None and oldest_rate is not None
+                    else None
+                ),
+                "source_industry_count": len({s for values in observed.values() for s in values}),
+                "source_industries": " | ".join(
+                    sorted(
+                        {
+                            str(row.get("svc_induty_cd_nm") or source)
+                            for values in observed.values()
+                            for source, row in values.items()
+                        }
+                    )
+                ),
+                "missing_reason": reason,
+            }
+        )
+    return pd.DataFrame(results)

@@ -7,11 +7,14 @@ import json
 import re
 from typing import Any
 
+from app.llm import client
+
 from .config import PACKAGE_DIR, Settings
 
 PROMPT_PATH = PACKAGE_DIR / "prompt.md"
 MAX_SUMMARY_CHARS = 900
 MAX_NOTE_CHARS = 200
+MAX_INDEX_NOTES = 7
 MAX_ATTEMPTS = 2
 RETRY_DELAY_S = 1.0
 
@@ -20,6 +23,15 @@ def load_prompt() -> str:
     if not PROMPT_PATH.exists():
         return ""
     return PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def _top_clusters(rows: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    """대분류별로 한 줄씩. 같은 대분류 행이 75개 중 여럿이라 중복을 걷어낸다."""
+    seen: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        seen.setdefault(row["major_name"], row)
+    ranked = sorted(seen.values(), key=lambda r: -r["major_cluster_count"])
+    return [r for r in ranked if r["major_cluster_count"] > 0][:limit]
 
 
 def build_user_message(data: dict[str, Any]) -> str:
@@ -65,9 +77,37 @@ def build_user_message(data: dict[str, Any]) -> str:
         "franchise": {
             "count": (data.get("franchise") or {}).get("count"),
             "ratio": (data.get("franchise") or {}).get("ratio"),
+            "independent_count": (data.get("franchise") or {}).get("independent_count"),
+            "independent_ratio": (data.get("franchise") or {}).get("independent_ratio"),
         }
         if data.get("franchise")
         else None,
+        # 목록은 5곳까지만 보내되 총 개수를 함께 준다. 안 그러면 받은 개수를 전체로 착각한다.
+        "상권_총개수": len(data.get("trade_areas", [])),
+        "상권": [
+            {"이름": t["name"], "유형": t.get("kind"), "거리m": round(t["distance_m"])}
+            for t in data.get("trade_areas", [])[:5]
+        ],
+        # 누적 유인은 값이 큰 대분류만 보낸다. 75종을 다 보내면 요약하려다 토큰을 그대로 쓴다.
+        "대분류_군집": [
+            {
+                "대분류": row["major_name"],
+                "점포수": row["major_cluster_count"],
+                "안에_있는_유효_업종수": row["major_cluster_diversity"],
+            }
+            for row in _top_clusters(data.get("by_middle", []))
+        ],
+        # 동종/이종은 1위 업종 한 줄이면 뜻이 전해진다. 75행을 다 보낼 이유가 없다.
+        "동종_이종": (
+            {
+                "업종": data["by_middle"][0]["name"],
+                "같은업종_점포수": data["by_middle"][0]["same_type_count"],
+                "다른업종_점포수": data["by_middle"][0]["diff_type_count"],
+            }
+            if data.get("by_middle")
+            else None
+        ),
+        "기준_반경m": (data.get("lq_baseline") or {}).get("applied_radius_m"),
     }
     return json.dumps(trimmed, ensure_ascii=False)
 
@@ -89,44 +129,22 @@ async def summarize(
     for attempt in range(MAX_ATTEMPTS):
         try:
             text = await _complete(system_prompt, user_message, settings)
+            if text and text.strip():
+                summary = parse_summary(text)
+                if summary["radius_notes"] or summary["overall"]:
+                    return summary, None
+                last_problem = "모델 응답에서 요약 내용을 찾지 못했습니다."
         except Exception as exc:
             last_problem = f"요약 실패: {type(exc).__name__}"
-            text = None
-        if text and text.strip():
-            summary = parse_summary(text)
-            if summary["radius_notes"] or summary["overall"]:
-                return summary, None
-            last_problem = "모델 응답에서 요약 내용을 찾지 못했습니다."
+            return None, last_problem
         if attempt < MAX_ATTEMPTS - 1:
             await asyncio.sleep(RETRY_DELAY_S)
     return None, last_problem
 
 
 async def _complete(system_prompt: str, user_message: str, settings: Settings) -> str:
-    from openai import AsyncOpenAI
-
-    model = settings.llm_model
-    if not model:
-        raise ValueError("ELICE_MODEL이 설정되지 않았습니다.")
-
-    async with AsyncOpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        timeout=settings.llm_timeout_s,
-        max_retries=1,
-    ) as client:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            response_format={"type": "json_object"},
-            max_completion_tokens=settings.llm_max_tokens,
-        )
-    if not response.choices:
-        return ""
-    return response.choices[0].message.content or ""
+    result = await client.complete_json(system_prompt, user_message, settings.llm_settings())
+    return json.dumps(result, ensure_ascii=False)
 
 
 def strip_code_fence(text: str) -> str:
@@ -171,10 +189,22 @@ def parse_summary(text: str) -> dict[str, Any]:
         value = str(value).strip() if value else ""
         return value[:MAX_SUMMARY_CHARS] or None
 
+    index_notes = []
+    for row in payload.get("index_notes") or []:
+        if not isinstance(row, dict):
+            continue
+        path = str(row.get("path") or "").strip()
+        label = str(row.get("label") or "").strip()
+        note = str(row.get("text") or "").strip()
+        # 셋 다 있어야 리포트가 숫자 옆에 붙일 수 있다. 하나라도 비면 버린다.
+        if path.startswith("/") and label and note:
+            index_notes.append({"path": path, "label": label, "text": note[:MAX_NOTE_CHARS]})
+
     return {
         "radius_notes": sorted(notes, key=lambda r: r["radius_m"]),
         "overall": field("overall"),
         "concentration": field("concentration"),
+        "index_notes": index_notes[:MAX_INDEX_NOTES],
     }
 
 
@@ -184,4 +214,5 @@ def render_summary_text(summary: dict[str, Any]) -> str | None:
         parts.append(f"종합 평가: {summary['overall']}")
     if summary.get("concentration"):
         parts.append(f"집적도·특화도 평가: {summary['concentration']}")
+    parts += [f"{n['label']}: {n['text']}" for n in summary.get("index_notes") or []]
     return "\n".join(parts) or None

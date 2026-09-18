@@ -10,8 +10,8 @@ from pathlib import Path
 from app.agents.commercial_area import analyze as commercial_area_analyze
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.industries import write_master
 from app.agents.commercial_area.schemas import MiddleCode, Store
-from app.agents.commercial_area.upjong import write_master
 from app.mocks import mock_agents, mock_generate, mock_site
 from app.orchestrator import run_agents, run_analysis
 from app.schemas import AnalysisTask, DecisionResult
@@ -83,7 +83,7 @@ def generate_from_commercial_area(system_prompt, input_json):
         "summary": "한식이 가장 많고 커피·음료가 뒤를 잇습니다.",
         "recommendations": [
             {
-                "category": {"major": "음식점업", "middle": "한식"},
+                "category": {"major": "음식점업", "middle": "한식 음식점업"},
                 "score": 61,
                 "reasons": ["반경 안 점포 구성에서 한식 비중이 가장 큽니다."],
                 "evidence": [{"agent_id": "commercial_area", "path": "/store_total"}],
@@ -107,7 +107,7 @@ class MockPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.agent_id, "decision")
         self.assertEqual(len(result.source_analyses), 3)
         self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
-        self.assertEqual(result.not_recommended[0].category.middle, "커피·음료업")
+        self.assertEqual(result.not_recommended[0].category.middle, "비알코올 음료점업")
 
     async def test_one_broken_agent_does_not_stop_the_rest(self):
         async def broken(task):
@@ -131,7 +131,9 @@ class MockPipelineTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.status, "partial")
         self.assertTrue(any("floating_population" in item for item in result.limitations))
-        self.assertTrue(any("응답 없음" in item for item in result.limitations))
+        self.assertTrue(
+            any("분석 에이전트 실행에 실패했습니다." in item for item in result.limitations)
+        )
 
     async def test_agents_run_concurrently(self):
         import asyncio

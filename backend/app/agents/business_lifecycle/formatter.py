@@ -1,297 +1,388 @@
-import json
-from pathlib import Path
+from typing import Any
 
-# ============================================================
-# 기본 설정
-# ============================================================
-
-BASE_DIR = Path(__file__).resolve().parent
-
-INPUT_FILE = (
-    BASE_DIR
-    / "business_lifecycle_agent_output.json"
-)
-
-OUTPUT_FILE = (
-    BASE_DIR
-    / "business_lifecycle_for_mediator.json"
-)
+from app.industries import MAPPING_REVIEW_WARNING, TAXONOMY
+from app.industries.catalog import EXPECTED_INDUSTRY_COUNT, INDUSTRIES
+from app.schemas import AgentAnalysis, Scope
 
 
-# ============================================================
-# 1. Agent Output 읽기
-# ============================================================
-
-with open(
-    INPUT_FILE,
-    encoding="utf-8",
-) as f:
-
-    agent_output = json.load(f)
+class BusinessLifecycleFormatterError(RuntimeError):
+    """Business Lifecycle 결과 변환 오류."""
 
 
-# ============================================================
-# 2. 필요한 값 가져오기
-# ============================================================
+def determine_status(
+    scored_count: int,
+    unscored_count: int,
+) -> str:
+    """
+    분석 결과를 기반으로 Agent 상태를 결정한다.
 
-request_id = agent_output["request_id"]
+    ok:
+        모든 업종 분석 가능
 
-status = agent_output["status"]
+    partial:
+        일부 업종은 분석 가능하지만
+        일부 업종은 데이터 부족
 
-scope = agent_output["scope"]
+    no_data:
+        분석 가능한 업종이 하나도 없음
+    """
 
-overall = agent_output["data"]["overall"]
+    if scored_count == 0:
+        return "no_data"
 
-industry_results = (
-    agent_output["data"]["industry_results"]
-)
+    if unscored_count > 0:
+        return "partial"
 
-warnings = agent_output.get(
-    "warnings",
-    []
-)
-
-error = agent_output.get(
-    "error"
-)
-
-
-print("원본 업종 수:", len(industry_results))
+    return "ok"
 
 
-# ============================================================
-# 3. 중재 Agent용 업종 데이터 생성
-#
-# 상세 metrics / component_scores는 제거하고
-# 최종 판단에 필요한 정보만 전달
-# ============================================================
+def format_scored_industry(
+    industry: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    LLM 분석이 완료된 업종을
+    중재 Agent용 공통 형태로 변환한다.
+    """
 
-mediator_industries = []
-
-
-for industry in industry_results:
-
-    mediator_industries.append(
-        {
-            "industry_id": industry[
-                "industry_id"
-            ],
-
-            "industry_name": industry[
-                "industry_name"
-            ],
-
-            "score": industry.get(
-                "lifecycle_score"
-            ),
-
-            "type": industry.get(
-                "type"
-            ),
-
-            "confidence": industry.get(
-                "confidence"
-            ),
-
-            "data_available": industry.get(
-                "data_available",
-                True,
-            ),
-
-            "evidence": industry.get(
-                "evidence",
-                [],
-            ),
-
-            "warning": industry.get(
-                "warning"
-            ),
-        }
-    )
-
-
-# ============================================================
-# 4. industry_id 순서 정렬
-# ============================================================
-
-mediator_industries = sorted(
-    mediator_industries,
-    key=lambda x: x["industry_id"],
-)
-
-
-# ============================================================
-# 5. 간단 Summary 생성
-#
-# LLM을 다시 호출하지 않고
-# Python에서 사실 기반으로 생성
-# ============================================================
-
-available_count = sum(
-    1
-    for industry in mediator_industries
-    if industry["data_available"]
-)
-
-unavailable_count = (
-    len(mediator_industries)
-    - available_count
-)
-
-
-summary = (
-    f"{scope['area']}의 "
-    f"{scope['period']} 개폐업 데이터를 기준으로 "
-    f"총 70개 서비스 업종 중 "
-    f"{available_count}개 업종을 분석했습니다. "
-    f"{unavailable_count}개 업종은 "
-    f"분석 가능한 데이터가 없어 판단 보류 처리했습니다."
-)
-
-
-# ============================================================
-# 6. 중재 Agent용 최종 JSON
-# ============================================================
-
-mediator_output = {
-
-    "request_id": request_id,
-
-    "agent_id": "business_lifecycle",
-
-    "status": status,
-
-    "scope": {
-        "area": scope[
-            "area"
-        ],
-
-        "area_code": scope[
-            "area_code"
-        ],
-
-        "period": scope[
-            "period"
-        ],
-    },
-
-    "data": {
-
-        "summary": summary,
-
-        "overall": {
-            "open_count": overall[
-                "open_count"
-            ],
-
-            "close_count": overall[
-                "close_count"
-            ],
-
-            "net_change": overall[
-                "net_change"
-            ],
-        },
-
-        "coverage": {
-            "target_industries": 70,
-            "available_industries": (
-                available_count
-            ),
-            "unavailable_industries": (
-                unavailable_count
-            ),
-        },
-
-        "industry_results": (
-            mediator_industries
+    return {
+        "industry_id": industry["industry_id"],
+        "industry_name": industry["industry_name"],
+        "score": industry["lifecycle_score"],
+        "type": industry["type"],
+        "confidence": industry["confidence"],
+        "data_available": True,
+        "score_available": True,
+        "data_status": industry.get("data_status", "observed"),
+        "data_complete": industry.get("data_complete", True),
+        "metrics": industry.get("metrics", {}),
+        "evidence": industry.get(
+            "evidence",
+            [],
         ),
-    },
-
-    "error": error,
-
-    "warnings": warnings,
-}
+        "warning": industry.get("warning"),
+    }
 
 
-# ============================================================
-# 7. JSON 저장
-# ============================================================
+def format_unscored_industry(
+    industry: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    데이터 부족 등의 이유로 Lifecycle Score를
+    계산하지 못한 업종을 판단 보류 형태로 변환한다.
+    """
 
-with open(
-    OUTPUT_FILE,
-    "w",
-    encoding="utf-8",
-) as f:
+    return {
+        "industry_id": industry["industry_id"],
+        "industry_name": industry["industry_name"],
+        "score": None,
+        "type": "판단 보류",
+        "confidence": industry.get(
+            "confidence",
+            "none",
+        ),
+        "data_available": industry.get(
+            "data_available",
+            False,
+        ),
+        "score_available": False,
+        "data_status": industry.get("data_status"),
+        "data_complete": industry.get("data_complete", False),
+        "metrics": industry.get("metrics", {}),
+        "source_coverage": industry.get("source_coverage", {})
+        | {"observed_quarters": industry.get("observed_quarters")},
+        "evidence": [],
+        "warning": industry.get(
+            "missing_reason",
+            "분석에 필요한 데이터가 부족합니다.",
+        ),
+    }
 
-    json.dump(
-        mediator_output,
-        f,
-        ensure_ascii=False,
-        indent=2,
+
+def build_warnings(
+    industries: list[dict[str, Any]],
+) -> list[str]:
+    """
+    전체 분석 결과에 대한 해석상 주의사항을 생성한다.
+    """
+
+    warnings: list[str] = [MAPPING_REVIEW_WARNING]
+
+    unscored_count = sum(1 for industry in industries if not industry["score_available"])
+
+    low_confidence_count = sum(
+        1
+        for industry in industries
+        if (industry["score_available"] and industry["confidence"] == "low")
+    )
+
+    if unscored_count > 0:
+        warnings.append(
+            f"{EXPECTED_INDUSTRY_COUNT}개 업종 중 {unscored_count}개 업종은 "
+            "데이터 부족 또는 직접 대응 데이터 부재로 "
+            "Lifecycle Score를 계산하지 못했습니다."
+        )
+
+    if low_confidence_count > 0:
+        warnings.append(
+            f"점수가 계산된 업종 중 "
+            f"{low_confidence_count}개 업종은 "
+            "표본 규모가 작아 confidence가 low입니다."
+        )
+
+    warnings.append(
+        "Lifecycle Score는 미래 생존 확률이 아니라 "
+        "분석 가능한 업종끼리 비교한 상대적 "
+        "개폐업 안정성 점수입니다."
+    )
+
+    return warnings
+
+
+def format_for_mediator(
+    agent_result: dict[str, Any],
+    *,
+    scope_area: str | None = None,
+    scope_period: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    extra_warnings: list[str] | None = None,
+) -> AgentAnalysis:
+    """
+    Business Lifecycle Agent의 내부 결과를
+    중재 Agent 공통 형식으로 변환한다.
+
+    반환 구조:
+
+    {
+        request_id,
+        agent_id,
+        status,
+        scope,
+        data,
+        warnings
+    }
+    """
+
+    request_id = agent_result.get("request_id")
+
+    if not request_id:
+        raise BusinessLifecycleFormatterError("request_id가 없습니다.")
+
+    agent_id = agent_result.get("agent_id")
+
+    if agent_id != "business_lifecycle":
+        raise BusinessLifecycleFormatterError("agent_id가 business_lifecycle이 아닙니다.")
+
+    scored_industries = agent_result.get(
+        "industry_scores",
+        [],
+    )
+
+    unscored_industries = agent_result.get(
+        "unavailable_industries",
+        [],
+    )
+
+    if not isinstance(
+        scored_industries,
+        list,
+    ):
+        raise BusinessLifecycleFormatterError("industry_scores가 list가 아닙니다.")
+
+    if not isinstance(
+        unscored_industries,
+        list,
+    ):
+        raise BusinessLifecycleFormatterError("unavailable_industries가 list가 아닙니다.")
+
+    entries = scored_industries + unscored_industries
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("industry_id"), str)
+        or item["industry_id"] not in INDUSTRIES
+        or item.get("industry_name") != INDUSTRIES[item["industry_id"]]
+        for item in entries
+    ):
+        raise BusinessLifecycleFormatterError("공통 업종 코드 또는 업종명이 일치하지 않습니다.")
+
+    # ========================================================
+    # 1. 점수 있는 업종
+    # ========================================================
+
+    industries: list[dict[str, Any]] = []
+
+    for industry in scored_industries:
+        industries.append(format_scored_industry(industry))
+
+    # ========================================================
+    # 2. 판단 보류 업종
+    # ========================================================
+
+    for industry in unscored_industries:
+        industries.append(format_unscored_industry(industry))
+
+    # ========================================================
+    # 3. 업종 ID 기준 정렬
+    # ========================================================
+
+    industries.sort(key=lambda item: item["industry_id"])
+
+    # ========================================================
+    # 4. 공통 75개 Master 검증
+    # ========================================================
+
+    if len(industries) != EXPECTED_INDUSTRY_COUNT:
+        raise BusinessLifecycleFormatterError(
+            f"Business Lifecycle 결과의 업종 수가 75개가 아닙니다. 현재={len(industries)}"
+        )
+
+    industry_ids = [industry["industry_id"] for industry in industries]
+
+    if len(set(industry_ids)) != EXPECTED_INDUSTRY_COUNT:
+        raise BusinessLifecycleFormatterError("중복된 industry_id가 존재합니다.")
+
+    expected_ids = set(INDUSTRIES)
+
+    actual_ids = set(industry_ids)
+
+    if expected_ids != actual_ids:
+        missing_ids = sorted(expected_ids - actual_ids)
+
+        extra_ids = sorted(actual_ids - expected_ids)
+
+        raise BusinessLifecycleFormatterError(
+            f"75개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
+        )
+
+    # ========================================================
+    # 5. Coverage 계산
+    # ========================================================
+
+    scored_count = sum(1 for industry in industries if industry["score_available"])
+
+    unscored_count = len(industries) - scored_count
+
+    coverage = {
+        "target_industries": EXPECTED_INDUSTRY_COUNT,
+        "scored_industries": scored_count,
+        "unscored_industries": unscored_count,
+    }
+
+    # ========================================================
+    # 6. Status
+    # ========================================================
+
+    status = determine_status(
+        scored_count=scored_count,
+        unscored_count=unscored_count,
+    )
+
+    scope = build_scope(
+        agent_result=agent_result,
+        scope_area=scope_area,
+        scope_period=scope_period,
+    )
+
+    # ========================================================
+    # 7. Warnings
+    # ========================================================
+
+    warnings = build_warnings(industries)
+
+    if extra_warnings:
+        warnings.extend(extra_warnings)
+
+    warnings = list(dict.fromkeys(warning for warning in warnings if warning))
+
+    # ========================================================
+    # 8. 중재 Agent 공통 반환 구조
+    # ========================================================
+
+    data: dict[str, Any] = {}
+
+    if status != "no_data":
+        data = {
+            "summary": agent_result.get(
+                "summary",
+                "",
+            ),
+            "metadata": build_metadata(
+                agent_result=agent_result,
+                metadata=metadata,
+            ),
+            "coverage": coverage,
+            "taxonomy": dict(TAXONOMY),
+            "scoring_method": agent_result.get(
+                "scoring_method",
+                {},
+            ),
+            "industries": industries,
+        }
+
+    formatted_result: dict[
+        str,
+        Any,
+    ] = {
+        "request_id": request_id,
+        "agent_id": "business_lifecycle",
+        "status": status,
+        "scope": scope.model_dump(),
+        "data": data,
+        "warnings": warnings,
+    }
+
+    return AgentAnalysis.model_validate(formatted_result)
+
+
+def build_scope(
+    *,
+    agent_result: dict[str, Any],
+    scope_area: str | None,
+    scope_period: str | None,
+) -> Scope:
+    raw_scope = agent_result.get("scope", {})
+    period = raw_scope.get("period", {})
+
+    area = (
+        scope_area
+        or raw_scope.get("area")
+        or raw_scope.get("area_name")
+        or raw_scope.get("area_code")
+        or "서울시 상권"
+    )
+
+    if scope_period:
+        period_label = scope_period
+    elif isinstance(period, dict):
+        start = period.get("start_quarter")
+        end = period.get("end_quarter")
+        count = period.get("quarter_count")
+        if start and end and count:
+            period_label = f"{start}~{end} ({count}개 분기)"
+        else:
+            period_label = str(raw_scope.get("base_quarter") or "기준 기간 확인 불가")
+    else:
+        period_label = str(period or raw_scope.get("base_quarter") or "기준 기간 확인 불가")
+
+    return Scope(
+        area=str(area),
+        period=period_label,
     )
 
 
-# ============================================================
-# 8. 검증
-# ============================================================
-
-print()
-print("===== Mediator Output 생성 결과 =====")
-
-print(
-    "전체 업종:",
-    len(mediator_industries)
-)
-
-print(
-    "데이터 존재 업종:",
-    available_count
-)
-
-print(
-    "데이터 없는 업종:",
-    unavailable_count
-)
-
-print(
-    "전체 개업:",
-    overall["open_count"]
-)
-
-print(
-    "전체 폐업:",
-    overall["close_count"]
-)
-
-print(
-    "전체 순증감:",
-    overall["net_change"]
-)
-
-
-# 반드시 70개인지 검증
-assert (
-    len(mediator_industries)
-    == 70
-)
-
-
-# ID 중복 여부 검증
-industry_ids = [
-    industry["industry_id"]
-    for industry in mediator_industries
-]
-
-assert (
-    len(industry_ids)
-    == len(set(industry_ids))
-)
-
-
-print()
-print("70개 업종 및 ID 중복 검증 완료")
-
-print()
-print("저장 완료:")
-print(OUTPUT_FILE)
+def build_metadata(
+    *,
+    agent_result: dict[str, Any],
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    raw_scope = agent_result.get("scope", {})
+    period = raw_scope.get("period", {})
+    result_metadata = {
+        "area_code": raw_scope.get("area_code"),
+        "area_name": raw_scope.get("area_name"),
+        "base_quarter": raw_scope.get("base_quarter"),
+        "period": period if isinstance(period, dict) else None,
+        "quarter_count": period.get("quarter_count") if isinstance(period, dict) else None,
+    }
+    if metadata:
+        result_metadata.update(metadata)
+    return {key: value for key, value in result_metadata.items() if value is not None}

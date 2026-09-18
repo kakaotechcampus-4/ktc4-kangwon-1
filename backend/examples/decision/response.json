@@ -3,25 +3,25 @@
   "summary": "가상 사례에서는 직장인 점심 수요를 검토할 수 있으며, 카페는 경쟁과 폐업 현황의 추가 확인이 필요합니다.",
   "recommendations": [
     {
-      "category": {"major": "음식점", "middle": "중식"},
+      "category": {"major": "음식점업", "middle": "중식 음식점업"},
       "score": 72,
       "reasons": ["직장인 비중과 점심 시간대 유동을 바탕으로 점심 식사 수요를 검토할 수 있습니다."],
       "evidence": [
         {"agent_id": "floating_population", "path": "/office_worker_share"},
         {"agent_id": "floating_population", "path": "/peak_hours"},
-        {"agent_id": "commercial_area", "path": "/industry_counts/중식"}
+        {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점업"}
       ],
       "risks": ["점포 수가 적다는 사실만으로 수요가 충분하다고 판단할 수 없습니다."]
     }
   ],
   "not_recommended": [
     {
-      "category": {"major": "음료점", "middle": "카페"},
+      "category": {"major": "음식점업", "middle": "비알코올 음료점업"},
       "score": 28,
       "reasons": ["같은 기간의 폐업 수와 기존 점포 수를 함께 보면 경쟁 부담을 우선 확인해야 합니다."],
       "evidence": [
         {"agent_id": "business_lifecycle", "path": "/industries/5"},
-        {"agent_id": "commercial_area", "path": "/industry_counts/카페"}
+        {"agent_id": "commercial_area", "path": "/industry_counts/비알코올 음료점업"}
       ],
       "risks": ["점포별 매출과 폐업 원인은 확인되지 않았습니다."]
     }

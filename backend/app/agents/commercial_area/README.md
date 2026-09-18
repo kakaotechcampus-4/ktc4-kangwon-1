@@ -4,9 +4,14 @@
 
 업종을 추천하거나 판단하지 않는다. 숫자와 그 숫자를 풀어 쓴 문장만 만든다.
 
+**점수를 주지 않는다.** 개폐업 에이전트는 `score` 0~100을 주지만 이 에이전트는 지표와 순위·비율만
+낸다. 내보내는 지표가 전부 트레이드오프라 가중치를 정하는 순간 그게 판단이 되고, 판단은 결정
+에이전트 몫이기 때문이다. **세 에이전트의 점수를 평균 내는 식의 합산은 성립하지 않는다** — 개폐업의
+`score`는 "개폐업 안정성"이고 우리가 점수를 만들면 그건 "경쟁 강도"라 축이 다르다.
+
 ## 무엇을 계산하나
 
-집적·경쟁 지표 10종을 반경 50·100·200·300·500m로 나눠 계산한다.
+집적·경쟁 지표 11종을 반경 50·200·500m로 나눠 계산한다.
 
 | 지표 | 필드 |
 | --- | --- |
@@ -18,7 +23,8 @@
 | 반경 대비 특화도 | `by_middle[].lq` (분석 반경 비중 ÷ 반경 2km 비중) |
 | 자치구 대비 특화도 | `by_middle[].lq_district`, `district_specialization` |
 | 마샬리안 / 제이코비안 | `by_middle[].marshallian` / `jacobian` |
-| 프랜차이즈 비율 | `franchise` |
+| 누적 유인 (Nelson 2원칙) | `by_middle[].major_cluster_count` / `major_cluster_diversity` |
+| 프랜차이즈 / 개인사업자 비율 | `franchise` |
 | 반경별 순위·해설 | `by_radius[]` |
 | 사람이 읽는 요약 | `summary` |
 
@@ -65,7 +71,7 @@ pip install -e ".[dev]"
 | `COMMERCIAL_AREA_API_KEY` | 소상공인 상가정보 (필수) | `status: error` |
 | `FRANCHISE_API_KEY` | 공정위 브랜드 목록 | 프랜차이즈 지표 생략 + `partial` |
 | `ELICE_API_KEY` / `ELICE_BASE_URL` / `ELICE_MODEL` | 요약 생성 | 요약 생략 |
-| `GEOCODING_API_KEY` | 주소→좌표 (카카오 REST 키) | 정확도가 낮은 대체 경로 사용 |
+| `GEOCODING_API_KEY` | 공통 주소 도구의 카카오 REST 키 | 주소 설정 오류 |
 | `ANALYSIS_RADIUS_M` | 분석 반경 (기본 500) | 500m |
 
 공공데이터 키 2개는 [공공데이터포털](https://www.data.go.kr) 계정의 **일반 인증키 하나**를 양쪽에 넣으면 된다. 단 API마다 활용신청을 따로 해야 한다.
@@ -105,6 +111,123 @@ result = asyncio.run(
 
 `AgentAnalysis`를 돌려주므로 `result.model_dump()`를 그대로 `DecisionRequest.analyses`에 넣으면 된다.
 
+## `data` 안에 무엇이 들어가고, 왜 그것인가
+
+`data`는 계약상 자유 형식이지만 **소비 경로가 둘**이다. 최종 판단은 업종과 근거를 만들고,
+프론트엔드는 SQLite에 저장된 `DecisionResult.source_analyses`를 POST/GET API로 받아 차트와 표를
+만든다. 별도 report 에이전트는 없다. 그래서 판단용 지표와 화면용 원시 시리즈를 둘 다 담는다.
+
+| 키 | 소비자 | 내용 |
+| --- | --- | --- |
+| `description` | **결정** | 맨 앞. 숫자의 기준과 단위를 문장으로. 결정 프롬프트가 "필드 이름, 설명, 단위와 실제 값을 함께 읽는다"로 동작해서 넣었다 |
+| `radius_m` · `store_total` | 결정·화면 | 분석 반경과 그 안의 총 점포 수 |
+| `data_reference_date` | 결정 | 자료 기준일 `"2026-03-31"`. **API 응답에 날짜 필드가 0개라** `sources.py` 상수에서 온다 |
+| `by_major` | 화면 | 대분류 10종 집계. 상권 성격을 한눈에 보여주는 용도 |
+| `by_middle` | **결정** | 중분류 75종 전수. LQ·집적·특화 지표가 전부 여기 있다 |
+| `by_radius` | 화면 | 반경 50~500m 5단계 순위와 해설 문장 |
+| `diversity` | 결정 | HHI와 유효 업종수 |
+| `restaurant_density` | 결정 | 음식점 밀도 + 원시 개수 |
+| `franchise` | 결정·화면 | 프랜차이즈·개인사업자 수와 비율, 업종별 내역, 브랜드 기준 연도 |
+| `lq_baseline` · `district_baseline` | 결정 | 두 기준선이 **무엇이었는지**. 배수를 해석하려면 분모를 알아야 한다 |
+| `district_specialization` | 결정·화면 | 자치구 대비 특화 상위 10 |
+| `summary` · `summary_text` | 화면 | 모델이 쓴 사람 읽는 문장 |
+| `sources` | 결정·화면 | 맨 뒤. 공공누리 출처표시 의무라 화면이 하드코딩하지 않게 함께 싣는다. **쓴 자료만 들어가므로 길이를 가정하지 않는다** |
+
+**기준선 정보를 함께 싣는 이유.** `lq: 4.21`만 주면 무엇과 비교한 4.21인지 알 수 없다.
+`lq_baseline.applied_radius_m`(실제 적용된 반경)과 `district_baseline.signgu_name`(자치구 이름)이
+있어야 "반경 2,000m 대비", "노원구 대비"로 문장을 만들 수 있다. 요청한 반경이 거부되면
+`requested_radius_m`과 `applied_radius_m`이 달라지므로 **적용값을 반드시 읽는다.**
+
+지표 하나하나의 정의·수식·해석 방향은 [`docs/INDEX_commercial_area.md`](../../../../docs/INDEX_commercial_area.md)에 있다.
+
+## 화면에 무엇을 싣고, 무엇을 실으면 안 되는가
+
+프론트엔드는 저장된 최종 판단의 `source_analyses`로 이 `data`를 받는다. 전부 보여줄 것은 아니다.
+
+### 실어도 되는 것
+
+| 키 | 화면에서의 역할 | 노원 실제 값 |
+| --- | --- | --- |
+| `store_total` | 대표 숫자 | 1,237개 |
+| `by_major[].count` | 대분류 구성 파이 차트 | 교육 530 · 음식 238 · 소매 158 |
+| `by_radius[].store_total` | 반경별 증가 곡선 | 46 → 206 → 569 → 985 → 1,237 |
+| `by_radius[].top_by_count` | 반경별 상위 업종 막대 | 50m 일반 교육기관 21개 |
+| `by_radius[].explanations` | 차트 옆 설명 문장 | 이미 사람이 읽는 문장으로 되어 있다 |
+| `district_specialization` | "이 동네에 유난히 많은 업종" | 일반 교육기관 5.8배 |
+| `diversity.effective_categories` | 다양성 지표 | 7.14종 |
+| `restaurant_density.value` + `store_count` | 음식점 밀집도 | 303.0개/km² (238개) |
+| `franchise.count` · `ratio` | 프랜차이즈 비율 | 136개 (11.0%) |
+| `franchise.independent_count` · `independent_ratio` | 개인사업자 비율 (도넛 반대쪽) | 1,101개 (89.0%) |
+| `description` | 숫자를 읽는 법 | 반경·모수·단위·배수의 분모까지 한 문단 |
+| `sources` | 출처 표기 (공공누리 의무) | 1~2행. 길이를 가정하지 말 것 |
+| `summary_text` | AI 요약 영역 | 반경별 5줄 + 종합 + 집적·특화 |
+
+### 실으면 안 되는 것
+
+- **`by_middle` 75행 전부를 차트로 그리면 안 된다.** ⚠️ **가장 위험한 자리다.**
+  0건 업종이 22개 섞여 있어 축을 잡아먹고, 상위 3종이 전체의 절반을 차지해 나머지가 안 보인다.
+  상위 N개만 자르거나 `by_radius[].top_by_count`(이미 순위로 잘려 있다)를 쓴다.
+- **`marshallian` · `jacobian` · `density_sq`** — 사용자에게 보여줄 이름이 아니다.
+  프롬프트에도 "마샬리안, 제이코비안은 쓰지 않는다"로 막아 두었다. 판단용 내부 지표다.
+- **`lq` 를 기준 없이 "3배"로 표시하면 안 된다.** `lq`와 `lq_district`는 분모가 다르다.
+  반드시 "반경 2km 안에서" / "노원구 전체와 비교하면"을 붙인다.
+- **`major_cluster_count` · `major_cluster_diversity`** — 누적 유인의 재료 두 개다.
+  둘을 곱하거나 더한 값을 우리가 만들지 않았다. 가중치를 정하는 순간 그게 판단이 되기 때문이다.
+- `data_reference_date`(`"2026-03-31"`)와 `scope.period`(`"2026년 1분기"`)는 **같은 시점인데
+  형식이 다르다.** 나란히 놓고 "둘이 다르다"고 읽지 않는다.
+
+### 같은 500m인데 순위가 다를 수 있는 이유
+
+`by_middle`(반경 500m 전체 기준 정렬)과 `by_radius[4]`(500m 슬라이스)는 같은 반경인데 값이 다를 수
+있다. `by_radius`는 API가 준 좌표로 거리를 다시 계산해 자르므로, 좌표가 없는 점포가 빠진다.
+화면에서 둘을 나란히 놓을 때는 출처를 밝힌다.
+
+## 키 이름이 인터페이스다
+
+결정 에이전트가 근거를 JSON Pointer 경로(`Evidence.path`)로 가리킨다. **키를 바꾸면 그 경로가
+깨진다.** 바꿀 때는 결정 에이전트 담당과 함께 바꾼다.
+
+실제로 결정 에이전트가 만들어 낸 경로들이다(노원 실행).
+
+```
+/store_total                              → 1237
+/diversity/effective_categories           → 7.1406
+/restaurant_density/value                 → 303.031
+/franchise/ratio                          → 0.1099
+/by_middle/0                              → 일반 교육기관 417개 lq 4.21
+/district_specialization/1                → 도서관·여가 서비스업 3.79배
+/by_radius/4/top_by_specialization/0      → 500m 특화 1위
+/lq_baseline/applied_radius_m             → 2000
+/district_baseline/signgu_name            → 노원구
+```
+
+## 기준 시점을 갱신하는 곳
+
+분기가 바뀌면 [`sources.py`](sources.py)의 **두 줄만** 고친다.
+
+```python
+SBIZ_PERIOD = "2026년 1분기"
+SBIZ_REFERENCE_DATE = "2026-03-31"
+```
+
+`scope.period` · `data_reference_date` · `sources[].period` · `description` 이 함께 따라간다.
+최신 분기는 [공공데이터포털 파일데이터](https://www.data.go.kr/data/15083033/fileData.do)에서 확인한다.
+**오픈API 응답에는 날짜 필드가 하나도 없어 API로는 알 수 없다**(39개 필드 전수 확인).
+
+공정위 연도는 [`config.py`](config.py)의 `ftc_year` 하나에서 `sources[].period` 와
+`franchise.base_year` 가 함께 나온다. 브랜드 캐시 파일명(`ftc_brands_<연도>.json`)에도 연도가 들어가
+있어, 연도를 올리면 지난 연도 목록이 새 연도 이름표를 달고 읽히는 일이 없다.
+
+## 아직 출력에 없는 필드
+
+넣을지 합의한 뒤 구현한다. 근거와 수식은
+[`docs/INDEX_commercial_area.md`](../../../../docs/INDEX_commercial_area.md)의 "남은 것" 절에 있다.
+
+| 필드 | 내용 | 막는 것 |
+| --- | --- | --- |
+| `trade_area_kind` | 골목상권 / 발달상권 구분 | 유동인구 모듈 의존. **서울 밖은 `null`** |
+| `restaurant_density.seoul_percentile` | 서울 상권 밀도 분포 대비 백분위 | 분포 1회 산출 선행. 서울 밖은 `null` |
+
 ## 터미널에서 확인
 
 ```bash
@@ -113,7 +236,7 @@ python examples/run_commercial_area.py --address "서울특별시 송파구 위�
 python examples/run_commercial_area.py --lat 37.4748 --lon 127.1416 --out examples/commercial_area/response.json
 ```
 
-좌표를 주지 않으면 `geocode.py`가 주소를 좌표로 바꿔서 실행한다. 상세주소(`155호`, `3층 302호`)는 자동으로 떼어내 `site.detail_address`로 넣는다.
+좌표를 주지 않으면 공통 `app/address.py`가 카카오 주소 검색의 단일 후보를 검증한다. 상세주소(`155호`, `3층 302호`)는 검색에서 제외하고 `site.detail_address`에 보존한다. 지역·번지가 불명확하거나 후보가 여러 개면 주소를 확정하지 않는다.
 
 출력 예시는 `examples/commercial_area/response.json`에 있다.
 
@@ -131,11 +254,20 @@ python examples/run_commercial_area.py --lat 37.4748 --lon 127.1416 --out exampl
 
 ## 업종 코드 마스터
 
-반경 안에 **없는 업종까지 0으로 채우려면** 중분류 75종 목록이 필요하다. `data/upjong_codes.csv`로 동봉돼 있고, 갱신하려면 [상권업종분류 코드](https://www.data.go.kr/data/15067631/fileData.do)를 받아 아래를 실행한다.
+반경 안에 **없는 업종까지 0으로 채우려면** 중분류 75종 목록이 필요하다. 이 목록은 팀 공통 업종
+어휘가 되면서 [`app/industries/data/industries.csv`](../../industries/README.md)로 옮겨졌다.
+LQ·HHI·부재 업종 수의 분모가 이 75칸이라, 다른 체계로 바꾸면 값이 통째로 달라진다.
+
+갱신하려면 [상권업종분류 코드](https://www.data.go.kr/data/15067631/fileData.do)를 받아 아래를 실행한다.
 
 ```bash
 python examples/build_upjong_master.py --official-csv <받은파일.csv>
+python examples/build_industry_links.py --force    # has_seoul·note 를 다시 채운다
+python scripts/build_industry_catalog.py          # catalog.py 재생성
 ```
+
+**세 줄을 같이 돌려야 한다.** 첫 줄이 마스터를 4개 컬럼으로만 다시 쓰기 때문에 `has_seoul`·`note`가
+사라지고, 그대로 두면 `build_industry_catalog.py` 검증이 실패한다.
 
 원본 파일 인코딩이 CP949다. 스크립트가 자동으로 처리한다.
 
@@ -163,7 +295,7 @@ python examples/probe_radius.py
 - **모든 외부 호출은 비동기다.** 첫 페이지에서 전체 건수를 확인한 뒤 나머지 페이지를 동시에 받아온다.
   동시 요청 수는 `SBIZ_MAX_CONCURRENCY`(기본 4)로 제한한다. 쿼터와 429 때문이다.
 - **API 쿼터가 하루 10,000건이다.** 같은 좌표 요청은 `backend/cache/`에 저장해 재사용한다. 강남 500m는 1회 분석에 5페이지, LQ용 2km는 48페이지가 나간다. LQ 기준 조회는 좌표를 250m 격자로 반올림해 같은 동네끼리 캐시를 공유한다.
-- **반경 5개를 위해 API를 5번 부르지 않는다.** 500m 한 번 받아 좌표로 안쪽 반경을 직접 계산한다. API 실측값과 오차 0~2건으로 일치하는 것을 확인했다.
+- **반경 3개를 위해 API를 3번 부르지 않는다.** 500m 한 번 받아 좌표로 안쪽 반경을 직접 계산한다. API 실측값과 오차 0~2건으로 일치하는 것을 확인했다.
 - **프랜차이즈 판정은 정확하지 않다.** 공정위 API에 반경 검색이 없어 브랜드명과 상호명을 문자열로 대조한다. 누락과 오탐이 있어 `confidence: "low"`로 표시한다.
 - **`scope.period`는 조회일이다.** 소상공인 API가 원천 기준 분기를 응답에 담지 않는다. 세 에이전트의 `scope` 표기가 다르면 결정 에이전트가 "기준 기간이 다르다"는 한계를 자동으로 붙이므로 형식을 맞춰야 한다.
 - **특화도는 점포 5개 미만 업종을 제외한다.** 표본이 1~2개면 배수가 튀어 순위가 무의미해진다. 두 기준선 모두에 같은 하한을 적용한다.

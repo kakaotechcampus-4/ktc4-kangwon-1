@@ -9,53 +9,61 @@ import sys
 import uuid
 from pathlib import Path
 
+from app.address import GeocodeError, resolve_site, split_detail
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present
-from app.agents.commercial_area.geocode import GeocodeError, geocode
 from app.schemas import AnalysisTask, Site
 
 
 async def run() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--address", default="서울특별시 강남구 테헤란로 123")
+    parser.add_argument("--address")
     parser.add_argument("--lat", type=float)
     parser.add_argument("--lon", type=float)
     parser.add_argument("--radius", type=int)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--full", action="store_true")
     args = parser.parse_args()
+    # 기본 주소를 두면 좌표만 준 실행에서 엉뚱한 주소 라벨이 붙는다. 라벨과 좌표가 어긋난
+    # 결과가 조용히 나가는 것보다 여기서 멈추는 편이 낫다.
+    if not args.address:
+        parser.error("--address 가 필요합니다. 좌표를 직접 줄 때도 함께 주세요.")
 
     load_dotenv_if_present()
     overrides = {"analysis_radius_m": args.radius} if args.radius else {}
     settings = Settings.from_env(**overrides)
 
-    site_kwargs = {}
     if args.lat is None or args.lon is None:
         try:
-            found = await geocode(args.address, settings)
+            site = await resolve_site(args.address)
         except GeocodeError as exc:
             print(f"주소를 좌표로 바꾸지 못했습니다: {exc}")
             return 1
-        lat, lon = found.latitude, found.longitude
-        site_kwargs = {
-            "road_address": found.road_address,
-            "jibun_address": found.jibun_address,
-            "detail_address": found.detail_address,
-        }
-        print(f"지오코딩  {found.provider} · 신뢰도 {found.confidence} → {lat}, {lon}")
-        if found.matched_query != args.address.strip():
-            print(f"          조회에 쓴 주소: {found.matched_query}")
-        if found.detail_address:
-            print(f"          분리한 상세주소: {found.detail_address}")
-        if found.road_address:
-            print(f"          {found.road_address}")
+        print(f"카카오 주소 확인 → {site.latitude}, {site.longitude}")
+        if site.detail_address:
+            print(f"          분리한 상세주소: {site.detail_address}")
+        if site.road_address:
+            print(f"          {site.road_address}")
     else:
         lat, lon = args.lat, args.lon
+        # 좌표를 직접 주면 지오코딩을 건너뛰는데, Site 는 도로명·지번 중 하나를 요구한다.
+        # 입력 주소에서 상세주소만 떼어 기본 주소로 쓴다.
+        base, detail = split_detail(args.address)
+        site = Site(
+            input_address=args.address,
+            road_address=base,
+            detail_address=detail,
+            latitude=lat,
+            longitude=lon,
+        )
+        print(f"좌표 직접 입력  {lat}, {lon}")
+        if detail:
+            print(f"          분리한 상세주소: {detail}")
 
     task = AnalysisTask(
         request_id=str(uuid.uuid4()),
-        site=Site(input_address=args.address, latitude=lat, longitude=lon, **site_kwargs),
+        site=site,
     )
     result = await analyze(task, settings=settings)
     payload = result.model_dump()

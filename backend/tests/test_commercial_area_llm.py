@@ -1,9 +1,13 @@
 """모델 응답을 구조화된 요약으로 바꾸는 과정을 검사합니다."""
 
+import json
 import unittest
 
-from app.agents.commercial_area.geocode import query_candidates, split_detail
-from app.agents.commercial_area.llm import parse_summary, render_summary_text
+from app.agents.commercial_area.llm import (
+    MAX_INDEX_NOTES,
+    parse_summary,
+    render_summary_text,
+)
 
 CLEAN = (
     '{"radius_notes":[{"radius_m":100,"text":"점포 50개."},{"radius_m":50,"text":"점포 14개."}],'
@@ -42,29 +46,51 @@ class SummaryParsingTests(unittest.TestCase):
         self.assertEqual(summary["radius_notes"], [])
         self.assertIsNone(summary["overall"])
 
+    def test_index_notes_need_path_label_and_text(self):
+        payload = json.dumps(
+            {
+                "overall": "종합",
+                "index_notes": [
+                    {"path": "/diversity/effective_categories", "label": "다양성", "text": "설명"},
+                    {"path": "상대경로", "label": "버림", "text": "슬래시로 시작 안 함"},
+                    {"path": "/franchise/independent_ratio", "label": "", "text": "라벨 없음"},
+                    {"path": "/restaurant_density/value", "label": "밀집도", "text": ""},
+                    "문자열은 무시",
+                ],
+            },
+            ensure_ascii=False,
+        )
+        notes = parse_summary(payload)["index_notes"]
+        self.assertEqual([n["label"] for n in notes], ["다양성"])
+
+    def test_index_notes_are_capped(self):
+        rows = [
+            {"path": f"/a/{i}", "label": f"라벨{i}", "text": "설명"}
+            for i in range(MAX_INDEX_NOTES + 4)
+        ]
+        payload = json.dumps({"overall": "종합", "index_notes": rows}, ensure_ascii=False)
+        self.assertEqual(len(parse_summary(payload)["index_notes"]), MAX_INDEX_NOTES)
+
+    def test_index_notes_absent_is_empty_not_missing(self):
+        summary = parse_summary(json.dumps({"overall": "종합"}, ensure_ascii=False))
+        self.assertEqual(summary["index_notes"], [])
+
+    def test_render_text_includes_index_notes(self):
+        text = render_summary_text(
+            {
+                "radius_notes": [],
+                "overall": "종합",
+                "concentration": None,
+                "index_notes": [{"path": "/x", "label": "업종 다양성", "text": "사실상 17종"}],
+            }
+        )
+        self.assertIn("업종 다양성: 사실상 17종", text)
+
     def test_render_text_uses_labels(self):
         text = render_summary_text(parse_summary(CLEAN))
         self.assertIn("50m: 점포 14개.", text)
         self.assertIn("종합 평가:", text)
         self.assertIn("집적도·특화도 평가:", text)
-
-
-class AddressSplitTests(unittest.TestCase):
-    def test_splits_unit_from_road_address(self):
-        self.assertEqual(
-            split_detail("서울특별시 송파구 위례광장로 120 155호"),
-            ("서울특별시 송파구 위례광장로 120", "155호"),
-        )
-
-    def test_keeps_address_without_unit(self):
-        self.assertEqual(
-            split_detail("서울 송파구 위례광장로 120"), ("서울 송파구 위례광장로 120", None)
-        )
-
-    def test_candidates_get_progressively_shorter(self):
-        candidates = query_candidates("서울특별시 강남구 테헤란로 123, ○○빌딩 3층 302호")
-        self.assertEqual(len(candidates), 3)
-        self.assertEqual(candidates[-1], "서울특별시 강남구 테헤란로 123")
 
 
 if __name__ == "__main__":

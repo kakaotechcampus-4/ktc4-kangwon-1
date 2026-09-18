@@ -24,6 +24,7 @@ REFERENCE_DATE_KEYS = ("stdrDt", "dataStdDe", "baseYm", "stdrYm")
 NODATA_RESULT_CODES = {"03"}
 NODATA_KEYWORDS = ("NODATA", "NO_DATA", "데이터없음", "데이터가_없")
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+DEFAULT_RETRY_BACKOFF_S = 1.5
 
 
 class SbizApiError(Exception):
@@ -52,7 +53,14 @@ def _read_cache(path: Path, ttl_hours: int) -> Any | None:
     if time.time() - path.stat().st_mtime > ttl_hours * 3600:
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            return None
+        if not all(isinstance(item, dict) for item in payload["items"]):
+            return None
+        if not isinstance(payload.get("meta"), dict):
+            return None
+        return payload
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -78,7 +86,11 @@ def _unwrap(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _check_header(payload: dict[str, Any]) -> None:
-    header = _unwrap(payload).get("header") or {}
+    header = _unwrap(payload).get("header")
+    if header is None:
+        header = {}
+    if not isinstance(header, dict):
+        raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
     code = str(header.get("resultCode", "")).strip()
     message = str(header.get("resultMsg", "")).strip()
     if code and code not in {"00", "0"}:
@@ -91,7 +103,9 @@ def _check_header(payload: dict[str, Any]) -> None:
 
 
 def _extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
-    body = _unwrap(payload).get("body") or {}
+    body = _unwrap(payload).get("body")
+    if not isinstance(body, dict) or "items" not in body:
+        raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
     items = body.get("items")
     if isinstance(items, dict):
         items = items.get("item") or []
@@ -99,6 +113,10 @@ def _extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
         items = []
     if isinstance(items, dict):
         items = [items]
+    if not isinstance(items, list):
+        raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
+    if not all(isinstance(item, dict) for item in items):
+        raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
     total: Any = body.get("totalCount")
     try:
         total_count = int(total)
@@ -161,7 +179,8 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
     if not raw:
         return None
     try:
-        return max(0.0, float(raw))
+        seconds = float(raw)
+        return min(seconds, 30.0) if math.isfinite(seconds) and seconds >= 0 else None
     except ValueError:
         return None
 
@@ -227,10 +246,12 @@ class StoreClient:
             **query,
         }
         url = f"{SBIZ_BASE_URL}/{operation}"
+        base_backoff = self.settings.retry_backoff_s
+        if not math.isfinite(base_backoff) or base_backoff < 0:
+            base_backoff = DEFAULT_RETRY_BACKOFF_S
 
-        last_error: Exception | None = None
         for attempt in range(self.settings.max_retries + 1):
-            wait_s = self.settings.retry_backoff_s * (attempt + 1)
+            wait_s = min(base_backoff * (attempt + 1), 30.0)
             try:
                 response = await self._http().get(url, params=params)
                 self.calls_made += 1
@@ -246,16 +267,29 @@ class StoreClient:
                     payload = response.json()
                 except json.JSONDecodeError as decode_error:
                     raise SbizApiError(
-                        "BAD_RESPONSE", response.text[:200].replace("\n", " ")
+                        "BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다."
                     ) from decode_error
+                if not isinstance(payload, dict):
+                    raise SbizApiError(
+                        "BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다."
+                    )
                 _check_header(payload)
                 return payload
-            except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.TransportError) as exc:
-                last_error = exc
+            except SbizApiError:
+                raise
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code not in RETRY_STATUS_CODES:
+                    raise SbizApiError(
+                        "UPSTREAM_FAILED", "상가정보 API 조회에 실패했습니다."
+                    ) from exc
                 if attempt < self.settings.max_retries:
                     await asyncio.sleep(wait_s)
                     continue
-        raise SbizApiError("UPSTREAM_FAILED", str(last_error))
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt < self.settings.max_retries:
+                    await asyncio.sleep(wait_s)
+                    continue
+        raise SbizApiError("UPSTREAM_FAILED", "상가정보 API 조회에 실패했습니다.")
 
     async def _collect_pages(
         self,

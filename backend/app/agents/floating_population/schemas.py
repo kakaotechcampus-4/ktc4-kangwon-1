@@ -5,7 +5,7 @@
 인터페이스다.** 자유 형식 dict 로 두면 여기서 키 하나 바꿀 때 결정 쪽 검증이 조용히 깨진다.
 그래서 모델로 고정하고, 키를 바꿀 때는 결정 에이전트 담당과 함께 바꾼다.
 
-리포트 에이전트도 같은 `data` 로 차트·표를 만든다(결정 에이전트가 `source_analyses` 에
+화면도 같은 `data` 로 차트·표를 만든다(최종판단이 `source_analyses` 에
 그대로 실어 보낸다). 그래서 판단용 지표(`benchmark`)와 차트용 원시 시리즈(`population`)를
 둘 다 담는다.
 """
@@ -52,13 +52,8 @@ class Population(Schema):
     daily_avg: float  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
     female_ratio: float
 
-    # ⚠️ 아래 원값 셋(`by_age`·`by_time`·`by_day`)은 선별에서 빠지면 **`null` 이 된다.**
-    # 키를 지우지 않고 `null` 로 두는 이유(실측으로 확인, `decision/agent.py:86-95`):
-    #   `/population/by_day`      → null 로 해석되고 통과. 키를 지웠으면 KeyError 로 죽는다.
-    #   `/population/by_day/mon`  → **그래도 죽는다**(ValueError "입력에 없는 근거입니다").
-    # 즉 null 은 리프 경로만 살린다. 한 단계 더 들어가는 인용은 여전히 리포트를 죽인다.
-    # 다만 결정 에이전트는 **내가 보낸 것만 보므로** null 인 블록 안쪽을 인용할 이유가 없다.
-    # 비중(`*_share`)은 선별 대상이 아니라 항상 남는다.
+    # 원본은 선별과 무관하게 보존합니다. 최종판단 입력 복사본에서만 이 셋을 제외할 수 있습니다.
+    # 기존 저장 자료를 읽을 수 있도록 nullable 계약은 유지합니다.
     by_age: dict[str, float] | None
     age_share: dict[str, float]
 
@@ -186,11 +181,10 @@ class RadiusProfile(Schema):
 
 
 class Selection(Schema):
-    """무엇을 넘기고 무엇을 뺐는지. LLM 이 고르고 코드가 검증한 결과다.
+    """최종판단 입력에 넣을 블록. 원본 반환·저장에는 영향을 주지 않습니다.
 
-    `data` 는 결정 에이전트 프롬프트에 통째로 실린다. 분석 에이전트가 셋이라 그대로 두면
-    판단에 쓸 지표가 차트용 시리즈에 묻힌다(실측: 길동 `data` 6,944자 중 결정이 쓰는
-    `benchmark`·`type`·`reliability` 는 995자, 14%). 그래서 지역에서 의미가 없는 블록을 뺀다.
+    최종판단이 직렬화한 입력 복사본에만 선택을 적용합니다. 배열 일부를 압축하지 않아
+    남아 있는 근거 경로는 원본에서도 같은 값을 가리킵니다.
 
     **선별은 최적화지 기능이 아니다.** 모델이 없거나 실패하면 `applied=False` 로 전부 싣는다 —
     분석 자체는 그대로 나가야 한다.
@@ -225,7 +219,7 @@ class FloatingPopulationData(Schema):
     description: Text
     period_code: Text
     radius_m: int
-    # ⚠️ 선별에서 빠지면 `null` 이 된다(키는 남는다 — 위 `Population` 주석의 이유와 같다).
+    # 과거 저장 자료의 null은 허용하되, 새 분석은 선별 전 원본을 보존합니다.
     trade_areas: list[TradeArea] | None
     population: Population
     benchmark: Benchmark

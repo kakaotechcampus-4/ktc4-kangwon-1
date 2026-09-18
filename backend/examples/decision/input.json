@@ -23,16 +23,16 @@
       "data": {
         "description": "개롱역 올리브영 건물 연결 시험용 가상 데이터이며 실제 API 조회값이 아닙니다.",
         "industries": [
-          {"industry": "중식", "opened": 7, "closed": 2, "unit": "개소"},
-          {"industry": "한식", "opened": 8, "closed": 3, "unit": "개소"},
-          {"industry": "분식", "opened": 5, "closed": 1, "unit": "개소"},
-          {"industry": "일식", "opened": 4, "closed": 1, "unit": "개소"},
-          {"industry": "베이커리", "opened": 4, "closed": 1, "unit": "개소"},
-          {"industry": "카페", "opened": 4, "closed": 8, "unit": "개소"},
-          {"industry": "치킨", "opened": 2, "closed": 6, "unit": "개소"},
-          {"industry": "피자", "opened": 1, "closed": 4, "unit": "개소"},
-          {"industry": "주점", "opened": 2, "closed": 7, "unit": "개소"},
-          {"industry": "편의점", "opened": 1, "closed": 4, "unit": "개소"}
+          {"industry": "중식 음식점업", "opened": 7, "closed": 2, "unit": "개소"},
+          {"industry": "한식 음식점업", "opened": 8, "closed": 3, "unit": "개소"},
+          {"industry": "기타 간이 음식점업", "source_industry": "분식", "opened": 5, "closed": 1, "unit": "개소"},
+          {"industry": "일식 음식점업", "opened": 4, "closed": 1, "unit": "개소"},
+          {"industry": "기타 간이 음식점업", "source_industry": "베이커리", "opened": 4, "closed": 1, "unit": "개소"},
+          {"industry": "비알코올 음료점업", "opened": 4, "closed": 8, "unit": "개소"},
+          {"industry": "기타 간이 음식점업", "source_industry": "치킨", "opened": 2, "closed": 6, "unit": "개소"},
+          {"industry": "기타 간이 음식점업", "source_industry": "피자", "opened": 1, "closed": 4, "unit": "개소"},
+          {"industry": "주점업", "opened": 2, "closed": 7, "unit": "개소"},
+          {"industry": "종합 소매업", "source_industry": "편의점", "opened": 1, "closed": 4, "unit": "개소"}
         ]
       }
     },
@@ -44,16 +44,13 @@
       "data": {
         "description": "개롱역 올리브영 건물 연결 시험용 가상 데이터이며 실제 API 조회값이 아닙니다.",
         "industry_counts": {
-          "중식": 5,
-          "한식": 10,
-          "분식": 7,
-          "일식": 4,
-          "베이커리": 6,
-          "카페": 42,
-          "치킨": 21,
-          "피자": 16,
-          "주점": 19,
-          "편의점": 15
+          "중식 음식점업": 5,
+          "한식 음식점업": 10,
+          "일식 음식점업": 4,
+          "기타 간이 음식점업": {"분식": 7, "베이커리": 6, "치킨": 21, "피자": 16},
+          "비알코올 음료점업": 42,
+          "주점업": 19,
+          "종합 소매업": {"편의점": 15}
         },
         "unit": "개소",
         "summary": "개롱역 역세권과 주거 밀집 상권을 가정한 목업입니다."
