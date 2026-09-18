@@ -98,12 +98,13 @@ def build_seoul_links(master: dict[str, dict[str, str]]) -> list[dict]:
 
 
 def build_legacy_links(seoul_rows: list[dict], master: dict[str, dict[str, str]]) -> list[dict]:
-    """개폐업 70업종 → 중분류. business_lifecycle 은 읽기만 한다."""
-    from app.agents.business_lifecycle import mapping as legacy
+    """개폐업 업종 → 중분류. business_lifecycle은 읽기만 한다."""
+    from app.industries.catalog import INDUSTRIES as service_industries
+    from app.industries.catalog import SEOUL_TO_INDUSTRY as seoul_to_service
 
     seoul_to_middle = {r["seoul_code"]: r["middle_code"] for r in seoul_rows}
     by_legacy: dict[int, dict[str, str]] = {}
-    for seoul_code, legacy_id in legacy.SEOUL_TO_SERVICE.items():
+    for seoul_code, legacy_id in seoul_to_service.items():
         middle = seoul_to_middle.get(seoul_code)
         if middle:
             by_legacy.setdefault(legacy_id, {})[middle] = "seoul"
@@ -125,7 +126,7 @@ def build_legacy_links(seoul_rows: list[dict], master: dict[str, dict[str, str]]
             by_legacy.setdefault(legacy_id, {})[code] = "direct"
 
     rows = []
-    for legacy_id in sorted(legacy.SERVICE_INDUSTRIES):
+    for legacy_id in sorted(service_industries):
         found = by_legacy.get(legacy_id, {})
         if not found:
             raise SystemExit(f"legacy {legacy_id} 에 연결된 중분류가 없습니다.")
@@ -133,7 +134,7 @@ def build_legacy_links(seoul_rows: list[dict], master: dict[str, dict[str, str]]
             rows.append(
                 {
                     "legacy_id": legacy_id,
-                    "legacy_name": legacy.SERVICE_INDUSTRIES[legacy_id],
+                    "legacy_name": service_industries[legacy_id],
                     "middle_code": middle,
                     "split_count": len(found),
                     "route": route,

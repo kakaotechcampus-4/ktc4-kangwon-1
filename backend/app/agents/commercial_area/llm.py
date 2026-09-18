@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+from app.llm import client
+
 from .config import PACKAGE_DIR, Settings
 
 PROMPT_PATH = PACKAGE_DIR / "prompt.md"
@@ -127,44 +129,22 @@ async def summarize(
     for attempt in range(MAX_ATTEMPTS):
         try:
             text = await _complete(system_prompt, user_message, settings)
+            if text and text.strip():
+                summary = parse_summary(text)
+                if summary["radius_notes"] or summary["overall"]:
+                    return summary, None
+                last_problem = "모델 응답에서 요약 내용을 찾지 못했습니다."
         except Exception as exc:
             last_problem = f"요약 실패: {type(exc).__name__}"
-            text = None
-        if text and text.strip():
-            summary = parse_summary(text)
-            if summary["radius_notes"] or summary["overall"]:
-                return summary, None
-            last_problem = "모델 응답에서 요약 내용을 찾지 못했습니다."
+            return None, last_problem
         if attempt < MAX_ATTEMPTS - 1:
             await asyncio.sleep(RETRY_DELAY_S)
     return None, last_problem
 
 
 async def _complete(system_prompt: str, user_message: str, settings: Settings) -> str:
-    from openai import AsyncOpenAI
-
-    model = settings.llm_model
-    if not model:
-        raise ValueError("ELICE_MODEL이 설정되지 않았습니다.")
-
-    async with AsyncOpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        timeout=settings.llm_timeout_s,
-        max_retries=1,
-    ) as client:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            response_format={"type": "json_object"},
-            max_completion_tokens=settings.llm_max_tokens,
-        )
-    if not response.choices:
-        return ""
-    return response.choices[0].message.content or ""
+    result = await client.complete_json(system_prompt, user_message, settings.llm_settings())
+    return json.dumps(result, ensure_ascii=False)
 
 
 def strip_code_fence(text: str) -> str:

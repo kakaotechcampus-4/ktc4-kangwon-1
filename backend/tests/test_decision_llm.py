@@ -11,7 +11,19 @@ from app.agents.decision.llm import generate_decision
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "decision"
 BASE_ENV = {
-    key: value for key, value in os.environ.items() if not key.startswith(("ELICE_", "LLM_"))
+    key: value
+    for key, value in os.environ.items()
+    if not key.startswith(
+        (
+            "ELICE_",
+            "LLM_",
+            "DECISION_LLM_",
+            "ORCHESTRATION_LLM_",
+            "COMMERCIAL_AREA_LLM_",
+            "FLOATING_POPULATION_LLM_",
+            "BUSINESS_LIFECYCLE_LLM_",
+        )
+    )
 }
 
 
@@ -94,7 +106,8 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await generate_decision("시험용 지침", "{}")
         self.assertEqual(result.recommendations[0].score, 72)
-        self.assertEqual(requests[0]["messages"][0]["content"], "시험용 지침")
+        self.assertIn("시험용 지침", requests[0]["messages"][0]["content"])
+        self.assertIn("json", requests[0]["messages"][0]["content"].lower())
         self.assertEqual(requests[0]["messages"][1]["content"], "{}")
         self.assertEqual(requests[0]["response_format"]["type"], "json_object")
         self.assertEqual(requests[0]["max_completion_tokens"], 8192)
@@ -191,7 +204,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "summary"):
                 await generate_decision("시험용 지침", "{}")
 
-    async def test_elice_request_error_shows_status_and_message(self):
+    async def test_elice_request_error_hides_response_message(self):
         import httpx
         import openai
 
@@ -200,8 +213,10 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         def make_client(**kwargs):
             response = {
                 "error": {
-                    "message": "지원하지 않는 요청 필드입니다.",
+                    "message": "FAKE-SECRET-KEY",
                     "type": "invalid_request_error",
+                    "code": "unsupported_value",
+                    "param": "reasoning_effort",
                 }
             }
             return constructor(
@@ -222,8 +237,12 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
             patch.dict(os.environ, {**BASE_ENV, **environment}, clear=True),
             patch("openai.AsyncOpenAI", side_effect=make_client),
         ):
-            with self.assertRaisesRegex(RuntimeError, "HTTP 400.*지원하지 않는 요청 필드"):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 400") as raised:
                 await generate_decision("시험용 지침", "{}")
+        self.assertNotIn("FAKE-SECRET-KEY", str(raised.exception))
+        self.assertEqual(raised.exception.diagnostics["http_status"], 400)
+        self.assertEqual(raised.exception.diagnostics["provider_code"], "unsupported_value")
+        self.assertEqual(raised.exception.diagnostics["parameter"], "reasoning_effort")
 
 
 if __name__ == "__main__":

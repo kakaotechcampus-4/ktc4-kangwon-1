@@ -43,6 +43,9 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 
 **응답 200** — `DecisionResult`
 
+이 객체가 별도 리포트 단계를 거치지 않는 최종 판단 결과입니다. 응답 헤더 `X-Request-ID`로
+같은 실행의 저장 상태를 조회할 수 있으며, 브라우저에서도 읽을 수 있도록 CORS에 노출합니다.
+
 ```json
 {
   "schema_version": "1.0",
@@ -68,6 +71,12 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
   "source_analyses": [ "… 세 에이전트의 원본 분석" ]
 }
 ```
+
+### `GET /api/v1/analyses/{request_id}`
+
+POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
+`pending` / `running` / `completed` / `failed`이며 `site`, `result`, `error`는 JSON 객체 또는 null입니다.
+과거 저장 결과의 업종명은 현재 75업종 규칙으로 다시 검증하거나 변환하지 않습니다.
 
 ## 화면이 알아야 할 것
 
@@ -102,9 +111,14 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 
 | 상태 | 언제 | 본문 |
 | --- | --- | --- |
-| 400 | 주소를 찾지 못함, 입력이 잘못됨 | `{"detail": "주소를 찾지 못했습니다: …"}` |
+| 400 | 주소를 찾지 못함, 여러 후보, 입력 오류 | `{"detail": "주소를 확인해 주세요."}` |
 | 422 | 본문 형식이 틀림 (빈 주소 등) | FastAPI 기본 형식 |
-| 502 | 외부 API·모델 실패 | `{"detail": "…"}` |
+| 404 | GET 요청 ID가 없음 | `{"detail": "분석 요청을 찾을 수 없습니다."}` |
+| 502 | 주소·외부 API·모델 실패 | 고정된 안전 메시지 |
+| 500 | 결과 계약·저장 또는 저장 결과 조회 실패 | 고정된 안전 메시지 |
+
+POST가 요청 ID를 만든 뒤 처리한 오류 응답에도 `X-Request-ID`가 있습니다. 본문 검증 422와
+공백 주소 400처럼 저장 시작 전 실패에는 조회할 행이 없습니다. 키·외부 URL·원문 예외는 반환하지 않습니다.
 
 ## 키 없이 화면 붙이기
 
@@ -112,10 +126,10 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 
 ```bash
 cd backend
-MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:app --reload
+MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:create_app --factory --reload
 ```
 
-또는 요청마다 `?mock=true`를 붙입니다. **목업도 진짜 오케스트레이터와 중재 에이전트를 그대로 지나가므로
+또는 요청마다 `?mock=true`를 붙입니다. **목업도 진짜 오케스트레이터와 최종판단 에이전트를 그대로 지나가므로
 응답 형태가 실제와 같습니다.** 좌표는 고정이고 `address`만 요청한 값이 돌아옵니다.
 
 ```ts

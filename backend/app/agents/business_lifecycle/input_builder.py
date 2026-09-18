@@ -1,12 +1,13 @@
-import argparse
-import json
 import uuid
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from app.industries import TAXONOMY
+from app.industries.catalog import EXPECTED_INDUSTRY_COUNT
+
 from .client import get_recent_quarters
+from .config import Settings
 from .scoring import (
     CLOSE_TREND_WEIGHT,
     NET_CHANGE_WEIGHT,
@@ -48,7 +49,7 @@ def get_score_missing_reason(
     # 1. 서울시 데이터 자체가 없는 경우
     # ========================================================
 
-    if not bool(row["data_available"]):
+    if not bool(row["data_available"]) or not bool(row["data_complete"]):
         missing_reason = row.get("missing_reason")
 
         if pd.isna(missing_reason):
@@ -92,6 +93,8 @@ def build_agent_input(
     quarter_count: int = 12,
     request_id: str | None = None,
     area_name: str | None = None,
+    *,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     """
     서울시 API 조회 → 전처리 → 점수 계산 결과를 이용해
@@ -112,6 +115,7 @@ def build_agent_input(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
+        settings=settings,
     )
 
     # ========================================================
@@ -143,10 +147,12 @@ def build_agent_input(
 
     for _, row in scored_df.iterrows():
         industry = {
-            "industry_id": to_int(row["service_id"]),
+            "industry_id": str(row["service_id"]),
             "industry_name": str(row["service_name"]),
             "data_available": True,
             "score_available": True,
+            "data_status": row["data_status"],
+            "data_complete": bool(row["data_complete"]),
             # =================================================
             # 실제 개폐업 데이터
             # =================================================
@@ -200,10 +206,36 @@ def build_agent_input(
     for _, row in unscored_df.iterrows():
         unavailable_industries.append(
             {
-                "industry_id": to_int(row["service_id"]),
+                "industry_id": str(row["service_id"]),
                 "industry_name": str(row["service_name"]),
                 "data_available": bool(row["data_available"]),
                 "score_available": False,
+                "data_status": row["data_status"],
+                "data_complete": bool(row["data_complete"]),
+                "metrics": {
+                    key: to_float(row[key])
+                    for key in (
+                        "latest_store_count",
+                        "avg_store_count",
+                        "period_open_count",
+                        "period_close_count",
+                        "period_net_change",
+                        "avg_open_rate",
+                        "avg_close_rate",
+                        "recent_year_close_rate",
+                        "net_change_rate",
+                        "turnover_rate",
+                        "close_rate_trend",
+                    )
+                },
+                "source_coverage": {
+                    key: to_int(row[key])
+                    for key in (
+                        "expected_source_count",
+                        "observed_source_rows",
+                        "expected_source_rows",
+                    )
+                },
                 "observed_quarters": to_int(row.get("observed_quarters")),
                 "lifecycle_score": None,
                 "confidence": "none",
@@ -223,6 +255,7 @@ def build_agent_input(
     agent_input: dict[str, Any] = {
         "request_id": request_id or str(uuid.uuid4()),
         "analysis_type": "business_lifecycle",
+        "taxonomy": dict(TAXONOMY),
         "scope": {
             "area_code": area_code,
             "area_name": area_name,
@@ -263,7 +296,7 @@ def build_agent_input(
         # Coverage
         # ====================================================
         "coverage": {
-            "target_industries": 70,
+            "target_industries": EXPECTED_INDUSTRY_COUNT,
             "scored_industries": len(scored_df),
             "unscored_industries": len(unscored_df),
         },
@@ -274,110 +307,3 @@ def build_agent_input(
     }
 
     return agent_input
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=("Business Lifecycle Agent 입력 JSON 생성"))
-
-    parser.add_argument(
-        "--area-code",
-        required=True,
-        help="서울시 상권코드",
-    )
-
-    parser.add_argument(
-        "--base-quarter",
-        required=True,
-        help="기준 분기. 예: 20252",
-    )
-
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=12,
-        help="분석할 분기 수. 기본값 12",
-    )
-
-    parser.add_argument(
-        "--output",
-        help=("테스트용 JSON 저장 경로. 생략하면 파일을 저장하지 않습니다."),
-    )
-
-    args = parser.parse_args()
-
-    agent_input = build_agent_input(
-        area_code=args.area_code,
-        base_quarter=args.base_quarter,
-        quarter_count=args.count,
-    )
-
-    # ========================================================
-    # 테스트 출력
-    # ========================================================
-
-    coverage = agent_input["coverage"]
-    period = agent_input["scope"]["period"]
-
-    print()
-    print("===== Agent Input 생성 결과 =====")
-
-    print(
-        "전체 목표 업종:",
-        coverage["target_industries"],
-    )
-
-    print(
-        "점수 계산 업종:",
-        coverage["scored_industries"],
-    )
-
-    print(
-        "판단 보류 업종:",
-        coverage["unscored_industries"],
-    )
-
-    print(
-        "분석 시작 분기:",
-        period["start_quarter"],
-    )
-
-    print(
-        "분석 종료 분기:",
-        period["end_quarter"],
-    )
-
-    print(
-        "분석 분기 수:",
-        period["quarter_count"],
-    )
-
-    # 70개가 제대로 유지되는지 확인
-    assert coverage["scored_industries"] + coverage["unscored_industries"] == 70
-
-    # ========================================================
-    # 테스트용 JSON 저장
-    # ========================================================
-
-    if args.output:
-        output_path = Path(args.output)
-
-        with output_path.open(
-            "w",
-            encoding="utf-8",
-        ) as file:
-            json.dump(
-                agent_input,
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-
-        print()
-        print(
-            "Agent Input JSON 저장 완료:",
-            output_path,
-        )
-
-
-if __name__ == "__main__":
-    main()

@@ -1,7 +1,7 @@
 """주소 처리와 분석 에이전트 실행 흐름을 연결합니다.
 
 주소 → 좌표 → 분석 에이전트 병렬 실행 → 최종판단까지가 한 흐름입니다.
-ReAct에서 개폐업은 미연결 오류를 반환하며, 최종판단이 그 사유를 남깁니다.
+세 분석기는 같은 요청 설정을 명시적으로 전달받습니다.
 한 에이전트가 실패해도 나머지는 계속 돕니다.
 """
 
@@ -11,15 +11,19 @@ import asyncio
 import json
 import uuid
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from functools import partial
 from importlib.resources import files
 from typing import Any
 
 from openai.types.chat import ChatCompletionMessage
+from pydantic import ValidationError
 
-from app.agents import commercial_area, decision, floating_population
-from app.agents.commercial_area.config import Settings, load_dotenv_if_present
+from app.agents import business_lifecycle, commercial_area, decision, floating_population
+from app.agents.commercial_area.config import Settings
 from app.agents.decision.agent import GenerateDecision
+from app.agents.floating_population import llm as floating_llm
+from app.config import AddressSettings
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
@@ -30,6 +34,7 @@ from app.schemas import (
     DecisionResult,
     Site,
 )
+from app.services.settings import ExecutionSettings, validate_timeout
 
 from . import llm, tools
 
@@ -67,17 +72,14 @@ async def prepare_task(
 
 
 def default_agents(settings: Settings | None = None) -> AgentRegistry:
-    """기존 고정 흐름에 연결된 분석 에이전트를 등록합니다.
-
-    유동인구·개폐업 에이전트가 준비되면 여기에 한 줄씩 추가합니다.
-    """
-    return {
-        commercial_area.AGENT_ID: partial(commercial_area.analyze, settings=settings),
-    }
+    """기존 상권 설정 인자를 유지하면서 공통 3종 등록을 재사용합니다."""
+    execution = ExecutionSettings.from_env()
+    return build_react_agents(replace(execution, commercial=settings) if settings else execution)
 
 
-def build_react_agents() -> AgentRegistry:
-    """실제 분석 두 개와 개폐업 미연결 응답을 명시적으로 등록합니다."""
+def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegistry:
+    """등록 시 외부 호출 없이 세 실제 분석기를 같은 설정 묶음에 연결합니다."""
+    settings = settings or ExecutionSettings.from_env()
 
     async def guarded(
         task: AnalysisTask, *, agent_id: AgentId, analyze: AnalysisAgent
@@ -94,40 +96,41 @@ def build_react_agents() -> AgentRegistry:
             )
         return await analyze(task)
 
-    async def unavailable(task: AnalysisTask) -> AgentAnalysis:
-        return AgentAnalysis(
-            request_id=task.request_id,
-            agent_id="business_lifecycle",
-            status="error",
-            error=AgentError(
-                code="AGENT_NOT_CONNECTED",
-                message="개폐업 에이전트의 공통 비동기 진입점이 아직 연결되지 않았습니다.",
-            ),
-        )
-
     return {
         "floating_population": partial(
             guarded,
             agent_id="floating_population",
-            analyze=floating_population.analyze,
+            analyze=partial(
+                floating_population.analyze,
+                settings=settings.floating,
+                select=partial(floating_llm.select_blocks, settings=settings.floating_llm),
+            ),
         ),
-        "business_lifecycle": unavailable,
+        "business_lifecycle": partial(
+            guarded,
+            agent_id="business_lifecycle",
+            analyze=partial(
+                business_lifecycle.analyze,
+                settings=settings.lifecycle,
+                llm_settings=settings.lifecycle_llm,
+            ),
+        ),
         "commercial_area": partial(
             guarded,
             agent_id="commercial_area",
-            analyze=commercial_area.analyze,
+            analyze=partial(commercial_area.analyze, settings=settings.commercial),
         ),
     }
 
 
-def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId, exc: BaseException) -> AgentAnalysis:
+def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId, _exc: BaseException) -> AgentAnalysis:
     return AgentAnalysis(
         request_id=task.request_id,
         agent_id=agent_id,
         status="error",
         error=AgentError(
             code="AGENT_CRASHED",
-            message=f"{type(exc).__name__}: {exc}"[:500],
+            message="분석 에이전트 실행에 실패했습니다.",
         ),
     )
 
@@ -137,16 +140,25 @@ async def run_agents(
     agents: AgentRegistry,
     *,
     on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None,
+    agent_timeout: float = 180.0,
 ) -> list[AgentAnalysis]:
     """등록된 분석 에이전트를 동시에 실행합니다."""
     if not agents:
         raise ValueError("실행할 분석 에이전트가 없습니다.")
+    validate_timeout(agent_timeout)
 
     async def run_one(agent_id: AgentId) -> AgentAnalysis:
         try:
-            result = await agents[agent_id](task)
+            async with asyncio.timeout(agent_timeout) as deadline:
+                result = await agents[agent_id](task)
+        except ValidationError:
+            raise
         except Exception as exc:
             result = _crash_to_analysis(task, agent_id, exc)
+            if isinstance(exc, TimeoutError) and deadline.expired():
+                result.error = AgentError(
+                    code="AGENT_TIMEOUT", message="분석 제한시간이 초과됐습니다."
+                )
         # 계약 오류와 저장 실패는 분석 함수의 실행 오류로 바꾸지 않습니다.
         analysis = AgentAnalysis.model_validate(result)
         if analysis.agent_id != agent_id or analysis.request_id != task.request_id:
@@ -178,11 +190,19 @@ async def run_analysis(
     `site`를 주면 좌표 변환을 건너뜁니다. `agents`와 `generate`는 시험용
     대역을 넣기 위한 자리입니다.
     """
-    load_dotenv_if_present()
     settings = settings or Settings.from_env()
 
     async def resolve(address: str) -> Site:
-        return site if site is not None else await tools.resolve_site(address, settings)
+        return (
+            site
+            if site is not None
+            else await tools.resolve_site(
+                address,
+                AddressSettings(
+                    api_key=settings.geocoding_api_key, timeout=settings.request_timeout_s
+                ),
+            )
+        )
 
     task = await prepare_task(
         address,
@@ -208,6 +228,7 @@ async def run_react(
     request_id: str | None = None,
     on_task_prepared: Callable[[AnalysisTask], Awaitable[None]] | None = None,
     on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None,
+    agent_timeout: float = 180.0,
 ) -> DecisionResult:
     """도구 호출과 관찰을 반복합니다. 주소 도구와 세 분석기는 명시적으로 연결합니다."""
     address = address.strip()
@@ -260,10 +281,18 @@ async def run_react(
             observation = {"status": "ok", "task": task.model_dump(mode="json")}
         elif name == "run_analyses":
             assert task is not None
-            analyses = await run_agents(task, agents, on_analysis_completed=on_analysis_completed)
+            analyses = await run_agents(
+                task,
+                agents,
+                on_analysis_completed=on_analysis_completed,
+                agent_timeout=agent_timeout,
+            )
             observation = {
                 "status": "ok",
-                "analyses": [item.model_dump(mode="json") for item in analyses],
+                "analyses": [
+                    item.model_dump(mode="json", include={"agent_id", "status", "scope"})
+                    for item in analyses
+                ],
             }
         else:
             assert task is not None and analyses is not None

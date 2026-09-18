@@ -9,14 +9,16 @@ from unittest.mock import patch
 
 from app.agents.business_lifecycle.agent import (
     AGENT_ID,
-    BusinessLifecycleAgentError,
     analyze,
 )
 from app.agents.business_lifecycle.area_resolver import (
     BusinessArea,
     BusinessAreaNoDataError,
+    BusinessAreaResolverError,
 )
 from app.agents.business_lifecycle.config import Settings
+from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError
+from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
 GARAK_SITE = Site(
@@ -71,9 +73,9 @@ def fake_pipeline(
             },
         },
         "coverage": {
-            "target_industries": 70,
+            "target_industries": 75,
             "scored_industries": 1,
-            "unscored_industries": 69,
+            "unscored_industries": 74,
         },
         "scoring_method": {
             "score_type": "relative",
@@ -82,8 +84,8 @@ def fake_pipeline(
         "summary": "테스트 요약입니다.",
         "industry_scores": [
             {
-                "industry_id": 1,
-                "industry_name": "한식음식점",
+                "industry_id": "I201",
+                "industry_name": "한식 음식점업",
                 "lifecycle_score": 71.5,
                 "type": "성장·안정형",
                 "confidence": "high",
@@ -94,17 +96,37 @@ def fake_pipeline(
         "unavailable_industries": [
             {
                 "industry_id": industry_id,
-                "industry_name": f"테스트 업종 {industry_id}",
+                "industry_name": INDUSTRIES[industry_id],
                 "data_available": False,
                 "confidence": "none",
+                "observed_quarters": 7 if industry_id == "I202" else 0,
                 "missing_reason": "테스트용 데이터 부족입니다.",
             }
-            for industry_id in range(2, 71)
+            for industry_id in INDUSTRIES
+            if industry_id != "I201"
         ],
     }
 
 
 class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bundled_area_reaches_pipeline_without_external_calls(self):
+        site = GARAK_SITE.model_copy(
+            update={
+                "latitude": 37.4975927810188,
+                "longitude": 127.135121781578,
+            }
+        )
+        with patch("socket.socket.connect", side_effect=AssertionError("외부 호출 금지")):
+            result = await analyze(
+                AnalysisTask(request_id="bundled-area", site=site),
+                settings=Settings(base_quarter_override="20244"),
+                run_pipeline=fake_pipeline,
+            )
+        self.assertIsNone(result.error)
+        self.assertEqual(result.data["metadata"]["area_code"], "3120240")
+        self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
+        self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "official_polygon")
+
     async def test_analyze_preserves_request_id_and_validates_agent_analysis(self):
         result = await analyze(
             task(),
@@ -120,7 +142,11 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.scope.area, "개롱역 (3120240)")
         self.assertEqual(result.scope.period, "20221~20244 (12개 분기)")
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
-        self.assertEqual(len(result.data["industries"]), 70)
+        self.assertEqual(len(result.data["industries"]), 75)
+        unavailable = next(
+            industry for industry in result.data["industries"] if industry["industry_id"] == "I202"
+        )
+        self.assertEqual(unavailable["source_coverage"].get("observed_quarters"), 7)
 
     async def test_analyze_returns_no_data_for_missing_area(self):
         def missing_area(site: Site, settings: Settings) -> BusinessArea:
@@ -157,6 +183,62 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, "error")
         self.assertEqual(result.data, {})
         self.assertIsNotNone(result.error)
+
+    async def test_error_does_not_expose_external_details(self):
+        secret = "FAKE-SECRET-KEY"
+
+        def broken_pipeline(*args: Any) -> dict[str, Any]:
+            raise BusinessLifecycleAgentError(f"https://example.test/{secret}?body=private")
+
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=fake_area,
+            run_pipeline=broken_pipeline,
+        )
+        self.assertNotIn(secret, result.model_dump_json())
+
+        def missing_area(site: Site, settings: Settings) -> BusinessArea:
+            raise BusinessAreaNoDataError(f"https://example.test/{secret}?body=private")
+
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=missing_area,
+            run_pipeline=fake_pipeline,
+        )
+        self.assertNotIn(secret, result.model_dump_json())
+
+    async def test_error_code_does_not_expose_subclass_name(self):
+        class FAKE_SECRET_KEY(BusinessLifecycleAgentError):
+            pass
+
+        def broken_pipeline(*args: Any) -> dict[str, Any]:
+            raise FAKE_SECRET_KEY("private body")
+
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=fake_area,
+            run_pipeline=broken_pipeline,
+        )
+
+        self.assertEqual(result.error.code, "BusinessLifecycleAgentError")
+        self.assertNotIn("FAKE_SECRET_KEY", result.model_dump_json())
+
+    async def test_shape_configuration_failure_is_error_not_no_data(self):
+        def broken_resolver(site: Site, settings: Settings) -> BusinessArea:
+            raise BusinessAreaResolverError("잘못된 SHP 설정")
+
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=broken_resolver,
+            run_pipeline=fake_pipeline,
+        )
+
+        self.assertEqual(result.status, "error")
+        self.assertEqual(result.error.code, "BusinessAreaResolverError")
 
     async def test_analyze_returns_no_data_for_empty_store_data(self):
         def empty_pipeline(
@@ -216,7 +298,7 @@ class BusinessAreaResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
         self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
         self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "env_override")
-        self.assertEqual(len(result.data["industries"]), 70)
+        self.assertEqual(len(result.data["industries"]), 75)
 
 
 if __name__ == "__main__":

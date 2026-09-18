@@ -13,16 +13,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import httpx
-from dotenv import load_dotenv
 
 from app.agents import commercial_area, floating_population
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.agents.commercial_area.franchise import _brand_items, save_brands
+from app.agents.floating_population import llm as floating_llm
 from app.agents.floating_population.client import SeoulOpenDataClient
 from app.agents.floating_population.config import Settings as FloatingSettings
-from app.agents.orchestration import build_react_agents, run_react
-from app.schemas import Site
+from app.agents.orchestration import build_react_agents
+from app.config import load_environment
+from app.schemas import AgentAnalysis, AgentError, Site
+from app.services.analysis import execute_analysis
+from app.services.settings import ExecutionSettings
 
 EXAMPLES = Path(__file__).resolve().parent
 DEFAULT_INPUT = EXAMPLES / "fixtures" / "api_responses.json"
@@ -85,9 +88,10 @@ def mock_transport(fixture: dict) -> httpx.MockTransport:
     return httpx.MockTransport(respond)
 
 
-async def run(fixture: dict):
+async def run(fixture: dict, *, db_path: str | Path | None = None):
     """원본 파싱·계산은 실제 코드로 수행하고 모델도 실제 호출합니다."""
     site = Site.model_validate(fixture["site"])
+    settings = ExecutionSettings.from_env()
 
     async def resolve(address: str) -> Site:
         if address != site.input_address:
@@ -98,6 +102,17 @@ async def run(fixture: dict):
         result = await analyze(task)
         result.warnings.append("API 목업 기반 가상 분석입니다. 실제 개롱역 관측값이 아닙니다.")
         return result
+
+    async def unavailable_lifecycle(task):
+        return AgentAnalysis(
+            request_id=task.request_id,
+            agent_id="business_lifecycle",
+            status="error",
+            error=AgentError(
+                code="AGENT_NOT_CONNECTED",
+                message="이 API 목업 예제에는 개폐업 원본 대역이 없습니다.",
+            ),
+        )
 
     # 실제 데이터 캐시와 섞이지 않도록 실행별 임시 폴더를 사용합니다.
     with TemporaryDirectory(prefix="chaeum-api-mock-") as temporary:
@@ -126,13 +141,15 @@ async def run(fixture: dict):
                 ) as population_client,
                 StoreClient(ca_settings, client=http) as store_client,
             ):
-                agents = build_react_agents()
+                agents = build_react_agents(settings)
+                agents["business_lifecycle"] = unavailable_lifecycle
                 agents["floating_population"] = partial(
                     with_notice,
                     analyze=partial(
                         floating_population.analyze,
                         settings=fp_settings,
                         client=population_client,
+                        select=partial(floating_llm.select_blocks, settings=settings.floating_llm),
                     ),
                 )
                 agents["commercial_area"] = partial(
@@ -143,21 +160,28 @@ async def run(fixture: dict):
                         store_client=store_client,
                     ),
                 )
-                return await run_react(site.input_address, resolve=resolve, agents=agents)
+                return await execute_analysis(
+                    site.input_address,
+                    resolve=resolve,
+                    agents=agents,
+                    settings=settings,
+                    db_path=db_path,
+                )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="API 응답 목업 JSON")
+    parser.add_argument("--db", type=Path, help="결과를 저장할 SQLite 파일")
     args = parser.parse_args()
-    load_dotenv(EXAMPLES.parent / ".env", override=False)
+    load_environment()
     print("데이터 API는 목업, LLM은 실제 연결입니다. 모델 호출 비용이 발생합니다.", file=sys.stderr)
     print(
         "좌표·인구·점포는 가상 값이며 실제 개롱역 입지 판단에 사용할 수 없습니다.", file=sys.stderr
     )
     try:
         fixture = json.loads(args.input.read_text(encoding="utf-8"))
-        result = asyncio.run(run(fixture))
+        result = asyncio.run(run(fixture, db_path=args.db))
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
         print(f"실행 실패: {exc}", file=sys.stderr)
         return 1

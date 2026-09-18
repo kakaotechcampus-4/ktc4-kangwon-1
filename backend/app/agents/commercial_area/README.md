@@ -71,7 +71,7 @@ pip install -e ".[dev]"
 | `COMMERCIAL_AREA_API_KEY` | 소상공인 상가정보 (필수) | `status: error` |
 | `FRANCHISE_API_KEY` | 공정위 브랜드 목록 | 프랜차이즈 지표 생략 + `partial` |
 | `ELICE_API_KEY` / `ELICE_BASE_URL` / `ELICE_MODEL` | 요약 생성 | 요약 생략 |
-| `GEOCODING_API_KEY` | 주소→좌표 (카카오 REST 키) | 정확도가 낮은 대체 경로 사용 |
+| `GEOCODING_API_KEY` | 공통 주소 도구의 카카오 REST 키 | 주소 설정 오류 |
 | `ANALYSIS_RADIUS_M` | 분석 반경 (기본 500) | 500m |
 
 공공데이터 키 2개는 [공공데이터포털](https://www.data.go.kr) 계정의 **일반 인증키 하나**를 양쪽에 넣으면 된다. 단 API마다 활용신청을 따로 해야 한다.
@@ -113,25 +113,25 @@ result = asyncio.run(
 
 ## `data` 안에 무엇이 들어가고, 왜 그것인가
 
-`data`는 계약상 자유 형식이지만 **소비자가 둘**이다. 결정 에이전트는 업종을 판단하고, 리포트
-에이전트는 같은 `data`로 차트와 표를 만든다(결정 에이전트가 `source_analyses`에 그대로 실어 보낸다).
-그래서 판단용 지표와 차트용 원시 시리즈를 둘 다 담는다.
+`data`는 계약상 자유 형식이지만 **소비 경로가 둘**이다. 최종 판단은 업종과 근거를 만들고,
+프론트엔드는 SQLite에 저장된 `DecisionResult.source_analyses`를 POST/GET API로 받아 차트와 표를
+만든다. 별도 report 에이전트는 없다. 그래서 판단용 지표와 화면용 원시 시리즈를 둘 다 담는다.
 
 | 키 | 소비자 | 내용 |
 | --- | --- | --- |
 | `description` | **결정** | 맨 앞. 숫자의 기준과 단위를 문장으로. 결정 프롬프트가 "필드 이름, 설명, 단위와 실제 값을 함께 읽는다"로 동작해서 넣었다 |
-| `radius_m` · `store_total` | 둘 다 | 분석 반경과 그 안의 총 점포 수 |
+| `radius_m` · `store_total` | 결정·화면 | 분석 반경과 그 안의 총 점포 수 |
 | `data_reference_date` | 결정 | 자료 기준일 `"2026-03-31"`. **API 응답에 날짜 필드가 0개라** `sources.py` 상수에서 온다 |
-| `by_major` | 리포트 | 대분류 10종 집계. 상권 성격을 한눈에 보여주는 용도 |
+| `by_major` | 화면 | 대분류 10종 집계. 상권 성격을 한눈에 보여주는 용도 |
 | `by_middle` | **결정** | 중분류 75종 전수. LQ·집적·특화 지표가 전부 여기 있다 |
-| `by_radius` | 리포트 | 반경 50~500m 5단계 순위와 해설 문장 |
+| `by_radius` | 화면 | 반경 50~500m 5단계 순위와 해설 문장 |
 | `diversity` | 결정 | HHI와 유효 업종수 |
 | `restaurant_density` | 결정 | 음식점 밀도 + 원시 개수 |
-| `franchise` | 둘 다 | 프랜차이즈·개인사업자 수와 비율, 업종별 내역, 브랜드 기준 연도 |
+| `franchise` | 결정·화면 | 프랜차이즈·개인사업자 수와 비율, 업종별 내역, 브랜드 기준 연도 |
 | `lq_baseline` · `district_baseline` | 결정 | 두 기준선이 **무엇이었는지**. 배수를 해석하려면 분모를 알아야 한다 |
-| `district_specialization` | 둘 다 | 자치구 대비 특화 상위 10 |
-| `summary` · `summary_text` | 리포트 | 모델이 쓴 사람 읽는 문장 |
-| `sources` | 둘 다 | 맨 뒤. 공공누리 출처표시 의무라 리포트가 하드코딩하지 않게 함께 싣는다. **쓴 자료만 들어가므로 길이를 가정하지 않는다** |
+| `district_specialization` | 결정·화면 | 자치구 대비 특화 상위 10 |
+| `summary` · `summary_text` | 화면 | 모델이 쓴 사람 읽는 문장 |
+| `sources` | 결정·화면 | 맨 뒤. 공공누리 출처표시 의무라 화면이 하드코딩하지 않게 함께 싣는다. **쓴 자료만 들어가므로 길이를 가정하지 않는다** |
 
 **기준선 정보를 함께 싣는 이유.** `lq: 4.21`만 주면 무엇과 비교한 4.21인지 알 수 없다.
 `lq_baseline.applied_radius_m`(실제 적용된 반경)과 `district_baseline.signgu_name`(자치구 이름)이
@@ -140,13 +140,13 @@ result = asyncio.run(
 
 지표 하나하나의 정의·수식·해석 방향은 [`docs/INDEX_commercial_area.md`](../../../../docs/INDEX_commercial_area.md)에 있다.
 
-## 리포트에 무엇을 싣고, 무엇을 실으면 안 되는가
+## 화면에 무엇을 싣고, 무엇을 실으면 안 되는가
 
-리포트 에이전트가 `source_analyses`로 이 `data`를 통째로 받는다. 전부 보여줄 것은 아니다.
+프론트엔드는 저장된 최종 판단의 `source_analyses`로 이 `data`를 받는다. 전부 보여줄 것은 아니다.
 
 ### 실어도 되는 것
 
-| 키 | 리포트에서의 역할 | 노원 실제 값 |
+| 키 | 화면에서의 역할 | 노원 실제 값 |
 | --- | --- | --- |
 | `store_total` | 대표 숫자 | 1,237개 |
 | `by_major[].count` | 대분류 구성 파이 차트 | 교육 530 · 음식 238 · 소매 158 |
@@ -180,7 +180,7 @@ result = asyncio.run(
 
 `by_middle`(반경 500m 전체 기준 정렬)과 `by_radius[4]`(500m 슬라이스)는 같은 반경인데 값이 다를 수
 있다. `by_radius`는 API가 준 좌표로 거리를 다시 계산해 자르므로, 좌표가 없는 점포가 빠진다.
-리포트에서 둘을 나란히 놓을 때는 출처를 밝힌다.
+화면에서 둘을 나란히 놓을 때는 출처를 밝힌다.
 
 ## 키 이름이 인터페이스다
 
@@ -236,7 +236,7 @@ python examples/run_commercial_area.py --address "서울특별시 송파구 위�
 python examples/run_commercial_area.py --lat 37.4748 --lon 127.1416 --out examples/commercial_area/response.json
 ```
 
-좌표를 주지 않으면 `geocode.py`가 주소를 좌표로 바꿔서 실행한다. 상세주소(`155호`, `3층 302호`)는 자동으로 떼어내 `site.detail_address`로 넣는다.
+좌표를 주지 않으면 공통 `app/address.py`가 카카오 주소 검색의 단일 후보를 검증한다. 상세주소(`155호`, `3층 302호`)는 검색에서 제외하고 `site.detail_address`에 보존한다. 지역·번지가 불명확하거나 후보가 여러 개면 주소를 확정하지 않는다.
 
 출력 예시는 `examples/commercial_area/response.json`에 있다.
 
@@ -263,7 +263,7 @@ LQ·HHI·부재 업종 수의 분모가 이 75칸이라, 다른 체계로 바꾸
 ```bash
 python examples/build_upjong_master.py --official-csv <받은파일.csv>
 python examples/build_industry_links.py --force    # has_seoul·note 를 다시 채운다
-python examples/build_industry_catalog.py          # catalog.py 재생성
+python scripts/build_industry_catalog.py          # catalog.py 재생성
 ```
 
 **세 줄을 같이 돌려야 한다.** 첫 줄이 마스터를 4개 컬럼으로만 다시 쓰기 때문에 `has_seoul`·`note`가

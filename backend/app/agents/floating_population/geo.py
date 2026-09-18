@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import math
 
+from .models import TrdarArea
+
 # EPSG:5181 — 중부원점 TM
 _LAT0 = math.radians(38.0)
 _LON0 = math.radians(127.0)
@@ -109,3 +111,43 @@ def circle_overlap_ratio(distance_m: float, radius_m: float, area_radius_m: floa
     a2 = math.acos(max(-1.0, min(1.0, (d**2 + r2**2 - r1**2) / (2 * d * r2))))
     lens = r1**2 * (a1 - math.sin(2 * a1) / 2) + r2**2 * (a2 - math.sin(2 * a2) / 2)
     return max(0.0, min(1.0, lens / (math.pi * r2**2)))
+
+
+_MAX_AREA_REACH_RATIO = 0.5
+
+
+def _overlapping_areas(
+    areas: list[TrdarArea], x: float, y: float, radius_m: float
+) -> list[tuple[TrdarArea, float]]:
+    """반경과 구역이 겹치는 상권을 (상권, 대표점까지의 거리) 로 가까운 순 반환.
+
+    상권영역 API 가 폴리곤을 주지 않아 구역을 **면적 등가원**으로 근사하고, 대표 점까지의
+    거리에서 등가 반지름을 빼서 반경과 비교한다. **단 등가 반지름은 반경의 절반까지만
+    인정한다**(`_MAX_AREA_REACH_RATIO`).
+
+    상한이 왜 필요한지는 실데이터로 확인했다(2026Q2, 반경 500m 기준):
+
+    | 기준 | 서교동 분석 | 역삼1동 최대 단일 기여 | 도달 거리 |
+    | --- | --- | --- | --- |
+    | 대표 점 거리만 | `서교동(홍대)` 상권 누락 | 역삼역 68.1% | 611m |
+    | 등가 반지름 전부 인정 | 포함 | **강남역 37.6%** | 1,287m |
+    | 등가 반지름 상한 절반 | 포함 | 역삼역 37.8% | 870m |
+
+    - 상한이 없으면 등가 반지름이 400m 대인 발달상권이 판정 반경을 두 배로 늘린다. 실제로
+      843m 떨어진 `강남역` 상권이 테헤란로 분석에 들어와 전체의 37.6% 를 차지했다.
+    - 반대로 대표 점 거리만 보면 큰 상권이 통째로 빠진다(등가 반지름 중위 151m, 상위 10% 는
+      255m 이상). 서교동(홍대) 분석에서 `서교동(홍대)` 상권 자체가 빠지는 결과가 나왔다.
+    - 상한을 반경의 1/3 로 더 조이면 그 누락이 다시 생긴다. 절반이 두 결함을 모두 피하는
+      지점이다.
+
+    집계 범위는 여전히 반경보다 넓다(반경에 걸친 상권은 구역 전체가 들어온다). 그래서 scope
+    와 warnings 에 실제 도달 거리를 적는다. 좌표계가 EPSG:5181(미터) 이라 유클리드 거리를
+    그대로 쓴다.
+    """
+    max_reach = radius_m * _MAX_AREA_REACH_RATIO
+    hits = []
+    for area in areas:
+        distance = math.hypot(area.x - x, area.y - y)
+        if distance - min(area.equivalent_radius_m, max_reach) <= radius_m:
+            hits.append((area, distance))
+    return sorted(hits, key=lambda h: h[1])

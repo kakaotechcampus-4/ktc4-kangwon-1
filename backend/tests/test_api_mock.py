@@ -4,7 +4,9 @@ import copy
 import importlib
 import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -19,6 +21,9 @@ commercial_agent = importlib.import_module("app.agents.commercial_area.agent")
 
 class ApiMockTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.path = Path(temporary.name) / "mock.sqlite3"
         self.fixture = json.loads(run_api_mock.DEFAULT_INPUT.read_text(encoding="utf-8"))
         self.original = copy.deepcopy(self.fixture)
         self.network = self.enterContext(
@@ -38,6 +43,7 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
                     "FLOATING_POPULATION_API_KEY": "must-not-use",
                     "FRANCHISE_API_KEY": "must-not-use",
                 },
+                clear=True,
             )
         )
         self.select = self.enterContext(
@@ -78,13 +84,13 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.summary.await_args.args[1].cache_dir.exists())
 
     @staticmethod
-    def decision(prompt, input_json):
+    def decision(prompt, input_json, settings=None):
         return {
             "status": "ok",
             "summary": "가상 자료 기반 연결 시험입니다.",
             "recommendations": [
                 {
-                    "category": {"major": "음식점", "middle": "중식"},
+                    "category": {"major": "음식점업", "middle": "중식 음식점업"},
                     "score": 60,
                     "reasons": ["가상 유동인구와 점포 집계가 있습니다."],
                     "risks": [],
@@ -99,7 +105,10 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         }
 
     async def test_raw_responses_produce_calculated_results(self):
-        result = await run_api_mock.run(self.fixture)
+        result = await run_api_mock.run(self.fixture, db_path=self.path)
+        from app.db.repository import get_request
+
+        self.assertEqual(get_request(result.request_id, db_path=self.path)["status"], "completed")
         DecisionResult.model_validate(result)
         sources = {a.agent_id: a for a in result.source_analyses}
         population = sources["floating_population"]
@@ -126,7 +135,7 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         for key in record:
             if key.endswith("_CO"):
                 record[key] *= 2
-        result = await run_api_mock.run(self.fixture)
+        result = await run_api_mock.run(self.fixture, db_path=self.path)
         self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], 20000)
 
     async def test_unknown_request_is_rejected_without_network(self):
@@ -138,7 +147,7 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         payload = self.fixture["responses"]["stores_500"]["response"]["body"]
         payload.update(items=[], totalCount=0)
         self.fixture["responses"]["areas"]["TbgisTrdarRelm"].update(row=[], list_total_count=0)
-        result = await run_api_mock.run(self.fixture)
+        result = await run_api_mock.run(self.fixture, db_path=self.path)
         self.assertEqual(result.status, "no_data")
         self.assertEqual(result.recommendations, [])
         self.generate.assert_not_called()

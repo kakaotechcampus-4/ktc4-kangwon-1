@@ -17,15 +17,14 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
-import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
+from app.agents.commercial_area.industries import load_middle_master  # noqa: E402
 from app.agents.commercial_area.schemas import MiddleCode  # noqa: E402
-from app.agents.commercial_area.upjong import load_middle_master  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent / "schema_compare"
 OUT_PATH = OUT_DIR / "업종매칭_서울시기준.csv"
@@ -84,29 +83,14 @@ def master_block(master: list[MiddleCode]) -> str:
 
 
 async def ask(settings: Settings, master: list[MiddleCode], chunk: list[dict]) -> dict[str, list]:
-    from openai import AsyncOpenAI
+    from app.llm import client
 
     listing = "\n".join(f"{r['SVC_INDUTY_CD']}\t{r['SVC_INDUTY_CD_NM']}" for r in chunk)
     user = (
         f"[소상공인 상권업종 중분류 {len(master)}종]\n{master_block(master)}\n\n"
         f"[분류할 서울시 생활밀접업종 {len(chunk)}종]\n코드\t업종명\n{listing}"
     )
-    async with AsyncOpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        timeout=settings.llm_timeout_s,
-        max_retries=2,
-    ) as client:
-        response = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": user},
-            ],
-            response_format={"type": "json_object"},
-            max_completion_tokens=settings.llm_max_tokens,
-        )
-    payload = json.loads(response.choices[0].message.content or "{}")
+    payload = await client.complete_json(SYSTEM, user, settings.llm_settings())
     return {
         str(row.get("seoul_code")): list(row.get("candidates") or [])
         for row in payload.get("matches") or []

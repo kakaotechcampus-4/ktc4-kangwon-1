@@ -7,8 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.config import BACKEND_DIR as BACKEND_DIR
+from app.config import load_environment
+
+# 기존 CLI 가져오기 경로를 유지합니다.
+load_dotenv_if_present = load_environment
+
 PACKAGE_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = PACKAGE_DIR.parents[3]
 
 SEOUL_OPEN_API_BASE = "http://openapi.seoul.go.kr:8088"
 
@@ -54,13 +59,3 @@ class Settings:
             env_values["analysis_radius_m"] = int(radius)
         env_values.update(overrides)
         return cls(**{k: v for k, v in env_values.items() if v is not None})
-
-
-def load_dotenv_if_present() -> None:
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    for candidate in (BACKEND_DIR / ".env", Path.cwd() / ".env"):
-        if candidate.exists():
-            load_dotenv(candidate, override=False)

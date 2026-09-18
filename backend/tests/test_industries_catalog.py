@@ -3,7 +3,7 @@
 import unittest
 
 from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.upjong import load_middle_master
+from app.agents.commercial_area.industries import load_middle_master
 from app.industries.catalog import (
     EXCLUDED_SEOUL_INDUSTRIES,
     EXPECTED_INDUSTRY_COUNT,

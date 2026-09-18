@@ -3,8 +3,8 @@
 CSV 가 깨져도 런타임까지 번지지 않게 하는 게 목적이다. 엑셀로 열었다 저장하면 인코딩이 cp949 로
 바뀌고 행이 날아가는 일이 실제로 있었다. 그래서 생성 단계에서 막는다.
 
-    python examples/build_industry_catalog.py            검증 후 생성물 둘을 다시 만든다
-    python examples/build_industry_catalog.py --check    검증만. CI 용
+    python scripts/build_industry_catalog.py            검증 후 생성물 둘을 다시 만든다
+    python scripts/build_industry_catalog.py --check    검증만. CI 용
 
 `--check` 는 디스크의 생성물이 지금 CSV 와 같은지도 본다. CSV 만 고치고 재생성을 잊는 사고를
 여기서 잡는다.
@@ -236,9 +236,10 @@ def render(
     head = f'''"""팀 공통 업종 어휘 — 자동 생성 파일입니다. 고치지 마세요.
 
 원본은 `app/industries/data/*.csv` 이고, 이 파일은
-`python examples/build_industry_catalog.py` 로 다시 만듭니다.
+`python scripts/build_industry_catalog.py` 로 다시 만듭니다.
 
-개폐업 `mapping.py` 와 같은 모양으로 씁니다 — `INDUSTRIES` 가 `SERVICE_INDUSTRIES` 자리,
+개폐업에서 직접 재사용하는 공통 카탈로그입니다. `INDUSTRIES` 가 기존
+`SERVICE_INDUSTRIES` 자리,
 `SEOUL_TO_INDUSTRY` 가 `SEOUL_TO_SERVICE` 자리입니다.
 """
 
@@ -310,14 +311,11 @@ def render_json(
     seoul: list[dict[str, str]],
     legacy: list[dict[str, str]],
 ) -> str:
-    """개폐업 `industry_master.json` 과 같은 모양의 업종 목록.
+    """공통 75개 중분류의 배포용 업종 목록.
 
-    `industry_id` 를 정수로 두는 이유가 있다 — 개폐업 코드가 `to_int()` 로 캐스팅하고
-    dict 키·정렬 키로 쓴다(`make_agent_input.py`, `formatter.py`).
-    문자열 코드를 넣으면 거기서 깨진다.
-    중분류 코드는 `code` 로 따로 싣는다.
-
-    번호는 중분류 코드 오름차순이라 다시 만들어도 바뀌지 않는다.
+    운영 개폐업 분석의 `industry_id`는 `code`에 담긴 문자열 중분류 코드다.
+    이 JSON의 정수 `industry_id`는 코드 오름차순의 보조 일련번호이며 운영 ID가 아니다.
+    과거 legacy70 정수 ID는 별도 연결표에 보관하며 이 일련번호와 구분한다.
     """
     industries = [
         {

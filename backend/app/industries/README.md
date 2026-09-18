@@ -23,11 +23,11 @@ lookup.from_legacy70(33)  # 개폐업 70업종 ID → 우리 업종 (여럿일 �
 lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Category 에 그대로 넣는다
 ```
 
-표 자체가 필요하면 `catalog.py`를 직접 읽는다. 개폐업 `mapping.py`와 이름을 맞춰 두었다.
+표 자체가 필요하면 `catalog.py`를 직접 읽는다. 개폐업 에이전트도 이 파일을 직접 사용한다.
 
-| `mapping.py` | 여기 |
+| 기존 개폐업 이름 | 여기 |
 | --- | --- |
-| `SERVICE_INDUSTRIES` (70) | `INDUSTRIES` (75) |
+| `SERVICE_INDUSTRIES` (75, 공통 상수 별칭) | `INDUSTRIES` (75) |
 | `SEOUL_TO_SERVICE` | `SEOUL_TO_INDUSTRY` |
 | `EXCLUDED_SEOUL_INDUSTRIES` | `EXCLUDED_SEOUL_INDUSTRIES` |
 | `UNSUPPORTED_SERVICE_INDUSTRIES` | `INDUSTRIES_WITHOUT_SEOUL` (25) |
@@ -59,8 +59,8 @@ lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Catego
 
 ```bash
 cd backend
-python examples/build_industry_catalog.py            # 검증 후 catalog.py · industry_master.json 재생성
-python examples/build_industry_catalog.py --check    # 검증만. CI 가 이걸 돌린다
+python scripts/build_industry_catalog.py            # 검증 후 catalog.py · industry_master.json 재생성
+python scripts/build_industry_catalog.py --check    # 검증만. CI 가 이걸 돌린다
 ```
 
 ### ⚠️ CSV 를 엑셀로 저장하지 말 것
@@ -83,7 +83,24 @@ python examples/build_industry_catalog.py --check    # 검증만. CI 가 이걸 
 **개폐업 점수는 그대로 옮기면 안 된다.** 개폐업이 주는 건 개수가 아니라 0~100 점수인데,
 70 → 75 변환이 양방향 N:M 이다. `from_legacy70(33)` 이 셋을 돌려주고, 반대로 `Q102` 에는
 개폐업 3업종이 몰린다. 점수 3개를 산술평균하면 점포 1개짜리와 100개짜리를 같은 무게로 섞는다.
-**가중 방식은 아직 팀 미합의 사항이라 이 모듈은 연결만 제공한다.**
+신규 개폐업 분석은 원본 서울시 건수를 75개 업종으로 먼저 합산한 뒤 기존 상대 점수를
+재계산한다. 비율은 합산 분자/분모에서 계산하고 분모 0은 null이다.
+`lookup.from_legacy70()`는 과거 결과 조회용 연결만 제공하며 과거 점수를 신규 점수로 변환하지 않는다.
+
+신규 `AgentAnalysis.data.taxonomy.id`는 `sbiz-middle-75`이며 카탈로그 버전을 함께 기록한다.
+`taxonomy.version`은 생성 카탈로그의 `CATALOG_VERSION`(원본 CSV 내용의 해시)이며 분석 실행 버전이 아니다.
+공통 `Category` 계약은 기존 `major`/`middle` 두 문자열을 유지한다.
+개폐업 `industry_id`는 `I201` 같은 문자열이다. 25개 미지원 업종은 `unsupported`,
+지원되지만 조회되지 않은 업종은 `missing`, 원천 업종·분기·건수 일부 누락은 `incomplete`,
+완전한 관측은 `observed`로 구분한다. 관측 0은 유지하며 부분 합계를 완전 집계로 표시하지 않는다.
+동일 분기·상권·원본 업종 행은 완전히 같은 행만 중복 제거하고 상충 행은 오류로 처리한다.
+
+상권 분석은 운영 마스터 누락·구조 오류를 설정 오류로 반환한다. 알 수 없는 중분류는
+`coverage.unmapped_store_count`로 표시하며 75개 업종에 추정 배분하지 않는다.
+테스트 등에서 주입한 별도 마스터는 `custom-middle`로 표시한다.
+
+`examples/fixtures/business_lifecycle_*.json`은 70개 어휘를 쓰던 과거 예제다.
+신규 formatter에는 사용할 수 없고 기존 DB 기록도 자동 변환하지 않는다.
 
 **서울시 연결 99건 중 53건이 모델 판정이다.** `data/seoul_to_industry.csv` 의 `match_method` 가
 `모델` 인 행은 사람 검수를 거치지 않았다. `근거 소분류`(`evidence_small`) 칸을 보면

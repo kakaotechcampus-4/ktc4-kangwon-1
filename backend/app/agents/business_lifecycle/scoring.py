@@ -1,8 +1,6 @@
-import argparse
-from pathlib import Path
-
 import pandas as pd
 
+from .config import Settings
 from .preprocess import preprocess_business_lifecycle_data
 
 # ============================================================
@@ -58,6 +56,7 @@ def calculate_lifecycle_scores(
 
     score_mask = (
         result_df["data_available"]
+        & result_df["data_complete"]
         & result_df["recent_year_close_rate"].notna()
         & result_df["net_change_rate"].notna()
         & result_df["turnover_rate"].notna()
@@ -168,7 +167,7 @@ def calculate_lifecycle_scores(
     )
 
     # ========================================================
-    # 8. 70개 Master에 점수 다시 결합
+    # 8. 공통 75개 Master에 점수 다시 결합
     # ========================================================
 
     score_result = score_df[
@@ -198,6 +197,8 @@ def score_business_lifecycle(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
+    *,
+    settings: Settings | None = None,
 ) -> pd.DataFrame:
     """
     API 조회 → 전처리 → 점수 계산까지 실행한다.
@@ -207,142 +208,10 @@ def score_business_lifecycle(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
+        settings=settings,
     )
 
     return calculate_lifecycle_scores(
         df=preprocessed_df,
         quarter_count=quarter_count,
     )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=("최근 3년 개폐업 데이터를 기반으로 Lifecycle Score를 계산합니다.")
-    )
-
-    parser.add_argument(
-        "--area-code",
-        required=True,
-        help="서울시 상권코드",
-    )
-
-    parser.add_argument(
-        "--base-quarter",
-        required=True,
-        help="기준 분기. 예: 20252",
-    )
-
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=12,
-        help="조회할 분기 수. 기본값 12",
-    )
-
-    parser.add_argument(
-        "--output",
-        help=("테스트용 CSV 저장 경로. 생략하면 파일을 생성하지 않습니다."),
-    )
-
-    args = parser.parse_args()
-
-    result_df = score_business_lifecycle(
-        area_code=args.area_code,
-        base_quarter=args.base_quarter,
-        quarter_count=args.count,
-    )
-
-    scored_df = result_df[result_df["lifecycle_score"].notna()]
-
-    print()
-    print("===== Lifecycle Score 결과 =====")
-
-    print(
-        "전체 서비스 업종:",
-        len(result_df),
-    )
-
-    print(
-        "점수 계산 업종:",
-        len(scored_df),
-    )
-
-    print(
-        "점수 없는 업종:",
-        result_df["lifecycle_score"].isna().sum(),
-    )
-
-    # ========================================================
-    # 상위 10개
-    # ========================================================
-
-    print()
-    print("===== 상위 10개 =====")
-
-    top10 = scored_df.sort_values(
-        "lifecycle_score",
-        ascending=False,
-    ).head(10)
-
-    print(
-        top10[
-            [
-                "service_id",
-                "service_name",
-                "latest_store_count",
-                "recent_year_close_rate",
-                "net_change_rate",
-                "turnover_rate",
-                "close_rate_trend",
-                "lifecycle_score",
-                "confidence",
-            ]
-        ].to_string(index=False)
-    )
-
-    # ========================================================
-    # 하위 10개
-    # ========================================================
-
-    print()
-    print("===== 하위 10개 =====")
-
-    bottom10 = scored_df.sort_values(
-        "lifecycle_score",
-        ascending=True,
-    ).head(10)
-
-    print(
-        bottom10[
-            [
-                "service_id",
-                "service_name",
-                "latest_store_count",
-                "recent_year_close_rate",
-                "net_change_rate",
-                "turnover_rate",
-                "close_rate_trend",
-                "lifecycle_score",
-                "confidence",
-            ]
-        ].to_string(index=False)
-    )
-
-    if args.output:
-        output_path = Path(args.output)
-
-        result_df.to_csv(
-            output_path,
-            index=False,
-            encoding="utf-8-sig",
-        )
-
-        print()
-        print(
-            "테스트 CSV 저장 완료:",
-            output_path,
-        )
-
-
-if __name__ == "__main__":
-    main()

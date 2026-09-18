@@ -15,9 +15,15 @@
 from __future__ import annotations
 
 import json
-import math
-import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+
+from app.llm import client
+from app.llm.config import LLMSettings
+
+from .schemas import FloatingPopulationData, Selection
+
+SelectBlocks = Callable[[str], Awaitable[tuple[list[str], str]]]
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROMPT_PATH = PACKAGE_DIR / "prompt.md"
@@ -32,24 +38,6 @@ class SelectionUnavailable(RuntimeError):
 
 def load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
-
-
-def _env() -> tuple[str, str, str, int, float]:
-    model = os.getenv("ELICE_MODEL", "").strip()
-    api_key = os.getenv("ELICE_API_KEY", "").strip()
-    base_url = os.getenv("ELICE_BASE_URL", "").strip()
-    if not (model and api_key and base_url):
-        raise SelectionUnavailable(
-            "ELICE_MODEL·ELICE_API_KEY·ELICE_BASE_URL 이 있어야 블록 선별을 합니다."
-        )
-    try:
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS", "8192"))
-        timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
-    except ValueError as exc:
-        raise SelectionUnavailable("응답 길이와 대기 시간은 양수여야 합니다.") from exc
-    if max_tokens <= 0 or not math.isfinite(timeout) or timeout <= 0:
-        raise SelectionUnavailable("응답 길이와 대기 시간은 양수여야 합니다.")
-    return model, api_key, base_url, max_tokens, timeout
 
 
 def parse_selection(content: str) -> tuple[list[str], str]:
@@ -81,33 +69,95 @@ def parse_selection(content: str) -> tuple[list[str], str]:
     return [b for b in SELECTABLE if b in include], reason.strip()
 
 
-async def select_blocks(payload: str) -> tuple[list[str], str]:
-    """`payload`(선별용 요약 JSON)를 보고 실을 블록을 고른다."""
-    model, api_key, base_url, max_tokens, timeout = _env()
+async def select_blocks(payload: str, settings: LLMSettings | None = None) -> tuple[list[str], str]:
+    """선별 실패는 분석 단계에서 모든 계산 블록을 유지하는 경고로 바뀝니다."""
     try:
-        from openai import APIError, AsyncOpenAI
-    except ImportError as exc:
-        raise SelectionUnavailable("openai 패키지가 없습니다.") from exc
+        result = await client.complete_json(
+            load_prompt(), payload, settings or LLMSettings.from_env("FLOATING_POPULATION")
+        )
+        return parse_selection(json.dumps(result, ensure_ascii=False))
+    except (RuntimeError, ValueError):
+        raise SelectionUnavailable(
+            "모델 선별을 완료하지 못했습니다. 설정과 응답을 확인해 주세요."
+        ) from None
 
+
+def _selection_digest(data: FloatingPopulationData) -> str:
+    """선별 모델에게 보낼 요약. **`data` 전체를 보내지 않는다.**
+
+    전체를 보내면 줄이려던 토큰을 선별하느라 그대로 쓰게 된다. 블록마다 "읽을 게 있는지" 를
+    판단할 최소 정보만 추린다 — 개수, 값의 폭, 0 이 몇 개인지 같은 것들.
+    """
+    rp = data.radius_profile
+    tr = data.trend
+    digest = {
+        "지역": data.description[:120],
+        "유형": data.type.label,
+        "신뢰도": data.reliability.level,
+        "trade_areas": {
+            "개수": len(data.trade_areas or []),
+            "이름": [t.name for t in (data.trade_areas or [])][:12],
+            "행정동": sorted({t.adstrd for t in (data.trade_areas or []) if t.adstrd}),
+        },
+        "population_raw": {
+            "설명": "연령·시간대·요일 원값(분기 합계). 같은 내용의 비중이 따로 있음",
+            "비중_이미_있음": True,
+        },
+        "radius_profile": {
+            "단계": [p.radius_m for p in (rp.points if rp else [])],
+            "일평균": [round(p.daily_avg) for p in (rp.points if rp else [])],
+            "값이_0인_단계수": sum(1 for p in (rp.points if rp else []) if p.daily_avg <= 0),
+        },
+        "trend": {
+            "분기수": len(tr.quarters) if tr else 0,
+            "방향": tr.direction if tr else None,
+            "전분기_변화율": tr.qoq_change if tr else None,
+            "전년동기_변화율": tr.yoy_change if tr else None,
+            "일평균_추이": [round(q.daily_avg) for q in (tr.quarters if tr else [])],
+        },
+    }
+    return json.dumps(digest, ensure_ascii=False)
+
+
+async def _select(
+    data: FloatingPopulationData,
+    select: SelectBlocks | None,
+) -> tuple[Selection, str | None]:
+    """블록을 고른다. 실패하면 전부 싣고 그 사실을 경고로 돌려준다."""
+    selectable = list(SELECTABLE)
     try:
-        async with AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=1
-        ) as client:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": load_prompt()},
-                    {"role": "user", "content": payload},
-                ],
-                response_format={"type": "json_object"},
-                max_completion_tokens=max_tokens,
-            )
-    except APIError as exc:
-        raise SelectionUnavailable(f"모델 요청에 실패했습니다: {exc}") from exc
+        included, reason = await (select or select_blocks)(_selection_digest(data))
+    except SelectionUnavailable:
+        return (
+            Selection(
+                applied=False,
+                selectable=selectable,
+                included=selectable,
+                dropped=[],
+                unavailable_reason="자료 선별 기능을 사용할 수 없습니다.",
+            ),
+            None,  # 키가 없어 못 한 경우까지 경고로 띄우면 시끄럽다
+        )
+    except Exception:  # 모델 쪽 어떤 실패도 분석을 막지 않는다
+        return (
+            Selection(
+                applied=False,
+                selectable=selectable,
+                included=selectable,
+                dropped=[],
+                unavailable_reason="자료 선별 중 오류가 발생했습니다.",
+            ),
+            "자료 선별에 실패해 전부 실었습니다.",
+        )
 
-    if not response.choices:
-        raise SelectionUnavailable("모델이 응답을 내지 못했습니다.")
-    choice = response.choices[0]
-    if choice.finish_reason != "stop" or not choice.message.content:
-        raise SelectionUnavailable("모델이 응답을 끝맺지 못했습니다(길이 제한 또는 거절).")
-    return parse_selection(choice.message.content)
+    dropped = [b for b in selectable if b not in included]
+    return (
+        Selection(
+            applied=True,
+            selectable=selectable,
+            included=included,
+            dropped=dropped,
+            reason=(reason or None) if dropped else None,
+        ),
+        None,
+    )

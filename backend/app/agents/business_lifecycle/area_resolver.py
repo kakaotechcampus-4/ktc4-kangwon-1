@@ -60,9 +60,9 @@ class BusinessAreaResolverError(RuntimeError):
 
 def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
     """서울시 공식 상권영역 SHP에서 입력 좌표가 포함된 상권을 찾습니다."""
-    _ = settings
+    settings = settings or Settings.from_env()
     target_x, target_y = wgs84_to_epsg5181(site.latitude, site.longitude)
-    features = load_shape_features(resolve_shape_path())
+    features = load_shape_features(settings.area_shape_path)
     matches = [
         feature
         for feature in features
@@ -124,14 +124,17 @@ def load_shape_features(shape_path: Path) -> list[ShapeFeature]:
     return [
         ShapeFeature(
             attributes=attribute,
-            bbox=bbox,
-            rings=rings,
+            bbox=polygon[0],
+            rings=polygon[1],
         )
-        for attribute, (bbox, rings) in zip(attributes, polygons, strict=True)
+        for attribute, polygon in zip(attributes, polygons, strict=True)
+        if attribute is not None and polygon is not None
     ]
 
 
-def read_polygon_shapes(path: Path) -> list[tuple[tuple[float, float, float, float], list[Ring]]]:
+def read_polygon_shapes(
+    path: Path,
+) -> list[tuple[tuple[float, float, float, float], list[Ring]] | None]:
     data = path.read_bytes()
     if len(data) < 100:
         raise BusinessAreaResolverError("SHP 파일 헤더가 너무 짧습니다.")
@@ -141,7 +144,7 @@ def read_polygon_shapes(path: Path) -> list[tuple[tuple[float, float, float, flo
         raise BusinessAreaResolverError("SHP 파일 형식이 아닙니다.")
 
     offset = 100
-    polygons: list[tuple[tuple[float, float, float, float], list[Ring]]] = []
+    polygons: list[tuple[tuple[float, float, float, float], list[Ring]] | None] = []
 
     while offset < len(data):
         if offset + 8 > len(data):
@@ -150,11 +153,12 @@ def read_polygon_shapes(path: Path) -> list[tuple[tuple[float, float, float, flo
         content_length_words = struct.unpack(">i", data[offset + 4 : offset + 8])[0]
         content_start = offset + 8
         content_end = content_start + content_length_words * 2
-        if content_end > len(data):
+        if content_length_words < 2 or content_end > len(data):
             raise BusinessAreaResolverError("SHP 레코드 길이가 파일 크기를 초과합니다.")
 
         shape_type = struct.unpack("<i", data[content_start : content_start + 4])[0]
         if shape_type == 0:
+            polygons.append(None)
             offset = content_end
             continue
         if shape_type not in {5, 15, 25}:
@@ -172,6 +176,8 @@ def _read_polygon_record(data: bytes) -> tuple[tuple[float, float, float, float]
 
     xmin, ymin, xmax, ymax = struct.unpack("<4d", data[4:36])
     num_parts, num_points = struct.unpack("<2i", data[36:44])
+    if num_parts <= 0 or num_points < 4:
+        raise BusinessAreaResolverError("polygon 구성 수가 올바르지 않습니다.")
     parts_start = 44
     points_start = parts_start + num_parts * 4
     points_end = points_start + num_points * 16
@@ -179,6 +185,11 @@ def _read_polygon_record(data: bytes) -> tuple[tuple[float, float, float, float]
         raise BusinessAreaResolverError("polygon 좌표 배열이 손상되었습니다.")
 
     parts = list(struct.unpack(f"<{num_parts}i", data[parts_start:points_start]))
+    if parts[0] != 0 or any(
+        start < 0 or start >= num_points or (index > 0 and start <= parts[index - 1])
+        for index, start in enumerate(parts)
+    ):
+        raise BusinessAreaResolverError("polygon part offset이 올바르지 않습니다.")
     points = [
         struct.unpack("<2d", data[points_start + index * 16 : points_start + (index + 1) * 16])
         for index in range(num_points)
@@ -188,13 +199,14 @@ def _read_polygon_record(data: bytes) -> tuple[tuple[float, float, float, float]
     for index, start in enumerate(parts):
         end = parts[index + 1] if index + 1 < len(parts) else num_points
         ring = [(float(x), float(y)) for x, y in points[start:end]]
-        if len(ring) >= 3:
-            rings.append(ring)
+        if len(ring) < 4 or ring[0] != ring[-1]:
+            raise BusinessAreaResolverError("polygon ring의 좌표가 부족합니다.")
+        rings.append(ring)
 
     return (xmin, ymin, xmax, ymax), rings
 
 
-def read_dbf(path: Path) -> list[dict[str, str | None]]:
+def read_dbf(path: Path) -> list[dict[str, str | None] | None]:
     data = path.read_bytes()
     if len(data) < 32:
         raise BusinessAreaResolverError("DBF 파일 헤더가 너무 짧습니다.")
@@ -203,13 +215,16 @@ def read_dbf(path: Path) -> list[dict[str, str | None]]:
     header_length = struct.unpack("<H", data[8:10])[0]
     record_length = struct.unpack("<H", data[10:12])[0]
     fields = _read_dbf_fields(data, header_length)
-    records: list[dict[str, str | None]] = []
+    records: list[dict[str, str | None] | None] = []
     offset = header_length
 
     for _ in range(record_count):
         record = data[offset : offset + record_length]
         offset += record_length
-        if len(record) < record_length or record[:1] == b"*":
+        if len(record) < record_length:
+            raise BusinessAreaResolverError("DBF 레코드 길이가 파일 크기를 초과합니다.")
+        if record[:1] == b"*":
+            records.append(None)
             continue
         records.append(_read_dbf_record(record[1:], fields))
 
@@ -351,19 +366,19 @@ def _feature_to_business_area(
 ) -> BusinessArea | None:
     row = feature.attributes
     area_code = _clean(row, "TRDAR_CD", "TRDAR_CD_1", "상권_코드")
-    area_name = _clean(row, "TRDAR_CD_NM", "TRDAR_NM", "상권_코드_명")
+    area_name = _clean(row, "TRDAR_CD_NM", "TRDAR_CD_N", "TRDAR_NM", "상권_코드_명")
     if not area_code or not area_name:
         return None
 
     return BusinessArea(
         area_code=area_code,
         area_name=area_name,
-        area_type_code=_clean(row, "TRDAR_SE_C", "TRDAR_SE_CD", "상권_구분_코드"),
-        area_type_name=_clean(row, "TRDAR_SE_1", "TRDAR_SE_CD_NM", "상권_구분_코드_명"),
+        area_type_code=_clean(row, "TRDAR_SE_CD", "TRDAR_SE_C", "상권_구분_코드"),
+        area_type_name=_clean(row, "TRDAR_SE_CD_NM", "TRDAR_SE_1", "상권_구분_코드_명"),
         district_code=_clean(row, "SIGNGU_CD", "시군구_코드"),
-        district_name=_clean(row, "SIGNGU_CD_", "SIGNGU_CD_NM", "시군구_코드_명"),
+        district_name=_clean(row, "SIGNGU_CD_NM", "SIGNGU_CD_", "시군구_코드_명"),
         dong_code=_clean(row, "ADSTRD_CD", "행정동_코드"),
-        dong_name=_clean(row, "ADSTRD_CD_", "ADSTRD_CD_NM", "행정동_코드_명"),
+        dong_name=_clean(row, "ADSTRD_CD_NM", "ADSTRD_CD_", "행정동_코드_명"),
         x=target_x,
         y=target_y,
     )

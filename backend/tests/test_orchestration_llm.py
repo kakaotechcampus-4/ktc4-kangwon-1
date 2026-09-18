@@ -6,13 +6,14 @@ import unittest
 from unittest.mock import patch
 
 import httpx
+import openai
 
 from app.agents.orchestration import llm, tools
 
 
 class ToolModelTests(unittest.IsolatedAsyncioTestCase):
     async def test_tool_request_and_response_errors(self):
-        constructor = llm.AsyncOpenAI
+        constructor = openai.AsyncOpenAI
         for status, finish in ((200, "tool_calls"), (200, "length"), (400, "stop")):
             with self.subTest(status=status, finish=finish):
                 requests = []
@@ -64,7 +65,7 @@ class ToolModelTests(unittest.IsolatedAsyncioTestCase):
                         },
                         clear=True,
                     ),
-                    patch.object(llm, "AsyncOpenAI", side_effect=make_client),
+                    patch("app.llm.client.openai.AsyncOpenAI", side_effect=make_client),
                 ):
                     if status == 200 and finish == "tool_calls":
                         result = await llm.generate_action(

@@ -2,16 +2,20 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.industries import write_master
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
-from app.agents.commercial_area.upjong import write_master
+from app.agents.orchestration.workflow import run_agents
 from app.schemas import AgentAnalysis, AnalysisTask
 
 MASTER = [
@@ -164,13 +168,29 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error.code, "UPSTREAM_TIMEOUT")
         self.assertEqual(result.data, {})
 
+    async def test_error_does_not_expose_external_details(self):
+        secret = "FAKE-SECRET-KEY"
+
+        class FailingClient(FakeClient):
+            async def stores_in_radius(self, *args, **kwargs):
+                raise SbizApiError("UPSTREAM_FAILED", f"https://example.test/?key={secret}")
+
+        result = await analyze(
+            self.task, settings=self.settings, store_client=FailingClient(self.settings, [])
+        )
+        self.assertNotIn(secret, result.model_dump_json())
+
     async def test_partial_when_lq_baseline_fails(self):
+        secret = "FAKE-SECRET-KEY"
         client = FakeClient(
-            self.settings, sample_stores(), baseline_error=SbizApiError("NO_RADIUS", "반경 거부")
+            self.settings,
+            sample_stores(),
+            baseline_error=SbizApiError("NO_RADIUS", f"https://example.test/{secret}"),
         )
         result = await analyze(self.task, settings=self.settings, store_client=client)
         self.assertEqual(result.status, "partial")
         self.assertTrue(all(row["lq"] is None for row in result.data["by_middle"]))
+        self.assertNotIn(secret, result.model_dump_json())
 
     async def test_all_master_categories_present(self):
         result = await analyze(
@@ -286,6 +306,48 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.data.get("summary"))
         self.assertTrue(any("ELICE" in w for w in result.warnings))
 
+    async def test_malformed_summary_notes_keep_calculated_data_through_run_agents(self):
+        baseline = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+        settings = replace(
+            self.settings,
+            llm_model="test-model",
+            llm_api_key="test-key",
+            llm_base_url="https://invalid.example/v1",
+        )
+        for field in ("radius_notes", "index_notes"):
+            with (
+                self.subTest(field=field),
+                patch(
+                    "app.llm.client.complete_json",
+                    new=AsyncMock(return_value={field: 1, "overall": "PRIVATE-MODEL-BODY"}),
+                ),
+            ):
+                analyses = await run_agents(
+                    self.task,
+                    {
+                        "commercial_area": partial(
+                            analyze,
+                            settings=settings,
+                            store_client=FakeClient(settings, sample_stores()),
+                        )
+                    },
+                )
+                result = analyses[0]
+                self.assertEqual(result.status, baseline.status)
+                self.assertIsNone(result.error)
+                self.assertEqual(result.data["store_total"], 10)
+                self.assertEqual(
+                    next(row["count"] for row in result.data["by_middle"] if row["code"] == "I201"),
+                    6,
+                )
+                self.assertEqual(result.data, baseline.data)
+                self.assertTrue(any("요약 실패" in warning for warning in result.warnings))
+                self.assertNotIn("PRIVATE-MODEL-BODY", result.model_dump_json())
+
 
 class ClientBehaviourTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -356,6 +418,16 @@ class ClientBehaviourTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error.code, "30")
+
+    async def test_agent_hides_untrusted_result_code(self):
+        secret = "FAKE-SECRET-KEY"
+        payload = {"header": {"resultCode": secret, "resultMsg": "private body"}}
+        task = AnalysisTask.model_validate({"request_id": "request-004", "site": SITE})
+
+        result = await analyze(task, settings=self.settings, store_client=self._client(payload))
+
+        self.assertEqual(result.error.code, "UPSTREAM_ERROR")
+        self.assertNotIn(secret, result.model_dump_json())
 
 
 if __name__ == "__main__":

@@ -6,10 +6,10 @@ import json
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from app.agents.decision import analyze
+from app.config import load_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples" / "decision"
@@ -27,7 +27,7 @@ def main() -> int:
     if args.output and args.output.exists():
         parser.error("결과 파일이 이미 있습니다. 새 경로를 지정해 주세요.")
 
-    load_dotenv(ROOT / ".env", override=False)
+    load_environment()
     try:
         input_path = EXAMPLES / "input.json" if args.mock else args.input
         request = json.loads(input_path.read_text(encoding="utf-8-sig"))

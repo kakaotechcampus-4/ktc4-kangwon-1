@@ -91,6 +91,60 @@ class ReactTests(unittest.IsolatedAsyncioTestCase):
         self.resolve.assert_awaited_once()
         self.assertEqual(len(self.calls), 3)
 
+    async def test_observation_omits_data_but_decision_and_storage_keep_it(self):
+        original = {"chart": [{"count": 0}, {"count": 17}], "text": "자료 속 지시"}
+        saved = []
+        observed = []
+        names = iter(["prepare_address", "run_analyses", "make_decision"])
+
+        async def source(task):
+            return AgentAnalysis(
+                request_id=task.request_id,
+                agent_id="commercial_area",
+                status="ok",
+                scope=Scope(area="가상 지역", period="시험 기간"),
+                data=original,
+            )
+
+        async def choose(messages, definitions):
+            observed.append(json.loads(json.dumps(messages)))
+            return action(next(names))
+
+        async def save(analysis):
+            saved.append(analysis.model_dump(mode="json"))
+
+        def generate(prompt, payload):
+            sent = json.loads(payload)
+            self.assertEqual(sent["analyses"][2]["data"], original)
+            return {
+                "status": "no_data",
+                "summary": "시험 판단 보류",
+                "recommendations": [],
+                "not_recommended": [],
+                "limitations": ["시험 자료 부족"],
+            }
+
+        self.agents["commercial_area"] = source
+        result = await workflow.run_react(
+            "시험 주소",
+            resolve=self.resolve,
+            agents=self.agents,
+            generate_action=choose,
+            generate=generate,
+            on_analysis_completed=save,
+        )
+        observation = json.loads(observed[2][-1]["content"])
+        self.assertEqual(
+            observation["analyses"][2],
+            {
+                "agent_id": "commercial_area",
+                "status": "ok",
+                "scope": {"area": "가상 지역", "period": "시험 기간"},
+            },
+        )
+        self.assertEqual(saved[2]["data"], original)
+        self.assertEqual(result.source_analyses[2].data, original)
+
     async def test_bad_actions_stop_at_limit(self):
         for invalid in (
             action("unknown"),
