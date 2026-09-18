@@ -6,7 +6,7 @@ import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
-import { createAnalysis, AnalysisApiError } from '@/lib/api/analyses';
+import { createAnalysis } from '@/lib/api/analyses';
 import { saveAnalysisResult, saveRequestId } from '@/lib/api/resultStore';
 
 export default function AddressInput() {
@@ -26,7 +26,10 @@ export default function AddressInput() {
       // mock 옵션 없이 기본값(false)으로 호출한다 — 실제 백엔드를 부른다.
       // 테스트 단계에서 백엔드 키 없이 화면만 확인하려면 아래를
       // createAnalysis(roadAddress, { mock: true })로 임시로 바꿔서 쓴다.
-      const { result, requestId } = await createAnalysis(roadAddress);
+      const fullAddress = floorUnit.trim()
+        ? `${roadAddress} ${floorUnit}`
+        : roadAddress;
+      const { result, requestId } = await createAnalysis(fullAddress);
 
       if (result.status === 'no_data') {
         console.warn('[AddressInput] no_data:', result.limitations);
@@ -45,7 +48,7 @@ export default function AddressInput() {
     } catch (error) {
       console.error('[AddressInput] 분석 요청 실패:', error);
       const message =
-        error instanceof AnalysisApiError
+        error instanceof Error
           ? error.message
           : '분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
       alert(message);
