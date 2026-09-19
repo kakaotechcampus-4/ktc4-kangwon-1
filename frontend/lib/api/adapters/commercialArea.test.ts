@@ -117,12 +117,13 @@ describe('adaptCommercialArea', () => {
       warnings: [],
     });
 
-    expect(result.status).toBe('ok');
-    expect(result.radiusM).toBe(500);
-    expect(result.storeTotal).toBe(120);
-    expect(result.dataReferenceDate).toBe('2026년 1월 조회');
+    expect(result).not.toBeNull();
+    expect(result?.status).toBe('ok');
+    expect(result?.radiusM).toBe(500);
+    expect(result?.storeTotal).toBe(120);
+    expect(result?.dataReferenceDate).toBe('2026년 1월 조회');
 
-    expect(result.byMajor).toEqual([
+    expect(result?.byMajor).toEqual([
       {
         code: 'I',
         name: '음식점업',
@@ -132,7 +133,7 @@ describe('adaptCommercialArea', () => {
       },
     ]);
 
-    expect(result.byRadius).toEqual([
+    expect(result?.byRadius).toEqual([
       {
         radiusM: 500,
         storeTotal: 120,
@@ -151,18 +152,18 @@ describe('adaptCommercialArea', () => {
       },
     ]);
 
-    expect(result.diversity).toEqual({ effectiveCategories: 8.5 });
-    expect(result.franchise).toEqual({
+    expect(result?.diversity).toEqual({ effectiveCategories: 8.5 });
+    expect(result?.franchise).toEqual({
       count: 12,
       ratio: 0.1,
       confidence: 'medium',
     });
-    expect(result.lqBaseline).toEqual({
+    expect(result?.lqBaseline).toEqual({
       requestedRadiusM: 1000,
       appliedRadiusM: 800,
     });
-    expect(result.districtBaseline).toEqual({ signguName: '강남구' });
-    expect(result.districtSpecialization).toEqual([
+    expect(result?.districtBaseline).toEqual({ signguName: '강남구' });
+    expect(result?.districtSpecialization).toEqual([
       {
         rank: 1,
         code: 'I212',
@@ -175,7 +176,7 @@ describe('adaptCommercialArea', () => {
 
     // by_middle 전체가 그대로 옮겨진다(추천 10개로 미리 걸러내지 않음 —
     // 파일 상단 mapMiddleCategory 주석 참고).
-    expect(result.byMiddleForRecommendations).toEqual([
+    expect(result?.byMiddleForRecommendations).toEqual([
       {
         code: 'I201',
         name: '한식 음식점업',
@@ -187,15 +188,18 @@ describe('adaptCommercialArea', () => {
     ]);
   });
 
-  it('franchise/district_baseline이 없으면 null로 채운다', () => {
+  it('franchise/district_baseline이 없어도(nullable 필드) 정상 데이터로 처리하고 null로 채운다', () => {
     const result = adaptCommercialArea({
       ...rawSample,
       franchise: null,
       district_baseline: null,
     });
 
-    expect(result.franchise).toBeNull();
-    expect(result.districtBaseline).toBeNull();
+    // by_major/by_radius/diversity/restaurant_density/lq_baseline은 전부
+    // 있으므로, nullable 필드 두 개가 없다고 해서 전체가 null이 되면 안 된다.
+    expect(result).not.toBeNull();
+    expect(result?.franchise).toBeNull();
+    expect(result?.districtBaseline).toBeNull();
   });
 
   it('district_baseline에 signgu_name이 없으면 null로 취급한다', () => {
@@ -208,7 +212,7 @@ describe('adaptCommercialArea', () => {
       },
     });
 
-    expect(result.districtBaseline).toBeNull();
+    expect(result?.districtBaseline).toBeNull();
   });
 
   it('data_reference_date가 없으면 빈 문자열로 채운다', () => {
@@ -217,28 +221,85 @@ describe('adaptCommercialArea', () => {
       data_reference_date: null,
     });
 
-    expect(result.dataReferenceDate).toBe('');
+    expect(result?.dataReferenceDate).toBe('');
   });
 
   it('envelope을 안 넘기면 status ok/warnings 빈 배열로 기본 처리한다', () => {
     const result = adaptCommercialArea(rawSample);
 
-    expect(result.status).toBe('ok');
-    expect(result.warnings).toEqual([]);
+    expect(result?.status).toBe('ok');
+    expect(result?.warnings).toEqual([]);
   });
 
-  it('빈 객체(no_data/error 상태의 data={})를 넣어도 안전한 기본값으로 채운다', () => {
+  it('by_major/by_radius가 실제로 빈 배열이면(아예 없음이 아니라) 정상 데이터로 통과시킨다', () => {
+    const result = adaptCommercialArea({
+      ...rawSample,
+      by_major: [],
+      by_radius: [],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.byMajor).toEqual([]);
+    expect(result?.byRadius).toEqual([]);
+  });
+
+  it.each([
+    ['by_major', { by_major: undefined }],
+    ['by_radius', { by_radius: undefined }],
+    ['diversity', { diversity: undefined }],
+    ['restaurant_density', { restaurant_density: undefined }],
+    ['lq_baseline', { lq_baseline: undefined }],
+  ])(
+    '%s가 아예 없으면(undefined) 전체를 null로 반환한다',
+    (_name, override) => {
+      const result = adaptCommercialArea({ ...rawSample, ...override });
+
+      expect(result).toBeNull();
+    }
+  );
+
+  it('radius_m/store_total이 숫자가 아니면(타입 불일치) null을 반환한다', () => {
+    const wrongRadius = adaptCommercialArea({
+      ...rawSample,
+      radius_m: '500',
+    });
+    const wrongStoreTotal = adaptCommercialArea({
+      ...rawSample,
+      store_total: null,
+    });
+
+    expect(wrongRadius).toBeNull();
+    expect(wrongStoreTotal).toBeNull();
+  });
+
+  it('by_major가 배열이 아니면(타입 불일치) null을 반환한다', () => {
+    const result = adaptCommercialArea({
+      ...rawSample,
+      by_major: { code: 'I' },
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('mock 스텁처럼 store_total/by_middle 정도만 있고 나머지 필수 필드가 없으면 null을 반환한다', () => {
+    // 실제로 관측된 문제 상황: 백엔드가 (mock 스텁 등으로) store_total과
+    // by_middle만 주고 by_major/by_radius/diversity/restaurant_density/
+    // lq_baseline을 아예 안 준 경우.
+    const result = adaptCommercialArea({
+      description: '목업 상권 자료입니다.',
+      store_total: 1241,
+      by_middle: [{ code: 'I201', name: '한식 음식점업', count: 96, lq: 1.24 }],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('빈 객체({}, no_data/error 상태의 data={})를 넣으면 null을 반환한다', () => {
     const result = adaptCommercialArea(
       {},
       { status: 'no_data', warnings: ['자료 없음'] }
     );
 
-    expect(result.status).toBe('no_data');
-    expect(result.warnings).toEqual(['자료 없음']);
-    expect(result.byMajor).toEqual([]);
-    expect(result.byRadius).toEqual([]);
-    expect(result.byMiddleForRecommendations).toEqual([]);
-    expect(result.franchise).toBeNull();
-    expect(result.districtBaseline).toBeNull();
+    expect(result).toBeNull();
   });
 });

@@ -141,10 +141,41 @@ function mapDistrictBaseline(
     : null;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export function adaptCommercialArea(
   raw: Record<string, unknown>,
   envelope: Envelope = { status: 'ok', warnings: [] }
-): CommercialAreaData {
+): CommercialAreaData | null {
+  // radius_m/store_total/by_major/by_radius/diversity/restaurant_density/
+  // lq_baseline은 backend/app/agents/commercial_area/schemas.py의
+  // CommercialAreaData에서 전부 필수(non-nullable, 기본값 없음이거나
+  // default_factory=list)다 — franchise/district_baseline/summary처럼
+  // `| None = None`으로 선언된 진짜 nullable 필드와 다르다. 이 중 하나라도
+  // 없거나(undefined) 타입이 안 맞으면, 실제 스키마를 따르는 응답이 아니라고
+  // 보고 통째로 null을 반환한다(floatingPopulation.ts/businessLifecycle.ts와
+  // 같은 엄격함). by_major/by_radius는 "배열로 존재하되 비어 있음"과
+  // "아예 없음"을 구분해서, 전자만 정상 데이터로 통과시킨다 — 상권에 실제로
+  // 집계된 업종이 하나도 없는 극단적 케이스일 수 있어서다.
+  //
+  // restaurant_density는 화면에 노출하는 필드가 아니라 CommercialAreaData
+  // 타입에 아예 없지만(파일 상단 주석 참고), 실제 스키마 응답인지 판별하는
+  // 신호로만 존재 여부를 확인한다.
+  if (
+    !raw ||
+    typeof raw.radius_m !== 'number' ||
+    typeof raw.store_total !== 'number' ||
+    !Array.isArray(raw.by_major) ||
+    !Array.isArray(raw.by_radius) ||
+    !isObject(raw.diversity) ||
+    !isObject(raw.restaurant_density) ||
+    !isObject(raw.lq_baseline)
+  ) {
+    return null;
+  }
+
   return {
     status: envelope.status,
     errorMessage: envelope.errorMessage,
