@@ -6,6 +6,14 @@ import type {
   BusinessLifecycleMetrics,
   BusinessLifecycleSourceCoverage,
 } from '@/lib/mockData/report';
+import {
+  asArray,
+  asNullableNumber,
+  asNumber,
+  asRecord,
+  asString,
+  asStringArray,
+} from './shared';
 
 /**
  * business_lifecycle 에이전트의 실제 출력
@@ -21,32 +29,6 @@ import type {
  * 파싱하고 (2) industries(공통 업종 코드 75개)를 이 리포트가 다루는 10개
  * 업종(recommendedNames/notRecommendedNames)으로 필터링하는 것.
  */
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object'
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function asNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function asNullableNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function asString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function asStringArray(value: unknown): string[] {
-  return asArray(value).filter((v): v is string => typeof v === 'string');
-}
 
 // metrics는 점수 계산 업종(17개 키)과 판단 보류 업종(11개 키)이 서로 다른
 // 키 집합을 갖는다(lib/mockData/report.ts의 BusinessLifecycleMetrics 주석

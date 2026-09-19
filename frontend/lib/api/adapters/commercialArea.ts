@@ -11,6 +11,7 @@ import type {
   CommercialAreaRadiusSlice,
   CommercialAreaSpecializationRank,
 } from '@/lib/mockData/report';
+import { asArray, asNumber, asRecord, asString } from './shared';
 
 /**
  * commercial_area 에이전트의 실제 출력(backend/app/agents/commercial_area/schemas.py의
@@ -27,24 +28,6 @@ type Envelope = {
   warnings?: string[];
   errorMessage?: string;
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object'
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function asNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function asString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
 
 function mapMajor(raw: unknown): CommercialAreaMajorCategory {
   const r = asRecord(raw);
