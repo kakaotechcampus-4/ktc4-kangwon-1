@@ -6,37 +6,56 @@ import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
-import { ApiError, postAnalysis } from '@/lib/api';
+import { createAnalysis } from '@/lib/api/analyses';
+import { saveAnalysisResult, saveRequestId } from '@/lib/api/resultStore';
 
 export default function AddressInput() {
   const router = useRouter();
   const [roadAddress, setRoadAddress] = useState('');
   const [floorUnit, setFloorUnit] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   async function handleSubmit() {
     if (!roadAddress.trim()) {
-      setError('도로명 주소를 입력해 주세요.');
+      alert('주소를 입력해주세요');
       return;
     }
-    setError(null);
-    setIsSubmitting(true);
+
+    setIsAnalyzing(true);
     try {
-      const address = floorUnit.trim()
-        ? `${roadAddress.trim()} ${floorUnit.trim()}`
-        : roadAddress.trim();
-      const result = await postAnalysis(address);
-      sessionStorage.setItem('chaeum:lastAnalysis', JSON.stringify(result));
+      // mock 옵션 없이 기본값(false)으로 호출한다 — 실제 백엔드를 부른다.
+      // 테스트 단계에서 백엔드 키 없이 화면만 확인하려면 아래를
+      // createAnalysis(roadAddress, { mock: true })로 임시로 바꿔서 쓴다.
+      const fullAddress = floorUnit.trim()
+        ? `${roadAddress} ${floorUnit}`
+        : roadAddress;
+      const { result, requestId } = await createAnalysis(fullAddress);
+
+      if (result.status === 'no_data') {
+        console.warn('[AddressInput] no_data:', result.limitations);
+        alert(
+          [
+            '이 주소에서는 추천할 업종을 찾지 못했습니다.',
+            ...result.limitations,
+          ].join('\n')
+        );
+        return;
+      }
+
+      saveRequestId(requestId);
+      saveAnalysisResult(result);
       router.push('/report');
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : '분석 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.'
-      );
+    } catch (error) {
+      console.error('[AddressInput] 분석 요청 실패:', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : '분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      alert(message);
     } finally {
-      setIsSubmitting(false);
+      // 성공 시엔 위에서 이미 페이지를 이동하므로, 여기 도달하는 건
+      // 실패했을 때뿐이다.
+      setIsAnalyzing(false);
     }
   }
 
@@ -85,19 +104,12 @@ export default function AddressInput() {
         </div>
       </div>
 
-      {error && (
-        <p className="text-sm" style={{ color: colors.status.notRecommend }}>
-          {error}
-        </p>
-      )}
-
       <div className="flex w-full justify-end gap-3 pt-2">
         <Button
           type="button"
           variant="outline"
           className="text-gray-500"
           style={{ padding: '14px 24px' }}
-          disabled={isSubmitting}
         >
           임시 저장
         </Button>
@@ -105,10 +117,12 @@ export default function AddressInput() {
           type="button"
           variant="primary"
           style={{ padding: '14px 24px' }}
+          disabled={isAnalyzing}
           onClick={handleSubmit}
-          disabled={isSubmitting}
         >
-          {isSubmitting ? '분석 중...' : '다음 · AI 판독 결과 확인'}
+          {isAnalyzing
+            ? '분석 중... (최대 1분 정도 걸릴 수 있어요)'
+            : '다음 · AI 판독 결과 확인'}
         </Button>
       </div>
     </Card>
