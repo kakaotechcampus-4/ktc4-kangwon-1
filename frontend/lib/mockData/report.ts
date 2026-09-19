@@ -272,31 +272,37 @@ export interface CommercialAreaData {
 }
 
 /**
- * 유동인구(floating_population) 에이전트 스키마
- * (backend/app/agents/floating_population/schemas.py, origin/feature/floating-population-agent
- * 브랜치, 커밋 3e30f74) 중 화면에 노출 가능한 필드만 옮겼다.
+ * 유동인구(floating_population) 에이전트 원본 스키마
+ * (backend/app/agents/floating_population/schemas.py, develop 최신 기준) 중
+ * 화면에 노출 가능한 필드만 옮겼다. business_lifecycle과 같은 이유로 필드명을
+ * camelCase로 바꾸지 않고 snake_case 원본 그대로 쓴다 — 이 에이전트는 자체
+ * 필드 구조가 곧 결정 에이전트의 JSON Pointer 인터페이스라(스키마 파일 상단
+ * 주석 참고), 화면이 임의로 이름을 바꿔 옮기면 백엔드 쪽 변경을 조용히
+ * 놓치기 쉽다.
  *
  * 아래는 의도적으로 제외했다:
  *   - population.by_time, by_age, by_day: 분기 합계 원값. by_time은 구간
  *     길이가 3~6시간으로 달라 원값을 그대로 비교하면 "새벽에 사람이 가장
  *     많다"는 틀린 결론이 난다(반드시 time_per_hour_share만 쓴다). by_day는
  *     비중 필드가 없어 요일 차트 자체를 이번 구현에서 스킵했다(팀 결정 필요).
- *   - type.signals, thresholds, rules_version, is_inference: 판정 내부값,
+ *   - type.signals, thresholds, rules_version, signals_unit: 판정 내부값,
  *     사용자 노출 금지.
- *   - data.period_code, unit, share_unit: 기계 판독용 문자열.
- *   - data.description: 결정 에이전트 LLM용 긴 설명문.
- *   - trade_areas의 code, distance_m, area_m2, equivalent_radius_m: 내부
- *     판정용. name/kind만 남겼다.
+ *   - data.description, period_code, population.unit/share_unit,
+ *     benchmark.unit/baseline: 기계 판독·LLM 프롬프트용 문자열, 화면 비표시.
+ *   - benchmark.time_per_hour_index, mean_daily_per_trade_area: 지금 화면이
+ *     쓰는 지표(연령/시간대/규모)에 없어 제외.
+ *   - trade_areas의 code, distance_m, area_m2, equivalent_radius_m, adstrd:
+ *     내부 판정용. name/kind만 남겼다.
+ *   - trend.unit, yoy_change / radius_profile.unit / selection.selectable,
+ *     included, unavailable_reason: 화면이 쓰는 최소 필드만 남겼다.
  *
- * ⚠️ trend / radiusProfile / selection 세 필드는 위 실제 스키마에 아직
- * 존재하지 않는다(FloatingPopulationData는 description/period_code/radius_m/
- * trade_areas/population/benchmark/type/reliability/sources 9개 필드뿐).
- * 이번 작업 지시에 필드명이 구체적으로 명시되어 있어 팀이 다음 단계로
- * 계획 중인 필드로 보고 우선 이 구조로 목업을 만들었다 — 실제 연동 시
- * 백엔드 담당과 필드명을 다시 확인해야 한다.
+ * trend/radius_profile/selection은 과거 "백엔드 미구현" 상태였지만 이제
+ * 실제 스키마에 전부 구현돼 있다(develop 기준 재확인 완료).
  */
 export type ReliabilityLevel = 'high' | 'medium' | 'low';
-export type TrendDirection = '증가' | '감소' | '보합';
+// "판단 불가"는 분기가 2개 미만이라 direction 자체를 못 정할 때 나온다
+// (backend/app/agents/floating_population/schemas.py의 Trend.direction 주석).
+export type TrendDirection = '증가' | '감소' | '보합' | '판단 불가';
 
 export interface FloatingPopulationTradeArea {
   name: string;
@@ -304,31 +310,32 @@ export interface FloatingPopulationTradeArea {
 }
 
 export interface FloatingPopulationPopulation {
-  dailyAvg: number;
-  femaleRatio: number;
-  ageShare: Record<string, number>; // key: '10'|'20'|...|'60' ("60"은 60대+로 라벨링)
-  timePerHourShare: Record<string, number>; // key: '00_06' 등, 반드시 이 필드만 사용
-  peakTimeBand: string;
-  weekendToWeekdayRatio: number;
+  daily_avg: number;
+  female_ratio: number;
+  age_share: Record<string, number>; // key: '10'|'20'|...|'60' ("60"은 60대+로 라벨링)
+  time_per_hour_share: Record<string, number>; // key: '00_06' 등, 반드시 이 필드만 사용
+  peak_time_band: string;
+  weekend_to_weekday_ratio: number;
 }
 
 export interface FloatingPopulationBenchmark {
-  ageIndex: Record<string, number>; // 서울 평균 대비 배수(1.0 기준)
-  lunchIndex: number;
-  eveningIndex: number;
-  nightIndex: number;
-  weekendIndex: number;
-  scalePercentile: number; // 서울 상권 중 규모 백분위
+  age_index: Record<string, number>; // 서울 평균 대비 배수(1.0 기준)
+  lunch_index: number;
+  evening_index: number;
+  night_index: number;
+  weekend_index: number;
+  scale_percentile: number; // 서울 상권 중 규모 백분위
 }
 
 export interface FloatingPopulationType {
   label: string;
   reasons: string[];
+  is_inference: boolean;
 }
 
 export interface FloatingPopulationReliability {
-  tradeAreaCount: number;
-  coveredTradeAreas: number;
+  trade_area_count: number;
+  covered_trade_areas: number;
   level: ReliabilityLevel;
 }
 
@@ -340,47 +347,44 @@ export interface FloatingPopulationSource {
 
 export interface FloatingPopulationTrendQuarter {
   period: string;
-  dailyAvg: number;
+  daily_avg: number;
 }
 
-// ⚠️ 백엔드 미구현(위 설명 참고).
 export interface FloatingPopulationTrend {
   quarters: FloatingPopulationTrendQuarter[];
   direction: TrendDirection;
-  qoqChange: number; // % 단위. yoyChange는 항상 null이라 타입에서부터 뺐다(화면 비표시).
+  qoq_change: number | null; // 분기가 2개 미만이면 null(backend 스키마 그대로).
 }
 
 export interface FloatingPopulationRadiusPoint {
-  radiusM: number;
-  dailyAvg: number;
+  radius_m: number;
+  daily_avg: number;
 }
 
-// ⚠️ 백엔드 미구현(위 설명 참고).
 export interface FloatingPopulationRadiusProfile {
   points: FloatingPopulationRadiusPoint[];
   method: string;
 }
 
-// ⚠️ 백엔드 미구현(위 설명 참고).
 export interface FloatingPopulationSelection {
   applied: boolean;
   dropped: string[]; // 예: ['trend', 'radius_profile'] — 어떤 하위 분석이 생략됐는지
-  reason: string;
+  reason: string | null; // 뺀 것이 없거나 선별을 못 했으면 null(backend 스키마 그대로).
 }
 
 export interface FloatingPopulationData {
   status: AgentStatus;
   errorMessage?: string;
   warnings: string[];
-  radiusM: number;
-  tradeAreas: FloatingPopulationTradeArea[] | null;
+  radius_m: number;
+  trade_areas: FloatingPopulationTradeArea[] | null;
   population: FloatingPopulationPopulation;
   benchmark: FloatingPopulationBenchmark;
   type: FloatingPopulationType;
   reliability: FloatingPopulationReliability;
   sources: FloatingPopulationSource[];
   trend: FloatingPopulationTrend | null;
-  radiusProfile: FloatingPopulationRadiusProfile | null;
+  radius_profile: FloatingPopulationRadiusProfile | null;
   selection: FloatingPopulationSelection;
 }
 
@@ -1255,7 +1259,7 @@ export const mockReportData = {
 
   // status를 'partial'로 둔 이유는 commercialArea와 동일 — 화면에서
   // "status가 partial이면 warnings를 각주로" 분기가 실제로 그려지는지
-  // 확인할 수 있게 한다. trend/radiusProfile/tradeAreas가 null인 케이스는
+  // 확인할 수 있게 한다. trend/radius_profile/trade_areas가 null인 케이스는
   // 별도로 floatingPopulationNullScenario(이 파일 하단)에서 확인한다.
   floatingPopulation: {
     status: 'partial',
@@ -1263,9 +1267,9 @@ export const mockReportData = {
       '유동인구 유형은 직업 데이터가 아닌 연령·요일 분포에서 추정한 값입니다.',
       '상권영역 API가 폴리곤을 주지 않아 상권 구역을 면적 등가원으로 근사했습니다.',
     ],
-    radiusM: 500,
+    radius_m: 500,
 
-    tradeAreas: [
+    trade_areas: [
       { name: '후평동먹자골목', kind: '골목상권' },
       { name: '후평시장', kind: '전통시장' },
       { name: '온의로상권', kind: '발달상권' },
@@ -1275,9 +1279,9 @@ export const mockReportData = {
     ] as FloatingPopulationTradeArea[],
 
     population: {
-      dailyAvg: 4820,
-      femaleRatio: 0.52,
-      ageShare: {
+      daily_avg: 4820,
+      female_ratio: 0.52,
+      age_share: {
         '10': 0.05,
         '20': 0.15,
         '30': 0.17,
@@ -1285,7 +1289,7 @@ export const mockReportData = {
         '50': 0.22,
         '60': 0.17,
       },
-      timePerHourShare: {
+      time_per_hour_share: {
         '00_06': 0.06,
         '06_11': 0.13,
         '11_14': 0.19,
@@ -1293,12 +1297,12 @@ export const mockReportData = {
         '17_21': 0.28,
         '21_24': 0.17,
       },
-      peakTimeBand: '17_21',
-      weekendToWeekdayRatio: 1.12,
+      peak_time_band: '17_21',
+      weekend_to_weekday_ratio: 1.12,
     } as FloatingPopulationPopulation,
 
     benchmark: {
-      ageIndex: {
+      age_index: {
         '10': 0.85,
         '20': 0.62,
         '30': 0.71,
@@ -1306,11 +1310,11 @@ export const mockReportData = {
         '50': 1.55,
         '60': 1.42,
       },
-      lunchIndex: 0.92,
-      eveningIndex: 1.35,
-      nightIndex: 1.15,
-      weekendIndex: 1.18,
-      scalePercentile: 58,
+      lunch_index: 0.92,
+      evening_index: 1.35,
+      night_index: 1.15,
+      weekend_index: 1.18,
+      scale_percentile: 58,
     } as FloatingPopulationBenchmark,
 
     type: {
@@ -1320,11 +1324,12 @@ export const mockReportData = {
         '저녁 시간대(17~21시) 통행이 서울 평균의 1.35배로 많아 퇴근·귀가 동선에 몰려 있습니다.',
         '주말 통행량이 평일의 1.12배로 주말에 더 붐빕니다.',
       ],
+      is_inference: true,
     } as FloatingPopulationType,
 
     reliability: {
-      tradeAreaCount: 6,
-      coveredTradeAreas: 6,
+      trade_area_count: 6,
+      covered_trade_areas: 6,
       level: 'high',
     } as FloatingPopulationReliability,
 
@@ -1343,22 +1348,22 @@ export const mockReportData = {
 
     trend: {
       quarters: [
-        { period: '2025년 3분기', dailyAvg: 4460 },
-        { period: '2025년 4분기', dailyAvg: 4610 },
-        { period: '2026년 1분기', dailyAvg: 5050 },
-        { period: '2026년 2분기', dailyAvg: 4820 },
+        { period: '2025년 3분기', daily_avg: 4460 },
+        { period: '2025년 4분기', daily_avg: 4610 },
+        { period: '2026년 1분기', daily_avg: 5050 },
+        { period: '2026년 2분기', daily_avg: 4820 },
       ],
       direction: '보합',
-      qoqChange: -4.6,
+      qoq_change: -4.6,
     } as FloatingPopulationTrend,
 
-    radiusProfile: {
+    radius_profile: {
       points: [
-        { radiusM: 50, dailyAvg: 210 },
-        { radiusM: 100, dailyAvg: 780 },
-        { radiusM: 200, dailyAvg: 1950 },
-        { radiusM: 300, dailyAvg: 3120 },
-        { radiusM: 500, dailyAvg: 4820 },
+        { radius_m: 50, daily_avg: 210 },
+        { radius_m: 100, daily_avg: 780 },
+        { radius_m: 200, daily_avg: 1950 },
+        { radius_m: 300, daily_avg: 3120 },
+        { radius_m: 500, daily_avg: 4820 },
       ],
       method:
         '반경 안과 겹치는 상권의 길단위인구를 면적 비례로 안분해 추정했습니다.',
@@ -1367,7 +1372,7 @@ export const mockReportData = {
     selection: {
       applied: false,
       dropped: [],
-      reason: '',
+      reason: null,
     } as FloatingPopulationSelection,
   } as FloatingPopulationData,
 
@@ -1406,7 +1411,7 @@ export const RECOMMENDED_NAME_TO_MIDDLE_CODE: Record<string, string> = {
 };
 
 /**
- * trend / radiusProfile / tradeAreas가 모두 null인 검증용 시나리오.
+ * trend / radius_profile / trade_areas가 모두 null인 검증용 시나리오.
  * 상권 자료가 부실한 지역(예: 집계 상권이 1곳뿐이라 시계열·반경별 세부
  * 분석을 만들 수 없는 경우)을 흉내낸다. FloatingPopulationSection이
  * 이 세 섹션을 깔끔하게 숨기는지, selection.reason 문구가 대신 그 자리를
@@ -1414,9 +1419,9 @@ export const RECOMMENDED_NAME_TO_MIDDLE_CODE: Record<string, string> = {
  */
 export const floatingPopulationNullScenario: FloatingPopulationData = {
   ...mockReportData.floatingPopulation,
-  tradeAreas: null,
+  trade_areas: null,
   trend: null,
-  radiusProfile: null,
+  radius_profile: null,
   selection: {
     applied: true,
     dropped: ['trend', 'radius_profile', 'trade_areas'],

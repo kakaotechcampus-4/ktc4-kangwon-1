@@ -24,6 +24,7 @@ import type {
 } from '@/lib/api/types';
 import { adaptCommercialArea } from '@/lib/api/adapters/commercialArea';
 import { adaptBusinessLifecycle } from '@/lib/api/adapters/businessLifecycle';
+import { adaptFloatingPopulation } from '@/lib/api/adapters/floatingPopulation';
 
 const dmMono = DM_Mono({
   subsets: ['latin'],
@@ -41,51 +42,27 @@ function findAgent(
  * agent.data는 백엔드 계약상 Record<string, unknown>이고, 어떤 필드를
  * 담을지는 각 분석 에이전트가 정한다(backend/app/schemas.py 주석 참고).
  *
- * commercial_area·business_lifecycle은 각자 전용 어댑터
- * (lib/api/adapters/commercialArea.ts, businessLifecycle.ts)로 실제 출력을
- * 화면 타입으로 옮긴다. commercial_area는 default_agents()(backend/app/agents/
- * orchestration/workflow.py)에 등록돼 있어 실호출로 진짜 데이터가 오지만,
- * business_lifecycle은 에이전트 코드·출력 예시(business_lifecycle_agent_output.json)는
- * 있어도 아직 그 레지스트리에 등록되지 않아(feature/mvp1-refact 미merge)
- * 실호출에서는 source_analyses에 아예 나타나지 않는다 — 어댑터는 미리
- * 만들어 두고, 등록되는 대로 자동으로 연결되게 한다.
- *
- * floating_population은 코드도 출력 형태도 아직 확정되지 않아 전용
- * 어댑터가 없다 — 대신 "우리가 그릴 수 있는 형태인지"를 최소한의 키
- * 존재 여부로만 확인하고 아니면 안내 문구로 대체한다.
+ * 세 에이전트(floating_population, commercial_area, business_lifecycle)
+ * 모두 default_agents()(backend/app/agents/orchestration/workflow.py)에
+ * 등록돼 있어 실호출로 진짜 데이터가 온다. 각자 전용 어댑터
+ * (lib/api/adapters/floatingPopulation.ts, commercialArea.ts,
+ * businessLifecycle.ts)로 실제 snake_case 출력을 화면 타입으로 옮긴다.
+ * status/warnings는 data 안이 아니라 AgentAnalysis 봉투에 있어 envelope
+ * 인자로 따로 넘긴다.
  */
-function pickShaped<T>(
-  data: Record<string, unknown>,
-  requiredKeys: string[]
-): T | null {
-  const hasAllKeys = requiredKeys.every((key) => key in data);
-  return hasAllKeys ? (data as unknown as T) : null;
-}
-
-// agent_id를 못 찾거나 status가 'error'면 그 자리에서 바로 포기한다.
-// 'no_data'는 여기서 걸러내지 않고 pickShaped까지 내려보낸다 — 스키마상
-// no_data의 data는 빈 객체라 어차피 필수 키 검사에서 자연스럽게
-// 걸러지지만, 그 판단은 "형태가 맞는지"를 보는 shape guard의 몫으로 둔다.
 function extractFloatingPopulationData(
   agent: AgentAnalysis | undefined
 ): FloatingPopulationData | null {
-  if (!agent || agent.status === 'error') {
+  if (!agent) {
     return null;
   }
-  return pickShaped<FloatingPopulationData>(agent.data, [
-    'status',
-    'population',
-    'benchmark',
-    'type',
-    'reliability',
-  ]);
+  return adaptFloatingPopulation(agent.data, {
+    status: agent.status,
+    warnings: agent.warnings,
+    errorMessage: agent.error?.message,
+  });
 }
 
-// commercial_area는 실제로 default_agents()에 등록돼 있어(위 주석 참고)
-// 형태만 안 맞으면 되는 나머지 둘과 다르게 다룬다 — pickShaped로 형태를
-// "맞나/안 맞나"만 보고 버리는 대신, lib/api/adapters/commercialArea.ts로
-// 실제 snake_case 응답을 화면이 쓰는 camelCase로 변환한다. status/warnings는
-// data 안이 아니라 AgentAnalysis 봉투에 있어 여기서 함께 넘긴다.
 function extractCommercialAreaData(
   agent: AgentAnalysis | undefined
 ): CommercialAreaData | null {
