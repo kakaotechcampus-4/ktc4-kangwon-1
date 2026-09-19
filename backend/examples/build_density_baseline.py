@@ -81,8 +81,6 @@ def percentile_table(values: list[float]) -> list[float]:
 
 
 async def sample(settings: Settings, limit: int | None) -> None:
-    from app.agents.commercial_area.trade_areas import to_epsg5181  # noqa: F401
-
     areas = load_trade_areas()
     if not areas:
         raise SystemExit(
@@ -132,7 +130,7 @@ def _to_wgs84(x: float, y: float) -> tuple[float, float]:
 
     상권 중심점 하나당 몇 번 반복이면 1cm 아래로 수렴한다.
     """
-    from app.agents.commercial_area.trade_areas import to_epsg5181
+    from app.geo import to_epsg5181
 
     lat, lon = 37.5, 127.0
     for _ in range(12):

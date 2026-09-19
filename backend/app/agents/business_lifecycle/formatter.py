@@ -1,8 +1,7 @@
-import argparse
-import json
-from pathlib import Path
 from typing import Any
 
+from app.industries import MAPPING_REVIEW_WARNING, TAXONOMY
+from app.industries.catalog import EXPECTED_INDUSTRY_COUNT, INDUSTRIES
 from app.schemas import AgentAnalysis, Scope
 
 
@@ -53,6 +52,9 @@ def format_scored_industry(
         "confidence": industry["confidence"],
         "data_available": True,
         "score_available": True,
+        "data_status": industry.get("data_status", "observed"),
+        "data_complete": industry.get("data_complete", True),
+        "metrics": industry.get("metrics", {}),
         "evidence": industry.get(
             "evidence",
             [],
@@ -83,6 +85,11 @@ def format_unscored_industry(
             False,
         ),
         "score_available": False,
+        "data_status": industry.get("data_status"),
+        "data_complete": industry.get("data_complete", False),
+        "metrics": industry.get("metrics", {}),
+        "source_coverage": industry.get("source_coverage", {})
+        | {"observed_quarters": industry.get("observed_quarters")},
         "evidence": [],
         "warning": industry.get(
             "missing_reason",
@@ -98,7 +105,7 @@ def build_warnings(
     전체 분석 결과에 대한 해석상 주의사항을 생성한다.
     """
 
-    warnings: list[str] = []
+    warnings: list[str] = [MAPPING_REVIEW_WARNING]
 
     unscored_count = sum(1 for industry in industries if not industry["score_available"])
 
@@ -110,7 +117,7 @@ def build_warnings(
 
     if unscored_count > 0:
         warnings.append(
-            f"70개 업종 중 {unscored_count}개 업종은 "
+            f"{EXPECTED_INDUSTRY_COUNT}개 업종 중 {unscored_count}개 업종은 "
             "데이터 부족 또는 직접 대응 데이터 부재로 "
             "Lifecycle Score를 계산하지 못했습니다."
         )
@@ -187,6 +194,16 @@ def format_for_mediator(
     ):
         raise BusinessLifecycleFormatterError("unavailable_industries가 list가 아닙니다.")
 
+    entries = scored_industries + unscored_industries
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("industry_id"), str)
+        or item["industry_id"] not in INDUSTRIES
+        or item.get("industry_name") != INDUSTRIES[item["industry_id"]]
+        for item in entries
+    ):
+        raise BusinessLifecycleFormatterError("공통 업종 코드 또는 업종명이 일치하지 않습니다.")
+
     # ========================================================
     # 1. 점수 있는 업종
     # ========================================================
@@ -210,20 +227,20 @@ def format_for_mediator(
     industries.sort(key=lambda item: item["industry_id"])
 
     # ========================================================
-    # 4. 70개 Master 검증
+    # 4. 공통 75개 Master 검증
     # ========================================================
 
-    if len(industries) != 70:
+    if len(industries) != EXPECTED_INDUSTRY_COUNT:
         raise BusinessLifecycleFormatterError(
-            f"Business Lifecycle 결과의 업종 수가 70개가 아닙니다. 현재={len(industries)}"
+            f"Business Lifecycle 결과의 업종 수가 75개가 아닙니다. 현재={len(industries)}"
         )
 
     industry_ids = [industry["industry_id"] for industry in industries]
 
-    if len(set(industry_ids)) != 70:
+    if len(set(industry_ids)) != EXPECTED_INDUSTRY_COUNT:
         raise BusinessLifecycleFormatterError("중복된 industry_id가 존재합니다.")
 
-    expected_ids = set(range(1, 71))
+    expected_ids = set(INDUSTRIES)
 
     actual_ids = set(industry_ids)
 
@@ -233,7 +250,7 @@ def format_for_mediator(
         extra_ids = sorted(actual_ids - expected_ids)
 
         raise BusinessLifecycleFormatterError(
-            f"70개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
+            f"75개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
         )
 
     # ========================================================
@@ -245,7 +262,7 @@ def format_for_mediator(
     unscored_count = len(industries) - scored_count
 
     coverage = {
-        "target_industries": 70,
+        "target_industries": EXPECTED_INDUSTRY_COUNT,
         "scored_industries": scored_count,
         "unscored_industries": unscored_count,
     }
@@ -293,6 +310,7 @@ def format_for_mediator(
                 metadata=metadata,
             ),
             "coverage": coverage,
+            "taxonomy": dict(TAXONOMY),
             "scoring_method": agent_result.get(
                 "scoring_method",
                 {},
@@ -368,109 +386,3 @@ def build_metadata(
     if metadata:
         result_metadata.update(metadata)
     return {key: value for key, value in result_metadata.items() if value is not None}
-
-
-def main() -> None:
-    """
-    formatter.py 단독 테스트용 CLI.
-
-    실제 서비스에서는 JSON 파일을 읽지 않고
-    agent.py가 format_for_mediator()를 직접 호출한다.
-    """
-
-    parser = argparse.ArgumentParser(
-        description=("Business Lifecycle Agent 결과를 중재 Agent 공통 형식으로 변환")
-    )
-
-    parser.add_argument(
-        "--input",
-        required=True,
-        help=("Business Lifecycle Agent 결과 JSON 파일"),
-    )
-
-    parser.add_argument(
-        "--output",
-        required=True,
-        help=("중재 Agent용 JSON 저장 경로"),
-    )
-
-    args = parser.parse_args()
-
-    input_path = Path(args.input)
-
-    output_path = Path(args.output)
-
-    with input_path.open(
-        "r",
-        encoding="utf-8",
-    ) as file:
-        agent_result = json.load(file)
-
-    formatted_result = format_for_mediator(agent_result)
-
-    formatted_payload = formatted_result.model_dump()
-
-    with output_path.open(
-        "w",
-        encoding="utf-8",
-    ) as file:
-        json.dump(
-            formatted_payload,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
-
-    print()
-    print("===== Formatter 완료 =====")
-
-    print(
-        "request_id:",
-        formatted_payload["request_id"],
-    )
-
-    print(
-        "agent_id:",
-        formatted_payload["agent_id"],
-    )
-
-    print(
-        "status:",
-        formatted_payload["status"],
-    )
-
-    coverage = formatted_payload["data"].get("coverage", {})
-
-    print(
-        "전체 업종:",
-        coverage.get(
-            "target_industries",
-            0,
-        ),
-    )
-
-    print(
-        "점수 계산 업종:",
-        coverage.get(
-            "scored_industries",
-            0,
-        ),
-    )
-
-    print(
-        "판단 보류 업종:",
-        coverage.get(
-            "unscored_industries",
-            0,
-        ),
-    )
-
-    print()
-    print(
-        "중재 Agent용 JSON 저장 완료:",
-        output_path,
-    )
-
-
-if __name__ == "__main__":
-    main()

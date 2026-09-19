@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 
+from app.industries import MASTER_PATH, TAXONOMY
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from .client import SbizApiError, StoreClient
-from .config import Settings, load_dotenv_if_present
+from .config import Settings
 from .franchise import build_franchise, load_brands
+from .industries import load_middle_master
 from .llm import render_summary_text, summarize
 from .metrics import (
     build_district_specialization,
@@ -29,10 +32,17 @@ from .sources import (
     franchise_base_year,
 )
 from .trade_areas import build_trade_areas
-from .upjong import load_middle_master, master_from_stores
 
 AGENT_ID: AgentId = "commercial_area"
 DISTRICT_VOTE_SIZE = 10
+PUBLIC_ERROR_CODES = {
+    "30",
+    "BAD_RESPONSE",
+    "NO_KEY",
+    "NO_RADIUS",
+    "UPSTREAM_FAILED",
+    "UPSTREAM_TIMEOUT",
+}
 
 
 async def analyze(
@@ -40,7 +50,6 @@ async def analyze(
     settings: Settings | None = None,
     store_client: StoreClient | None = None,
 ) -> AgentAnalysis:
-    load_dotenv_if_present()
     task = AnalysisTask.model_validate(task)
     settings = settings or Settings.from_env()
     radius = settings.analysis_radius_m
@@ -55,13 +64,28 @@ async def analyze(
 
     try:
         try:
+            master = load_middle_master(settings)
+        except (OSError, ValueError):
+            return AgentAnalysis(
+                request_id=task.request_id,
+                agent_id=AGENT_ID,
+                status="error",
+                error=AgentError(
+                    code="INDUSTRY_CONFIG_ERROR",
+                    message="업종 마스터 설정을 확인해 주세요.",
+                ),
+            )
+        try:
             stores, meta = await client.stores_in_radius(site.latitude, site.longitude, radius)
         except SbizApiError as exc:
             return AgentAnalysis(
                 request_id=task.request_id,
                 agent_id=AGENT_ID,
                 status="error",
-                error=AgentError(code=exc.code, message=exc.message),
+                error=AgentError(
+                    code=exc.code if exc.code in PUBLIC_ERROR_CODES else "UPSTREAM_ERROR",
+                    message="상가정보 조회에 실패했습니다.",
+                ),
                 warnings=warnings,
             )
 
@@ -84,13 +108,14 @@ async def analyze(
                 "페이지 상한에 걸려 집계가 일부 누락됐습니다."
             )
 
-        master = load_middle_master(settings)
-        if not master:
-            master = master_from_stores(stores)
+        known_codes = {entry.code for entry in master}
+        mapped_count = sum(store.middle_code in known_codes for store in stores)
+        unmapped_count = len(stores) - mapped_count
+        if unmapped_count:
             degraded = True
             warnings.append(
-                "업종 코드 마스터 파일이 없어 조회된 업종만 집계했습니다. "
-                "점포가 0건인 업종은 결과에 포함되지 않습니다."
+                f"마스터에 대응하지 않는 점포 {unmapped_count}건은 "
+                "업종별 집계에 배분하지 않았습니다."
             )
 
         baseline_counts = None
@@ -118,9 +143,9 @@ async def analyze(
                 warnings.append(
                     "LQ 기준 반경 조회가 페이지 상한에 걸려 LQ가 과대추정될 수 있습니다."
                 )
-        except SbizApiError as exc:
+        except SbizApiError:
             degraded = True
-            warnings.append(f"LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다: {exc.message}")
+            warnings.append("LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다.")
 
         district_counts = None
         district_baseline = None
@@ -141,11 +166,9 @@ async def analyze(
                         "자치구 조회가 페이지 상한에 걸려 "
                         "자치구 대비 배수가 과대추정될 수 있습니다."
                     )
-            except SbizApiError as exc:
+            except SbizApiError:
                 degraded = True
-                warnings.append(
-                    f"자치구 조회 실패로 자치구 대비 배수를 계산하지 못했습니다: {exc.message}"
-                )
+                warnings.append("자치구 조회 실패로 자치구 대비 배수를 계산하지 못했습니다.")
         else:
             degraded = True
             warnings.append(
@@ -160,8 +183,13 @@ async def analyze(
         if brands:
             # 판정 방식의 한계는 franchise.method 와 confidence 로 전달한다.
             # warnings 는 실패에만 쓴다. 고지를 여기 넣으면 정상 분석도 partial 로 내려간다.
-            franchise = build_franchise(
-                stores, brands, middle_rows, base_year=franchise_base_year(settings)
+            # 스레드 이동은 이벤트 루프 정지를 막지만 CPU 병렬 실행을 보장하지는 않는다.
+            franchise = await asyncio.to_thread(
+                build_franchise,
+                stores,
+                brands,
+                middle_rows,
+                base_year=franchise_base_year(settings),
             )
         else:
             degraded = True
@@ -216,6 +244,15 @@ async def analyze(
         )
 
         data = payload.model_dump()
+        data["taxonomy"] = (
+            dict(TAXONOMY)
+            if settings.upjong_master_path.resolve() == MASTER_PATH.resolve()
+            else {"id": "custom-middle", "industry_count": len(master)}
+        )
+        data["coverage"] = {
+            "mapped_store_count": mapped_count,
+            "unmapped_store_count": unmapped_count,
+        }
         summary, summary_warning = await summarize(data, settings)
         if summary_warning:
             warnings.append(summary_warning)

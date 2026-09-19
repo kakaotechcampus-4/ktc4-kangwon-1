@@ -59,19 +59,27 @@ class SchemaTests(unittest.TestCase):
             "summary": "검증용 요약입니다.",
             "recommendations": [
                 {
-                    "category": {"major": "음식점", "middle": middle},
+                    "category": {"major": "음식점업", "middle": middle},
                     "score": 70 - index,
                     "reasons": ["검증용 근거입니다."],
                     "evidence": [{"agent_id": "floating_population", "path": "/value"}],
                     "risks": [],
                 }
-                for index, middle in enumerate(["중식", "양식", "일식", "한식", "분식"])
+                for index, middle in enumerate(
+                    [
+                        "중식 음식점업",
+                        "서양식 음식점업",
+                        "일식 음식점업",
+                        "한식 음식점업",
+                        "기타 간이 음식점업",
+                    ]
+                )
             ],
             "not_recommended": [],
             "limitations": [],
         }
         content = schemas.DecisionContent.model_validate(payload)
-        self.assertEqual(content.recommendations[-1].category.middle, "분식")
+        self.assertEqual(content.recommendations[-1].category.middle, "기타 간이 음식점업")
 
     def test_decision_request_rejects_another_request_result(self):
         with self.assertRaises(ValueError):

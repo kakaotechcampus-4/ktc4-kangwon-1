@@ -30,6 +30,7 @@ PR마다 CI가 같은 명령을 돌립니다. **로컬에서 먼저 돌리고 �
 ### 계층
 
 ```
+app/*.py     팀 공통 (schemas.py · address.py · config.py · geo.py). 세 에이전트가 함께 쓴다
 schemas.py   팀 공통 계약 (여기를 바꾸면 남의 코드가 깨진다)
 agent.py     한 에이전트의 흐름. 외부 호출·계산·조립을 순서대로 부른다
 client.py    외부 API 호출만. 계산하지 않는다
@@ -40,9 +41,14 @@ schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
 
 **계산 함수는 순수하게 둡니다.** `metrics.py`가 네트워크를 모르기 때문에 시험이 빠르고 안정적입니다.
 
+**에이전트는 다른 에이전트를 import 하지 않습니다.** 다만 둘 이상이 쓰는 코드를 복사하지는
+않습니다. 그 규칙이 막는 것은 에이전트 **사이의** 의존이지 공통 모듈이 아닙니다. 파일·네트워크를
+모르는 순수 계산이면 `app/` 루트로 올리고(`geo.py`), 요청 흐름을 다루면 `app/services/`에 둡니다.
+
 ### 비동기
 
 - 외부 호출은 전부 `async`입니다. `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
+- 기존 개폐업 동기 I/O 파이프라인은 `asyncio.to_thread()`로 격리해 이벤트 루프를 막지 않습니다.
 - 대기는 `await asyncio.sleep()`입니다. `time.sleep()`은 이벤트 루프를 멈춥니다.
 - 여러 요청을 동시에 보낼 때는 `asyncio.Semaphore`로 상한을 겁니다.
   공공데이터 쿼터가 하루 10,000건이고 429가 옵니다. 기본 4개(`SBIZ_MAX_CONCURRENCY`).
@@ -53,10 +59,11 @@ schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
 | 위치 | 정책 |
 | --- | --- |
 | `client.py` | 외부 실패를 `SbizApiError`로 바꿔 올린다. 재시도는 여기서 한다 |
-| `agent.py` | 예외를 밖으로 내보내지 않는다. `status`와 `warnings`로 표현한다 |
-| `orchestrator.py` | 한 에이전트가 죽어도 나머지를 살린다. 죽은 것은 `status="error"`로 채운다 |
+| `agent.py` | 외부 API 등 운영 실패는 `status`와 `warnings`로 수집한다. 공통 계약 검증 오류는 전파한다 |
+| `agents/orchestration/workflow.py` | 운영 실패는 다른 에이전트를 살려 수집하고, 계약 오류는 판단을 중단해 failed로 저장한다 |
 | `decision/llm.py` | 모델 실패는 **대체하지 않고 올린다**. 틀린 판단보다 실패가 낫다 |
-| `api/v1/routes.py` | 예외를 HTTP 상태로 바꾼다. 400은 사용자 입력, 502는 외부 실패 |
+| `services/analysis.py` | 저장 오류를 에이전트 실패로 숨기지 않고 전파한다 |
+| `api/v1/routes.py` | 400은 주소 입력, 422는 본문 검증, 502는 외부 실패, 500은 계약·저장 실패 |
 
 `status` 네 가지의 뜻은 이렇게 고정합니다.
 

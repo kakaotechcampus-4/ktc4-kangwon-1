@@ -14,6 +14,7 @@ import re
 from .catalog import (
     INDUSTRIES,
     INDUSTRY_MAJORS,
+    INDUSTRY_TO_SEOUL,
     LEGACY70_TO_INDUSTRY,
     SEOUL_TO_INDUSTRY,
 )
@@ -43,7 +44,13 @@ def get(code: str) -> Industry:
     """중분류 코드로 업종을 찾는다. 없으면 KeyError."""
     name = INDUSTRIES[code]
     major_code, major_name = INDUSTRY_MAJORS[code]
-    return Industry(code=code, name=name, major_code=major_code, major_name=major_name)
+    return Industry(
+        code=code,
+        name=name,
+        major_code=major_code,
+        major_name=major_name,
+        has_seoul=code in INDUSTRY_TO_SEOUL,
+    )
 
 
 def find(code: str) -> Industry | None:

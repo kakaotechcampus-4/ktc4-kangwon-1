@@ -11,8 +11,8 @@ from pathlib import Path
 
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present
+from app.agents.commercial_area.industries import master_from_stores, write_master
 from app.agents.commercial_area.schemas import MiddleCode
-from app.agents.commercial_area.upjong import master_from_stores, write_master
 
 OFFICIAL_COLUMN_CANDIDATES = {
     "middle_code": ("중분류코드", "indsMclsCd", "상권업종중분류코드"),

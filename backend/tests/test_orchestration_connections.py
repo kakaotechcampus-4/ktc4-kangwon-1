@@ -6,23 +6,28 @@ import json
 import os
 import runpy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 from test_orchestration_react import action
 from test_orchestrator_e2e import MASTER, sample_stores
 
+from app.agents.business_lifecycle.area_resolver import BusinessAreaNoDataError
 from app.agents.orchestration import build_react_agents, workflow
 from app.schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 floating = importlib.import_module("app.agents.floating_population.agent")
 commercial = importlib.import_module("app.agents.commercial_area.agent")
+lifecycle = importlib.import_module("app.agents.business_lifecycle.agent")
 
 
 class ConnectionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        tempfile.gettempdir()
         # 계산 시험용 좌표이며 실제 개롱역 위치를 검증한 값이 아닙니다.
         self.site = Site(
             input_address="개롱역 올리브영 건물 시험 주소",
@@ -32,11 +37,19 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             longitude=127.1,
         )
         self.task = AnalysisTask(request_id="connection-test", site=self.site)
+        self.enterContext(
+            patch.object(
+                lifecycle, "resolve_area", side_effect=BusinessAreaNoDataError("시험 자료 없음")
+            )
+        )
         self.network = self.enterContext(
             patch(
-                "socket.socket.connect",
+                "httpx.AsyncClient.send",
                 side_effect=AssertionError("외부 연결 금지"),
             )
+        )
+        self.enterContext(
+            patch("socket.create_connection", side_effect=AssertionError("외부 연결 금지"))
         )
         self.enterContext(
             patch.dict(
@@ -48,11 +61,14 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                     "FLOATING_POPULATION_API_KEY": "test-key",
                     "COMMERCIAL_AREA_API_KEY": "test-key",
                 },
+                clear=True,
             )
         )
 
     def tearDown(self):
         self.network.assert_not_called()
+        if hasattr(self, "environment_loader"):
+            self.environment_loader.assert_not_called()
 
     async def run_react(self, agents, generate):
         return await workflow.run_react(
@@ -76,10 +92,10 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         seen = []
 
         def make(agent_id):
-            async def analyze(task):
+            async def analyze(task, **kwargs):
                 seen.append(task)
                 started.add(agent_id)
-                if len(started) == 2:
+                if len(started) == 3:
                     ready.set()
                 await asyncio.wait_for(ready.wait(), timeout=1)
                 return AgentAnalysis(
@@ -95,20 +111,18 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             workflow.floating_population, "analyze", make("floating_population")
         ) as fp:
             with patch.object(workflow.commercial_area, "analyze", make("commercial_area")) as ca:
-                before = {name for name in sys.modules if "business_lifecycle" in name}
-                agents = build_react_agents()
-                self.assertEqual(set(agents), set(AGENT_IDS))
-                fp.assert_not_called()
-                ca.assert_not_called()
-                results = await workflow.run_agents(self.task, agents)
-                self.assertTrue(all(task is self.task for task in seen))
-                self.assertEqual(len(seen), 2)
-                pending = results[1]
-                self.assertEqual(pending.error.code, "AGENT_NOT_CONNECTED")
-                self.assertEqual(pending.request_id, self.task.request_id)
-                self.assertEqual(pending.data, {})
-                self.assertIsNone(pending.scope)
-                self.assertEqual(before, {n for n in sys.modules if "business_lifecycle" in n})
+                with patch(
+                    "app.agents.business_lifecycle.analyze", make("business_lifecycle")
+                ) as bl:
+                    agents = build_react_agents()
+                    self.assertEqual(set(agents), set(AGENT_IDS))
+                    fp.assert_not_called()
+                    ca.assert_not_called()
+                    bl.assert_not_called()
+                    results = await workflow.run_agents(self.task, agents)
+                    self.assertTrue(all(task is self.task for task in seen))
+                    self.assertEqual(len(seen), 3)
+                    self.assertTrue(all(item.status == "no_data" for item in results))
 
     async def test_mock_coordinates_never_reach_real_functions(self):
         with patch.object(workflow.floating_population, "analyze", new_callable=AsyncMock) as fp:
@@ -124,7 +138,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                     [r.error.code for r in results],
                     [
                         "INVALID_ANALYSIS_COORDINATES",
-                        "AGENT_NOT_CONNECTED",
+                        "INVALID_ANALYSIS_COORDINATES",
                         "INVALID_ANALYSIS_COORDINATES",
                     ],
                 )
@@ -132,6 +146,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 ca.assert_not_called()
 
     def prepare_real_agents(self):
+        self.environment_loader = self.enterContext(patch("app.config.load_dotenv"))
         from app.agents.floating_population.models import (
             AGE_BANDS,
             DAYS,
@@ -139,8 +154,9 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             FlpopRecord,
             TrdarArea,
         )
+        from app.geo import to_epsg5181
 
-        x, y = floating.to_epsg5181(self.site.latitude, self.site.longitude)
+        x, y = to_epsg5181(self.site.latitude, self.site.longitude)
         record = FlpopRecord(
             trdar_cd="test",
             stdr_yyqu_cd="20262",
@@ -173,7 +189,6 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             aclose=AsyncMock(),
         )
         for module in (floating, commercial):
-            self.enterContext(patch.object(module, "load_dotenv_if_present"))
             self.enterContext(
                 patch.object(module.Settings, "from_env", return_value=module.Settings())
             )
@@ -206,7 +221,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "summary": "대역 자료로 연결을 검증했습니다.",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점", "middle": "중식"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
                         "score": 60,
                         "reasons": ["유동과 점포 집계를 확인했습니다."],
                         "risks": [],
@@ -231,7 +246,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             captured[0]["analyses"], [a.model_dump(mode="json") for a in result.source_analyses]
         )
-        self.assertTrue(any("공통 비동기 진입점" in text for text in result.limitations))
+        self.assertEqual(result.source_analyses[1].status, "no_data")
         fp_client.aclose.assert_awaited_once()
         ca_client.aclose.assert_awaited_once()
 
@@ -244,6 +259,113 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(ValueError, "사용할 수 없는 분석"):
             await self.run_react(build_react_agents(), bad_evidence)
+
+    async def test_three_real_analyzers_are_saved_and_lifecycle_receives_its_llm_settings(self):
+        from dataclasses import replace
+
+        from test_business_lifecycle_agent import fake_area
+        from test_industry_pipeline import raw_rows
+
+        from app.db.repository import get_request, list_agent_results
+        from app.llm.config import LLMSettings
+        from app.services.analysis import execute_analysis
+        from app.services.settings import ExecutionSettings
+
+        self.prepare_real_agents()
+        expected_model = "lifecycle-only-model"
+        settings = ExecutionSettings.from_env()
+        settings = replace(
+            settings,
+            lifecycle=replace(
+                settings.lifecycle,
+                base_quarter_override="20244",
+                quarter_count=4,
+                api_key="captured-key",
+                request_timeout_s=0.25,
+            ),
+            lifecycle_llm=LLMSettings(model=expected_model),
+        )
+
+        def request_page(**kwargs):
+            self.assertEqual(kwargs["api_key"], "captured-key")
+            self.assertEqual(kwargs["timeout"], 0.25)
+            rows = [
+                {key.upper(): value for key, value in row.items()}
+                for row in raw_rows()
+                if row["stdr_yyqu_cd"] == kwargs["quarter"]
+            ]
+            return {
+                "VwsmTrdarStorQq": {
+                    "RESULT": {"CODE": "INFO-000"},
+                    "list_total_count": len(rows),
+                    "row": rows,
+                }
+            }
+
+        async def interpret(prompt, input_json, settings):
+            self.assertEqual(settings.model, expected_model)
+            payload = json.loads(input_json)
+            return {
+                "industry_scores": [
+                    dict(item, type="안정형", evidence=[], warning=None)
+                    for item in payload["industries"]
+                ]
+            }
+
+        def generate(prompt, input_json):
+            return {
+                "status": "ok",
+                "summary": "세 분석 자료 확인",
+                "not_recommended": [],
+                "limitations": [],
+                "recommendations": [
+                    {
+                        "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                        "score": 60,
+                        "reasons": ["각 분석 원본 확인"],
+                        "risks": [],
+                        "evidence": [{"agent_id": "business_lifecycle", "path": "/industries/0"}],
+                    }
+                ],
+            }
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"BUSINESS_LIFECYCLE_API_KEY": "later-env-key"}),
+            patch.object(lifecycle, "resolve_area", new=fake_area),
+            patch("app.agents.business_lifecycle.client.request_page", side_effect=request_page),
+            patch("app.llm.client.complete_json", side_effect=interpret),
+        ):
+            path = Path(temporary) / "three.sqlite3"
+            result = await execute_analysis(
+                self.site.input_address,
+                settings=settings,
+                db_path=path,
+                resolve=AsyncMock(return_value=self.site),
+                generate=generate,
+                generate_action=AsyncMock(
+                    side_effect=[
+                        action("prepare_address"),
+                        action("run_analyses"),
+                        action("make_decision"),
+                    ]
+                ),
+            )
+            self.assertTrue(
+                all(item.status in {"ok", "partial"} for item in result.source_analyses)
+            )
+            self.assertEqual(len(result.source_analyses[1].data["industries"]), 75)
+            snack = next(
+                item
+                for item in result.source_analyses[1].data["industries"]
+                if item["industry_id"] == "I210"
+            )
+            self.assertEqual(snack["metrics"]["avg_close_rate"], 10)
+            self.assertEqual(snack["score"], 55)
+            self.assertEqual(len(list_agent_results(result.request_id, db_path=path)), 3)
+            row = get_request(result.request_id, db_path=path)
+            self.assertEqual(row["status"], "completed")
+            self.assertEqual(json.loads(row["result_json"]), result.model_dump(mode="json"))
 
     async def test_failure_preserves_other_agent_and_no_data_skips_decision_model(self):
         self.prepare_real_agents()
@@ -269,6 +391,29 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         result = await self.run_react(build_react_agents(), generate)
         self.assertEqual(result.status, "no_data")
         generate.assert_not_called()
+
+    async def test_public_errors_do_not_expose_external_details(self):
+        secret = "FAKE-SECRET-KEY"
+
+        async def crashed(task):
+            raise RuntimeError(f"https://example.test/{secret}?body=private")
+
+        result = (await workflow.run_agents(self.task, {"floating_population": crashed}))[0]
+        self.assertNotIn(secret, result.model_dump_json())
+
+        fp_client, _ = self.prepare_real_agents()
+        fp_client.fetch_trdar_areas.side_effect = httpx.TimeoutException(
+            f"https://example.test/?key={secret} response=private"
+        )
+        result = await floating.analyze(self.task)
+        self.assertNotIn(secret, result.model_dump_json())
+
+        fp_client.fetch_trdar_areas.side_effect = None
+        floating.llm.select_blocks.side_effect = RuntimeError(
+            f"https://example.test/?key={secret} response=private"
+        )
+        result = await floating.analyze(self.task)
+        self.assertNotIn(secret, result.model_dump_json())
 
     async def test_invalid_contract_stops_both_paths_before_decision(self):
         good = AgentAnalysis(
@@ -318,6 +463,13 @@ class OfflineExampleTests(unittest.IsolatedAsyncioTestCase):
             ) as network:
                 with patch.object(sys, "path", [str(examples), *sys.path]):
                     example = runpy.run_path(str(examples / "run_orchestration.py"))
-                    result = await example["run"](offline=True)
+                    with tempfile.TemporaryDirectory() as temporary:
+                        path = Path(temporary) / "offline.sqlite3"
+                        result = await example["run"](offline=True, db_path=path)
+                        from app.db.repository import get_request
+
+                        self.assertEqual(
+                            get_request(result.request_id, db_path=path)["status"], "completed"
+                        )
                 DecisionResult.model_validate(result)
                 network.assert_not_called()

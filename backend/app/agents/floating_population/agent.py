@@ -14,51 +14,28 @@
 
 from __future__ import annotations
 
-import json
-import math
-from collections.abc import Awaitable, Callable
-from typing import Literal
-
 import httpx
 
+from app.geo import to_epsg5181
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
-from . import baseline, llm
+from . import llm
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
-from .config import Settings, load_dotenv_if_present
-from .geo import circle_overlap_ratio, to_epsg5181
-from .models import (
-    AGE_BANDS,
-    DAYS,
-    TIME_BAND_HOURS,
-    TIME_BANDS,
-    WEEKDAYS,
-    WEEKEND,
-    FlpopRecord,
-    TrdarArea,
-    period_ko,
-    quarter_days,
-)
+from .config import Settings
+from .geo import _overlapping_areas
+from .llm import SelectBlocks
+from .metrics import _aggregate, _benchmark, _radius_profile, _reliability, _trend
+from .models import period_ko, quarter_days
 from .schemas import (
-    Benchmark,
     FloatingPopulationData,
-    Population,
-    QuarterPoint,
-    RadiusPoint,
-    RadiusProfile,
-    Reliability,
     Selection,
     Source,
     TradeArea,
-    Trend,
     TypeJudgement,
 )
 
 AGENT_ID: AgentId = "floating_population"
-
-# 선별 함수 자리. 테스트에서 갈아 끼운다(팀 `decision.analyze(generate=...)` 와 같은 방식).
-SelectBlocks = Callable[[str], Awaitable[tuple[list[str], str]]]
 
 SOURCES = [
     {
@@ -73,123 +50,10 @@ SOURCES = [
     },
 ]
 
-# 상권 구역(면적 등가원)을 반경 판정에 반영할 상한 — 반경의 절반까지만 인정한다.
-# 근거는 `_overlapping_areas` 의 표에 있다. 바꾸면 집계에 들어오는 상권이 달라진다.
-_MAX_AREA_REACH_RATIO = 0.5
-
 BASE_WARNINGS = [
     "유동인구 유형은 직업 데이터가 아닌 연령·요일 분포에서 추정한 값입니다.",
     "상권영역 API 가 폴리곤을 주지 않아 상권 구역을 면적 등가원으로 근사했습니다.",
 ]
-
-
-def _overlapping_areas(
-    areas: list[TrdarArea], x: float, y: float, radius_m: float
-) -> list[tuple[TrdarArea, float]]:
-    """반경과 구역이 겹치는 상권을 (상권, 대표점까지의 거리) 로 가까운 순 반환.
-
-    상권영역 API 가 폴리곤을 주지 않아 구역을 **면적 등가원**으로 근사하고, 대표 점까지의
-    거리에서 등가 반지름을 빼서 반경과 비교한다. **단 등가 반지름은 반경의 절반까지만
-    인정한다**(`_MAX_AREA_REACH_RATIO`).
-
-    상한이 왜 필요한지는 실데이터로 확인했다(2026Q2, 반경 500m 기준):
-
-    | 기준 | 서교동 분석 | 역삼1동 최대 단일 기여 | 도달 거리 |
-    | --- | --- | --- | --- |
-    | 대표 점 거리만 | `서교동(홍대)` 상권 누락 | 역삼역 68.1% | 611m |
-    | 등가 반지름 전부 인정 | 포함 | **강남역 37.6%** | 1,287m |
-    | 등가 반지름 상한 절반 | 포함 | 역삼역 37.8% | 870m |
-
-    - 상한이 없으면 등가 반지름이 400m 대인 발달상권이 판정 반경을 두 배로 늘린다. 실제로
-      843m 떨어진 `강남역` 상권이 테헤란로 분석에 들어와 전체의 37.6% 를 차지했다.
-    - 반대로 대표 점 거리만 보면 큰 상권이 통째로 빠진다(등가 반지름 중위 151m, 상위 10% 는
-      255m 이상). 서교동(홍대) 분석에서 `서교동(홍대)` 상권 자체가 빠지는 결과가 나왔다.
-    - 상한을 반경의 1/3 로 더 조이면 그 누락이 다시 생긴다. 절반이 두 결함을 모두 피하는
-      지점이다.
-
-    집계 범위는 여전히 반경보다 넓다(반경에 걸친 상권은 구역 전체가 들어온다). 그래서 scope
-    와 warnings 에 실제 도달 거리를 적는다. 좌표계가 EPSG:5181(미터) 이라 유클리드 거리를
-    그대로 쓴다.
-    """
-    max_reach = radius_m * _MAX_AREA_REACH_RATIO
-    hits = []
-    for area in areas:
-        distance = math.hypot(area.x - x, area.y - y)
-        if distance - min(area.equivalent_radius_m, max_reach) <= radius_m:
-            hits.append((area, distance))
-    return sorted(hits, key=lambda h: h[1])
-
-
-def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
-    """여러 상권의 같은 분기 레코드를 하나로 합산하고 비중까지 계산한다.
-
-    원본 인원수는 **분기 합계**다. 결정 에이전트가 다른 에이전트의 "명/일" 과 나란히 읽게
-    되므로 **일평균(`daily_avg`)으로만** 내보내고 합계는 싣지 않는다. 합계 원값이 남는 곳은
-    `by_age`·`by_time`·`by_day` 뿐이다.
-    """
-    total = sum(r.total for r in records)
-    denom = total or 1.0
-    female = sum(r.female for r in records)
-
-    by_age = {a: sum(r.by_age[a] for r in records) for a in AGE_BANDS}
-    by_time = {b: sum(r.by_time[b] for r in records) for b in TIME_BANDS}
-    by_day = {d: sum(r.by_day[d] for r in records) for d in DAYS}
-
-    # 시간대는 반드시 시간당 값으로 비교한다. 구간 길이가 3~6시간으로 달라서 총량으로 비교하면
-    # 6시간짜리 00~06시가 거의 항상 1위가 된다(실데이터에서 확인된 왜곡).
-    per_hour = {b: by_time[b] / TIME_BAND_HOURS[b] for b in TIME_BANDS}
-    ph_sum = sum(per_hour.values()) or 1.0
-
-    weekday_avg = sum(by_day[d] for d in WEEKDAYS) / len(WEEKDAYS)
-    weekend_avg = sum(by_day[d] for d in WEEKEND) / len(WEEKEND)
-
-    days = quarter_days(quarter)
-    return Population(
-        unit=(
-            f"daily_avg 는 명/일 ({period_ko(quarter)} 합계 ÷ {days}일). "
-            "같은 사람의 반복 통행이 중복 집계된 통행량이며 사람 수가 아님. "
-            "by_age·by_time·by_day 는 분기 합계 원값"
-        ),
-        share_unit="비율 (0~1)",
-        daily_avg=round(total / days, 1),
-        female_ratio=round(female / denom, 4),
-        by_age={a: float(v) for a, v in by_age.items()},
-        age_share={a: round(by_age[a] / denom, 4) for a in AGE_BANDS},
-        by_time={b: float(v) for b, v in by_time.items()},
-        time_per_hour_share={b: round(per_hour[b] / ph_sum, 4) for b in TIME_BANDS},
-        peak_time_band=max(TIME_BANDS, key=per_hour.__getitem__),
-        by_day={d: float(v) for d, v in by_day.items()},
-        weekend_to_weekday_ratio=round(weekend_avg / weekday_avg, 4) if weekday_avg else 0.0,
-    )
-
-
-def _benchmark(
-    population: Population, quarter_total: float, trade_area_count: int, days: int
-) -> Benchmark:
-    """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다.
-
-    `scale_percentile` 은 서울 기준선이 분기 합계로 측정돼 있어 분기 합계로 계산하지만,
-    밖으로 내보낼 때는 일평균으로 바꾼다 — 이 블록의 `unit` 이 "배수" 라 분기 합계가 섞이면
-    표기가 어긋나고, 다른 에이전트의 "명/일" 옆에서 오독된다.
-    """
-    time_index = baseline.time_indices(population.time_per_hour_share)
-    mean_per_area = quarter_total / (trade_area_count or 1)
-    return Benchmark(
-        unit="배수 (1.0 = 서울 전체 상권 평균). 단 mean_daily_per_trade_area 는 명/일",
-        baseline=baseline.BASELINE_LABEL,
-        age_index={
-            a: baseline.index(population.age_share[a], baseline.AGE_SHARE_AVG[a]) for a in AGE_BANDS
-        },
-        time_per_hour_index=time_index,
-        lunch_index=time_index["11_14"],
-        evening_index=time_index["17_21"],
-        night_index=time_index["21_24"],
-        weekend_index=baseline.index(
-            population.weekend_to_weekday_ratio, baseline.WEEKEND_TO_WEEKDAY_AVG
-        ),
-        mean_daily_per_trade_area=round(mean_per_area / days, 1),
-        scale_percentile=baseline.scale_percentile(mean_per_area),
-    )
 
 
 def _description(quarter: str, covered: int, outer_reach: float, radius_m: int) -> str:
@@ -225,244 +89,6 @@ def _description(quarter: str, covered: int, outer_reach: float, radius_m: int) 
     )
 
 
-def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) -> Trend:
-    """분기별 추세. 최신 1개 분기만 보던 단면 분석의 한계를 푼다.
-
-    **같은 상권 집합으로 분기마다 다시 합산한다.** 반경 판정은 상권영역(시점 없는 현재
-    스냅샷)으로 한 번만 하므로 분기가 바뀌어도 대상 상권은 같다. 다만 그 분기에 자료가 없는
-    상권이 있을 수 있어(서울 전체가 1,648~1,650곳 사이에서 오르내린다) 분기마다 실제 집계된
-    상권 수를 함께 싣는다 — 증감이 상권 수 변화 때문일 수 있기 때문이다.
-
-    변화율은 `daily_avg` 로 잰다. 분기 합계는 분기 일수(90~92일)가 달라 그대로 비교하면
-    최대 2% 의 가짜 증감이 섞인다.
-    """
-    points: list[QuarterPoint] = []
-    for quarter, records in series:
-        rs = [r for r in records if r.trdar_cd in main_codes]
-        if not rs:
-            continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
-        pop = _aggregate(rs, quarter)
-        points.append(
-            QuarterPoint(
-                period_code=quarter,
-                period=period_ko(quarter),
-                daily_avg=round(pop.daily_avg, 1),
-                trade_area_count=len(rs),
-                age_share=pop.age_share,
-                time_per_hour_share=pop.time_per_hour_share,
-            )
-        )
-
-    def change(new: float, old: float) -> float | None:
-        return round((new - old) / old, 4) if old else None
-
-    qoq = change(points[-1].daily_avg, points[-2].daily_avg) if len(points) >= 2 else None
-    yoy = change(points[-1].daily_avg, points[-5].daily_avg) if len(points) >= 5 else None
-
-    # 전년 동기가 있으면 그걸로 본다 — 계절성이 빠져서 판단에 낫다.
-    basis = yoy if yoy is not None else qoq
-    if basis is None:
-        direction = "판단 불가"
-    elif basis > 0.05:
-        direction = "증가"
-    elif basis < -0.05:
-        direction = "감소"
-    else:
-        direction = "보합"
-
-    return Trend(
-        unit="명 (분기 합계) · daily_avg 는 명/일 · 변화율은 비율(0.05 = +5%)",
-        quarters=points,
-        qoq_change=qoq,
-        yoy_change=yoy,
-        direction=direction,
-    )
-
-
-def _radius_profile(
-    scan_hits: list[tuple[TrdarArea, float]],
-    by_cd: dict[str, FlpopRecord],
-    radii: tuple[int, ...],
-    days: int,
-) -> RadiusProfile:
-    """반경을 넓혀가며 본 인구 곡선. **면적 안분**으로 낸다.
-
-    원자료가 상권 조각 단위라 정직한 반경 절단이 안 된다. 대표 점이 반경 안이면 상권을
-    통째로 세는 방식은 반경을 줄일수록 무너진다 — 실측(2026Q2)으로 확인한 것:
-
-    | 반경 | 길동 | 테헤란로 | 서교동 | 평창동 |
-    | --- | --- | --- | --- | --- |
-    | 100m | 0곳 | 1곳(100%) | 0곳 | 0곳 |
-    | 250m | 4곳 | 1곳(100%) | 1곳(100%) | 0곳 |
-    | 500m | 9곳 | 8곳 | 12곳 | 2곳 |
-
-    테헤란로 100m 의 "상권 1곳" 은 실제 도달 거리가 483m 이고, 서교동은 250m→500m 에서
-    합계가 **+2,981%** 튄다. 조각이 하나 들어오고 나가는 데 따라 계단식으로 뛰기 때문이다.
-
-    그래서 반경 원과 상권 면적 등가원의 **겹친 면적 비율**만큼만 인구를 센다. 반경이 줄면
-    값도 부드럽게 줄고 100m 에서도 0 이 되지 않는다. 대신 **상권 안에서 인구가 고르게
-    분포한다**는 가정이 들어가므로 `method` 에 그대로 적어 결정·리포트 쪽이 알게 한다.
-    """
-    points: list[RadiusPoint] = []
-    for r in sorted(radii):
-        total = 0.0
-        weight_sum = 0.0
-        touched = 0
-        for area, distance in scan_hits:
-            record = by_cd.get(area.trdar_cd)
-            if record is None:
-                continue
-            w = circle_overlap_ratio(distance, r, area.equivalent_radius_m)
-            if w <= 0:
-                continue
-            total += record.total * w
-            weight_sum += w
-            touched += 1
-        points.append(
-            RadiusPoint(
-                radius_m=r,
-                total=round(total, 1),
-                daily_avg=round(total / days, 1),
-                trade_area_count=touched,
-                effective_trade_areas=round(weight_sum, 2),
-            )
-        )
-    return RadiusProfile(
-        unit="명 (분기 합계) · daily_avg 는 명/일",
-        method=(
-            "면적 안분 — 상권 구역을 면적 등가원으로 근사하고, 반경 원과 겹친 면적 비율만큼 "
-            "인구를 나눠 셌습니다. 상권 안에서 인구가 고르게 분포한다고 가정한 값이므로 "
-            "실측값이 아니라 추정값입니다. 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 "
-            "없어 쓰는 방법입니다. "
-            "⚠️ 그래서 같은 반경이라도 population 의 값보다 작습니다 — population 은 반경에 "
-            "걸친 상권을 구역째 합산하고(바깥 경계가 반경을 넘습니다), 이 곡선은 겹친 만큼만 "
-            "셉니다. 서로 다른 질문의 답이지 모순이 아닙니다. 지역의 대표 수치로는 "
-            "population 을, 반경에 따른 증가 추이로는 이 곡선을 쓰십시오."
-        ),
-        points=points,
-    )
-
-
-def _selection_digest(data: FloatingPopulationData) -> str:
-    """선별 모델에게 보낼 요약. **`data` 전체를 보내지 않는다.**
-
-    전체를 보내면 줄이려던 토큰을 선별하느라 그대로 쓰게 된다. 블록마다 "읽을 게 있는지" 를
-    판단할 최소 정보만 추린다 — 개수, 값의 폭, 0 이 몇 개인지 같은 것들.
-    """
-    rp = data.radius_profile
-    tr = data.trend
-    digest = {
-        "지역": data.description[:120],
-        "유형": data.type.label,
-        "신뢰도": data.reliability.level,
-        "trade_areas": {
-            "개수": len(data.trade_areas or []),
-            "이름": [t.name for t in (data.trade_areas or [])][:12],
-            "행정동": sorted({t.adstrd for t in (data.trade_areas or []) if t.adstrd}),
-        },
-        "population_raw": {
-            "설명": "연령·시간대·요일 원값(분기 합계). 같은 내용의 비중이 따로 있음",
-            "비중_이미_있음": True,
-        },
-        "radius_profile": {
-            "단계": [p.radius_m for p in (rp.points if rp else [])],
-            "일평균": [round(p.daily_avg) for p in (rp.points if rp else [])],
-            "값이_0인_단계수": sum(1 for p in (rp.points if rp else []) if p.daily_avg <= 0),
-        },
-        "trend": {
-            "분기수": len(tr.quarters) if tr else 0,
-            "방향": tr.direction if tr else None,
-            "전분기_변화율": tr.qoq_change if tr else None,
-            "전년동기_변화율": tr.yoy_change if tr else None,
-            "일평균_추이": [round(q.daily_avg) for q in (tr.quarters if tr else [])],
-        },
-    }
-    return json.dumps(digest, ensure_ascii=False)
-
-
-def _apply_selection(data: FloatingPopulationData, included: list[str]) -> None:
-    """고르지 않은 블록을 `None` 으로 비운다. **키는 지우지 않는다.**
-
-    결정 에이전트가 `evidence.path` 로 내부를 탐색하는데(`decision/agent.py:86-95`), 키가
-    없으면 `KeyError` → `ValueError` 가 되어 리포트 전체가 죽는다. 실측으로 확인한 차이:
-
-    | 인용 경로 | 키를 지웠을 때 | `None` 으로 뒀을 때 |
-    | --- | --- | --- |
-    | `/trade_areas` | 죽는다 | **통과**(값이 null) |
-    | `/trade_areas/0` | 죽는다 | 죽는다 |
-
-    `None` 은 **리프 경로만** 살린다. 한 단계 더 들어가는 인용은 여전히 죽는다. 그래도 이쪽이
-    나은 이유는, 결정 에이전트가 **내가 보낸 것만 보기 때문**이다 — null 인 블록 안쪽을
-    인용할 이유가 없고, 혹시 리프를 인용해도 죽지 않는다.
-    """
-    if "trade_areas" not in included:
-        data.trade_areas = None
-    if "trend" not in included:
-        data.trend = None
-    if "radius_profile" not in included:
-        data.radius_profile = None
-    if "population_raw" not in included:
-        data.population.by_age = None
-        data.population.by_time = None
-        data.population.by_day = None
-
-
-async def _select(
-    data: FloatingPopulationData,
-    select: SelectBlocks | None,
-) -> tuple[Selection, str | None]:
-    """블록을 고른다. 실패하면 전부 싣고 그 사실을 경고로 돌려준다."""
-    selectable = list(llm.SELECTABLE)
-    try:
-        included, reason = await (select or llm.select_blocks)(_selection_digest(data))
-    except llm.SelectionUnavailable as e:
-        return (
-            Selection(
-                applied=False,
-                selectable=selectable,
-                included=selectable,
-                dropped=[],
-                unavailable_reason=str(e),
-            ),
-            None,  # 키가 없어 못 한 경우까지 경고로 띄우면 시끄럽다
-        )
-    except Exception as e:  # 모델 쪽 어떤 실패도 분석을 막지 않는다
-        return (
-            Selection(
-                applied=False,
-                selectable=selectable,
-                included=selectable,
-                dropped=[],
-                unavailable_reason=f"{type(e).__name__}: {e}",
-            ),
-            f"자료 선별에 실패해 전부 실었습니다: {type(e).__name__}",
-        )
-
-    dropped = [b for b in selectable if b not in included]
-    return (
-        Selection(
-            applied=True,
-            selectable=selectable,
-            included=included,
-            dropped=dropped,
-            reason=(reason or None) if dropped else None,
-        ),
-        None,
-    )
-
-
-def _reliability(found: int, covered: int) -> Reliability:
-    """상권 표본이 얼마나 두터운지. 결정 에이전트가 가중치를 낮추는 근거."""
-    level: Literal["high", "medium", "low"]
-    if covered <= 1:
-        level = "low"
-    elif covered < 3 or covered < found:
-        level = "medium"
-    else:
-        level = "high"
-    return Reliability(trade_area_count=found, covered_trade_areas=covered, level=level)
-
-
 async def analyze(
     task: AnalysisTask,
     *,
@@ -478,7 +104,6 @@ async def analyze(
     """
     site = task.site
     if settings is None:
-        load_dotenv_if_present()
         settings = Settings.from_env()
     radius = settings.analysis_radius_m
     # ⚠️ 이 문자열은 `commercial_area` 와 **글자까지 같아야 한다.** 결정 에이전트가
@@ -514,8 +139,8 @@ async def analyze(
     owns_client = client is None
     try:
         client = client or SeoulOpenDataClient(settings)
-    except MissingApiKeyError as e:
-        return failed("CONFIG_ERROR", str(e))
+    except MissingApiKeyError:
+        return failed("CONFIG_ERROR", "유동인구 API 설정을 확인해 주세요.")
 
     x, y = to_epsg5181(site.latitude, site.longitude)
 
@@ -538,10 +163,10 @@ async def analyze(
         series = await client.fetch_flpop_series(wanted, settings.trend_quarters)
         quarter, latest = series[-1]
         records = [r for r in latest if r.trdar_cd in main_codes]
-    except httpx.TimeoutException as e:
-        return failed("UPSTREAM_TIMEOUT", f"서울시 API 응답 시간이 초과되었습니다: {e}")
-    except (SeoulOpenApiError, httpx.HTTPError) as e:
-        return failed("UPSTREAM_ERROR", f"서울시 API 오류: {e}")
+    except httpx.TimeoutException:
+        return failed("UPSTREAM_TIMEOUT", "서울시 API 응답 시간이 초과되었습니다.")
+    except (SeoulOpenApiError, httpx.HTTPError):
+        return failed("UPSTREAM_ERROR", "서울시 API 조회에 실패했습니다.")
     finally:
         if owns_client:
             await client.aclose()
@@ -637,15 +262,14 @@ async def analyze(
     )
 
     # 넘길 블록을 고른다. 숫자는 이미 다 계산돼 있고 모델은 고르기만 한다.
-    selection, select_warning = await _select(data, select)
+    selection, select_warning = await llm._select(data, select)
     data.selection = selection
-    if selection.applied:
-        _apply_selection(data, selection.included)
-        if selection.dropped:
-            warnings.append(
-                f"판단에 쓰이지 않는 자료 {len(selection.dropped)}개를 뺐습니다"
-                f"({', '.join(selection.dropped)}). {selection.reason}".strip()
-            )
+    # 원본 차트는 반환·저장하고 최종판단이 프롬프트 복사본에만 선별을 적용합니다.
+    if selection.applied and selection.dropped:
+        warnings.append(
+            f"최종판단 입력에서만 자료 {len(selection.dropped)}개를 제외합니다"
+            f"({', '.join(selection.dropped)}). {selection.reason}".strip()
+        )
     if select_warning:
         warnings.append(select_warning)
 

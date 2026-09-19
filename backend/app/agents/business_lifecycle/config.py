@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = PACKAGE_DIR.parents[2]
 
 
 @dataclass(frozen=True)
 class Settings:
+    api_key: str | None = field(default=None, repr=False)
+    area_shape_path: Path = PACKAGE_DIR / "data" / "trdar_area" / "TbgisTrdarRelm.shp"
     quarter_count: int = 12
     area_page_size: int = 1000
     area_max_centroid_distance_m: float = 1500.0
@@ -25,10 +26,15 @@ class Settings:
     @classmethod
     def from_env(cls, **overrides: Any) -> Settings:
         env_values: dict[str, Any] = {
+            "api_key": os.environ.get("BUSINESS_LIFECYCLE_API_KEY")
+            or os.environ.get("SEOUL_OPEN_API_KEY"),
             "base_quarter_override": os.environ.get("BUSINESS_LIFECYCLE_BASE_QUARTER"),
             "area_code_override": os.environ.get("BUSINESS_LIFECYCLE_AREA_CODE"),
             "area_name_override": os.environ.get("BUSINESS_LIFECYCLE_AREA_NAME"),
         }
+        shape_path = os.environ.get("BUSINESS_LIFECYCLE_AREA_SHP_PATH")
+        if shape_path:
+            env_values["area_shape_path"] = Path(shape_path)
         for name, key in (
             ("quarter_count", "BUSINESS_LIFECYCLE_QUARTER_COUNT"),
             ("area_page_size", "BUSINESS_LIFECYCLE_AREA_PAGE_SIZE"),
@@ -45,13 +51,3 @@ class Settings:
             env_values["request_timeout_s"] = float(timeout)
         env_values.update(overrides)
         return cls(**{key: value for key, value in env_values.items() if value is not None})
-
-
-def load_dotenv_if_present() -> None:
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    for candidate in (BACKEND_DIR / ".env", Path.cwd() / ".env"):
-        if candidate.exists():
-            load_dotenv(candidate, override=False)

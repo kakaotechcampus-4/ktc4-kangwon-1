@@ -1,10 +1,11 @@
-import argparse
 import json
 import os
 from datetime import date
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
+
+from .config import Settings
 
 SEOUL_API_BASE_URL = "http://openapi.seoul.go.kr:8088"
 SERVICE_NAME = "VwsmTrdarStorQq"
@@ -25,8 +26,12 @@ class FutureQuarterError(ValueError):
     """아직 확정되지 않은 미래 분기를 요청했습니다."""
 
 
-def get_api_key() -> str:
-    api_key = os.getenv("BUSINESS_LIFECYCLE_API_KEY") or os.getenv("SEOUL_OPEN_API_KEY")
+def get_api_key(settings: Settings | None = None) -> str:
+    api_key = (
+        settings.api_key
+        if settings is not None
+        else (os.getenv("BUSINESS_LIFECYCLE_API_KEY") or os.getenv("SEOUL_OPEN_API_KEY"))
+    )
 
     if not api_key:
         raise SeoulOpenAPIError("BUSINESS_LIFECYCLE_API_KEY 환경변수가 설정되어 있지 않습니다.")
@@ -59,6 +64,7 @@ def request_page(
     area_code: str,
     start_index: int,
     end_index: int,
+    timeout: float = TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     url = build_url(
         api_key=api_key,
@@ -71,7 +77,7 @@ def request_page(
     try:
         with urlopen(
             url,
-            timeout=TIMEOUT_SECONDS,
+            timeout=timeout,
         ) as response:
             raw_data = response.read().decode("utf-8")
 
@@ -147,12 +153,14 @@ def normalize_row(
 def fetch_store_data(
     area_code: str,
     quarter: str,
+    *,
+    settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     """
     특정 상권의 특정 분기 데이터를 조회한다.
     """
 
-    api_key = get_api_key()
+    api_key = get_api_key(settings)
 
     rows: list[dict[str, Any]] = []
     start_index = 1
@@ -166,6 +174,7 @@ def fetch_store_data(
             area_code=area_code,
             start_index=start_index,
             end_index=end_index,
+            timeout=settings.request_timeout_s if settings is not None else TIMEOUT_SECONDS,
         )
 
         try:
@@ -281,6 +290,7 @@ def detect_latest_valid_quarter(
     *,
     candidate_count: int = 12,
     today: date | None = None,
+    settings: Settings | None = None,
 ) -> str:
     """
     서울시 API를 실제로 조회해 해당 상권에서 자료가 있는 최신 분기를 고릅니다.
@@ -293,6 +303,7 @@ def detect_latest_valid_quarter(
         rows = fetch_store_data(
             area_code=area_code,
             quarter=quarter,
+            settings=settings,
         )
         if rows:
             return quarter
@@ -347,6 +358,8 @@ def get_recent_quarters(
 def fetch_store_data_for_quarters(
     area_code: str,
     quarters: list[str],
+    *,
+    settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     """
     여러 분기의 데이터를 조회하여 하나의 리스트로 합친다.
@@ -358,6 +371,7 @@ def fetch_store_data_for_quarters(
         rows = fetch_store_data(
             area_code=area_code,
             quarter=quarter,
+            settings=settings,
         )
 
         all_rows.extend(rows)
@@ -369,6 +383,8 @@ def fetch_recent_store_data(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
+    *,
+    settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     """
     기준 분기를 기준으로 최근 N개 분기의 데이터를 조회한다.
@@ -384,69 +400,5 @@ def fetch_recent_store_data(
     return fetch_store_data_for_quarters(
         area_code=area_code,
         quarters=quarters,
+        settings=settings,
     )
-
-
-def main() -> None:
-    """
-    로컬 테스트용 CLI.
-
-    실제 서비스 로직에서는 사용하지 않고
-    fetch_recent_store_data()를 직접 호출한다.
-    """
-
-    parser = argparse.ArgumentParser(description="서울시 상권 개폐업 데이터 조회")
-
-    parser.add_argument(
-        "--area-code",
-        required=True,
-        help="서울시 상권코드",
-    )
-
-    parser.add_argument(
-        "--base-quarter",
-        required=True,
-        help="기준 분기. 예: 20252",
-    )
-
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=12,
-        help="조회할 최근 분기 수. 기본값 12",
-    )
-
-    args = parser.parse_args()
-
-    quarters = get_recent_quarters(
-        base_quarter=args.base_quarter,
-        count=args.count,
-    )
-
-    print("조회 상권:", args.area_code)
-    print("기준 분기:", args.base_quarter)
-    print("조회 분기 수:", len(quarters))
-    print("조회 분기:", ", ".join(quarters))
-
-    rows = fetch_recent_store_data(
-        area_code=args.area_code,
-        base_quarter=args.base_quarter,
-        quarter_count=args.count,
-    )
-
-    print("전체 조회 행 수:", len(rows))
-
-    if rows:
-        print()
-        print("첫 번째 데이터:")
-        print(
-            json.dumps(
-                rows[0],
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-
-
-if __name__ == "__main__":
-    main()

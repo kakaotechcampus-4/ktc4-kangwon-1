@@ -20,7 +20,7 @@ from datetime import date
 
 import httpx
 
-from .config import Settings, load_dotenv_if_present
+from .config import Settings
 from .models import FlpopRecord, TrdarArea
 
 
@@ -57,7 +57,6 @@ class SeoulOpenDataClient:
         today: date | None = None,
     ):
         if settings is None:
-            load_dotenv_if_present()
             settings = Settings.from_env()
         self.settings = settings
         self._http = http

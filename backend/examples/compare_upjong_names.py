@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
-from app.agents.commercial_area.upjong import load_middle_master  # noqa: E402
+from app.agents.commercial_area.industries import load_middle_master  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent / "schema_compare"
 TOP_N = 5
