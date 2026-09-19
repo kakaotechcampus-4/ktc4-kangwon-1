@@ -1,7 +1,7 @@
 import type { DecisionResult } from '@/lib/api/types';
 
-const RESULT_STORAGE_KEY = 'chum:lastAnalysis';
-const REQUEST_ID_STORAGE_KEY = 'chum:lastRequestId';
+const RESULT_STORAGE_KEY = 'chaeum:lastAnalysis';
+const REQUEST_ID_STORAGE_KEY = 'chaeum:lastRequestId';
 
 export function saveAnalysisResult(result: DecisionResult): void {
   sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(result));
