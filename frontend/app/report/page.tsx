@@ -138,7 +138,7 @@ export default function ReportPage() {
       style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
-      <ReportHeader />
+      <ReportHeader address={analysisResult?.address} />
 
       {analysisResult?.status === 'partial' &&
         analysisResult.limitations.length > 0 && (
@@ -159,7 +159,11 @@ export default function ReportPage() {
         recommendations={analysisResult?.recommendations}
         notRecommended={analysisResult?.not_recommended}
       />
-      <AIAnalysisSummary />
+      <AIAnalysisSummary
+        summary={analysisResult?.summary}
+        recommendedReasons={analysisResult?.recommendations[0]?.reasons}
+        notRecommendedReasons={analysisResult?.not_recommended[0]?.reasons}
+      />
       <DetailAnalysisTabs
         floatingPopulation={
           analysisResult
