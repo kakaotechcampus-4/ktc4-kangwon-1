@@ -40,17 +40,42 @@ type InfoItem = {
   highlight?: boolean; // filled일 때만 의미가 있다(빈 값을 강조색으로 보여주면 혼란스럽다).
 };
 
-const infoItems: InfoItem[] = [
-  { id: 'rent', label: '월세', value: '', filled: false },
-  { id: 'deposit', label: '보증금', value: '', filled: false },
-  { id: 'maintenance', label: '관리비', value: '', filled: false },
-  { id: 'vacancy', label: '공실 기간', value: '', filled: false },
-  { id: 'parking', label: '주차', value: '', filled: false },
-  { id: 'floor', label: '층수', value: mockReportData.floor, filled: true },
-  { id: 'area', label: '전용면적', value: '', filled: false },
-];
+export default function ReportHeader({
+  address,
+  floorUnit,
+}: {
+  address?: string;
+  floorUnit?: string;
+} = {}) {
+  const displayAddress = address ?? mockReportData.address;
 
-export default function ReportHeader() {
+  // DecisionResult.address는 도로명 주소 + 층/호수가 이미 하나의 문자열로
+  // 합쳐져 있다(AddressInput.tsx가 createAnalysis 호출 전에 합친다) —
+  // 백엔드가 층수를 따로 돌려주지 않는다. 그래서 address prop이 왔다는 것
+  // 자체를(=실제 분석 결과) "층수를 따로 모른다"는 신호로 쓴다. 이 경우
+  // floorUnit이 별도로 오지 않는 한 mockReportData.floor로 대신 채우지
+  // 않고, 다른 미입력 필드(월세·보증금 등)와 같은 원칙으로 "미입력" 처리한다.
+  // address도 없는 완전한 mock 화면(직접 /report 접속)에서만 기존처럼
+  // mockReportData.floor를 보여준다.
+  const isRealData = address !== undefined;
+  const floorValue =
+    floorUnit ?? (isRealData ? undefined : mockReportData.floor);
+
+  const infoItems: InfoItem[] = [
+    { id: 'rent', label: '월세', value: '', filled: false },
+    { id: 'deposit', label: '보증금', value: '', filled: false },
+    { id: 'maintenance', label: '관리비', value: '', filled: false },
+    { id: 'vacancy', label: '공실 기간', value: '', filled: false },
+    { id: 'parking', label: '주차', value: '', filled: false },
+    {
+      id: 'floor',
+      label: '층수',
+      value: floorValue ?? '',
+      filled: floorValue !== undefined,
+    },
+    { id: 'area', label: '전용면적', value: '', filled: false },
+  ];
+
   return (
     <div className="flex w-full flex-col items-start px-8 pt-10">
       <Link
@@ -73,18 +98,23 @@ export default function ReportHeader() {
             className={`${outfit.className} pt-2 text-[34px] font-bold`}
             style={{ color: colors.neutral.black }}
           >
-            {mockReportData.address}
+            {displayAddress}
           </h1>
           {/*
             원본은 이 줄에 "2층 · 전용 26평 · 전면폭 7.4m"를 전부 표시했다.
             전용면적·전면폭은 MVP 폼이 안 받는 값이라, 부제 줄 같은 한 줄
             요약 자리에 "미입력"을 두 번 나열하면 오히려 번잡해 보여서
             (아래 stat 카드에 이미 각각 "미입력"으로 명확히 표시된다),
-            실제로 입력받는 "층수"만 남기기로 했다.
+            실제로 입력받는 "층수"만 남기기로 했다. 실제 분석 결과에서는
+            층수를 따로 몰라 floorValue가 없을 수 있는데, 그 경우 빈 줄을
+            보여주는 대신 이 줄 자체를 생략한다(아래 stat 카드의 "미입력"
+            표시로 충분하다).
           */}
-          <p className={`${dmMono.className} pt-1 text-sm text-gray-500`}>
-            {mockReportData.floor}
-          </p>
+          {floorValue && (
+            <p className={`${dmMono.className} pt-1 text-sm text-gray-500`}>
+              {floorValue}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

@@ -21,6 +21,7 @@ import {
   mockReportData,
   type RecommendedIndustry,
 } from '@/lib/mockData/report';
+import type { IndustryAssessment } from '@/lib/api/types';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -45,44 +46,88 @@ const industryIcons: Record<string, LucideIcon> = {
   헬스장: Dumbbell,
 };
 
+/**
+ * 이 카드가 실제로 그리는 데 필요한 최소 정보. mockReportData의 임의 구조
+ * (RecommendedIndustry: rank/name/tags)와 실제 DecisionResult 스키마
+ * (IndustryAssessment: category.major/middle, reasons, evidence, risks)를
+ * 하나의 형태로 맞춰서, 렌더링 쪽은 어느 소스에서 왔는지 몰라도 되게 한다.
+ */
+type DisplayIndustry = {
+  rank: number;
+  name: string;
+  score: number;
+  reasons: string[];
+  risks: string[];
+};
+
+function fromLegacy(item: RecommendedIndustry): DisplayIndustry {
+  return {
+    rank: item.rank,
+    name: item.name,
+    score: item.score,
+    reasons: item.tags,
+    risks: [],
+  };
+}
+
+function fromAssessment(
+  item: IndustryAssessment,
+  rank: number
+): DisplayIndustry {
+  return {
+    rank,
+    name: item.category.middle,
+    score: item.score,
+    reasons: item.reasons,
+    risks: item.risks,
+  };
+}
+
 type Column = {
   id: string;
   title: string;
   badgeLabel: string;
   tint: string;
   accent: string;
-  tagBg: string;
-  tagColor: string;
   progressColor: 'primary' | 'danger';
-  items: RecommendedIndustry[];
+  items: DisplayIndustry[];
 };
 
-const columns: Column[] = [
-  {
-    id: 'recommended',
-    title: '추천 업종',
-    badgeLabel: 'TOP 5',
-    tint: `${colors.brand.primary}1A`,
-    accent: colors.brand.primary,
-    tagBg: `${colors.brand.primary}1A`,
-    tagColor: colors.brand.dark,
-    progressColor: 'primary',
-    items: mockReportData.recommended,
-  },
-  {
-    id: 'not-recommended',
-    title: '비추천 업종',
-    badgeLabel: 'BOTTOM 5',
-    tint: `${colors.status.notRecommend}1A`,
-    accent: colors.status.notRecommend,
-    tagBg: `${colors.status.notRecommend}1A`,
-    tagColor: colors.status.notRecommend,
-    progressColor: 'danger',
-    items: mockReportData.notRecommended,
-  },
-];
+export default function RecommendationSection({
+  recommendations,
+  notRecommended,
+}: {
+  recommendations?: IndustryAssessment[];
+  notRecommended?: IndustryAssessment[];
+}) {
+  const recommendedItems: DisplayIndustry[] = recommendations
+    ? recommendations.map((item, i) => fromAssessment(item, i + 1))
+    : mockReportData.recommended.map(fromLegacy);
+  const notRecommendedItems: DisplayIndustry[] = notRecommended
+    ? notRecommended.map((item, i) => fromAssessment(item, i + 1))
+    : mockReportData.notRecommended.map(fromLegacy);
 
-export default function RecommendationSection() {
+  const columns: Column[] = [
+    {
+      id: 'recommended',
+      title: '추천 업종',
+      badgeLabel: 'TOP 5',
+      tint: `${colors.brand.primary}1A`,
+      accent: colors.brand.primary,
+      progressColor: 'primary',
+      items: recommendedItems,
+    },
+    {
+      id: 'not-recommended',
+      title: '비추천 업종',
+      badgeLabel: 'BOTTOM 5',
+      tint: `${colors.status.notRecommend}1A`,
+      accent: colors.status.notRecommend,
+      progressColor: 'danger',
+      items: notRecommendedItems,
+    },
+  ];
+
   return (
     <div className="flex w-full items-start gap-6 px-8 pt-8">
       {columns.map((column) => (
@@ -178,23 +223,40 @@ export default function RecommendationSection() {
                     />
                   </div>
 
-                  <div className="flex w-full flex-wrap gap-1.5 pt-2.5">
-                    {item.tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        style={{
-                          backgroundColor: column.tagBg,
-                          color: column.tagColor,
-                          fontFamily: 'inherit',
-                          textTransform: 'none',
-                          letterSpacing: 'normal',
-                          fontSize: '12px',
-                        }}
-                      >
-                        {tag}
-                      </Badge>
+                  {/*
+                    실제 DecisionResult에는 tags 같은 짧은 칩용 필드가 없고
+                    reasons(문장)만 있다. 배지 대신 짧은 불릿 목록으로
+                    바꿔서, 목업 데이터(RecommendedIndustry.tags)와 실제
+                    스키마(IndustryAssessment.reasons) 둘 다 같은 자리에서
+                    자연스럽게 보이게 한다. 카드가 길어지지 않도록 상위
+                    2개까지만 보여준다.
+                  */}
+                  <ul
+                    className="w-full list-disc pt-2.5 pl-4 text-xs marker:text-gray-300"
+                    style={{ color: 'var(--color-gray-500)' }}
+                  >
+                    {item.reasons.slice(0, 2).map((reason) => (
+                      <li key={reason}>{reason}</li>
                     ))}
-                  </div>
+                  </ul>
+
+                  {/*
+                    risks는 목업(RecommendedIndustry)엔 없던 필드라 실제
+                    스키마(IndustryAssessment)를 쓸 때만 채워진다. reasons와
+                    같은 자리(카드 안)에 두되, 점수를 뒷받침하는 근거와
+                    헷갈리지 않도록 앞에 "주의" 라벨을 붙이고 accent 색으로
+                    구분한다.
+                  */}
+                  {item.risks.length > 0 && (
+                    <ul
+                      className="w-full list-none pt-1.5 text-xs"
+                      style={{ color: colors.accent.orange }}
+                    >
+                      {item.risks.slice(0, 2).map((risk) => (
+                        <li key={risk}>주의 · {risk}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               );
             })}
