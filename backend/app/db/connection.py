@@ -40,6 +40,15 @@ def initialize(db_path: str | Path | None = None) -> Path:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.executescript(files("app.db").joinpath("schema.sql").read_text(encoding="utf-8"))
+        # 기존 요청의 반경은 알 수 없으므로 NULL로 보존합니다.
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_requests)")}
+            if "radius_m" not in columns:
+                connection.execute(
+                    "ALTER TABLE analysis_requests ADD COLUMN radius_m INTEGER "
+                    "CHECK (radius_m IS NULL OR (typeof(radius_m) = 'integer' AND radius_m > 0))"
+                )
     finally:
         connection.close()
     return path

@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS analysis_requests (
     request_id TEXT PRIMARY KEY NOT NULL CHECK (length(trim(request_id)) > 0),
     input_address TEXT NOT NULL CHECK (length(trim(input_address)) > 0),
+    radius_m INTEGER CHECK (radius_m IS NULL OR (typeof(radius_m) = 'integer' AND radius_m > 0)),
     site_json TEXT CHECK (site_json IS NULL OR json_valid(site_json)),
     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
     result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
