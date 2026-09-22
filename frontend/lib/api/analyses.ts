@@ -5,7 +5,7 @@ const API_BASE_URL =
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
-const CREATE_ANALYSIS_TIMEOUT_MS = 90_000;
+const CREATE_ANALYSIS_TIMEOUT_MS = 600_000;
 
 export class AnalysisApiError extends Error {
   status: number;
