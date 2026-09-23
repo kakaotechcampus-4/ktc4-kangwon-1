@@ -25,6 +25,41 @@ from app.services.settings import ExecutionSettings
 
 
 class ServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_radius_reaches_all_agents_and_storage(self):
+        received = []
+
+        def wrap(analyze):
+            async def capture(task):
+                received.append((task.request_id, task.radius_m))
+                return await analyze(task)
+
+            return capture
+
+        agents = {key: wrap(value) for key, value in self.agents().items()}
+        await asyncio.gather(
+            self.run_service(agents=agents, request_id="small", radius_m=300),
+            self.run_service(agents=agents, request_id="large", radius_m=700),
+        )
+        self.assertCountEqual(received, [("small", 300)] * 3 + [("large", 700)] * 3)
+        for request_id, radius in (("small", 300), ("large", 700)):
+            self.assertEqual(repo.get_request(request_id, db_path=self.path)["radius_m"], radius)
+
+    async def test_invalid_radius_has_no_side_effects(self):
+        for radius in (0, -1, 1.5, "300", True, None):
+            with self.subTest(radius=radius), self.assertRaises(ValueError):
+                await self.run_service(radius_m=radius)
+        self.resolve.assert_not_awaited()
+        self.assertFalse(self.path.exists())
+
+    async def test_default_radius_and_failure_storage(self):
+        await self.run_service(request_id="default")
+        self.assertEqual(repo.get_request("default", db_path=self.path)["radius_m"], 500)
+        self.resolve.side_effect = RuntimeError("주소 변환 실패")
+        with self.assertRaises(RuntimeError):
+            await self.run_service(request_id="failed", radius_m=300)
+        row = repo.get_request("failed", db_path=self.path)
+        self.assertEqual((row["status"], row["radius_m"]), ("failed", 300))
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
