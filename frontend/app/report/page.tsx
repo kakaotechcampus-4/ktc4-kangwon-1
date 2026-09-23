@@ -113,18 +113,18 @@ export default function ReportPage() {
 
   const floatingPopulationData = analysisResult
     ? extractFloatingPopulationData(
-      findAgent(analysisResult, 'floating_population')
-    )
+        findAgent(analysisResult, 'floating_population')
+      )
     : undefined;
   const competitorData = analysisResult
     ? extractCommercialAreaData(findAgent(analysisResult, 'commercial_area'))
     : undefined;
   const businessLifecycleData = analysisResult
     ? extractBusinessLifecycleData(
-      findAgent(analysisResult, 'business_lifecycle'),
-      industryNames(analysisResult.recommendations),
-      industryNames(analysisResult.not_recommended)
-    )
+        findAgent(analysisResult, 'business_lifecycle'),
+        industryNames(analysisResult.recommendations),
+        industryNames(analysisResult.not_recommended)
+      )
     : undefined;
 
   const analyzedDate = analysisResult
@@ -174,27 +174,27 @@ export default function ReportPage() {
         floatingPopulation={
           analysisResult
             ? {
-              data: floatingPopulationData ?? undefined,
-              unavailable: !floatingPopulationData,
-            }
+                data: floatingPopulationData ?? undefined,
+                unavailable: !floatingPopulationData,
+              }
             : undefined
         }
         competitor={
           analysisResult
             ? {
-              data: competitorData ?? undefined,
-              unavailable: !competitorData,
-              recommendations: analysisResult.recommendations,
-              notRecommended: analysisResult.not_recommended,
-            }
+                data: competitorData ?? undefined,
+                unavailable: !competitorData,
+                recommendations: analysisResult.recommendations,
+                notRecommended: analysisResult.not_recommended,
+              }
             : undefined
         }
         openClose={
           analysisResult
             ? {
-              data: businessLifecycleData ?? undefined,
-              unavailable: !businessLifecycleData,
-            }
+                data: businessLifecycleData ?? undefined,
+                unavailable: !businessLifecycleData,
+              }
             : undefined
         }
       />
