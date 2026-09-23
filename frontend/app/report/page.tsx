@@ -162,7 +162,13 @@ export default function ReportPage() {
       <AIAnalysisSummary
         summary={analysisResult?.summary}
         recommendedReasons={analysisResult?.recommendations[0]?.reasons}
+        recommendedCategoryName={
+          analysisResult?.recommendations[0]?.category.middle
+        }
         notRecommendedReasons={analysisResult?.not_recommended[0]?.reasons}
+        notRecommendedCategoryName={
+          analysisResult?.not_recommended[0]?.category.middle
+        }
       />
       <DetailAnalysisTabs
         floatingPopulation={

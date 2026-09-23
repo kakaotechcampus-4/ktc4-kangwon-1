@@ -86,7 +86,8 @@ function fromAssessment(
 type Column = {
   id: string;
   title: string;
-  badgeLabel: string;
+  badgePrefix: string;
+  emptyLabel: string;
   tint: string;
   accent: string;
   progressColor: 'primary' | 'danger';
@@ -111,7 +112,8 @@ export default function RecommendationSection({
     {
       id: 'recommended',
       title: '추천 업종',
-      badgeLabel: 'TOP 5',
+      badgePrefix: 'TOP',
+      emptyLabel: '추천할 업종이 없습니다.',
       tint: `${colors.brand.primary}1A`,
       accent: colors.brand.primary,
       progressColor: 'primary',
@@ -120,7 +122,8 @@ export default function RecommendationSection({
     {
       id: 'not-recommended',
       title: '비추천 업종',
-      badgeLabel: 'BOTTOM 5',
+      badgePrefix: 'BOTTOM',
+      emptyLabel: '비추천 업종이 없습니다.',
       tint: `${colors.status.notRecommend}1A`,
       accent: colors.status.notRecommend,
       progressColor: 'danger',
@@ -163,11 +166,23 @@ export default function RecommendationSection({
                 letterSpacing: '1.26px',
               }}
             >
-              {column.badgeLabel}
+              {column.items.length > 0
+                ? `${column.badgePrefix} ${column.items.length}`
+                : '0건'}
             </Badge>
           </div>
 
           <div className="flex w-full flex-col gap-6 p-6">
+            {column.items.length === 0 && (
+              <div className="flex w-full flex-col items-center justify-center gap-1 py-10 text-center">
+                <p
+                  className="text-sm"
+                  style={{ color: 'var(--color-gray-400)' }}
+                >
+                  {column.emptyLabel}
+                </p>
+              </div>
+            )}
             {column.items.map((item) => {
               const Icon = industryIcons[item.name] ?? Store;
 

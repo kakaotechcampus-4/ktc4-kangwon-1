@@ -121,7 +121,7 @@ export default function AddressInput() {
           onClick={handleSubmit}
         >
           {isAnalyzing
-            ? '분석 중... (최대 1분 정도 걸릴 수 있어요)'
+            ? '분석 중... (최대 10분 정도 걸릴 수 있어요)'
             : '다음 · AI 판독 결과 확인'}
         </Button>
       </div>
