@@ -8,8 +8,9 @@ import ProgressBar from '@/components/ui/ProgressBar';
 import { colors } from '@/styles/tokens';
 import {
   mockReportData,
-  type LifecycleConfidence,
-  type OpenCloseIndustryIndex,
+  type BusinessLifecycleConfidence,
+  type BusinessLifecycleData,
+  type BusinessLifecycleIndustryResult,
 } from '@/lib/mockData/report';
 
 const outfit = Outfit({
@@ -40,12 +41,17 @@ const recommendedNames = new Set(
   mockReportData.recommended.map((item) => item.name)
 );
 
-const indexData = mockReportData.openCloseIndex;
+// 리포트가 다루는 업종은 추천 5 + 비추천 5 = 10개로 고정이다(RecommendationSection의
+// "TOP 5"/"BOTTOM 5" 배지와 동일한 전제). 개폐업 에이전트의 공통 업종 코드
+// 75종 목록에 이름이 정확히 대응하지 않는 업종이 있으면(경쟁업체 탭의
+// "무인점포" 케이스와 동일한 성격의 문제) 이 숫자보다 적게 내려온다.
+const EXPECTED_INDUSTRY_COUNT = 10;
 
-const confidenceLabels: Record<LifecycleConfidence, string> = {
+const confidenceLabels: Record<BusinessLifecycleConfidence, string> = {
   high: '높음',
   medium: '보통',
   low: '낮음',
+  none: '판단 근거 부족',
 };
 
 type Band = {
@@ -54,7 +60,11 @@ type Band = {
 };
 
 // 요구 구간: 0~30 위험 / 30~60 보통 / 60~100 양호.
-function getBand(score: number): Band {
+// score는 score_available:false인 업종에서 null로 온다("판단 보류").
+function getBand(score: number | null): Band {
+  if (score === null) {
+    return { label: '판단 보류', color: 'var(--color-gray-400)' };
+  }
   if (score < 30) {
     return { label: '위험', color: colors.status.notRecommend };
   }
@@ -64,8 +74,8 @@ function getBand(score: number): Band {
   return { label: '양호', color: colors.brand.primary };
 }
 
-function isRecommended(item: OpenCloseIndustryIndex) {
-  return recommendedNames.has(item.industryName);
+function isRecommended(item: BusinessLifecycleIndustryResult) {
+  return recommendedNames.has(item.industry_name);
 }
 
 function SectionCard({
@@ -161,17 +171,64 @@ function RecommendBadge({ recommended }: { recommended: boolean }) {
   );
 }
 
+/** 탭 맨 위 요약 카드 — summary/coverage/scoring_method를 문장으로 풀어 쓴다. */
+function CoverageSummary({ data }: { data: BusinessLifecycleData }) {
+  const { coverage, scoring_method: scoringMethod } = data;
+
+  return (
+    <SectionCard
+      title="개폐업 데이터 요약"
+      description="이 상권 업종 전반의 개폐업 현황과 안정성 점수를 매기는 기준입니다."
+    >
+      <ul className="oc-summary-list">
+        {data.summary && <li>{data.summary}</li>}
+        <li>
+          전체 {coverage.target_industries}개 업종 중{' '}
+          {coverage.scored_industries}개 분석 가능합니다(
+          {coverage.unscored_industries}
+          개는 판단 보류).
+        </li>
+        <li>
+          안정성 점수는 최근 1년 폐업률(
+          {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
+          %)·순증감률(
+          {Math.round(scoringMethod.weights.net_change_rate * 100)}
+          %)·회전율 안정성(
+          {Math.round(scoringMethod.weights.turnover_stability * 100)}
+          %)·폐업률 변화 추세(
+          {Math.round(scoringMethod.weights.close_rate_trend * 100)}
+          %)를 종합한 상대 점수입니다.
+        </li>
+      </ul>
+    </SectionCard>
+  );
+}
+
 /** 2. 점포 현황 */
-function StoreStatus() {
-  // 개업/폐업 미니 막대는 절대값이 아니라 10개 업종 중 최대값 대비 비율로
-  // 그린다. 그래야 한 자릿수 건수 차이도 길이로 구분된다.
-  const maxOpen = Math.max(...indexData.map((item) => item.openCount));
-  const maxClose = Math.max(...indexData.map((item) => item.closeCount));
+function StoreStatus({ data }: { data: BusinessLifecycleIndustryResult[] }) {
+  // "점포수" 칸은 latest_store_count(가장 최근 분기 점포 수)를 쓴다 —
+  // avg_store_count(3년 평균)는 "현황"이라는 제목과 맞지 않는 지난 평균값이라,
+  // 지금 이 순간의 상태를 보여주는 데는 최신 관측치가 더 적절하다.
+  // 개업/폐업/순증감은 avg_* 대응 항목이 없어 관측 전체 기간 합계
+  // (period_open_count/period_close_count/period_net_change)를 그대로 쓴다.
+  //
+  // 미니 막대는 절대값이 아니라 목록 안 최대값 대비 비율로 그린다. 그래야
+  // 한 자릿수 건수 차이도 길이로 구분된다. data_available:false인 업종은
+  // 0으로 취급해 최대값 계산을 왜곡하지 않는다. 전부 0이어도 나누기 0을
+  // 피하려 최소 1로 둔다.
+  const maxOpen = Math.max(
+    1,
+    ...data.map((item) => item.metrics.period_open_count ?? 0)
+  );
+  const maxClose = Math.max(
+    1,
+    ...data.map((item) => item.metrics.period_close_count ?? 0)
+  );
 
   return (
     <SectionCard
       title="점포 현황"
-      description="추천·비추천 10개 업종의 연간 개업·폐업 건수와 순증감입니다."
+      description="추천·비추천 업종의 최근 점포 수와 관측 기간 전체 개업·폐업 건수입니다."
     >
       <div className="oc-store-row oc-store-head" aria-hidden="true">
         <span className="oc-store-name-cell">업종</span>
@@ -181,55 +238,67 @@ function StoreStatus() {
         <span className="oc-store-net-cell">순증감</span>
       </div>
 
-      {indexData.map((item) => {
+      {data.map((item) => {
         const recommended = isRecommended(item);
 
         return (
           <div
-            key={item.industryCode}
+            key={item.industry_id}
             className="oc-store-row"
             style={{ borderTop: `1px solid ${colors.neutral.border}` }}
           >
             <span className="oc-store-name-cell">
-              <span className="oc-store-name">{item.industryName}</span>
+              <span className="oc-store-name">{item.industry_name}</span>
               <RecommendBadge recommended={recommended} />
             </span>
 
-            <span className="oc-store-count-cell">
-              <span className="oc-cell-label">점포수</span>
-              <span className={`oc-num ${dmMono.className}`}>
-                {item.storeCount}
-              </span>
-            </span>
+            {item.data_available ? (
+              <>
+                <span className="oc-store-count-cell">
+                  <span className="oc-cell-label">점포수</span>
+                  <span className={`oc-num ${dmMono.className}`}>
+                    {item.metrics.latest_store_count ?? '–'}
+                  </span>
+                </span>
 
-            <span className="oc-store-open-cell">
-              <span className="oc-cell-label">개업</span>
-              <ProgressBar
-                className="oc-mini-bar"
-                value={(item.openCount / maxOpen) * 100}
-                color="primary"
-              />
-              <span className={`oc-num oc-num-tail ${dmMono.className}`}>
-                {item.openCount}
-              </span>
-            </span>
+                <span className="oc-store-open-cell">
+                  <span className="oc-cell-label">개업</span>
+                  <ProgressBar
+                    className="oc-mini-bar"
+                    value={
+                      ((item.metrics.period_open_count ?? 0) / maxOpen) * 100
+                    }
+                    color="primary"
+                  />
+                  <span className={`oc-num oc-num-tail ${dmMono.className}`}>
+                    {item.metrics.period_open_count ?? 0}
+                  </span>
+                </span>
 
-            <span className="oc-store-close-cell">
-              <span className="oc-cell-label">폐업</span>
-              <ProgressBar
-                className="oc-mini-bar"
-                value={(item.closeCount / maxClose) * 100}
-                color="danger"
-              />
-              <span className={`oc-num oc-num-tail ${dmMono.className}`}>
-                {item.closeCount}
-              </span>
-            </span>
+                <span className="oc-store-close-cell">
+                  <span className="oc-cell-label">폐업</span>
+                  <ProgressBar
+                    className="oc-mini-bar"
+                    value={
+                      ((item.metrics.period_close_count ?? 0) / maxClose) * 100
+                    }
+                    color="danger"
+                  />
+                  <span className={`oc-num oc-num-tail ${dmMono.className}`}>
+                    {item.metrics.period_close_count ?? 0}
+                  </span>
+                </span>
 
-            <NetChangeDisplay
-              value={item.netChange}
-              className={`oc-store-net-cell ${dmMono.className}`}
-            />
+                <NetChangeDisplay
+                  value={item.metrics.period_net_change ?? 0}
+                  className={`oc-store-net-cell ${dmMono.className}`}
+                />
+              </>
+            ) : (
+              <span className="oc-store-nodata">
+                {item.warning ?? '개폐업 데이터가 없습니다.'}
+              </span>
+            )}
           </div>
         );
       })}
@@ -239,42 +308,55 @@ function StoreStatus() {
 
 /** 3·4. 폐업률 / 회전율 공통 가로 막대 리스트 */
 function MetricBarList({
+  data,
   title,
   description,
   unit,
   pick,
 }: {
+  data: BusinessLifecycleIndustryResult[];
   title: string;
   description: string;
   unit: string;
-  pick: (item: OpenCloseIndustryIndex) => number;
+  pick: (item: BusinessLifecycleIndustryResult) => number | null;
 }) {
-  const sorted = [...indexData].sort((a, b) => pick(b) - pick(a));
-  // 막대 길이는 최댓값을 100%로 둔 상대값이다. 폐업률(최대 22.7%)을 그대로
-  // 퍼센트 폭으로 쓰면 모든 막대가 1/5 미만이라 비교가 안 되기 때문.
-  const max = Math.max(...sorted.map(pick));
+  // 값이 null인(비교할 수 없는) 업종은 순위 막대에 넣을 수 없다 — 목록에서
+  // 빼고, 전부 빠졌을 때만 별도로 안내한다. score_available이 아니라 값
+  // 자체로 판단하는 이유: 판단 보류(score_available:false) 업종도 일부
+  // 지표는 값이 남아 있을 수 있어서다(data_status가 'incomplete'인 경우).
+  const withValue = data.filter((item) => pick(item) !== null);
+  const sorted = [...withValue].sort(
+    (a, b) => (pick(b) as number) - (pick(a) as number)
+  );
+  // 막대 길이는 최댓값을 100%로 둔 상대값이다. 값 그대로를 폭으로 쓰면
+  // 다들 낮은 비율에서 뭉쳐 비교가 안 되기 때문.
+  const max = Math.max(1, ...sorted.map((item) => pick(item) as number));
 
   return (
     <SectionCard title={title} description={description}>
-      {sorted.map((item) => {
-        const recommended = isRecommended(item);
-        const value = pick(item);
+      {sorted.length === 0 ? (
+        <p className="oc-empty-note">비교할 수 있는 업종이 없습니다.</p>
+      ) : (
+        sorted.map((item) => {
+          const recommended = isRecommended(item);
+          const value = pick(item) as number;
 
-        return (
-          <div key={item.industryCode} className="oc-bar-row">
-            <span className="oc-bar-label">{item.industryName}</span>
-            <ProgressBar
-              className="oc-bar-track"
-              value={(value / max) * 100}
-              color={recommended ? 'primary' : 'muted'}
-            />
-            <span className={`oc-bar-value ${dmMono.className}`}>
-              {value}
-              {unit}
-            </span>
-          </div>
-        );
-      })}
+          return (
+            <div key={item.industry_id} className="oc-bar-row">
+              <span className="oc-bar-label">{item.industry_name}</span>
+              <ProgressBar
+                className="oc-bar-track"
+                value={(value / max) * 100}
+                color={recommended ? 'primary' : 'muted'}
+              />
+              <span className={`oc-bar-value ${dmMono.className}`}>
+                {value}
+                {unit}
+              </span>
+            </div>
+          );
+        })
+      )}
 
       <div className="oc-legend">
         <span className="oc-legend-item">
@@ -297,16 +379,23 @@ function MetricBarList({
 }
 
 /** 1. 개폐업 안정성 */
-function StabilityGauge() {
-  const [selectedCode, setSelectedCode] = useState(indexData[0].industryCode);
+function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
+  const [selectedId, setSelectedId] = useState(data[0].industry_id);
   const selected =
-    indexData.find((item) => item.industryCode === selectedCode) ??
-    indexData[0];
+    data.find((item) => item.industry_id === selectedId) ?? data[0];
   const band = getBand(selected.score);
 
   // 반원 게이지: 중심 (100,100), 반지름 82의 위쪽 반원.
   const arcLength = Math.PI * 82;
-  const filled = (Math.min(100, Math.max(0, selected.score)) / 100) * arcLength;
+  const filled =
+    (Math.min(100, Math.max(0, selected.score ?? 0)) / 100) * arcLength;
+
+  const { recent_year_close_rate, oldest_year_close_rate, close_rate_trend } =
+    selected.metrics;
+  const hasTrend =
+    recent_year_close_rate != null &&
+    oldest_year_close_rate != null &&
+    close_rate_trend != null;
 
   return (
     <SectionCard
@@ -314,15 +403,15 @@ function StabilityGauge() {
       description="업종을 선택하면 개폐업 지표를 종합한 안정성 점수를 보여줍니다."
     >
       <div className="oc-chip-row">
-        {indexData.map((item) => {
-          const active = item.industryCode === selectedCode;
+        {data.map((item) => {
+          const active = item.industry_id === selectedId;
 
           return (
             <button
-              key={item.industryCode}
+              key={item.industry_id}
               type="button"
               aria-pressed={active}
-              onClick={() => setSelectedCode(item.industryCode)}
+              onClick={() => setSelectedId(item.industry_id)}
               className="oc-chip"
               style={{
                 backgroundColor: active
@@ -335,7 +424,7 @@ function StabilityGauge() {
                 fontWeight: active ? 600 : 400,
               }}
             >
-              {item.industryName}
+              {item.industry_name}
             </button>
           );
         })}
@@ -346,7 +435,9 @@ function StabilityGauge() {
           className="oc-gauge"
           viewBox="0 0 200 128"
           role="img"
-          aria-label={`${selected.industryName} 안정성 점수 ${selected.score}점, ${band.label}`}
+          aria-label={`${selected.industry_name} 안정성 점수 ${
+            selected.score ?? '판단 보류'
+          }, ${band.label}`}
         >
           <path
             d="M 18 100 A 82 82 0 0 1 182 100"
@@ -367,11 +458,11 @@ function StabilityGauge() {
             x="100"
             y="88"
             textAnchor="middle"
-            fontSize="38"
+            fontSize={selected.score === null ? '24' : '38'}
             fontWeight="700"
             fill={band.color}
           >
-            {selected.score}
+            {selected.score ?? '판단 보류'}
           </text>
           <text
             x="100"
@@ -380,7 +471,7 @@ function StabilityGauge() {
             fontSize="12"
             fill="var(--color-gray-400)"
           >
-            / 100점
+            {selected.score === null ? '' : '/ 100점'}
           </text>
           <text
             x="18"
@@ -407,7 +498,7 @@ function StabilityGauge() {
             className={`oc-gauge-name ${outfit.className} font-bold`}
             style={{ color: colors.neutral.black }}
           >
-            {selected.industryName}
+            {selected.industry_name}
           </p>
 
           <div className="oc-gauge-badges">
@@ -433,6 +524,18 @@ function StabilityGauge() {
                 fontSize: fluid(10, 12),
               }}
             >
+              {selected.type}
+            </Badge>
+            <Badge
+              style={{
+                backgroundColor: colors.neutral.background,
+                color: 'var(--color-gray-500)',
+                fontFamily: 'inherit',
+                textTransform: 'none',
+                letterSpacing: 'normal',
+                fontSize: fluid(10, 12),
+              }}
+            >
               신뢰도 {confidenceLabels[selected.confidence]}
             </Badge>
           </div>
@@ -440,46 +543,115 @@ function StabilityGauge() {
           <dl className="oc-gauge-stats">
             <div>
               <dt>폐업률</dt>
-              <dd className={dmMono.className}>{selected.closeRate}%</dd>
+              <dd className={dmMono.className}>
+                {selected.metrics.avg_close_rate != null
+                  ? `${selected.metrics.avg_close_rate}%`
+                  : '–'}
+              </dd>
             </div>
             <div>
               <dt>회전율</dt>
-              <dd className={dmMono.className}>{selected.turnoverRate}</dd>
+              <dd className={dmMono.className}>
+                {selected.metrics.turnover_rate ?? '–'}
+              </dd>
             </div>
             <div>
               <dt>순증감</dt>
               <dd className={dmMono.className}>
-                <NetChangeDisplay value={selected.netChange} />
+                {selected.metrics.period_net_change != null ? (
+                  <NetChangeDisplay
+                    value={selected.metrics.period_net_change}
+                  />
+                ) : (
+                  '–'
+                )}
               </dd>
             </div>
           </dl>
+
+          {/*
+            close_rate_trend = 최근 1년 폐업률 - 가장 오래된 1년 폐업률
+            (scoring.py 주석 그대로). 양수면 악화, 음수면 개선 — 부호만
+            보고 방향을 판단한다.
+          */}
+          {hasTrend && (
+            <p className="oc-gauge-trend">
+              최근 1년 폐업률 {recent_year_close_rate}% — 과거(
+              {oldest_year_close_rate}%)보다{' '}
+              {close_rate_trend! > 0
+                ? '상승'
+                : close_rate_trend! < 0
+                  ? '하락'
+                  : '변동 없음'}{' '}
+              추세
+            </p>
+          )}
+
+          {selected.evidence.length > 0 && (
+            <ul className="oc-gauge-evidence">
+              {selected.evidence.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+
+          {selected.warning && (
+            <p className="oc-gauge-warning">주의 · {selected.warning}</p>
+          )}
         </div>
       </div>
     </SectionCard>
   );
 }
 
-export default function OpenCloseTrendSection() {
+export default function OpenCloseTrendSection({
+  data = mockReportData.businessLifecycle,
+  source = mockReportData.openCloseSource,
+}: {
+  data?: BusinessLifecycleData;
+  source?: string;
+}) {
+  const industries = data.industries;
+  const matchedShortfall = EXPECTED_INDUSTRY_COUNT - industries.length;
+
+  if (industries.length === 0) {
+    return (
+      <div className="oc-root oc-root-empty">
+        <p className="oc-empty-note">개폐업 데이터에 매칭된 업종이 없습니다.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="oc-root flex w-full flex-col items-start">
-      <StabilityGauge />
-      <StoreStatus />
+      <CoverageSummary data={data} />
+
+      {matchedShortfall > 0 && (
+        <p className="oc-mismatch-note">
+          추천·비추천 {EXPECTED_INDUSTRY_COUNT}개 업종 중 {industries.length}
+          개만 개폐업 데이터에 매칭됐습니다. 나머지 {matchedShortfall}개는 업종
+          분류 기준이 달라 매칭되지 않았습니다.
+        </p>
+      )}
+
+      <StabilityGauge data={industries} />
+      <StoreStatus data={industries} />
       <MetricBarList
+        data={industries}
         title="폐업률"
         description="값이 높은 업종일수록 같은 상권에서 문을 닫는 비율이 높습니다."
         unit="%"
-        pick={(item) => item.closeRate}
+        pick={(item) => item.metrics.avg_close_rate ?? null}
       />
       <MetricBarList
+        data={industries}
         title="회전율"
         description="개업과 폐업이 함께 잦은 정도입니다. 높을수록 사업자 교체가 빈번합니다."
         unit=""
-        pick={(item) => item.turnoverRate}
+        pick={(item) => item.metrics.turnover_rate ?? null}
       />
 
-      <p className="oc-source text-gray-400">
-        출처: {mockReportData.openCloseSource}
-      </p>
+      <p className="oc-source text-gray-400">출처: {source}</p>
 
       {/*
         구간별로 달라지는 값(폰트·여백·컬럼 폭·게이지 크기)은 전부 이 블록
@@ -506,6 +678,11 @@ export default function OpenCloseTrendSection() {
             calc(20px + (100vw - 375px) * 0.011268),
             32px
           );
+        }
+        .oc-root-empty {
+          align-items: center;
+          justify-content: center;
+          min-height: 160px;
         }
 
         .oc-card-head {
@@ -539,6 +716,33 @@ export default function OpenCloseTrendSection() {
             calc(8px + (100vw - 375px) * 0.005634),
             14px
           );
+        }
+
+        /* ---- 요약 카드 ---- */
+        .oc-summary-list {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: 6px;
+          list-style: disc;
+          padding-left: 18px;
+          color: var(--color-gray-600);
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
+          line-height: 1.6;
+        }
+
+        .oc-mismatch-note {
+          width: 100%;
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          color: var(--color-gray-500);
+          line-height: 1.5;
+        }
+
+        .oc-empty-note {
+          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
+          color: var(--color-gray-500);
+          padding-block: 8px;
+          line-height: 1.6;
         }
 
         /* ---- 2. 점포 현황 ---- */
@@ -594,6 +798,12 @@ export default function OpenCloseTrendSection() {
           align-items: center;
           gap: 8px;
           min-width: 0;
+        }
+        .oc-store-nodata {
+          grid-column: 1 / -1;
+          grid-row: 2;
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          color: var(--color-gray-400);
         }
         .oc-store-head {
           display: none;
@@ -671,6 +881,10 @@ export default function OpenCloseTrendSection() {
           }
           .oc-store-net-cell {
             grid-column: 5;
+            grid-row: 1;
+          }
+          .oc-store-nodata {
+            grid-column: 2 / -1;
             grid-row: 1;
           }
           .oc-cell-label {
@@ -805,6 +1019,30 @@ export default function OpenCloseTrendSection() {
         .oc-gauge-stats dd {
           font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px);
           color: ${colors.neutral.black};
+        }
+        .oc-gauge-trend {
+          width: 100%;
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          color: var(--color-gray-500);
+          line-height: 1.5;
+        }
+        .oc-gauge-evidence {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: 3px;
+          list-style: disc;
+          padding-left: 16px;
+          color: var(--color-gray-500);
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          line-height: 1.5;
+          padding-top: 4px;
+        }
+        .oc-gauge-warning {
+          width: 100%;
+          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          color: ${colors.accent.orange};
+          line-height: 1.5;
         }
 
         .oc-source {

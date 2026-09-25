@@ -179,8 +179,8 @@ function TypeHeaderCard({ data }: { data: FloatingPopulationData }) {
               fontSize: fluid(10, 12),
             }}
           >
-            {data.reliability.tradeAreaCount}곳 중{' '}
-            {data.reliability.coveredTradeAreas}곳 자료 확보
+            {data.reliability.trade_area_count}곳 중{' '}
+            {data.reliability.covered_trade_areas}곳 자료 확보
           </Badge>
         </div>
       </div>
@@ -196,14 +196,14 @@ function TypeHeaderCard({ data }: { data: FloatingPopulationData }) {
 
 /** 2. 핵심 stat */
 function CoreStat({ data }: { data: FloatingPopulationData }) {
-  const topPercent = 100 - data.benchmark.scalePercentile;
+  const topPercent = 100 - data.benchmark.scale_percentile;
 
   return (
     <div className="fp-core-stats">
       <SectionCard title="하루 평균 유동인구">
         <p className={`fp-core-value ${dmMono.className}`}>
           <span style={{ color: colors.brand.dark }}>
-            {Math.round(data.population.dailyAvg).toLocaleString('ko-KR')}
+            {Math.round(data.population.daily_avg).toLocaleString('ko-KR')}
           </span>
           <span className="fp-core-unit">명/일</span>
         </p>
@@ -230,10 +230,10 @@ const AGE_COLORS = [
 
 /** 4. 연령대별 분포 */
 function AgeDistribution({ data }: { data: FloatingPopulationData }) {
-  const ageKeys = Object.keys(data.population.ageShare);
+  const ageKeys = Object.keys(data.population.age_share);
   const slices = ageKeys.map((key, i) => ({
     name: formatAgeLabel(key),
-    value: data.population.ageShare[key],
+    value: data.population.age_share[key],
     color: AGE_COLORS[i % AGE_COLORS.length],
   }));
   const total = slices.reduce((sum, s) => sum + s.value, 0);
@@ -287,7 +287,7 @@ function AgeDistribution({ data }: { data: FloatingPopulationData }) {
             <DivergingBar
               key={key}
               eyebrow={formatAgeLabel(key)}
-              value={data.benchmark.ageIndex[key] ?? null}
+              value={data.benchmark.age_index[key] ?? null}
             />
           ))}
         </div>
@@ -310,7 +310,7 @@ function TrendChart({ data }: { data: FloatingPopulationData }) {
 
   const points = data.trend.quarters.map((q) => ({
     label: q.period,
-    value: Math.round(q.dailyAvg),
+    value: Math.round(q.daily_avg),
   }));
 
   return (
@@ -327,8 +327,15 @@ function TrendChart({ data }: { data: FloatingPopulationData }) {
         />
       </div>
       <p className="fp-trend-caption">
-        전분기 대비 {data.trend.qoqChange > 0 ? '+' : ''}
-        {data.trend.qoqChange}%, {data.trend.direction}
+        {/* qoq_change는 분기가 2개 미만이면 null이다(backend 스키마 그대로) —
+            그 경우엔 "전분기 대비" 수치 없이 direction만 보여준다. */}
+        {data.trend.qoq_change !== null && (
+          <>
+            전분기 대비 {data.trend.qoq_change > 0 ? '+' : ''}
+            {data.trend.qoq_change}%,{' '}
+          </>
+        )}
+        {data.trend.direction}
       </p>
     </SectionCard>
   );
@@ -336,7 +343,7 @@ function TrendChart({ data }: { data: FloatingPopulationData }) {
 
 /** 3. 반경별 인구 */
 function RadiusProfileChart({ data }: { data: FloatingPopulationData }) {
-  if (!data.radiusProfile) {
+  if (!data.radius_profile) {
     return (
       <SelectionReasonNote
         data={data}
@@ -346,9 +353,9 @@ function RadiusProfileChart({ data }: { data: FloatingPopulationData }) {
     );
   }
 
-  const points = data.radiusProfile.points.map((p) => ({
-    label: `${p.radiusM}m`,
-    value: Math.round(p.dailyAvg),
+  const points = data.radius_profile.points.map((p) => ({
+    label: `${p.radius_m}m`,
+    value: Math.round(p.daily_avg),
   }));
 
   return (
@@ -367,14 +374,14 @@ function RadiusProfileChart({ data }: { data: FloatingPopulationData }) {
       <p className="fp-radius-caption">
         50~100m 구간은 표본이 적어 추정 성격이 강합니다.
       </p>
-      <p className="fp-radius-method">{data.radiusProfile.method}</p>
+      <p className="fp-radius-method">{data.radius_profile.method}</p>
     </SectionCard>
   );
 }
 
 /** 6. 집계 상권 목록 */
 function TradeAreaList({ data }: { data: FloatingPopulationData }) {
-  if (!data.tradeAreas) {
+  if (!data.trade_areas) {
     return (
       <SelectionReasonNote
         data={data}
@@ -390,7 +397,7 @@ function TradeAreaList({ data }: { data: FloatingPopulationData }) {
       description="이 지역을 나눈 조각들입니다. 동네 개수가 아닙니다."
     >
       <ul className="fp-trade-area-list">
-        {data.tradeAreas.map((area) => (
+        {data.trade_areas.map((area) => (
           <li key={area.name} className="fp-trade-area-row">
             <span className="fp-trade-area-name">{area.name}</span>
             {area.kind && (

@@ -13,6 +13,24 @@ from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 
 class RepositoryTests(unittest.TestCase):
+    def test_radius_migration_preserves_old_requests(self):
+        with connect(self.path) as db:
+            db.execute("ALTER TABLE analysis_requests DROP COLUMN radius_m")
+        initialize(self.path)
+        initialize(self.path)
+        row = repo.get_request("request", db_path=self.path)
+        self.assertIsNone(row["radius_m"])
+        self.assertEqual(row["status"], "running")
+        repo.create_request("new", "주소", radius_m=300, db_path=self.path)
+        self.assertEqual(repo.get_request("new", db_path=self.path)["radius_m"], 300)
+        for value in (0, -1, 1.5, "invalid"):
+            with self.subTest(value=value), self.assertRaises(sqlite3.IntegrityError):
+                with connect(self.path) as db:
+                    db.execute(
+                        "UPDATE analysis_requests SET radius_m = ? WHERE request_id = 'new'",
+                        (value,),
+                    )
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

@@ -5,7 +5,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.schemas import AgentAnalysis, AgentError, AnalysisTask, DecisionRequest, DecisionResult
+from app.schemas import (
+    AgentAnalysis,
+    AgentError,
+    AnalysisTask,
+    DecisionRequest,
+    DecisionResult,
+    validate_radius,
+)
 
 from .connection import connect
 
@@ -20,14 +27,23 @@ def _text(value: str) -> str:
     return value.strip()
 
 
-def create_request(request_id: str, address: str, *, db_path: str | Path | None = None) -> None:
+def create_request(
+    request_id: str,
+    address: str,
+    *,
+    radius_m: int | None = None,
+    db_path: str | Path | None = None,
+) -> None:
     request_id = _text(request_id)
     _text(address)
+    if radius_m is not None:
+        radius_m = validate_radius(radius_m)
     with connect(db_path) as db:
         db.execute(
-            "INSERT INTO analysis_requests (request_id, input_address, status, created_at) "
-            "VALUES (?, ?, 'pending', ?)",
-            (request_id, address, _now()),
+            "INSERT INTO analysis_requests "
+            "(request_id, input_address, radius_m, status, created_at) "
+            "VALUES (?, ?, ?, 'pending', ?)",
+            (request_id, address, radius_m, _now()),
         )
 
 

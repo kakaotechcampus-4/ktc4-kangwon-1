@@ -26,6 +26,7 @@ from app.agents.floating_population import llm as floating_llm
 from app.config import AddressSettings
 from app.schemas import (
     AGENT_IDS,
+    DEFAULT_RADIUS_M,
     AgentAnalysis,
     AgentError,
     AgentId,
@@ -33,6 +34,7 @@ from app.schemas import (
     DecisionRequest,
     DecisionResult,
     Site,
+    validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
 
@@ -58,9 +60,11 @@ async def prepare_task(
     address: str,
     *,
     resolve: Callable[[str], Awaitable[Site]],
+    radius_m: int = DEFAULT_RADIUS_M,
     request_id: str | None = None,
 ) -> AnalysisTask:
     """주소 변환 도구를 호출하고 공통 입력을 검증합니다."""
+    radius_m = validate_radius(radius_m)
     cleaned = address.strip()
     if not cleaned:
         raise ValueError("주소가 비어 있습니다.")
@@ -68,6 +72,7 @@ async def prepare_task(
     return AnalysisTask(
         request_id=uuid.uuid4().hex if request_id is None else request_id,
         site=resolved,
+        radius_m=radius_m,
     )
 
 
@@ -180,6 +185,7 @@ async def run_analysis(
     address: str,
     *,
     site: Site | None = None,
+    radius_m: int = DEFAULT_RADIUS_M,
     settings: Settings | None = None,
     agents: AgentRegistry | None = None,
     generate: GenerateDecision | None = None,
@@ -190,6 +196,7 @@ async def run_analysis(
     `site`를 주면 좌표 변환을 건너뜁니다. `agents`와 `generate`는 시험용
     대역을 넣기 위한 자리입니다.
     """
+    radius_m = validate_radius(radius_m)
     settings = settings or Settings.from_env()
 
     async def resolve(address: str) -> Site:
@@ -207,6 +214,7 @@ async def run_analysis(
     task = await prepare_task(
         address,
         resolve=resolve,
+        radius_m=radius_m,
         request_id=request_id,
     )
     analyses = await run_agents(task, agents or default_agents(settings))
@@ -223,6 +231,7 @@ async def run_react(
     *,
     resolve: Callable[[str], Awaitable[Site]],
     agents: AgentRegistry,
+    radius_m: int = DEFAULT_RADIUS_M,
     generate_action: GenerateAction | None = None,
     generate: GenerateDecision | None = None,
     request_id: str | None = None,
@@ -231,6 +240,7 @@ async def run_react(
     agent_timeout: float = 180.0,
 ) -> DecisionResult:
     """도구 호출과 관찰을 반복합니다. 주소 도구와 세 분석기는 명시적으로 연결합니다."""
+    radius_m = validate_radius(radius_m)
     address = address.strip()
     if not address:
         raise ValueError("주소가 비어 있습니다.")
@@ -242,7 +252,10 @@ async def run_react(
         raise ValueError("요청 ID가 비어 있습니다.")
     messages: list[Any] = [
         {"role": "system", "content": files(__package__).joinpath("prompt.md").read_text("utf-8")},
-        {"role": "user", "content": json.dumps({"address": address}, ensure_ascii=False)},
+        {
+            "role": "user",
+            "content": json.dumps({"address": address, "radius_m": radius_m}, ensure_ascii=False),
+        },
     ]
     task = None
     analyses = None
@@ -275,7 +288,9 @@ async def run_react(
         if arguments != {} or name != expected:
             observation = {"status": "error", "message": f"빈 인자로 {expected}를 호출하세요."}
         elif name == "prepare_address":
-            task = await prepare_task(address, resolve=resolve, request_id=request_id)
+            task = await prepare_task(
+                address, resolve=resolve, request_id=request_id, radius_m=radius_m
+            )
             if on_task_prepared is not None:
                 await on_task_prepared(task)
             observation = {"status": "ok", "task": task.model_dump(mode="json")}

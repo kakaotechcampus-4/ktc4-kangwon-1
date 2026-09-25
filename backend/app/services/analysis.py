@@ -20,7 +20,16 @@ from app.agents.orchestration.workflow import (
 )
 from app.db import repository
 from app.db.connection import initialize
-from app.schemas import AGENT_IDS, AgentAnalysis, AgentError, AnalysisTask, DecisionResult, Site
+from app.schemas import (
+    AGENT_IDS,
+    DEFAULT_RADIUS_M,
+    AgentAnalysis,
+    AgentError,
+    AnalysisTask,
+    DecisionResult,
+    Site,
+    validate_radius,
+)
 from app.services.settings import ExecutionSettings, validate_timeout
 
 
@@ -46,6 +55,7 @@ async def execute_analysis(
     address: str,
     *,
     db_path: str | Path | None = None,
+    radius_m: int = DEFAULT_RADIUS_M,
     resolve: Callable[[str], Awaitable[Site]] | None = None,
     agents: AgentRegistry | None = None,
     generate_action: GenerateAction | None = None,
@@ -56,6 +66,7 @@ async def execute_analysis(
     settings: ExecutionSettings | None = None,
 ) -> DecisionResult:
     """요청·중간 결과·최종 결과를 저장하며 실패는 호출자에게 전달합니다."""
+    radius_m = validate_radius(radius_m)
     if not isinstance(address, str) or not address.strip():
         raise ValueError("주소가 비어 있습니다.")
     if request_id is None:
@@ -84,7 +95,9 @@ async def execute_analysis(
 
     async def create() -> None:
         nonlocal owned
-        await asyncio.to_thread(repository.create_request, request_id, address, db_path=path)
+        await asyncio.to_thread(
+            repository.create_request, request_id, address, radius_m=radius_m, db_path=path
+        )
         owned = True
 
     async def save_task(task: AnalysisTask) -> None:
@@ -101,6 +114,7 @@ async def execute_analysis(
             await _settle(asyncio.to_thread(repository.mark_running, request_id, db_path=path))
             result = await run_react(
                 address,
+                radius_m=radius_m,
                 resolve=resolve,
                 agents=agents,
                 request_id=request_id,
