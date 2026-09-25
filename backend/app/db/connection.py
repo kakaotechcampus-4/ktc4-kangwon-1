@@ -8,6 +8,11 @@ from importlib.resources import files
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+SCHEMA_VERSION = 1
+
+
+class SchemaVersionError(RuntimeError):
+    pass
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:
@@ -35,20 +40,28 @@ def initialize(db_path: str | Path | None = None) -> Path:
     """처음 실행할 때 파일과 테이블을 생성합니다. 기존 자료는 유지합니다."""
     path = resolve_path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=5)
+    connection = sqlite3.connect(path, timeout=5, autocommit=True)
     try:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
-        connection.executescript(files("app.db").joinpath("schema.sql").read_text(encoding="utf-8"))
-        # 기존 요청의 반경은 알 수 없으므로 NULL로 보존합니다.
-        with connection:
-            connection.execute("BEGIN IMMEDIATE")
-            columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_requests)")}
-            if "radius_m" not in columns:
-                connection.execute(
-                    "ALTER TABLE analysis_requests ADD COLUMN radius_m INTEGER "
-                    "CHECK (radius_m IS NULL OR (typeof(radius_m) = 'integer' AND radius_m > 0))"
+        if _schema_version(connection) == SCHEMA_VERSION:
+            return path
+        connection.execute("BEGIN IMMEDIATE")
+        found = _schema_version(connection)
+        if found != SCHEMA_VERSION:
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table'").fetchone():
+                raise SchemaVersionError(
+                    f"DB 스키마 버전({found})과 코드 버전({SCHEMA_VERSION})이 다릅니다. "
+                    f"이 파일을 지우고 다시 실행하세요: {path}"
                 )
+            schema = files("app.db").joinpath("schema.sql").read_text(encoding="utf-8")
+            connection.executescript(schema)
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        connection.execute("COMMIT")
     finally:
         connection.close()
     return path
+
+
+def _schema_version(connection: sqlite3.Connection) -> int:
+    return int(connection.execute("PRAGMA user_version").fetchone()[0])
