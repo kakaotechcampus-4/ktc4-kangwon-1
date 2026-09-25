@@ -8,19 +8,35 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.db import repository as repo
-from app.db.connection import BACKEND_DIR, connect, initialize, resolve_path
+from app.db.connection import (
+    BACKEND_DIR,
+    SCHEMA_VERSION,
+    SchemaVersionError,
+    connect,
+    initialize,
+    resolve_path,
+)
 from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 
 class RepositoryTests(unittest.TestCase):
-    def test_radius_migration_preserves_old_requests(self):
+    def test_schema_version_is_stamped_and_idempotent(self):
+        initialize(self.path)
         with connect(self.path) as db:
-            db.execute("ALTER TABLE analysis_requests DROP COLUMN radius_m")
-        initialize(self.path)
-        initialize(self.path)
-        row = repo.get_request("request", db_path=self.path)
-        self.assertIsNone(row["radius_m"])
-        self.assertEqual(row["status"], "running")
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+
+    def test_version_mismatch_fails_without_touching_data(self):
+        with connect(self.path) as db:
+            db.execute("PRAGMA user_version = 0")
+        with self.assertRaises(SchemaVersionError) as caught:
+            initialize(self.path)
+        self.assertIn(str(resolve_path(self.path)), str(caught.exception))
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 0)
+        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+
+    def test_radius_constraint(self):
         repo.create_request("new", "주소", radius_m=300, db_path=self.path)
         self.assertEqual(repo.get_request("new", db_path=self.path)["radius_m"], 300)
         for value in (0, -1, 1.5, "invalid"):
