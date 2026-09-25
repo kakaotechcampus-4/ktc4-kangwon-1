@@ -3,6 +3,7 @@
 import json
 import sqlite3
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -35,6 +36,29 @@ class RepositoryTests(unittest.TestCase):
         with connect(self.path) as db:
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 0)
         self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+
+    def test_concurrent_initialize_on_fresh_files(self):
+        errors: list[BaseException] = []
+        for round_index in range(20):
+            fresh = self.path.parent / f"fresh-{round_index}.sqlite3"
+            start = threading.Barrier(4)
+
+            def run(target: Path = fresh, barrier: threading.Barrier = start) -> None:
+                barrier.wait()
+                try:
+                    initialize(target)
+                except Exception as error:
+                    errors.append(error)
+
+            threads = [threading.Thread(target=run) for _ in range(4)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            with connect(fresh) as db:
+                self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "wal")
+                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+        self.assertEqual(errors, [])
 
     def test_radius_constraint(self):
         repo.create_request("new", "주소", radius_m=300, db_path=self.path)

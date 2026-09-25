@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib.resources import files
@@ -43,9 +44,9 @@ def initialize(db_path: str | Path | None = None) -> Path:
     connection = sqlite3.connect(path, timeout=5, autocommit=True)
     try:
         connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
         if _schema_version(connection) == SCHEMA_VERSION:
             return path
+        _enable_wal(connection)
         connection.execute("BEGIN IMMEDIATE")
         found = _schema_version(connection)
         if found != SCHEMA_VERSION:
@@ -65,3 +66,19 @@ def initialize(db_path: str | Path | None = None) -> Path:
 
 def _schema_version(connection: sqlite3.Connection) -> int:
     return int(connection.execute("PRAGMA user_version").fetchone()[0])
+
+
+def _enable_wal(connection: sqlite3.Connection, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error) or time.monotonic() >= deadline:
+                raise
+        else:
+            if mode == "wal":
+                return
+            if time.monotonic() >= deadline:
+                raise sqlite3.OperationalError(f"WAL 모드로 바꾸지 못했습니다. 현재 모드: {mode}")
+        time.sleep(0.01)
