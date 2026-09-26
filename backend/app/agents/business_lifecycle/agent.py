@@ -143,6 +143,8 @@ def _analyze_sync(
             scope_area=f"{area.area_name} ({area.area_code})",
             scope_period=_period_label(agent_result),
             metadata={
+                "requested_radius_m": task.radius_m,
+                "radius_applied": False,
                 "area_code": area.area_code,
                 "area_name": area.area_name,
                 "area_type_code": area.area_type_code,

@@ -64,6 +64,7 @@ async def run() -> int:
     task = AnalysisTask(
         request_id=str(uuid.uuid4()),
         site=site,
+        radius_m=settings.analysis_radius_m,
     )
     result = await analyze(task, settings=settings)
     payload = result.model_dump()

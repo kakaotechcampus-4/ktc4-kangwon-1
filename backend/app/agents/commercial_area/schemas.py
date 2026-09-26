@@ -51,7 +51,7 @@ class RestaurantDensity(Schema):
     unit: Literal["stores_per_km2"]
     store_count: int
     # 서울 상권 1,650곳 분포에서의 위치(0~100). 논문 임계값을 대신하는 값이라
-    # 추정이 아니라 관측 분포 그 자체다. 서울 밖은 null.
+    # 서울 밖이거나 요청 반경이 표본의 500m와 다르면 비웁니다.
     seoul_percentile: float | None = None
 
 

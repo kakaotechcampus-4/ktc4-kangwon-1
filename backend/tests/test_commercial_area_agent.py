@@ -1,5 +1,8 @@
 """상권 경쟁 분석 에이전트가 팀 전달 규약을 지키는지 검사합니다."""
 
+import asyncio
+import json
+import math
 import tempfile
 import unittest
 from dataclasses import replace
@@ -13,6 +16,7 @@ from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
 from app.agents.commercial_area.industries import write_master
+from app.agents.commercial_area.llm import build_user_message
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
 from app.agents.orchestration.workflow import run_agents
@@ -72,6 +76,8 @@ class FakeClient(StoreClient):
         self._baseline_error = baseline_error
         self._district_error = district_error
         self.district_calls = 0
+        self.radius_calls = []
+        self.baseline_candidates = []
 
     async def stores_in_district(self, signgu_cd):
         self.district_calls += 1
@@ -87,6 +93,7 @@ class FakeClient(StoreClient):
         }
 
     async def stores_in_radius(self, lat, lon, radius_m, use_cache=True, grid_m=None):
+        self.radius_calls.append(radius_m)
         return list(self._stores), {
             "total_count": len(self._stores),
             "fetched": len(self._stores),
@@ -97,6 +104,7 @@ class FakeClient(StoreClient):
         }
 
     async def stores_in_radius_with_fallback(self, lat, lon, candidates, grid_m=None):
+        self.baseline_candidates.append(candidates)
         if self._baseline_error:
             raise self._baseline_error
         return list(self._baseline), {
@@ -127,6 +135,56 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         self._tmp.cleanup()
+
+    async def test_request_radius_controls_queries_metrics_and_scope(self):
+        async def check(radius):
+            client = FakeClient(self.settings, sample_stores())
+            task = self.task.model_copy(update={"radius_m": radius})
+            result = await analyze(task, settings=self.settings, store_client=client)
+            self.assertEqual(client.radius_calls, [radius])
+            self.assertEqual(result.data["radius_m"], radius)
+            message = json.loads(build_user_message(result.data))
+            self.assertEqual(message["lq_baseline"], result.data["lq_baseline"])
+            self.assertIn(f"반경 {radius}m", result.scope.area)
+            self.assertEqual(
+                [row["radius_m"] for row in result.data["by_radius"]],
+                sorted({r for r in (50, 200, 500) if r <= radius} | {radius}),
+            )
+            self.assertAlmostEqual(
+                result.data["restaurant_density"]["value"],
+                9 / (math.pi * radius**2 / 1_000_000),
+                places=3,
+            )
+            if radius != 500:
+                self.assertIsNone(result.data["restaurant_density"]["seoul_percentile"])
+
+        await asyncio.gather(*(check(radius) for radius in (300, 500, 700)))
+        self.assertEqual(self.settings.analysis_radius_m, 500)
+
+    async def test_lq_only_uses_larger_radii(self):
+        for radius, expected in ((1500, [(2000,)]), (2000, [])):
+            with self.subTest(radius=radius):
+                client = FakeClient(self.settings, sample_stores())
+                result = await analyze(
+                    self.task.model_copy(update={"radius_m": radius}),
+                    settings=self.settings,
+                    store_client=client,
+                )
+                self.assertEqual(client.baseline_candidates, expected)
+                if not expected:
+                    self.assertEqual(result.status, "partial")
+                    self.assertIsNone(result.data["lq_baseline"]["applied_radius_m"])
+                    self.assertTrue(all(row["lq"] is None for row in result.data["by_middle"]))
+
+    async def test_lq_reports_first_eligible_candidate(self):
+        settings = replace(self.settings, lq_radius_candidates=(1000, 2000))
+        result = await analyze(
+            self.task.model_copy(update={"radius_m": 1500}),
+            settings=settings,
+            store_client=FakeClient(settings, sample_stores()),
+        )
+        self.assertEqual(result.data["lq_baseline"]["requested_radius_m"], 2000)
+        self.assertFalse(any("축소" in warning for warning in result.warnings))
 
     async def test_result_matches_team_contract(self):
         result = await analyze(
@@ -350,6 +408,50 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ClientBehaviourTests(unittest.IsolatedAsyncioTestCase):
+    async def test_radius_cache_does_not_mix_requests(self):
+        called = []
+
+        def handler(request):
+            called.append(int(request.url.params["radius"]))
+            return httpx.Response(
+                200,
+                json={
+                    "header": {"resultCode": "00"},
+                    "body": {"items": [], "totalCount": 0},
+                },
+            )
+
+        async with StoreClient(
+            self.settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        ) as client:
+            for radius in (300, 700, 300, 700):
+                _, meta = await client.stores_in_radius(37.5, 127.0, radius)
+                self.assertEqual(meta["radius_m"], radius)
+        self.assertEqual(called, [300, 700])
+
+    async def test_main_radius_rejection_is_not_retried_at_smaller_radius(self):
+        called = []
+
+        def handler(request):
+            called.append(int(request.url.params["radius"]))
+            return httpx.Response(
+                200,
+                json={
+                    "header": {"resultCode": "04", "resultMsg": "invalid radius"},
+                },
+            )
+
+        async with StoreClient(
+            self.settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        ) as client:
+            result = await analyze(
+                {"request_id": "rejected", "site": SITE, "radius_m": 300},
+                settings=self.settings,
+                store_client=client,
+            )
+        self.assertEqual(result.status, "error")
+        self.assertEqual(called, [300])
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.settings = Settings(

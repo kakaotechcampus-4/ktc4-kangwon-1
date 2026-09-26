@@ -109,6 +109,21 @@ def fake_pipeline(
 
 
 class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_radius_is_recorded_but_does_not_change_polygon(self):
+        results = []
+        for radius in (300, 700):
+            result = await analyze(
+                task().model_copy(update={"radius_m": radius}),
+                settings=Settings(base_quarter_override="20244"),
+                area_resolver=fake_area,
+                run_pipeline=fake_pipeline,
+            )
+            self.assertEqual(result.data["metadata"]["requested_radius_m"], radius)
+            self.assertIs(result.data["metadata"]["radius_applied"], False)
+            results.append(result)
+        self.assertEqual(results[0].scope, results[1].scope)
+        self.assertEqual(results[0].data["industries"], results[1].data["industries"])
+
     async def test_bundled_area_reaches_pipeline_without_external_calls(self):
         site = GARAK_SITE.model_copy(
             update={

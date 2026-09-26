@@ -20,6 +20,8 @@ from openai.types.chat import ChatCompletionMessage
 from pydantic import ValidationError
 
 from app.agents import business_lifecycle, commercial_area, decision, floating_population
+from app.agents.business_lifecycle import supplement as lifecycle_supplement
+from app.agents.commercial_area import supplement as commercial_supplement
 from app.agents.commercial_area.config import Settings
 from app.agents.decision.agent import GenerateDecision
 from app.agents.floating_population import llm as floating_llm
@@ -34,11 +36,13 @@ from app.schemas import (
     DecisionRequest,
     DecisionResult,
     Site,
+    SupplementOperation,
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
 
 from . import llm, tools
+from .supplement import OnSupplement, decide_with_supplement, validate_tools
 
 AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]
 AgentRegistry = dict[AgentId, AnalysisAgent]
@@ -48,6 +52,7 @@ __all__ = [
     "AgentRegistry",
     "AnalysisAgent",
     "build_react_agents",
+    "build_supplement_tools",
     "default_agents",
     "prepare_task",
     "run_agents",
@@ -126,6 +131,38 @@ def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegist
             analyze=partial(commercial_area.analyze, settings=settings.commercial),
         ),
     }
+
+
+def build_supplement_tools(settings: ExecutionSettings) -> list[tools.SupplementTool]:
+    """등록만으로 외부 호출하지 않으며 유동인구 보완은 연결하지 않습니다."""
+    return [
+        tools.SupplementTool(
+            operation=SupplementOperation(
+                agent_id="commercial_area",
+                operation="retry_lq_baseline",
+                description=(
+                    "최초 주변 비교 조회 실패 시 경쟁 판단에 꼭 필요한 자료만 재조회합니다. "
+                    "주 반경 점포는 재조회하지 않습니다."
+                ),
+            ),
+            execute=partial(commercial_supplement.supplement, settings=settings.commercial),
+            eligible=partial(commercial_supplement.eligible, settings=settings.commercial),
+            accept=commercial_supplement.accept,
+        ),
+        tools.SupplementTool(
+            operation=SupplementOperation(
+                agent_id="business_lifecycle",
+                operation="fetch_quarter_details",
+                description=(
+                    "추세 판단에 필요할 때 동일 상권·기간의 분기별 건수·폐업률을 확인합니다. "
+                    "최대 12개 분기이며 없는 분기를 채우거나 점수를 재계산하지 않습니다."
+                ),
+            ),
+            execute=partial(lifecycle_supplement.supplement, settings=settings.lifecycle),
+            eligible=lifecycle_supplement.eligible,
+            accept=lifecycle_supplement.accept,
+        ),
+    ]
 
 
 def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId, _exc: BaseException) -> AgentAnalysis:
@@ -238,9 +275,14 @@ async def run_react(
     on_task_prepared: Callable[[AnalysisTask], Awaitable[None]] | None = None,
     on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None,
     agent_timeout: float = 180.0,
+    supplements: list[tools.SupplementTool] | None = None,
+    on_supplement: OnSupplement | None = None,
 ) -> DecisionResult:
     """도구 호출과 관찰을 반복합니다. 주소 도구와 세 분석기는 명시적으로 연결합니다."""
     radius_m = validate_radius(radius_m)
+    supplements = list(supplements or [])
+    validate_tools(supplements)
+    validate_timeout(agent_timeout)
     address = address.strip()
     if not address:
         raise ValueError("주소가 비어 있습니다.")
@@ -311,6 +353,15 @@ async def run_react(
             }
         else:
             assert task is not None and analyses is not None
+            if supplements:
+                return await decide_with_supplement(
+                    task,
+                    analyses,
+                    tools=supplements,
+                    generate=generate,
+                    on_event=on_supplement,
+                    operation_timeout=agent_timeout,
+                )
             return await decision.analyze(
                 DecisionRequest(
                     request_id=task.request_id,

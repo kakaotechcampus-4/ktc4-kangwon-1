@@ -38,6 +38,7 @@ def build_user_message(data: dict[str, Any]) -> str:
     slices = data.get("by_radius", [])
     trimmed = {
         "radius_m": data.get("radius_m"),
+        "lq_baseline": data.get("lq_baseline"),
         "store_total": data.get("store_total"),
         "반경별_점포수": [
             {

@@ -5,18 +5,94 @@
 
 ## 실행 흐름과 책임
 
+### 작업 단위 보완 — 상권·개폐업 함수 연결
+
+`execute_analysis(..., supplements=[...])`에 `SupplementTool`을 명시적으로 주입할 때만
+보완을 활성화합니다. 서비스 기본값은 빈 목록입니다.
+`build_supplement_tools(settings)`로 실제 두 작업을 등록할 수 있으며 validation 도구의 일반 실행에는 연결되어 있습니다.
+유동인구 원본과 HTTP API는 변경하지 않았습니다.
+
+| 작업 | 수행 범위 | 추가 근거 |
+| --- | --- | --- |
+| `retry_lq_baseline` | 최초 주변 조회 실패 시 주변 자료만 재조회. 주 반경 점포 재조회 없음 | 상권 `data.supplement_lq` |
+| `fetch_quarter_details` | 최초 상권·기간 그대로 최대 12분기의 원자료 조회·공통 업종 집계. 전체 분석·점수·LLM 재실행 없음 | 개폐업 `data.supplement_quarters` |
+
+개폐업 상세 조회는 서울시 조회 단위에 따라 해당 상권·분기의 원본 업종 전체를 받습니다.
+없는 분기를 채우지 않으며 원천 결측·미지원 업종과 실제 0을 구분합니다.
+재조회 자료는 시점이 달라질 수 있어 원래 지표·점수·요약·주의사항을 덮어쓰지 않습니다.
+
+```text
+최초 분석 3종 → 최종판단
+  ├─ 최종 결과 → 저장·종료
+  └─ 보완 요청 → 등록·조건 검증 → 대상 부분 작업 → 재판단 → 저장·종료
+```
+
+- `tools.SupplementTool`: 작업 설명, `eligible(task, previous) -> bool`,
+  `execute(task, previous) -> AgentAnalysis` 비동기 함수와 선택형 `accept(previous, candidate)`를 등록합니다.
+- `decision.evaluate()`: 기존 판단 내용 또는 `SupplementPlan`을 반환합니다.
+  기존 `decision.analyze()`는 계속 `DecisionResult`만 반환합니다.
+- `orchestration/supplement.py`: 최대 한 라운드, 에이전트별 한 작업을 순서대로 실행합니다.
+  전체 분석기로 대체 호출하지 않습니다. `make_decision` 안에서 코드가 실행하므로
+  오케스트레이터 모델의 도구 선택 호출을 추가하지 않습니다.
+- 모델에는 코드가 실행 가능하다고 판정한 작업만 제공합니다. 모델은 작업명·대상·사유만
+  반환하며 주소·반경·임의 인자를 변경할 수 없습니다. 함수에는 원본의 깊은 복사본을 줍니다.
+- 작업 함수는 필요한 부분만 실행한 뒤 **갱신된 전체 AgentAnalysis**를 반환해야 합니다.
+  부분 JSON의 임의 병합이나 지표 재계산은 오케스트레이터가 하지 않습니다.
+- 실제 두 작업은 기존 필드·범위·상태·주의사항 보존과 추가 자료의 구조·유효값을 검사합니다.
+  통과하면 `partial`도 채택합니다. 원래 부족한 자료가 모두 해결됐다는 의미는 아닙니다.
+  채택 검증 함수가 없는 기존 대역 작업은 이전 상태 기반 규칙을 유지합니다.
+- 실행 예외·작업 시간 초과는 실패 이력으로 남기고 재판단합니다. 응답 계약·ID 불일치,
+  DB 저장 실패, 두 번째 보완 요청은 성공으로 숨기지 않고 요청을 실패 처리합니다.
+- 작업별로 `agent_timeout`, 전체로는 서비스의 기존 `overall_timeout`을 적용합니다.
+  전체 취소·시간 초과가 나면 최초 결과와 기록된 요청은 남고 후속 작업을 실행하지 않습니다.
+
+#### 보완 이력
+
+DB 초기화 시 `supplement_events`를 추가합니다. 기존 테이블·자료는 유지합니다.
+최종 결과가 없는 보완 요청은 `decision_results`에 가짜 판단으로 넣지 않습니다.
+기존 `supplement_request_json` 예약 컬럼은 이번에도 사용하지 않습니다.
+
+| 컬럼 | 의미 |
+| --- | --- |
+| `id` | 이벤트 순서 |
+| `request_id` | 원래 요청 ID |
+| `agent_id` | 보완 대상 |
+| `status` | requested·succeeded·failed·rejected |
+| `event_json` | 요청 작업·사유, 처리 메시지, 채택 여부, 반환된 분석 |
+| `created_at` | UTC 기록 시각 |
+
+보완 결과는 채택 여부와 관계없이 `agent_results.attempt=2`에 저장합니다.
+계약에 맞지 않는 결과는 저장하지 않습니다. 결과와 완료 이벤트는 한 트랜잭션으로 저장합니다.
+최종 `source_attempts_json`은 실제 채택한 차수를 가리킵니다.
+`repository.list_supplement_events()`로 요청별 이력을 조회합니다.
+
+외부 호출 없이 확인:
+
+```powershell
+conda activate chaeum
+cd backend
+python -m unittest discover -s tests -p test_supplement_loop.py -v
+```
+
+실제 보완 함수·저장·재판단 전달은 API·LLM 대역으로 검증합니다. 실제 공급자 연결과 LLM 판단 품질은 별도 시험 대상입니다.
+
 ### 요청 반경 전달 — MVP1.5 준비
+
+상권은 `AnalysisTask.radius_m`으로 조회·면적·밀도·세부 반경을 계산합니다.
+개폐업은 상권 폴리곤을 유지하며 `data.metadata.radius_applied=false`로 구분합니다.
+유동인구의 요청 반경 적용은 아직 보장하지 않습니다.
+서울 음식점 백분위는 500m 요청에만 적용하고, 다른 반경에서는 null입니다.
 
 `execute_analysis(address, radius_m=300)`으로 요청 반경(미터)을 전달할 수 있습니다.
 생략하면 500m이며 양의 정수만 허용합니다. 검증은 저장·외부 호출 전에 수행합니다.
 세 분석 에이전트에는 동일한 `AnalysisTask.radius_m`이 전달됩니다.
-**현재는 전달·저장만 구현했습니다. 실제 조회·집계는 각 에이전트의 기존 설정을 사용합니다.**
+상권의 실제 조회·집계에도 적용합니다. 개폐업은 폴리곤 기준이고 유동인구는 기존 설정을 사용합니다.
 HTTP 입력과 최종판단 계약은 변경하지 않았습니다.
 
 `analysis_requests.radius_m`은 요청 조건이며 실제 적용 범위가 아닙니다.
 DB 초기화 시 기존 테이블에도 컬럼을 추가하며 과거 기록은 NULL로 보존합니다.
 폴리곤 분석을 수행해도 입력받은 요청 반경은 지우지 않습니다.
-API별 최대 지원 반경과 분석기 적용은 별도 합의·구현이 필요합니다.
+API별 최대 지원 반경은 별도 확인이 필요합니다. 상권 주 조회가 거절되면 임의 축소하지 않습니다.
 
 ```text
 HTTP API 또는 실행 스크립트
@@ -238,7 +314,7 @@ POST는 분석 완료까지 기다립니다. 즉시 작업 ID를 반환하는 �
 | `agent_results` | 세 분석 에이전트의 요청별·실행 차수별 결과 |
 | `decision_results` | 최종판단 이력·참조한 분석 차수·보완 요청 저장 필드 |
 
-최종판단은 `agent_results`가 아닌 `decision_results`에 기록하며, 최종 결과 스냅샷은 `analysis_requests.result_json`에도 저장합니다. 이력 필드가 있다고 보완 재실행 루프가 구현된 것은 아닙니다.
+최종판단은 `agent_results`가 아닌 `decision_results`에 기록하며, 최종 결과 스냅샷은 `analysis_requests.result_json`에도 저장합니다. 보완 요청·처리 이력은 `supplement_events`에 별도로 기록합니다.
 
 - 요청 상태: `pending → running → completed / failed`.
 - 분석 상태: `ok / partial / no_data / error`. 최종판단이 `partial`·`no_data`여도 정상 반환·저장되면 요청은 `completed`입니다.
@@ -256,7 +332,9 @@ POST는 분석 완료까지 기다립니다. 즉시 작업 ID를 반환하는 �
 - 서울시 업종 매핑 99건 중 모델 판정 53건은 사람 검수가 필요합니다.
 - 자료 없음·매핑 불가·실제 0을 구분하고, 비율은 가능한 원시 분자·분모에서 재계산합니다.
 - 근거 경로의 업종 일치, 기간·반경 차이 해석, 실제 추천 품질은 별도 검증 대상입니다.
-- 부분 결과 보완 요청·선택 재실행은 아직 구현하지 않았습니다.
+- 판단에 필요한 정보가 부족하면 등록된 보완 작업을 최대 한 라운드 실행합니다. 서비스 호출자는 등록표를 명시적으로 전달해야 합니다.
+- 보완 요청은 판단 질문·부족한 정보·필요 이유·예상 영향을 포함합니다. `partial`만으로 자동 재조회하지 않습니다.
+- 재판단에 원래 질문과 실행·채택 결과를 전달합니다. 실행 성공이 질문 해결을 의미하지는 않습니다.
 
 ## 검사
 

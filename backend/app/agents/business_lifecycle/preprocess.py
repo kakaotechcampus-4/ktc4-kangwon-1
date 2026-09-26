@@ -95,6 +95,7 @@ def preprocess_business_lifecycle_data(
         groups.setdefault(SEOUL_TO_SERVICE[source], {}).setdefault(quarter, {})[source] = row
 
     results = []
+    details = []
     for code, name in SERVICE_INDUSTRIES.items():
         observed = groups.get(code, {})
         sources = INDUSTRY_TO_SEOUL.get(code, ())
@@ -119,6 +120,28 @@ def preprocess_business_lifecycle_data(
         ) -> float:
             # sum은 NaN을 전파하므로 일부 결측을 0으로 보충하지 않습니다.
             return sum(values[q][field] for q in period)
+
+        if observed:
+
+            def counts(field: str, values=quarterly) -> list[int | None]:
+                return [
+                    int(values[q][field]) if pd.notna(values[q][field]) else None for q in quarters
+                ]
+
+            details.append(
+                {
+                    "industry_id": code,
+                    "store_counts": counts("similr_induty_stor_co"),
+                    "opened_counts": counts("opbiz_stor_co"),
+                    "closed_counts": counts("clsbiz_stor_co"),
+                    "close_rates": [
+                        calculate_rate(
+                            quarterly[q]["clsbiz_stor_co"], quarterly[q]["similr_induty_stor_co"]
+                        )
+                        for q in quarters
+                    ],
+                }
+            )
 
         exposure = total("similr_induty_stor_co", quarters)
         opened = total("opbiz_stor_co", quarters)
@@ -193,4 +216,18 @@ def preprocess_business_lifecycle_data(
                 "missing_reason": reason,
             }
         )
-    return pd.DataFrame(results)
+    frame = pd.DataFrame(results)
+    # 기존 점수 계산과 같은 매핑·결측 처리 결과를 보완 조회에서도 재사용합니다.
+    frame.attrs["quarterly_detail"] = {
+        "area_code": str(area_code),
+        "quarters": quarters,
+        "count_unit": "개소",
+        "rate_unit": "%",
+        "industries": details,
+        "unsupported_industry_ids": [
+            r["service_id"] for r in results if r["data_status"] == "unsupported"
+        ],
+        "missing_industry_ids": [r["service_id"] for r in results if r["data_status"] == "missing"],
+        "note": "배열 순서는 quarters 기준, null은 결측입니다. 기존 점수는 보존했습니다.",
+    }
+    return frame

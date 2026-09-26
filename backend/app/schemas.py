@@ -84,7 +84,65 @@ class AgentAnalysis(Schema):
         return self
 
 
-# 중재·최종 점수 에이전트 입력
+class SupplementOperation(Schema):
+    """코드에 등록된 보완 작업의 공개 설명입니다."""
+
+    agent_id: AgentId
+    operation: Text
+    description: Text
+
+
+class SupplementRequest(Schema):
+    agent_id: AgentId
+    operation: Text
+    decision_question: Text
+    missing_information: Text
+    why_needed: Text
+    expected_impact: Text
+
+
+class SupplementPlan(Schema):
+    action: Literal["supplement"]
+    requests: list[SupplementRequest] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def check_targets(self) -> Self:
+        ids = [item.agent_id for item in self.requests]
+        if len(ids) != len(set(ids)):
+            raise ValueError("한 보완 라운드에서 에이전트별 작업은 하나만 허용합니다.")
+        return self
+
+
+class SupplementEvent(Schema):
+    request_id: Text
+    request: SupplementRequest
+    status: Literal["requested", "succeeded", "failed", "rejected"]
+    message: Text
+    adopted: bool = False
+    analysis: AgentAnalysis | None = None
+
+    @model_validator(mode="after")
+    def check_analysis(self) -> Self:
+        if self.analysis is not None:
+            if (
+                self.analysis.request_id != self.request_id
+                or self.analysis.agent_id != self.request.agent_id
+            ):
+                raise ValueError("보완 결과 식별자가 요청과 다릅니다.")
+        if self.adopted and (self.status != "succeeded" or self.analysis is None):
+            raise ValueError("성공한 분석 결과만 채택할 수 있습니다.")
+        if (
+            self.adopted
+            and self.analysis is not None
+            and self.analysis.status not in {"ok", "partial"}
+        ):
+            raise ValueError("사용 가능한 분석 결과만 채택할 수 있습니다.")
+        if self.status in {"requested", "rejected"} and self.analysis is not None:
+            raise ValueError("실행 전 이벤트에는 분석 결과가 없습니다.")
+        return self
+
+
+# 최종판단 에이전트 입력
 class DecisionRequest(Schema):
     request_id: Text
     address: Text

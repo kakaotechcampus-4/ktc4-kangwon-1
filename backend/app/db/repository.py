@@ -11,6 +11,7 @@ from app.schemas import (
     AnalysisTask,
     DecisionRequest,
     DecisionResult,
+    SupplementEvent,
     validate_radius,
 )
 
@@ -185,3 +186,51 @@ def list_agent_results(
             (_text(request_id),),
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def save_supplement_event(event: SupplementEvent, *, db_path: str | Path | None = None) -> None:
+    """보완 결과 2차 이력과 이벤트를 한 트랜잭션으로 저장합니다."""
+    event = SupplementEvent.model_validate(event)
+    with connect(db_path) as db:
+        row = db.execute(
+            "SELECT status FROM analysis_requests WHERE request_id = ?",
+            (event.request_id,),
+        ).fetchone()
+        if row is None or row[0] != "running":
+            raise ValueError("실행 중인 요청이 없습니다.")
+        if event.analysis is not None:
+            analysis = event.analysis
+            db.execute(
+                "INSERT INTO agent_results VALUES (?, ?, 2, ?, ?, ?)",
+                (
+                    event.request_id,
+                    analysis.agent_id,
+                    analysis.status,
+                    analysis.model_dump_json(),
+                    _now(),
+                ),
+            )
+        db.execute(
+            "INSERT INTO supplement_events "
+            "(request_id, agent_id, status, event_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            (
+                event.request_id,
+                event.request.agent_id,
+                event.status,
+                event.model_dump_json(),
+                _now(),
+            ),
+        )
+
+
+def list_supplement_events(
+    request_id: str, *, db_path: str | Path | None = None
+) -> list[dict[str, Any]]:
+    with connect(db_path) as db:
+        return [
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM supplement_events WHERE request_id = ? ORDER BY id",
+                (_text(request_id),),
+            ).fetchall()
+        ]

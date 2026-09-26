@@ -432,5 +432,5 @@ def build_restaurant_density(
         squared=round(density**2, 4),
         unit="stores_per_km2",
         store_count=count,
-        seoul_percentile=seoul_percentile(density) if in_seoul else None,
+        seoul_percentile=seoul_percentile(density) if in_seoul and radius_m == 500 else None,
     )

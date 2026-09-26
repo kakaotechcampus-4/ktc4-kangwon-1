@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from dataclasses import replace
 
 from app.industries import MASTER_PATH, TAXONOMY
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
@@ -51,7 +52,7 @@ async def analyze(
     store_client: StoreClient | None = None,
 ) -> AgentAnalysis:
     task = AnalysisTask.model_validate(task)
-    settings = settings or Settings.from_env()
+    settings = replace(settings or Settings.from_env(), analysis_radius_m=task.radius_m)
     radius = settings.analysis_radius_m
     site = task.site
     scope_area = f"{site.input_address} 반경 {radius}m"
@@ -119,24 +120,31 @@ async def analyze(
             )
 
         baseline_counts = None
-        baseline = LqBaseline(requested_radius_m=settings.lq_radius_candidates[0])
+        lq_retryable = False
+        candidates = tuple(r for r in settings.lq_radius_candidates if r > radius)
+        requested_baseline = next(
+            iter(candidates), next(iter(settings.lq_radius_candidates), radius)
+        )
+        baseline = LqBaseline(requested_radius_m=requested_baseline)
         try:
+            if not candidates:
+                raise SbizApiError("NO_RADIUS", "요청 반경보다 큰 비교 반경이 없습니다.")
             baseline_stores, baseline_meta = await client.stores_in_radius_with_fallback(
                 site.latitude,
                 site.longitude,
-                settings.lq_radius_candidates,
+                candidates,
                 grid_m=settings.lq_cache_grid_m,
             )
             baseline_counts = dict(count_by_middle(baseline_stores))
             baseline = LqBaseline(
-                requested_radius_m=settings.lq_radius_candidates[0],
+                requested_radius_m=requested_baseline,
                 applied_radius_m=baseline_meta.get("radius_m"),
                 store_total=len(baseline_stores),
             )
-            if baseline_meta.get("radius_m") != settings.lq_radius_candidates[0]:
+            if baseline_meta.get("radius_m") != requested_baseline:
                 warnings.append(
-                    f"LQ 기준 반경이 {settings.lq_radius_candidates[0]}m에서 "
-                    f"{baseline_meta.get('radius_m')}m로 축소됐습니다."
+                    f"LQ 기준 반경이 {requested_baseline}m에서 "
+                    f"{baseline_meta.get('radius_m')}m로 변경됐습니다."
                 )
             if baseline_meta.get("truncated"):
                 degraded = True
@@ -144,8 +152,13 @@ async def analyze(
                     "LQ 기준 반경 조회가 페이지 상한에 걸려 LQ가 과대추정될 수 있습니다."
                 )
         except SbizApiError:
+            lq_retryable = bool(candidates)
             degraded = True
-            warnings.append("LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다.")
+            warnings.append(
+                "요청 반경보다 큰 비교 반경이 없어 주변 LQ를 계산하지 않았습니다."
+                if not candidates
+                else "LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다."
+            )
 
         district_counts = None
         district_baseline = None
@@ -198,6 +211,10 @@ async def analyze(
             )
 
         trade_areas = build_trade_areas(site.latitude, site.longitude, radius)
+        if radius != 500:
+            warnings.append(
+                "서울 음식점 백분위는 500m 표본이므로 이번 반경에는 적용하지 않았습니다."
+            )
 
         radius_slices = build_radius_slices(
             stores,
@@ -244,6 +261,7 @@ async def analyze(
         )
 
         data = payload.model_dump()
+        data["lq_retryable"] = lq_retryable
         data["taxonomy"] = (
             dict(TAXONOMY)
             if settings.upjong_master_path.resolve() == MASTER_PATH.resolve()

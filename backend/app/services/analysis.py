@@ -12,6 +12,8 @@ from app.address import resolve_site
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
 from app.agents.orchestration import llm
+from app.agents.orchestration.supplement import OnSupplement, validate_tools
+from app.agents.orchestration.tools import SupplementTool
 from app.agents.orchestration.workflow import (
     AgentRegistry,
     GenerateAction,
@@ -28,6 +30,7 @@ from app.schemas import (
     AnalysisTask,
     DecisionResult,
     Site,
+    SupplementEvent,
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
@@ -64,9 +67,13 @@ async def execute_analysis(
     agent_timeout: float | None = None,
     overall_timeout: float | None = None,
     settings: ExecutionSettings | None = None,
+    supplements: list[SupplementTool] | None = None,
+    on_supplement: OnSupplement | None = None,
 ) -> DecisionResult:
     """요청·중간 결과·최종 결과를 저장하며 실패는 호출자에게 전달합니다."""
     radius_m = validate_radius(radius_m)
+    supplements = list(supplements or [])
+    validate_tools(supplements)
     if not isinstance(address, str) or not address.strip():
         raise ValueError("주소가 비어 있습니다.")
     if request_id is None:
@@ -92,6 +99,7 @@ async def execute_analysis(
     validate_timeout(agent_timeout)
     validate_timeout(overall_timeout)
     owned = False
+    source_attempts = dict.fromkeys(AGENT_IDS, 1)
 
     async def create() -> None:
         nonlocal owned
@@ -105,6 +113,13 @@ async def execute_analysis(
 
     async def save_analysis(analysis: AgentAnalysis) -> None:
         await _settle(asyncio.to_thread(repository.save_agent, analysis, db_path=path))
+
+    async def save_supplement(event: SupplementEvent) -> None:
+        await _settle(asyncio.to_thread(repository.save_supplement_event, event, db_path=path))
+        if event.adopted:
+            source_attempts[event.request.agent_id] = 2
+        if on_supplement is not None:
+            await on_supplement(event.model_copy(deep=True))
 
     try:
         async with asyncio.timeout(overall_timeout):
@@ -123,8 +138,17 @@ async def execute_analysis(
                 on_task_prepared=save_task,
                 on_analysis_completed=save_analysis,
                 agent_timeout=agent_timeout,
+                supplements=supplements,
+                on_supplement=save_supplement,
             )
-            await _settle(asyncio.to_thread(repository.complete_request, result, db_path=path))
+            await _settle(
+                asyncio.to_thread(
+                    repository.complete_request,
+                    result,
+                    source_attempts=source_attempts,
+                    db_path=path,
+                )
+            )
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if not owned:
