@@ -2,12 +2,15 @@
 
 from typing import Annotated, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
 # 공통 기본 타입과 검증 규칙
 AgentId = Literal["floating_population", "business_lifecycle", "commercial_area"]
 AGENT_IDS = get_args(AgentId)
 Text = Annotated[str, Field(min_length=1)]
+RadiusMeters = Annotated[int, Field(strict=True, gt=0)]
+DEFAULT_RADIUS_M = 500
+validate_radius = TypeAdapter(RadiusMeters).validate_python
 Latitude = Annotated[float, Field(ge=-90, le=90)]
 Longitude = Annotated[float, Field(ge=-180, le=180)]
 
@@ -48,6 +51,7 @@ class AnalysisTask(Schema):
 
     request_id: Text
     site: Site
+    radius_m: RadiusMeters = DEFAULT_RADIUS_M
 
 
 # 유동인구·개폐업·상권 에이전트 공통 출력
