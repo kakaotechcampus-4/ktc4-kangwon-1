@@ -399,7 +399,20 @@ HTTP API·프론트엔드는 질문 기능과 아직 연결하지 않았습니�
 
 [설계](../docs/mvp19-questions-design.md) · [구현 계획](../docs/mvp19-questions-plan.md)
 
-## 관련 문서
+## 선택적 지도 조회
+
+`execute_analysis(..., map_lookup=observe)`로 카카오맵 도구를 명시적으로 연결합니다.
+`observe`는 `app.agents.map_analysis.agent`에 있습니다. 기본 호출과 HTTP 경로는 자동 변경되지 않습니다.
+최종판단이 요청하면 오케스트레이터가 같은 좌표·반경으로 최대 1배치·5개 검색을 실행합니다.
+원본 장소를 보존하고 업종 조회 표본만 공통 75개 업종으로 매핑합니다. 시설은 별도 분류입니다.
+지도 요청·결과는 `map_observations`에 저장하며 답변 후 재개 시 재조회하지 않습니다.
+최종 JSON의 선택형 `map_observation`과 `Evidence.agent_id="map_analysis"`는 공통 계약 변경입니다.
+기존 저장 결과는 해당 필드 없이 읽을 수 있습니다. 세 분석의 AgentId·실행 차수는 유지합니다.
+실제 API·매핑 LLM 품질 검증과 프론트·HTTP 연결은 별도입니다.
+
+[지도 도구 사용법](app/agents/map_analysis/README.md) · [설계](../docs/mvp19-map-design.md)
+
+## 참고 문서
 
 - [공통 입출력 정의](app/schemas.py)
 - [DB 테이블 정의](app/db/schema.sql)

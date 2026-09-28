@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import Awaitable, Callable
@@ -21,6 +22,8 @@ from app.schemas import (
     DecisionRequest,
     DecisionResult,
     LandlordAnswer,
+    MapLookupPlan,
+    MapObservation,
     QuestionPlan,
     Site,
     SupplementEvent,
@@ -44,7 +47,9 @@ class GraphState(TypedDict, total=False):
     call_id: str
     task: AnalysisTask
     analyses: list[AgentAnalysis]
-    outcome: DecisionResult | SupplementPlan | QuestionPlan | WaitingForInput
+    outcome: DecisionResult | SupplementPlan | QuestionPlan | WaitingForInput | MapLookupPlan
+    map_done: bool
+    map_observation: MapObservation
     operations: list[SupplementOperation]
     supplement_done: bool
     feedback: list[str]
@@ -77,6 +82,9 @@ async def run_graph(
     supplements: list[tools.SupplementTool],
     on_supplement: OnSupplement | None,
     allow_questions: bool = False,
+    map_lookup: tools.MapLookup | None = None,
+    on_map_requested: tools.OnMapRequested | None = None,
+    on_map_completed: tools.OnMapCompleted | None = None,
     on_questions: Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]]
     | None = None,
 ) -> DecisionResult | WaitingForInput:
@@ -182,8 +190,9 @@ async def run_graph(
             request_id=task.request_id,
             address=task.site.input_address,
             analyses=state["analyses"],
+            map_observation=state.get("map_observation"),
         )
-        if not supplements and not allow_questions:
+        if not supplements and not allow_questions and map_lookup is None:
             return {"outcome": await decision.analyze(request, generate=generate)}
         if state["supplement_done"]:
             outcome = await decision.evaluate(
@@ -193,6 +202,7 @@ async def run_graph(
                 supplement_context=state["supplement_context"],
                 question_fields=list(QUESTION_FIELDS) if allow_questions else None,
                 site=task.site if allow_questions else None,
+                allow_map_lookup=map_lookup is not None and not state["map_done"],
             )
             if isinstance(outcome, SupplementPlan):
                 raise ValueError("보완 라운드를 추가 실행할 수 없습니다.")
@@ -212,8 +222,40 @@ async def run_graph(
             operations=operations,
             question_fields=list(QUESTION_FIELDS) if allow_questions else None,
             site=task.site if allow_questions else None,
+            allow_map_lookup=map_lookup is not None and not state["map_done"],
         )
         return {"outcome": outcome, "operations": operations}
+
+    async def execute_map(state: GraphState) -> GraphState:
+        from app.agents.map_analysis.agent import failed_observation
+
+        plan = state["outcome"]
+        task = state["task"]
+        if state["map_done"] or map_lookup is None or not isinstance(plan, MapLookupPlan):
+            raise ValueError("지도 조회를 추가 실행할 수 없습니다.")
+        plan = MapLookupPlan.model_validate(plan)
+        if on_map_requested is not None:
+            await on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
+        try:
+            async with asyncio.timeout(agent_timeout):
+                raw = await map_lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
+        except TimeoutError:
+            raw = failed_observation(task, plan, "MAP_TIMEOUT")
+        except (ValueError, TypeError):
+            raise
+        except Exception:
+            raw = failed_observation(task, plan, "MAP_FAILED")
+        observed = MapObservation.model_validate(raw)
+        if (
+            observed.request_id != task.request_id
+            or observed.site != task.site
+            or observed.radius_m != task.radius_m
+            or [q.request for q in observed.data.queries.values()] != plan.unique_queries()
+        ):
+            raise ValueError("지도 요청과 관측의 식별자·위치·검색 대상이 다릅니다.")
+        if on_map_completed is not None:
+            await on_map_completed(observed.model_copy(deep=True))
+        return {"map_done": True, "map_observation": observed}
 
     async def ask_user(state: GraphState) -> GraphState:
         plan = state["outcome"]
@@ -261,6 +303,7 @@ async def run_graph(
     builder.add_node("evaluate_decision", evaluate_decision)
     builder.add_node("execute_supplement", supplement_node)
     builder.add_node("ask_user", ask_user)
+    builder.add_node("execute_map", execute_map)
     builder.add_edge(START, "choose_action")
     builder.add_conditional_edges(
         "choose_action",
@@ -275,15 +318,23 @@ async def run_graph(
     builder.add_conditional_edges(
         "evaluate_decision",
         lambda state: (
-            "supplement"
+            "map"
+            if isinstance(state["outcome"], MapLookupPlan)
+            else "supplement"
             if isinstance(state["outcome"], SupplementPlan)
             else "question"
             if isinstance(state["outcome"], QuestionPlan)
             else "final"
         ),
-        {"supplement": "execute_supplement", "question": "ask_user", "final": END},
+        {
+            "map": "execute_map",
+            "supplement": "execute_supplement",
+            "question": "ask_user",
+            "final": END,
+        },
     )
     builder.add_edge("execute_supplement", "evaluate_decision")
+    builder.add_edge("execute_map", "evaluate_decision")
     builder.add_edge("ask_user", END)
     graph = builder.compile()
     initial: GraphState = {
@@ -302,6 +353,7 @@ async def run_graph(
         ],
         "action_calls": 0,
         "supplement_done": False,
+        "map_done": False,
     }
     # 주소·분석 자료는 기존 로컬 trace에만 남기고 외부 자동 추적은 사용하지 않습니다.
     with tracing_context(enabled=False):

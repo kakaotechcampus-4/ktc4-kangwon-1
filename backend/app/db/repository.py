@@ -14,6 +14,8 @@ from app.schemas import (
     AnswerSubmission,
     DecisionRequest,
     DecisionResult,
+    MapLookupPlan,
+    MapObservation,
     QuestionSnapshot,
     Site,
     SupplementEvent,
@@ -22,6 +24,14 @@ from app.schemas import (
 )
 
 from .connection import connect
+
+
+class AnswerConflictError(ValueError):
+    """다른 호출이 먼저 확정한 답변과 충돌합니다."""
+
+
+class DecisionRetryConflictError(ValueError):
+    """실패 상태 또는 저장된 입력이 재시도 조건과 다릅니다."""
 
 
 def _now() -> str:
@@ -122,6 +132,8 @@ def complete_request(
         raise ValueError("판단에 사용한 모든 분석의 실행 차수를 지정해야 합니다.")
     payload, completed_at = result.model_dump_json(), _now()
     with connect(db_path) as db:
+        if _get_map_observation(db, result.request_id) != result.map_observation:
+            raise ValueError("최종 결과와 저장된 지도 관측이 다릅니다.")
         for agent_id, source_attempt in source_attempts.items():
             row = db.execute(
                 "SELECT analysis_json FROM agent_results "
@@ -162,17 +174,134 @@ def fail_request(
     request_id: str,
     error: AgentError,
     *,
+    diagnostics: list[dict[str, Any]] | None = None,
     db_path: str | Path | None = None,
 ) -> None:
     error = AgentError.model_validate(error)
+    failed_at = _now()
     with connect(db_path) as db:
         changed = db.execute(
             "UPDATE analysis_requests SET error_json = ?, status = 'failed', completed_at = ? "
             "WHERE request_id = ? AND status IN ('pending', 'running')",
-            (error.model_dump_json(), _now(), _text(request_id)),
+            (error.model_dump_json(), failed_at, _text(request_id)),
         )
         if changed.rowcount != 1:
             raise ValueError("종료할 수 있는 요청이 없습니다.")
+        if diagnostics is not None:
+            db.execute(
+                "INSERT INTO decision_failures VALUES (?, ?, ?, ?)",
+                (
+                    request_id,
+                    failed_at,
+                    error.model_dump_json(),
+                    json.dumps(diagnostics, ensure_ascii=False, allow_nan=False),
+                ),
+            )
+
+
+def list_decision_failures(request_id: str, *, db_path=None) -> list[dict[str, Any]]:
+    """실패한 판단은 성공 결과와 분리해서 보존합니다."""
+    with connect(db_path) as db:
+        return [
+            {"failed_at": row[0], "error": json.loads(row[1]), "diagnostics": json.loads(row[2])}
+            for row in db.execute(
+                "SELECT failed_at,error_json,diagnostics_json FROM decision_failures "
+                "WHERE request_id=? ORDER BY failed_at",
+                (_text(request_id),),
+            )
+        ]
+
+
+def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> dict[str, Any]:
+    """검증된 저장 입력을 확보한 한 호출만 실패한 판단을 재시도합니다."""
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)
+        ).fetchone()
+        if row is None or row["status"] != "failed" or row["completed_at"] != failed_at:
+            raise DecisionRetryConflictError("현재 실패 기록과 재시도 요청이 다릅니다.")
+        if json.loads(row["error_json"])["code"] not in {
+            "DECISION_CONTRACT_INVALID",
+            "DECISION_RETRY_FAILED",
+            "ANALYSIS_FAILED",
+        }:
+            raise DecisionRetryConflictError("이 실패는 최종판단 재시도 대상이 아닙니다.")
+        try:
+            task = AnalysisTask(
+                request_id=request_id,
+                site=Site.model_validate_json(row["site_json"]),
+                radius_m=row["radius_m"],
+            )
+            events = [
+                SupplementEvent.model_validate_json(r[0])
+                for r in db.execute(
+                    "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id",
+                    (request_id,),
+                )
+            ]
+            attempts = dict.fromkeys(AGENT_IDS, 1)
+            for event in events:
+                if event.request_id != request_id:
+                    raise ValueError("보완 요청 식별자가 다릅니다.")
+                if event.adopted:
+                    attempts[event.request.agent_id] = 2
+            analyses = []
+            for agent_id, attempt in attempts.items():
+                source = db.execute(
+                    "SELECT analysis_json FROM agent_results "
+                    "WHERE request_id=? AND agent_id=? AND attempt=?",
+                    (request_id, agent_id, attempt),
+                ).fetchone()
+                if source is None:
+                    raise ValueError("분석 이력이 부족합니다.")
+                analysis = AgentAnalysis.model_validate_json(source[0])
+                if (analysis.request_id, analysis.agent_id) != (request_id, agent_id):
+                    raise ValueError("분석 식별자가 다릅니다.")
+                analyses.append(analysis)
+            questions = db.execute(
+                "SELECT snapshot_json,answers_json FROM question_sessions WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            answers, feedback = [], []
+            if questions:
+                snapshot = QuestionSnapshot.model_validate_json(questions[0])
+                submission = AnswerSubmission.model_validate_json(questions[1])
+                answers = normalize_answers(snapshot.waiting, submission).answers
+                analyses = _load_question_analyses(db, snapshot)
+                feedback = snapshot.feedback
+            observation = _get_map_observation(db, request_id)
+            if observation and (
+                observation.site != task.site or observation.radius_m != task.radius_m
+            ):
+                raise ValueError("지도 관측 위치가 다릅니다.")
+            request = DecisionRequest(
+                request_id=request_id,
+                address=task.site.input_address,
+                analyses=analyses,
+                map_observation=observation,
+            )
+        except (ValueError, TypeError) as exc:
+            raise DecisionRetryConflictError(
+                "최종판단을 재시도할 저장 입력이 완전하지 않습니다."
+            ) from exc
+        db.execute(
+            "INSERT OR IGNORE INTO decision_failures VALUES (?,?,?,'[]')",
+            (request_id, failed_at, row["error_json"]),
+        )
+        db.execute(
+            "UPDATE analysis_requests SET status='running',error_json=NULL,completed_at=NULL "
+            "WHERE request_id=?",
+            (request_id,),
+        )
+        return {
+            "request": request,
+            "site": task.site,
+            "answers": answers,
+            "feedback": feedback,
+            "supplement_context": events,
+            "source_attempts": attempts,
+        }
 
 
 def get_request(request_id: str, *, db_path: str | Path | None = None) -> dict[str, Any] | None:
@@ -246,6 +375,7 @@ def _load_question_analyses(
     db: sqlite3.Connection, snapshot: QuestionSnapshot
 ) -> list[AgentAnalysis]:
     request_id = snapshot.task.request_id
+    _get_map_observation(db, request_id)
     row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
     if (
         row is None
@@ -352,7 +482,7 @@ def claim_question_resume(
         normalized = normalize_answers(snapshot.waiting, submission)
         if row["answers_json"] is not None:
             if AnswerSubmission.model_validate_json(row["answers_json"]) != normalized:
-                raise ValueError("이미 제출한 답변은 변경할 수 없습니다.")
+                raise AnswerConflictError("이미 제출한 답변은 변경할 수 없습니다.")
             if row["status"] not in {"running", "completed", "failed"}:
                 raise ValueError("답변과 요청 상태가 일치하지 않습니다.")
             return False
@@ -371,3 +501,86 @@ def claim_question_resume(
         if changed.rowcount != 1:
             raise ValueError("질문 재개를 선점하지 못했습니다.")
         return True
+
+
+def start_map_lookup(
+    task: AnalysisTask, plan: MapLookupPlan, *, db_path: str | Path | None = None
+) -> None:
+    task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT * FROM analysis_requests WHERE request_id=?", (task.request_id,)
+        ).fetchone()
+        if (
+            row is None
+            or row["status"] != "running"
+            or row["site_json"] is None
+            or Site.model_validate_json(row["site_json"]) != task.site
+            or row["radius_m"] != task.radius_m
+        ):
+            raise ValueError("지도 조회할 실행 요청과 위치가 다릅니다.")
+        db.execute(
+            "INSERT INTO map_observations "
+            "(request_id,plan_json,task_json,status,created_at) VALUES (?,?,?,'running',?)",
+            (task.request_id, plan.model_dump_json(), task.model_dump_json(), _now()),
+        )
+
+
+def complete_map_lookup(observation: MapObservation, *, db_path: str | Path | None = None) -> None:
+    observation = MapObservation.model_validate(observation)
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT m.*, r.status AS request_status FROM map_observations m "
+            "JOIN analysis_requests r USING(request_id) WHERE request_id=?",
+            (observation.request_id,),
+        ).fetchone()
+        if row is None or row["status"] != "running" or row["request_status"] != "running":
+            raise ValueError("실행 중인 지도 조회가 없습니다.")
+        task = AnalysisTask.model_validate_json(row["task_json"])
+        plan = MapLookupPlan.model_validate_json(row["plan_json"])
+        if (
+            observation.site != task.site
+            or observation.radius_m != task.radius_m
+            or [q.request for q in observation.data.queries.values()] != plan.unique_queries()
+        ):
+            raise ValueError("지도 관측의 위치·검색 대상이 다릅니다.")
+        db.execute(
+            "UPDATE map_observations SET status='completed', observation_json=?, "
+            "completed_at=? WHERE request_id=?",
+            (observation.model_dump_json(), _now(), observation.request_id),
+        )
+
+
+def _get_map_observation(db: sqlite3.Connection, request_id: str) -> MapObservation | None:
+    row = db.execute("SELECT * FROM map_observations WHERE request_id=?", (request_id,)).fetchone()
+    if row is None:
+        return None
+    if row["status"] != "completed":
+        raise ValueError("지도 관측 저장이 완료되지 않았습니다.")
+    observed = MapObservation.model_validate_json(row["observation_json"])
+    if observed.request_id != request_id:
+        raise ValueError("지도 관측 요청 ID가 다릅니다.")
+    return observed
+
+
+def get_map_observation(
+    request_id: str, *, db_path: str | Path | None = None
+) -> MapObservation | None:
+    with connect(db_path) as db:
+        return _get_map_observation(db, _text(request_id))
+
+
+def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dict[str, Any] | None:
+    """진행 중인 조회도 상태와 공개 관측만 반환합니다."""
+    with connect(db_path) as db:
+        row = db.execute(
+            "SELECT status, observation_json FROM map_observations WHERE request_id=?",
+            (_text(request_id),),
+        ).fetchone()
+        return (
+            {"status": row[0], "observation": json.loads(row[1]) if row[1] else None}
+            if row
+            else None
+        )

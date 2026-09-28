@@ -242,14 +242,211 @@ class QuestionSnapshot(Schema):
         return self
 
 
+# 지도 요청·관측은 세 분석의 실행 계약과 분리합니다.
+FacilityCode = Literal[
+    "MT1",
+    "CS2",
+    "PS3",
+    "SC4",
+    "AC5",
+    "PK6",
+    "OL7",
+    "SW8",
+    "BK9",
+    "CT1",
+    "AG2",
+    "PO3",
+    "AT4",
+    "AD5",
+    "FD6",
+    "CE7",
+    "HP8",
+    "PM9",
+]
+
+
+class MapQuery(Schema):
+    kind: Literal["industry", "infrastructure"]
+    industry_code: Text | None = None
+    facility_code: FacilityCode | None = None
+    query: Annotated[str, Field(min_length=1, max_length=50)] | None = None
+    why_needed: Text
+    expected_impact: Text
+
+    @model_validator(mode="after")
+    def check_target(self) -> Self:
+        from app.industries.lookup import find
+
+        if self.kind == "industry":
+            if (
+                not self.industry_code
+                or not find(self.industry_code)
+                or not self.query
+                or self.facility_code
+            ):
+                raise ValueError("유효한 업종 코드와 검색 표현만 필요합니다.")
+        elif not self.facility_code or self.industry_code or self.query:
+            raise ValueError("시설 조회에는 지원 시설 코드만 필요합니다.")
+        return self
+
+
+class MapLookupPlan(Schema):
+    action: Literal["map_lookup"]
+    queries: list[MapQuery] = Field(min_length=1, max_length=5)
+
+    def unique_queries(self) -> list[MapQuery]:
+        seen = set()
+        result = []
+        for query in self.queries:
+            key = (query.kind, query.industry_code, query.facility_code, query.query)
+            if key not in seen:
+                result.append(query)
+                seen.add(key)
+        return result
+
+
+class MapQueryResult(Schema):
+    request: MapQuery
+    status: Literal["ok", "error"]
+    method: Literal["keyword", "category"]
+    category_code: FacilityCode | None = None
+    total_count: Annotated[int, Field(ge=0)] | None = None
+    place_ids: list[Text] = Field(default_factory=list)
+    has_more: bool | None = None
+    error: Text | None = None
+
+    @model_validator(mode="after")
+    def check_result(self) -> Self:
+        if self.status == "error":
+            if not self.error or self.total_count is not None or self.place_ids:
+                raise ValueError("실패한 검색은 건수·장소 대신 오류를 반환합니다.")
+        elif self.error or self.total_count is None:
+            raise ValueError("성공한 검색에는 건수가 필요합니다.")
+        if (self.method == "category") != (self.category_code is not None):
+            raise ValueError("실제 조회 방식과 카테고리가 다릅니다.")
+        if len(set(self.place_ids)) != len(self.place_ids):
+            raise ValueError("검색 내 장소가 중복되었습니다.")
+        return self
+
+
+class MapPlace(Schema):
+    name: Text
+    category_name: str
+    category_code: str = ""
+    distance_m: Annotated[int, Field(ge=0)] | None = None
+    place_url: Text | None = None
+    mapping_status: Literal["mapped", "ambiguous", "unmapped", "not_applicable"] = "not_applicable"
+    industry_code: Text | None = None
+    mapping_method: Literal["llm"] | None = None
+    reason: Text | None = None
+
+    @model_validator(mode="after")
+    def check_mapping(self) -> Self:
+        from app.industries.lookup import find
+
+        if self.mapping_status == "mapped":
+            if (
+                not self.industry_code
+                or not find(self.industry_code)
+                or self.mapping_method != "llm"
+            ):
+                raise ValueError("매핑된 장소에는 유효한 업종 코드와 방법이 필요합니다.")
+        elif self.industry_code is not None:
+            raise ValueError("미확정 장소에 업종 코드를 지정할 수 없습니다.")
+        return self
+
+
+class MapIndustry(Schema):
+    name: Text
+    major: Text
+    place_ids: list[Text]
+    sampled_count: int = Field(ge=1)
+
+
+class MapData(Schema):
+    queries: dict[Text, MapQueryResult]
+    places: dict[Text, MapPlace] = Field(default_factory=dict)
+    industries: dict[Text, MapIndustry] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def check_links(self) -> Self:
+        from app.industries.lookup import find
+
+        referenced = {p for q in self.queries.values() for p in q.place_ids}
+        if referenced != set(self.places):
+            raise ValueError("검색과 장소의 참조가 다릅니다.")
+        expected: dict[str, set[str]] = {}
+        for place_id, place in self.places.items():
+            if place.industry_code:
+                expected.setdefault(place.industry_code, set()).add(place_id)
+        if set(expected) != set(self.industries):
+            raise ValueError("매핑 장소와 업종 집계가 다릅니다.")
+        for code, group in self.industries.items():
+            master = find(code)
+            if (
+                master is None
+                or group.name != master.name
+                or group.major != master.major_name
+                or set(group.place_ids) != expected[code]
+                or len(group.place_ids) != len(expected[code])
+                or group.sampled_count != len(expected[code])
+            ):
+                raise ValueError("업종 명칭 또는 표본 집계가 일치하지 않습니다.")
+        return self
+
+
+class MapObservation(Schema):
+    request_id: Text
+    observation_id: Text
+    site: Site
+    radius_m: RadiusMeters
+    queried_at: Text
+    master_version: Text
+    status: Literal["ok", "partial", "no_data", "error"]
+    data: MapData
+    warnings: list[Text] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_observation(self) -> Self:
+        from datetime import datetime, timedelta
+
+        stamp = datetime.fromisoformat(self.queried_at)
+        if stamp.utcoffset() != timedelta(0):
+            raise ValueError("지도 조회 시각은 UTC여야 합니다.")
+        queries = self.data.queries
+        if not 1 <= len(queries) <= 5 or set(queries) != {
+            f"q{i}" for i in range(1, len(queries) + 1)
+        }:
+            raise ValueError("지도 검색 식별자가 올바르지 않습니다.")
+        success = [q for q in queries.values() if q.status == "ok"]
+        if (not success) != (self.status == "error"):
+            raise ValueError("검색 성공 여부와 관측 상태가 다릅니다.")
+        if self.status == "no_data" and (
+            len(success) != len(queries)
+            or self.data.places
+            or any(q.total_count != 0 for q in success)
+        ):
+            raise ValueError("자료 없음은 모든 검색이 정상 0건이어야 합니다.")
+        if self.status == "ok" and (
+            len(success) != len(queries)
+            or not any(q.total_count for q in success)
+            or any(p.mapping_status in {"unmapped", "ambiguous"} for p in self.data.places.values())
+        ):
+            raise ValueError("불완전한 지도 관측은 partial이어야 합니다.")
+        return self
+
+
 # 최종판단 에이전트 입력
 class DecisionRequest(Schema):
     request_id: Text
     address: Text
     analyses: list[AgentAnalysis] = Field(min_length=1, max_length=3)
+    map_observation: MapObservation | None = None
 
     @model_validator(mode="after")
     def check_unique_sources(self) -> Self:
+        if self.map_observation and self.map_observation.request_id != self.request_id:
+            raise ValueError("지도 관측의 요청 ID가 다릅니다.")
         ids = [analysis.agent_id for analysis in self.analyses]
         if len(ids) != len(set(ids)):
             raise ValueError("같은 에이전트의 분석을 중복으로 전달할 수 없습니다.")
@@ -259,7 +456,7 @@ class DecisionRequest(Schema):
 
 
 class Evidence(Schema):
-    agent_id: AgentId
+    agent_id: AgentId | Literal["map_analysis"]
     path: Text = Field(description="해당 분석 자료 안의 필드 경로. 예: /industries/0")
 
 
@@ -309,3 +506,4 @@ class DecisionResult(DecisionContent):
     # 중재 자체는 ok/no_data만 내지만, 입력 분석이 일부 빠지면 리포트에는 partial로 나갑니다.
     status: Literal["ok", "partial", "no_data"]  # type: ignore[assignment]
     source_analyses: list[AgentAnalysis]
+    map_observation: MapObservation | None = None

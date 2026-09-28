@@ -1,11 +1,13 @@
 """분석 결과를 모아 검증된 최종 판단을 반환합니다."""
 
+import asyncio
 import inspect
 import json
 import re
 from collections.abc import Awaitable, Callable
+from difflib import get_close_matches
 from importlib.resources import files
-from typing import Any
+from typing import Any, cast
 
 from app.agents.floating_population.llm import SELECTABLE
 from app.industries import lookup
@@ -17,6 +19,8 @@ from app.schemas import (
     DecisionRequest,
     DecisionResult,
     LandlordAnswer,
+    MapLookupPlan,
+    MapObservation,
     QuestionField,
     QuestionPlan,
     Site,
@@ -32,8 +36,9 @@ GenerateDecision = Callable[
     DecisionContent
     | SupplementPlan
     | QuestionPlan
+    | MapLookupPlan
     | dict
-    | Awaitable[DecisionContent | SupplementPlan | QuestionPlan | dict],
+    | Awaitable[DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | dict],
 ]
 
 
@@ -58,6 +63,7 @@ class DecisionContractError(ValueError):
             "field": field,
             "reason": reason,
         }
+        self.failures: list[dict[str, Any]] = []
 
 
 async def analyze(
@@ -82,12 +88,18 @@ async def evaluate(
     question_fields: list[QuestionField] | None = None,
     user_answers: list[LandlordAnswer] | None = None,
     site: Site | None = None,
-) -> DecisionResult | SupplementPlan | QuestionPlan:
+    allow_map_lookup: bool = False,
+) -> DecisionResult | SupplementPlan | QuestionPlan | MapLookupPlan:
     """보완 가능 작업이 있을 때만 내부 보완 요청을 허용합니다."""
     request = DecisionRequest.model_validate(request)
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
     available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
     limitations = list(feedback or [])
+    observation = request.map_observation
+    if observation is not None:
+        limitations.extend(observation.warnings)
+        if observation.status in {"error", "partial"}:
+            limitations.append("지도 조회·매핑 일부 또는 전체 실패: 확인된 자료만 사용합니다.")
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
     if answers:
@@ -135,6 +147,12 @@ async def evaluate(
         else:
             prompt += "\n데이터 보완 요청은 금지됩니다."
         payload = json.loads(_decision_input(request))
+        if allow_map_lookup and observation is None:
+            prompt += "\n필요할 때만 지도 조회 JSON을 요청할 수 있습니다:\n" + json.dumps(
+                MapLookupPlan.model_json_schema(), ensure_ascii=False
+            )
+        else:
+            prompt += "\n지도 추가 조회는 금지됩니다."
         if allowed_questions:
             prompt += "\n필요한 경우에만 허용 항목으로 질문하세요. JSON 스키마:\n" + json.dumps(
                 QuestionPlan.model_json_schema(), ensure_ascii=False
@@ -142,7 +160,7 @@ async def evaluate(
             payload["question_fields"] = sorted(allowed_questions)
         else:
             prompt += (
-                "\n사용자 질문은 금지됩니다. 허용된 데이터 보완이 없으면 "
+                "\n사용자 질문은 금지됩니다. 허용된 데이터 보완·지도 조회가 없으면 "
                 "최종판단 또는 no_data를 반환하세요."
             )
         if answers:
@@ -157,12 +175,32 @@ async def evaluate(
             payload["supplement_context"] = [
                 item.model_dump(mode="json", exclude={"analysis"}) for item in supplement_context
             ]
+        failures: list[dict[str, Any]] = []
         for attempt in range(2):
-            produced = (generate or generate_decision)(
-                prompt, json.dumps(payload, ensure_ascii=False)
-            )
-            if inspect.isawaitable(produced):
-                produced = await produced
+            try:
+                produced = (generate or generate_decision)(
+                    prompt, json.dumps(payload, ensure_ascii=False)
+                )
+                if inspect.isawaitable(produced):
+                    produced = await produced
+            except (Exception, asyncio.CancelledError) as exc:
+                if failures:
+                    cast(Any, exc).failures = failures
+                raise
+            if attempt and (
+                isinstance(produced, (MapLookupPlan, QuestionPlan, SupplementPlan))
+                or isinstance(produced, dict)
+                and produced.get("action") in {"map_lookup", "ask_user", "supplement"}
+            ):
+                error = ValueError("교정 단계에서는 최종판단만 허용합니다.")
+                cast(Any, error).failures = failures
+                raise error
+            if isinstance(produced, MapLookupPlan) or (
+                isinstance(produced, dict) and produced.get("action") == "map_lookup"
+            ):
+                if attempt or not allow_map_lookup or observation is not None:
+                    raise ValueError("현재 단계에서는 지도 조회를 요청할 수 없습니다.")
+                return MapLookupPlan.model_validate(produced)
             if isinstance(produced, QuestionPlan) or (
                 isinstance(produced, dict) and produced.get("action") == "ask_user"
             ):
@@ -181,25 +219,37 @@ async def evaluate(
                 if not operations or attempt:
                     raise ValueError("현재 단계에서는 보완 요청을 허용하지 않습니다.")
                 return plan
-            content = DecisionContent.model_validate(produced)
+            try:
+                content = DecisionContent.model_validate(produced)
+            except ValueError as exc:
+                if failures:
+                    cast(Any, exc).failures = failures
+                raise
             try:
                 _validate_categories(content)
-                _validate_evidence(content, available)
+                _validate_evidence(content, available, observation)
                 break
             except DecisionContractError as exc:
+                correction = _correction_detail(exc, content, request)
+                correction["correction_attempt"] = attempt
+                failures.append(correction)
+                exc.failures = failures
                 if attempt:
                     raise
                 # 데이터 보완과 별개로 같은 자료의 판단 출력만 한 번 교정합니다.
                 payload.pop("supplement_operations", None)
                 payload.pop("question_fields", None)
-                payload["correction"] = exc.diagnostics
+                payload["correction"] = correction
                 payload["previous_decision"] = content.model_dump(mode="json")
                 prompt += (
-                    "\n이번 호출은 최종판단 출력 교정입니다. 보완·사용자 질문 요청은 금지됩니다. "
+                    "\n이번 호출은 최종판단 출력 교정입니다. "
+                    "보완·지도·사용자 질문 요청은 금지됩니다. "
                     "correction의 오류 위치·사유와 previous_decision을 확인하고 "
                     "현재 analyses의 실제 값으로 전체 최종판단을 다시 작성하세요. "
                     "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
                     "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
+                    "candidates는 실제 입력 경로 후보일 뿐 같은 의미나 업종을 보장하지 않습니다. "
+                    "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
                     "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
                 )
     else:
@@ -228,8 +278,60 @@ async def evaluate(
         request_id=request.request_id,
         address=request.address,
         source_analyses=request.analyses,
+        map_observation=observation,
         **payload,
     )
+
+
+def _correction_detail(
+    error: DecisionContractError, content: DecisionContent, request: DecisionRequest
+) -> dict[str, Any]:
+    """실패 경로와 실제 입력에서 찾은 후보만 전달하며 자동 치환하지 않습니다."""
+    detail: dict[str, Any] = dict(error.diagnostics)
+    parts = error.diagnostics["field"].split(".")
+    item = getattr(content, parts[0])[int(parts[1])]
+    detail["category"] = item.category.model_dump()
+    if parts[2] != "evidence":
+        return detail
+    evidence = item.evidence[int(parts[3])]
+    detail.update(agent_id=evidence.agent_id, invalid_path=evidence.path[:1000])
+    payload = json.loads(_decision_input(request))
+    data: Any = next(
+        (
+            s["data"]
+            for s in payload["analyses"]
+            if s["agent_id"] == evidence.agent_id and s["status"] in {"ok", "partial"}
+        ),
+        {},
+    )
+    if evidence.agent_id == "map_analysis" and request.map_observation:
+        data = request.map_observation.data.model_dump(mode="json")
+    paths: list[str] = []
+
+    def visit(value: Any, path: str = "", depth: int = 0) -> None:
+        if len(paths) >= 10000 or depth > 12:
+            return
+        if path and value is not None and value != "" and value != [] and value != {}:
+            if evidence.agent_id != "map_analysis" or _valid_map_evidence(
+                path, item.category.middle, request.map_observation
+            ):
+                paths.append(path)
+        children = (
+            value.items()
+            if isinstance(value, dict)
+            else enumerate(value)
+            if isinstance(value, list)
+            else ()
+        )
+        for key, child in children:
+            escaped = str(key).replace("~", "~0").replace("/", "~1")
+            visit(child, f"{path}/{escaped}", depth + 1)
+
+    visit(data)
+    detail["candidates"] = [
+        {"path": path} for path in get_close_matches(evidence.path, paths, n=8, cutoff=0.2)
+    ]
+    return detail
 
 
 def _decision_input(request: DecisionRequest) -> str:
@@ -275,7 +377,11 @@ def _validate_categories(content: DecisionContent) -> None:
         item.category.middle = industry.name
 
 
-def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysis]) -> None:
+def _validate_evidence(
+    content: DecisionContent,
+    sources: dict[str, AgentAnalysis],
+    observation: MapObservation | None = None,
+) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
     for index, item in enumerate(content.recommendations + content.not_recommended):
         field = (
@@ -285,6 +391,10 @@ def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysi
         )
         for evidence_index, evidence in enumerate(item.evidence):
             location = f"{field}.evidence.{evidence_index}"
+            if evidence.agent_id == "map_analysis":
+                if not _valid_map_evidence(evidence.path, item.category.middle, observation):
+                    raise DecisionContractError(location + ".path", "source_unavailable")
+                continue
             if evidence.agent_id not in sources:
                 raise DecisionContractError(location + ".agent_id", "source_unavailable")
             path = evidence.path
@@ -310,3 +420,48 @@ def _validate_evidence(content: DecisionContent, sources: dict[str, AgentAnalysi
                 and not value
             ):
                 raise DecisionContractError(location + ".path", "evidence_empty")
+
+
+def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
+    """지도 근거는 정상 조회의 허용 필드와 일치 업종만 인용합니다."""
+    if observation is None or observation.status == "error":
+        return False
+    parts = path.split("/")
+    if len(parts) != 4 or parts[0] or re.search(r"~(?![01])", path):
+        return False
+    _, section, key, field = [p.replace("~1", "/").replace("~0", "~") for p in parts]
+    industry = lookup.find_by_name(industry_name)
+    if industry is None:
+        return False
+    data = observation.data
+    if section == "industries":
+        return key == industry.code and key in data.industries and field == "sampled_count"
+    if section == "queries":
+        query = data.queries.get(key)
+        # 키워드 전체 검색 건수를 특정 업종 수로 인용하지 못하게 합니다.
+        return bool(
+            query
+            and query.status == "ok"
+            and field == "total_count"
+            and (
+                query.request.kind == "infrastructure"
+                or query.request.industry_code == industry.code
+                and query.total_count == 0
+            )
+        )
+    if section == "places":
+        place = data.places.get(key)
+        if place is None or field not in {"name", "distance_m"}:
+            return False
+        if field == "distance_m" and place.distance_m is None:
+            return False
+        return (
+            place.mapping_status == "mapped"
+            and place.industry_code == industry.code
+            or place.mapping_status == "not_applicable"
+            and any(
+                q.status == "ok" and q.request.kind == "infrastructure" and key in q.place_ids
+                for q in data.queries.values()
+            )
+        )
+    return False

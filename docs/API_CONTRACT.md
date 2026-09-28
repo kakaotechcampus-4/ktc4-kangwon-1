@@ -34,6 +34,12 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 | 필드 | 형 | 설명 |
 | --- | --- | --- |
 | `address` | string (1~200자) | 상세주소가 붙어 있어도 됩니다. 서버가 떼어 냅니다 |
+| `radius_m` | 양의 정수, 기본 500 | 공통 요청 반경. 실제 분석 범위는 각 결과의 scope로 확인 |
+| `allow_questions` | boolean, 기본 false | 임대인에게 선택적으로 질문할 수 있도록 허용 |
+| `with_map` | boolean, 기본 false | 필요할 때 카카오맵 조회 허용. 항상 실행하지는 않음 |
+
+기존 주소만 보내는 요청은 유지됩니다. 반경에 문자열·소수·boolean·0을 보내면 422입니다.
+실제 실행에는 등록된 분석 보완 도구를 전달합니다. 보완 요청 여부는 최종판단이 결정합니다.
 
 **질의 문자열**
 
@@ -42,6 +48,23 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 | `mock` | `false` | `true`면 외부 API·모델을 부르지 않고 고정 응답을 돌려줍니다 |
 
 **응답 200** — `DecisionResult`
+
+질문을 허용한 요청은 DecisionResult 대신 다음 WaitingForInput을 반환할 수 있습니다.
+HTTP 요청은 이때 종료되며 서버는 답변이 올 때까지 연결을 붙잡지 않습니다.
+
+```json
+{
+  "status": "waiting_for_input",
+  "request_id": "요청 ID",
+  "question_set_id": "질문 묶음 ID",
+  "questions": [{
+    "field": "floor",
+    "text": "공실은 몇 층인가요?",
+    "why_needed": "접근 조건을 확인해야 합니다.",
+    "expected_impact": "보행 접근성이 중요한 후보의 판단에 반영합니다."
+  }]
+}
+```
 
 이 객체가 별도 리포트 단계를 거치지 않는 최종 판단 결과입니다. 응답 헤더 `X-Request-ID`로
 같은 실행의 저장 상태를 조회할 수 있으며, 브라우저에서도 읽을 수 있도록 CORS에 노출합니다.
@@ -75,8 +98,45 @@ CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://
 ### `GET /api/v1/analyses/{request_id}`
 
 POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
-`pending` / `running` / `completed` / `failed`이며 `site`, `result`, `error`는 JSON 객체 또는 null입니다.
+`pending` / `running` / `waiting_for_input` / `completed` / `failed`이며 `site`, `result`, `error`는 JSON 객체 또는 null입니다.
 과거 저장 결과의 업종명은 현재 75업종 규칙으로 다시 검증하거나 변환하지 않습니다.
+
+추가 조회 필드:
+
+| 필드 | 의미 |
+| --- | --- |
+| `questions` | 저장된 WaitingForInput 또는 null. 완료 뒤에도 질문 이력으로 남음 |
+| `analyses` | `{attempt, analysis}` 목록. analysis는 AgentAnalysis 원본 |
+| `supplements` | 분석 보완 이벤트 목록 |
+| `map_status` | 지도 조회의 running / completed 또는 null |
+| `map_observation` | 저장된 지도 관측 또는 null. 진행 중에는 null |
+
+질문 입력창은 **요청 status가 waiting_for_input일 때만** 표시합니다.
+요청 상태 completed와 최종 결과의 ok / partial / no_data는 서로 다른 상태입니다.
+
+### `POST /api/v1/analyses/{request_id}/answers`
+
+```json
+{
+  "request_id": "요청 ID",
+  "question_set_id": "질문 묶음 ID",
+  "answers": [{"field": "floor", "status": "answered", "value": "1층"}]
+}
+```
+
+- 답변 상태는 answered / unknown / skipped. answered만 value가 필요합니다.
+- `answers: []`는 전부 건너뛰기입니다. 미제출 항목도 skipped로 처리됩니다.
+- 경로와 본문의 요청 ID가 다르면 422, 요청이 없으면 404입니다.
+- 질문 ID·항목 불일치, 이미 제출한 답변 변경, 처리 중·실패한 재개는 409입니다.
+- 같은 답변을 완료 후 재전송하면 저장된 최종 결과를 반환합니다.
+- 응답 200은 DecisionResult. 기존 자료로 최종판단만 재개하며 재조회하지 않습니다.
+- 대역 실행에서 시작했다면 답변에도 `?mock=true`를 유지하세요. 요청 간 실행 모드를 바꾸지 마세요.
+
+지도 관측은 최종 결과의 `map_observation`에도 포함됩니다. map_analysis 근거 경로는
+이 객체의 data 안에서 해석하며, 기본 세 분석 source_analyses와 구분합니다.
+
+정식 POST는 실행 완료 또는 질문 대기까지 기다리는 기존 방식입니다. 작업 큐·실시간 trace
+스트림은 제공하지 않습니다. 상세 trace는 로컬 validation_tool에서만 기록합니다.
 
 ## 화면이 알아야 할 것
 
@@ -114,6 +174,7 @@ POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 | 400 | 주소를 찾지 못함, 여러 후보, 입력 오류 | `{"detail": "주소를 확인해 주세요."}` |
 | 422 | 본문 형식이 틀림 (빈 주소 등) | FastAPI 기본 형식 |
 | 404 | GET 요청 ID가 없음 | `{"detail": "분석 요청을 찾을 수 없습니다."}` |
+| 409 | 질문 상태·답변 충돌 | 고정된 안전 메시지 |
 | 502 | 주소·외부 API·모델 실패 | 고정된 안전 메시지 |
 | 500 | 결과 계약·저장 또는 저장 결과 조회 실패 | 고정된 안전 메시지 |
 
@@ -132,6 +193,12 @@ MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:create_app --factory --relo
 또는 요청마다 `?mock=true`를 붙입니다. **목업도 진짜 오케스트레이터와 최종판단 에이전트를 그대로 지나가므로
 응답 형태가 실제와 같습니다.** 좌표는 고정이고 `address`만 요청한 값이 돌아옵니다.
 
+대역에서 with_map을 켜면 외부 호출 없는 0건 지도 관측을 만들고,
+allow_questions를 켜면 층수 질문을 고정 반환합니다. 이는 흐름 검증용이며 추천 품질 시험이 아닙니다.
+
+현재 API에는 사용자 인증·요청 소유권 검사가 없습니다. 이 변경을 공개 서비스 배포 준비 완료로
+보면 안 됩니다. 외부 공개 전 인증·권한·호출량 제한과 목업 옵션 정책을 별도 적용해야 합니다.
+
 ```ts
 const res = await fetch('http://127.0.0.1:8000/api/v1/analyses?mock=true', {
   method: 'POST',
@@ -140,6 +207,26 @@ const res = await fetch('http://127.0.0.1:8000/api/v1/analyses?mock=true', {
 });
 const result: DecisionResult = await res.json();
 ```
+
+## 실패한 최종판단 재시도
+
+`GET /api/v1/analyses/{request_id}`의 `completed_at`을 확인한 뒤 호출합니다.
+
+```http
+POST /api/v1/analyses/{request_id}/retry-decision
+Content-Type: application/json
+
+{"failed_at": "조회에서 받은 completed_at"}
+```
+
+- 저장된 분석·채택된 보완·지도 관측·제출 답변으로 **최종판단만** 실행합니다.
+- 분석 API는 다시 호출하지 않습니다. 실제 모드에서는 최종판단 LLM 비용이 발생합니다.
+- 상태나 실패 시각이 바뀌었거나 저장 입력이 불완전하면 `409`입니다. 중복 실행하지 않습니다.
+- 근거 검증은 동일합니다. 자동 교정은 한 번이며, 다시 실패하면 사용자 재시도가 필요합니다.
+- 조회의 `decision_failures`에 실패 시각·오류·잘못된 경로·실제 경로 후보를 보존합니다.
+  후보는 문자열 유사도로 제시할 뿐 업종·의미 일치를 보증하지 않습니다.
+- 과거 실패는 모델 경로가 저장되지 않아 진단 목록이 비어 있을 수 있습니다.
+- 대역 실행은 재시도에도 `?mock=true`를 유지하세요. 기존 API와 동일하게 인증 적용 전에는 외부 공개하지 않습니다.
 
 ## 타입을 옮길 때
 

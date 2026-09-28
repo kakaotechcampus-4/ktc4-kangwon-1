@@ -277,6 +277,9 @@ async def run_react(
     supplements: list[tools.SupplementTool] | None = None,
     on_supplement: OnSupplement | None = None,
     allow_questions: bool = False,
+    map_lookup: tools.MapLookup | None = None,
+    on_map_requested: tools.OnMapRequested | None = None,
+    on_map_completed: tools.OnMapCompleted | None = None,
     on_questions: Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]]
     | None = None,
 ) -> DecisionResult | WaitingForInput:
@@ -285,6 +288,8 @@ async def run_react(
     supplements = list(supplements or [])
     validate_tools(supplements)
     validate_timeout(agent_timeout)
+    if map_lookup is not None and not callable(map_lookup):
+        raise ValueError("지도 조회 함수가 필요합니다.")
     if type(allow_questions) is not bool or (allow_questions and not callable(on_questions)):
         raise ValueError("질문 허용 실행에는 저장 콜백이 필요합니다.")
     address = address.strip()
@@ -313,5 +318,8 @@ async def run_react(
         supplements=supplements,
         on_supplement=on_supplement,
         allow_questions=allow_questions,
+        map_lookup=map_lookup,
+        on_map_requested=on_map_requested,
+        on_map_completed=on_map_completed,
         on_questions=on_questions,
     )

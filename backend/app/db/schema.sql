@@ -64,6 +64,28 @@ CREATE TABLE IF NOT EXISTS supplement_events (
     CHECK (json_extract(event_json, '$.status') IS status)
 );
 
+CREATE TABLE IF NOT EXISTS map_observations (
+    request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
+    plan_json TEXT NOT NULL CHECK (json_valid(plan_json)),
+    task_json TEXT NOT NULL CHECK (json_valid(task_json)),
+    status TEXT NOT NULL CHECK (status IN ('running', 'completed')),
+    observation_json TEXT CHECK (observation_json IS NULL OR json_valid(observation_json)),
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    CHECK (json_extract(task_json, '$.request_id') IS request_id),
+    CHECK (observation_json IS NULL OR json_extract(observation_json, '$.request_id') IS request_id),
+    CHECK ((status = 'running' AND observation_json IS NULL AND completed_at IS NULL)
+        OR (status = 'completed' AND observation_json IS NOT NULL AND completed_at IS NOT NULL))
+);
+
+CREATE TABLE IF NOT EXISTS decision_failures (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    failed_at TEXT NOT NULL,
+    error_json TEXT NOT NULL CHECK (json_valid(error_json)),
+    diagnostics_json TEXT NOT NULL CHECK (json_valid(diagnostics_json)),
+    PRIMARY KEY (request_id, failed_at)
+);
+
 CREATE TABLE IF NOT EXISTS question_sessions (
     request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
     question_set_id TEXT NOT NULL UNIQUE CHECK (length(trim(question_set_id)) > 0),

@@ -148,7 +148,17 @@ async def complete_json(
         def invalid_constant(_value: str) -> None:
             raise ValueError
 
-        result = json.loads(message.content or "", parse_constant=invalid_constant)
+        def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result = dict(pairs)
+            if len(result) != len(pairs):
+                raise ValueError
+            return result
+
+        result = json.loads(
+            message.content or "",
+            parse_constant=invalid_constant,
+            object_pairs_hook=unique_object,
+        )
         if not isinstance(result, dict):
             raise ValueError
     except (ValueError, TypeError):

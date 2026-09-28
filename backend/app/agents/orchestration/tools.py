@@ -7,7 +7,17 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.address import resolve_site
-from app.schemas import AgentAnalysis, AnalysisTask, SupplementOperation
+from app.schemas import (
+    AgentAnalysis,
+    AnalysisTask,
+    MapLookupPlan,
+    MapObservation,
+    SupplementOperation,
+)
+
+MapLookup = Callable[[AnalysisTask, MapLookupPlan], Awaitable[MapObservation]]
+OnMapRequested = Callable[[AnalysisTask, MapLookupPlan], Awaitable[None]]
+OnMapCompleted = Callable[[MapObservation], Awaitable[None]]
 
 
 @dataclass(frozen=True)
