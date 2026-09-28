@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 from app.address import resolve_site
 from app.agents.decision import agent as decision
@@ -28,9 +28,13 @@ from app.schemas import (
     AgentAnalysis,
     AgentError,
     AnalysisTask,
+    AnswerSubmission,
+    DecisionRequest,
     DecisionResult,
+    QuestionSnapshot,
     Site,
     SupplementEvent,
+    WaitingForInput,
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
@@ -54,6 +58,124 @@ async def _settle[T](operation: Coroutine[Any, Any, T]) -> T:
         raise
 
 
+class AnalysisAlreadyRunningError(RuntimeError):
+    """동일 답변으로 이미 실행 중인 요청입니다."""
+
+
+class AnalysisAlreadyFailedError(RuntimeError):
+    """이미 실패한 답변 실행은 자동 재시도하지 않습니다."""
+
+
+async def resume_analysis(
+    submission: AnswerSubmission,
+    *,
+    db_path: str | Path | None = None,
+    generate: GenerateDecision | None = None,
+    settings: ExecutionSettings | None = None,
+    overall_timeout: float | None = None,
+) -> DecisionResult:
+    """답변을 한 번만 수락하고 저장된 분석으로 최종판단을 재개합니다."""
+    from app.agents.orchestration.graph import resume_graph
+
+    submission = AnswerSubmission.model_validate(submission)
+    settings = settings or ExecutionSettings.from_env()
+    db_path = db_path if db_path is not None else settings.db_path
+    if generate is None:
+        settings.decision_llm.require_credentials()
+        generate = partial(decision.generate_decision, settings=settings.decision_llm)
+    elif not callable(generate):
+        raise ValueError("최종판단 호출 함수가 필요합니다.")
+    timeout = settings.overall_timeout if overall_timeout is None else overall_timeout
+    validate_timeout(timeout)
+    owned = False
+
+    async def claim() -> None:
+        nonlocal owned
+        owned = await asyncio.to_thread(repository.claim_question_resume, submission, db_path=path)
+
+    try:
+        async with asyncio.timeout(timeout):
+            path = await _settle(asyncio.to_thread(initialize, db_path))
+            await _settle(claim())
+            if not owned:
+                row = await asyncio.to_thread(
+                    repository.get_request, submission.request_id, db_path=path
+                )
+                if row and row["status"] == "completed":
+                    return DecisionResult.model_validate_json(row["result_json"])
+                if row and row["status"] == "failed":
+                    raise AnalysisAlreadyFailedError(
+                        "이미 실패한 재개 요청입니다. 이력을 확인하세요."
+                    )
+                raise AnalysisAlreadyRunningError("동일 답변으로 최종판단을 실행 중입니다.")
+            snapshot = await asyncio.to_thread(
+                repository.get_question_snapshot, submission.request_id, db_path=path
+            )
+            answers = await asyncio.to_thread(
+                repository.get_question_answers, submission.request_id, db_path=path
+            )
+            if snapshot is None or answers is None:
+                raise ValueError("재개에 필요한 질문·답변 기록이 없습니다.")
+            analyses = await asyncio.to_thread(
+                repository.load_question_analyses, snapshot, db_path=path
+            )
+            rows = await asyncio.to_thread(
+                repository.list_supplement_events, submission.request_id, db_path=path
+            )
+            result = await resume_graph(
+                DecisionRequest(
+                    request_id=submission.request_id,
+                    address=snapshot.task.site.input_address,
+                    analyses=analyses,
+                ),
+                site=snapshot.task.site,
+                answers=answers.answers,
+                feedback=snapshot.feedback,
+                supplement_context=[
+                    SupplementEvent.model_validate_json(row["event_json"]) for row in rows
+                ],
+                generate=generate,
+            )
+            await _settle(
+                asyncio.to_thread(
+                    repository.complete_request,
+                    result,
+                    source_attempts={str(k): v for k, v in snapshot.source_attempts.items()},
+                    db_path=path,
+                )
+            )
+            return result
+    except (Exception, asyncio.CancelledError) as exc:
+        if owned:
+
+            def fail_if_running(error: BaseException = exc) -> None:
+                row = repository.get_request(submission.request_id, db_path=path)
+                if row and row["status"] == "running":
+                    code = (
+                        "ANALYSIS_CANCELLED"
+                        if isinstance(error, asyncio.CancelledError)
+                        else "ANALYSIS_TIMEOUT"
+                        if isinstance(error, TimeoutError)
+                        else "STORAGE_ERROR"
+                        if isinstance(error, sqlite3.Error)
+                        else "ANALYSIS_FAILED"
+                    )
+                    repository.fail_request(
+                        submission.request_id,
+                        AgentError(code=code, message="답변 후 최종판단 또는 저장에 실패했습니다."),
+                        db_path=path,
+                    )
+
+            try:
+                await _settle(asyncio.to_thread(fail_if_running))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                exc.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")
+        raise
+
+
+@overload
 async def execute_analysis(
     address: str,
     *,
@@ -69,9 +191,51 @@ async def execute_analysis(
     settings: ExecutionSettings | None = None,
     supplements: list[SupplementTool] | None = None,
     on_supplement: OnSupplement | None = None,
-) -> DecisionResult:
+    allow_questions: Literal[False] = False,
+) -> DecisionResult: ...
+
+
+@overload
+async def execute_analysis(
+    address: str,
+    *,
+    db_path: str | Path | None = None,
+    radius_m: int = DEFAULT_RADIUS_M,
+    resolve: Callable[[str], Awaitable[Site]] | None = None,
+    agents: AgentRegistry | None = None,
+    generate_action: GenerateAction | None = None,
+    generate: GenerateDecision | None = None,
+    request_id: str | None = None,
+    agent_timeout: float | None = None,
+    overall_timeout: float | None = None,
+    settings: ExecutionSettings | None = None,
+    supplements: list[SupplementTool] | None = None,
+    on_supplement: OnSupplement | None = None,
+    allow_questions: bool,
+) -> DecisionResult | WaitingForInput: ...
+
+
+async def execute_analysis(
+    address: str,
+    *,
+    db_path: str | Path | None = None,
+    radius_m: int = DEFAULT_RADIUS_M,
+    resolve: Callable[[str], Awaitable[Site]] | None = None,
+    agents: AgentRegistry | None = None,
+    generate_action: GenerateAction | None = None,
+    generate: GenerateDecision | None = None,
+    request_id: str | None = None,
+    agent_timeout: float | None = None,
+    overall_timeout: float | None = None,
+    settings: ExecutionSettings | None = None,
+    supplements: list[SupplementTool] | None = None,
+    on_supplement: OnSupplement | None = None,
+    allow_questions: bool = False,
+) -> DecisionResult | WaitingForInput:
     """요청·중간 결과·최종 결과를 저장하며 실패는 호출자에게 전달합니다."""
     radius_m = validate_radius(radius_m)
+    if type(allow_questions) is not bool:
+        raise ValueError("질문 허용 여부는 참 또는 거짓이어야 합니다.")
     supplements = list(supplements or [])
     validate_tools(supplements)
     if not isinstance(address, str) or not address.strip():
@@ -121,6 +285,25 @@ async def execute_analysis(
         if on_supplement is not None:
             await on_supplement(event.model_copy(deep=True))
 
+    async def save_questions(
+        task: AnalysisTask, waiting: WaitingForInput, done: bool, feedback: list[str]
+    ) -> None:
+        snapshot = QuestionSnapshot(
+            task=task,
+            waiting=waiting,
+            source_attempts=source_attempts,
+            supplement_done=done,
+            feedback=feedback,
+        )
+
+        async def persist() -> None:
+            nonlocal owned
+            await asyncio.to_thread(repository.save_question_snapshot, snapshot, db_path=path)
+            # 대기 이후 실행은 답변을 선점한 호출이 소유합니다.
+            owned = False
+
+        await _settle(persist())
+
     try:
         async with asyncio.timeout(overall_timeout):
             path = await _settle(asyncio.to_thread(initialize, db_path))
@@ -140,7 +323,11 @@ async def execute_analysis(
                 agent_timeout=agent_timeout,
                 supplements=supplements,
                 on_supplement=save_supplement,
+                allow_questions=allow_questions,
+                on_questions=save_questions if allow_questions else None,
             )
+            if isinstance(result, WaitingForInput):
+                return result
             await _settle(
                 asyncio.to_thread(
                     repository.complete_request,

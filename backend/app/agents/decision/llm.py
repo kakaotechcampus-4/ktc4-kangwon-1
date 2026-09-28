@@ -4,18 +4,20 @@ from pydantic import ValidationError
 
 from app.llm import client
 from app.llm.config import LLMSettings
-from app.schemas import DecisionContent, SupplementPlan
+from app.schemas import DecisionContent, QuestionPlan, SupplementPlan
 
 
 async def generate_decision(
     system_prompt: str, input_json: str, settings: LLMSettings | None = None
-) -> DecisionContent | SupplementPlan:
+) -> DecisionContent | SupplementPlan | QuestionPlan:
     payload = await client.complete_json(
         system_prompt, input_json, settings or LLMSettings.from_env("DECISION")
     )
     schema = (
         SupplementPlan
         if isinstance(payload, dict) and payload.get("action") == "supplement"
+        else QuestionPlan
+        if isinstance(payload, dict) and payload.get("action") == "ask_user"
         else DecisionContent
     )
     try:

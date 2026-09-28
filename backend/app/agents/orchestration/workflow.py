@@ -35,6 +35,7 @@ from app.schemas import (
     DecisionResult,
     Site,
     SupplementOperation,
+    WaitingForInput,
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
@@ -275,12 +276,17 @@ async def run_react(
     agent_timeout: float = 180.0,
     supplements: list[tools.SupplementTool] | None = None,
     on_supplement: OnSupplement | None = None,
-) -> DecisionResult:
+    allow_questions: bool = False,
+    on_questions: Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]]
+    | None = None,
+) -> DecisionResult | WaitingForInput:
     """입력 계약을 검증한 뒤 LangGraph로 도구 선택·판단·보완을 실행합니다."""
     radius_m = validate_radius(radius_m)
     supplements = list(supplements or [])
     validate_tools(supplements)
     validate_timeout(agent_timeout)
+    if type(allow_questions) is not bool or (allow_questions and not callable(on_questions)):
+        raise ValueError("질문 허용 실행에는 저장 콜백이 필요합니다.")
     address = address.strip()
     if not address:
         raise ValueError("주소가 비어 있습니다.")
@@ -306,4 +312,6 @@ async def run_react(
         agent_timeout=agent_timeout,
         supplements=supplements,
         on_supplement=on_supplement,
+        allow_questions=allow_questions,
+        on_questions=on_questions,
     )

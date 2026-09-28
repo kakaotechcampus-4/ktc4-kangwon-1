@@ -5,13 +5,13 @@ CREATE TABLE IF NOT EXISTS analysis_requests (
     input_address TEXT NOT NULL CHECK (length(trim(input_address)) > 0),
     radius_m INTEGER CHECK (radius_m IS NULL OR (typeof(radius_m) = 'integer' AND radius_m > 0)),
     site_json TEXT CHECK (site_json IS NULL OR json_valid(site_json)),
-    status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'waiting_for_input')),
     result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
     error_json TEXT CHECK (error_json IS NULL OR json_valid(error_json)),
     created_at TEXT NOT NULL,
     completed_at TEXT,
     CHECK (
-        (status IN ('pending', 'running') AND completed_at IS NULL
+        (status IN ('pending', 'running', 'waiting_for_input') AND completed_at IS NULL
             AND result_json IS NULL AND error_json IS NULL)
         OR (status = 'completed' AND completed_at IS NOT NULL
             AND result_json IS NOT NULL AND error_json IS NULL)
@@ -62,4 +62,21 @@ CREATE TABLE IF NOT EXISTS supplement_events (
     CHECK (json_extract(event_json, '$.request_id') IS request_id),
     CHECK (json_extract(event_json, '$.request.agent_id') IS agent_id),
     CHECK (json_extract(event_json, '$.status') IS status)
+);
+
+CREATE TABLE IF NOT EXISTS question_sessions (
+    request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
+    question_set_id TEXT NOT NULL UNIQUE CHECK (length(trim(question_set_id)) > 0),
+    snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+    answers_json TEXT CHECK (answers_json IS NULL OR json_valid(answers_json)),
+    created_at TEXT NOT NULL,
+    answered_at TEXT,
+    CHECK ((answers_json IS NULL) = (answered_at IS NULL)),
+    CHECK (json_extract(snapshot_json, '$.task.request_id') IS request_id),
+    CHECK (json_extract(snapshot_json, '$.waiting.request_id') IS request_id),
+    CHECK (json_extract(snapshot_json, '$.waiting.question_set_id') IS question_set_id),
+    CHECK (answers_json IS NULL OR (
+        json_extract(answers_json, '$.request_id') IS request_id
+        AND json_extract(answers_json, '$.question_set_id') IS question_set_id
+    ))
 );

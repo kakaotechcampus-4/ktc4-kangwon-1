@@ -142,6 +142,106 @@ class SupplementEvent(Schema):
         return self
 
 
+# 임대인에게 선택적으로 요청하는 정보
+QuestionField = Literal[
+    "floor", "exclusive_area", "space_condition", "existing_facilities", "industry_preferences"
+]
+QUESTION_FIELDS = get_args(QuestionField)
+
+
+class LandlordQuestion(Schema):
+    field: QuestionField
+    text: Text
+    why_needed: Text
+    expected_impact: Text
+
+
+class QuestionPlan(Schema):
+    action: Literal["ask_user"]
+    questions: list[LandlordQuestion] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def check_fields(self) -> Self:
+        if len({q.field for q in self.questions}) != len(self.questions):
+            raise ValueError("같은 항목을 중복 질문할 수 없습니다.")
+        return self
+
+
+class WaitingForInput(Schema):
+    status: Literal["waiting_for_input"] = "waiting_for_input"
+    request_id: Text
+    question_set_id: Text
+    questions: list[LandlordQuestion] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def check_questions(self) -> Self:
+        QuestionPlan(action="ask_user", questions=self.questions)
+        return self
+
+
+class LandlordAnswer(Schema):
+    field: QuestionField
+    status: Literal["answered", "unknown", "skipped"]
+    value: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
+
+    @model_validator(mode="after")
+    def check_value(self) -> Self:
+        if (self.status == "answered") != (self.value is not None):
+            raise ValueError("답변 완료인 항목에만 답변 내용을 작성하세요.")
+        return self
+
+
+class AnswerSubmission(Schema):
+    request_id: Text
+    question_set_id: Text
+    answers: list[LandlordAnswer] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def check_fields(self) -> Self:
+        if len({a.field for a in self.answers}) != len(self.answers):
+            raise ValueError("같은 항목에 중복 답변할 수 없습니다.")
+        return self
+
+
+def normalize_answers(waiting: WaitingForInput, submission: AnswerSubmission) -> AnswerSubmission:
+    """누락 답변은 건너뛰기로 확정하고 순서와 무관하게 같은 제출로 비교합니다."""
+    waiting = WaitingForInput.model_validate(waiting)
+    submission = AnswerSubmission.model_validate(submission)
+    if (waiting.request_id, waiting.question_set_id) != (
+        submission.request_id,
+        submission.question_set_id,
+    ):
+        raise ValueError("질문과 답변의 식별자가 일치하지 않습니다.")
+    fields = {q.field for q in waiting.questions}
+    answers = {a.field: a for a in submission.answers}
+    if not set(answers) <= fields:
+        raise ValueError("요청하지 않은 항목에는 답변할 수 없습니다.")
+    return AnswerSubmission(
+        request_id=waiting.request_id,
+        question_set_id=waiting.question_set_id,
+        answers=[answers.get(f, LandlordAnswer(field=f, status="skipped")) for f in sorted(fields)],
+    )
+
+
+class QuestionSnapshot(Schema):
+    """질문 경계의 내부 저장 계약입니다. 분석 본문은 저장된 차수로 참조합니다."""
+
+    version: Literal[1] = 1
+    task: AnalysisTask
+    waiting: WaitingForInput
+    source_attempts: dict[AgentId, Annotated[int, Field(strict=True, gt=0)]]
+    supplement_done: bool
+    feedback: list[Text]
+
+    @model_validator(mode="after")
+    def check_references(self) -> Self:
+        if self.task.request_id != self.waiting.request_id:
+            raise ValueError("작업과 질문의 요청 ID가 다릅니다.")
+        if set(self.source_attempts) != set(AGENT_IDS):
+            raise ValueError("세 분석의 실행 차수가 필요합니다.")
+        return self
+
+
 # 최종판단 에이전트 입력
 class DecisionRequest(Schema):
     request_id: Text

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
 from typing import Any, Literal, TypedDict
@@ -14,14 +15,18 @@ from openai.types.chat import ChatCompletionMessage
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
 from app.schemas import (
+    QUESTION_FIELDS,
     AgentAnalysis,
     AnalysisTask,
     DecisionRequest,
     DecisionResult,
+    LandlordAnswer,
+    QuestionPlan,
     Site,
     SupplementEvent,
     SupplementOperation,
     SupplementPlan,
+    WaitingForInput,
 )
 
 from . import llm, tools, workflow
@@ -39,7 +44,7 @@ class GraphState(TypedDict, total=False):
     call_id: str
     task: AnalysisTask
     analyses: list[AgentAnalysis]
-    outcome: DecisionResult | SupplementPlan
+    outcome: DecisionResult | SupplementPlan | QuestionPlan | WaitingForInput
     operations: list[SupplementOperation]
     supplement_done: bool
     feedback: list[str]
@@ -71,7 +76,10 @@ async def run_graph(
     agent_timeout: float,
     supplements: list[tools.SupplementTool],
     on_supplement: OnSupplement | None,
-) -> DecisionResult:
+    allow_questions: bool = False,
+    on_questions: Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]]
+    | None = None,
+) -> DecisionResult | WaitingForInput:
     """검증된 입력으로 실행합니다. 외부 진입점은 workflow.run_react입니다."""
     choose = generate_action or llm.generate_action
 
@@ -175,7 +183,7 @@ async def run_graph(
             address=task.site.input_address,
             analyses=state["analyses"],
         )
-        if not supplements:
+        if not supplements and not allow_questions:
             return {"outcome": await decision.analyze(request, generate=generate)}
         if state["supplement_done"]:
             outcome = await decision.evaluate(
@@ -183,6 +191,8 @@ async def run_graph(
                 generate=generate,
                 feedback=state["feedback"],
                 supplement_context=state["supplement_context"],
+                question_fields=list(QUESTION_FIELDS) if allow_questions else None,
+                site=task.site if allow_questions else None,
             )
             if isinstance(outcome, SupplementPlan):
                 raise ValueError("보완 라운드를 추가 실행할 수 없습니다.")
@@ -196,8 +206,28 @@ async def run_graph(
                 sources[tool.operation.agent_id].model_copy(deep=True),
             )
         ]
-        outcome = await decision.evaluate(request, generate=generate, operations=operations)
+        outcome = await decision.evaluate(
+            request,
+            generate=generate,
+            operations=operations,
+            question_fields=list(QUESTION_FIELDS) if allow_questions else None,
+            site=task.site if allow_questions else None,
+        )
         return {"outcome": outcome, "operations": operations}
+
+    async def ask_user(state: GraphState) -> GraphState:
+        plan = state["outcome"]
+        if not allow_questions or on_questions is None or not isinstance(plan, QuestionPlan):
+            raise ValueError("질문을 저장할 수 없는 실행입니다.")
+        waiting = WaitingForInput(
+            request_id=state["task"].request_id,
+            question_set_id=uuid.uuid4().hex,
+            questions=plan.questions,
+        )
+        await on_questions(
+            state["task"], waiting, state["supplement_done"], state.get("feedback", [])
+        )
+        return {"outcome": waiting}
 
     async def supplement_node(state: GraphState) -> GraphState:
         plan = state["outcome"]
@@ -230,6 +260,7 @@ async def run_graph(
     builder.add_node("run_analyses", run_analyses)
     builder.add_node("evaluate_decision", evaluate_decision)
     builder.add_node("execute_supplement", supplement_node)
+    builder.add_node("ask_user", ask_user)
     builder.add_edge(START, "choose_action")
     builder.add_conditional_edges(
         "choose_action",
@@ -243,10 +274,17 @@ async def run_graph(
     builder.add_edge("run_analyses", "choose_action")
     builder.add_conditional_edges(
         "evaluate_decision",
-        lambda state: "supplement" if isinstance(state["outcome"], SupplementPlan) else "final",
-        {"supplement": "execute_supplement", "final": END},
+        lambda state: (
+            "supplement"
+            if isinstance(state["outcome"], SupplementPlan)
+            else "question"
+            if isinstance(state["outcome"], QuestionPlan)
+            else "final"
+        ),
+        {"supplement": "execute_supplement", "question": "ask_user", "final": END},
     )
     builder.add_edge("execute_supplement", "evaluate_decision")
+    builder.add_edge("ask_user", END)
     graph = builder.compile()
     initial: GraphState = {
         "messages": [
@@ -269,6 +307,40 @@ async def run_graph(
     with tracing_context(enabled=False):
         final = await graph.ainvoke(initial, config={"recursion_limit": 32})
     result = final["outcome"]
-    if not isinstance(result, DecisionResult):
+    if not isinstance(result, (DecisionResult, WaitingForInput)):
         raise ValueError("그래프가 최종판단 결과를 반환하지 않았습니다.")
     return result
+
+
+async def resume_graph(
+    request: DecisionRequest,
+    *,
+    site: Site,
+    answers: list[LandlordAnswer],
+    feedback: list[str],
+    supplement_context: list[SupplementEvent],
+    generate: GenerateDecision | None = None,
+) -> DecisionResult:
+    """저장된 분석으로 판단만 실행합니다. 주소·분석·보완 노드는 등록하지 않습니다."""
+    request = DecisionRequest.model_validate(request)
+
+    async def evaluate_decision(state: GraphState) -> GraphState:
+        outcome = await decision.evaluate(
+            request,
+            site=site,
+            user_answers=answers,
+            feedback=feedback,
+            supplement_context=supplement_context,
+            generate=generate,
+        )
+        if not isinstance(outcome, DecisionResult):
+            raise ValueError("답변 후에는 최종판단만 허용합니다.")
+        return {"outcome": outcome}
+
+    builder = StateGraph(GraphState)
+    builder.add_node("evaluate_decision", evaluate_decision)
+    builder.add_edge(START, "evaluate_decision")
+    builder.add_edge("evaluate_decision", END)
+    with tracing_context(enabled=False):
+        result = await builder.compile().ainvoke({})
+    return result["outcome"]

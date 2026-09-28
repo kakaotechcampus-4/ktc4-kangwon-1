@@ -1,17 +1,23 @@
 """요청과 검증된 분석 결과를 짧은 트랜잭션으로 저장합니다."""
 
 import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from app.schemas import (
+    AGENT_IDS,
     AgentAnalysis,
     AgentError,
     AnalysisTask,
+    AnswerSubmission,
     DecisionRequest,
     DecisionResult,
+    QuestionSnapshot,
+    Site,
     SupplementEvent,
+    normalize_answers,
     validate_radius,
 )
 
@@ -234,3 +240,134 @@ def list_supplement_events(
                 (_text(request_id),),
             ).fetchall()
         ]
+
+
+def _load_question_analyses(
+    db: sqlite3.Connection, snapshot: QuestionSnapshot
+) -> list[AgentAnalysis]:
+    request_id = snapshot.task.request_id
+    row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
+    if (
+        row is None
+        or row["site_json"] is None
+        or (
+            Site.model_validate_json(row["site_json"]) != snapshot.task.site
+            or row["radius_m"] != snapshot.task.radius_m
+        )
+    ):
+        raise ValueError("저장된 위치·반경과 질문 작업이 다릅니다.")
+    events = [
+        SupplementEvent.model_validate_json(r[0])
+        for r in db.execute(
+            "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id", (request_id,)
+        )
+    ]
+    expected = dict.fromkeys(AGENT_IDS, 1)
+    for event in events:
+        if event.adopted:
+            expected[event.request.agent_id] = 2
+    if snapshot.source_attempts != expected or snapshot.supplement_done != bool(events):
+        raise ValueError("채택된 분석 차수 또는 보완 이력이 다릅니다.")
+    analyses = []
+    for agent_id in AGENT_IDS:
+        source = db.execute(
+            "SELECT analysis_json FROM agent_results "
+            "WHERE request_id=? AND agent_id=? AND attempt=?",
+            (request_id, agent_id, snapshot.source_attempts[agent_id]),
+        ).fetchone()
+        if source is None:
+            raise ValueError("질문이 참조한 분석 이력이 없습니다.")
+        analysis = AgentAnalysis.model_validate_json(source[0])
+        if (analysis.request_id, analysis.agent_id) != (request_id, agent_id):
+            raise ValueError("저장된 분석 식별자가 일치하지 않습니다.")
+        analyses.append(analysis)
+    return analyses
+
+
+def load_question_analyses(
+    snapshot: QuestionSnapshot, *, db_path: str | Path | None = None
+) -> list[AgentAnalysis]:
+    snapshot = QuestionSnapshot.model_validate(snapshot)
+    with connect(db_path) as db:
+        return _load_question_analyses(db, snapshot)
+
+
+def save_question_snapshot(
+    snapshot: QuestionSnapshot, *, db_path: str | Path | None = None
+) -> None:
+    snapshot = QuestionSnapshot.model_validate(snapshot)
+    request_id = snapshot.task.request_id
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        _load_question_analyses(db, snapshot)
+        db.execute(
+            "INSERT INTO question_sessions(request_id,question_set_id,snapshot_json,created_at) "
+            "VALUES (?,?,?,?)",
+            (request_id, snapshot.waiting.question_set_id, snapshot.model_dump_json(), _now()),
+        )
+        changed = db.execute(
+            "UPDATE analysis_requests SET status='waiting_for_input' "
+            "WHERE request_id=? AND status='running'",
+            (request_id,),
+        )
+        if changed.rowcount != 1:
+            raise ValueError("실행 중인 요청만 질문 대기로 전환할 수 있습니다.")
+
+
+def get_question_snapshot(
+    request_id: str, *, db_path: str | Path | None = None
+) -> QuestionSnapshot | None:
+    with connect(db_path) as db:
+        row = db.execute(
+            "SELECT snapshot_json FROM question_sessions WHERE request_id=?", (_text(request_id),)
+        ).fetchone()
+        return QuestionSnapshot.model_validate_json(row[0]) if row else None
+
+
+def get_question_answers(
+    request_id: str, *, db_path: str | Path | None = None
+) -> AnswerSubmission | None:
+    with connect(db_path) as db:
+        row = db.execute(
+            "SELECT answers_json FROM question_sessions WHERE request_id=?", (_text(request_id),)
+        ).fetchone()
+        return AnswerSubmission.model_validate_json(row[0]) if row and row[0] else None
+
+
+def claim_question_resume(
+    submission: AnswerSubmission, *, db_path: str | Path | None = None
+) -> bool:
+    """한 호출만 재개를 소유합니다. 확정한 답변은 이후 변경하지 않습니다."""
+    submission = AnswerSubmission.model_validate(submission)
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT q.*, r.status FROM question_sessions q "
+            "JOIN analysis_requests r USING(request_id) WHERE request_id=?",
+            (submission.request_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("질문 대기 기록이 없습니다.")
+        snapshot = QuestionSnapshot.model_validate_json(row["snapshot_json"])
+        normalized = normalize_answers(snapshot.waiting, submission)
+        if row["answers_json"] is not None:
+            if AnswerSubmission.model_validate_json(row["answers_json"]) != normalized:
+                raise ValueError("이미 제출한 답변은 변경할 수 없습니다.")
+            if row["status"] not in {"running", "completed", "failed"}:
+                raise ValueError("답변과 요청 상태가 일치하지 않습니다.")
+            return False
+        if row["status"] != "waiting_for_input":
+            raise ValueError("질문 대기 중인 요청만 재개할 수 있습니다.")
+        _load_question_analyses(db, snapshot)
+        db.execute(
+            "UPDATE question_sessions SET answers_json=?, answered_at=? WHERE request_id=?",
+            (normalized.model_dump_json(), _now(), submission.request_id),
+        )
+        changed = db.execute(
+            "UPDATE analysis_requests SET status='running' "
+            "WHERE request_id=? AND status='waiting_for_input'",
+            (submission.request_id,),
+        )
+        if changed.rowcount != 1:
+            raise ValueError("질문 재개를 선점하지 못했습니다.")
+        return True
