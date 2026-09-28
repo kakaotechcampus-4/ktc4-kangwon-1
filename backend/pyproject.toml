@@ -34,7 +34,7 @@ include = ["app*"]
 "app.agents.decision" = ["prompt.md"]
 "app.agents.orchestration" = ["prompt.md"]
 "app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
-"app.agents.floating_population" = ["prompt.md"]
+"app.agents.floating_population" = ["prompt.md", "data/*.csv"]
 "app.agents.business_lifecycle" = ["prompt.md", "data/trdar_area/*"]
 "app.industries" = ["data/*.csv", "data/*.json"]
 

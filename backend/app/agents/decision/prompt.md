@@ -4,7 +4,7 @@
 
 ## 입력 해석
 
-- `floating_population`: 유동인구 분석입니다.
+- `floating_population`: 유동·상주·직장 인구와 인구 종합 분석입니다. 과거 입력은 유동인구만 있을 수 있습니다.
 - `business_lifecycle`: 개업·폐업 분석입니다.
 - `commercial_area`: 상권 분석입니다.
 - 각 `data`의 내부 구조는 다를 수 있습니다. 아래 필드 설명은 현재 출력 구조의 안내이며, 과거·목업 입력을 포함해 이번 입력의 실제 키, 설명, 단위와 값을 우선합니다. 없는 필드를 안내된 이름으로 만들어내거나 이름을 바꿔 인용하지 않습니다.
@@ -34,6 +34,18 @@
 - trend가 있으면 실제 period_code 간격과 집계 상권 수를 확인합니다. 전년 동기는 같은 분기끼리일 때만 우선 참고하고, 결측 분기나 표본 변화가 있으면 추세 해석을 제한합니다.
 - radius_profile은 면적 안분 추정치입니다. population과 같은 반경이라도 집계 방법이 다르므로 모순으로 단정하거나 합산하지 않습니다. 반경별 누적 값도 서로 더하지 않습니다.
 - selection에서 제외된 블록은 조회 결과가 0인 것이 아닙니다. 남아 있는 값만 인용합니다.
+
+## 상주·직장 인구와 종합 해석
+
+- resident는 상주인구, worker는 직장인구입니다. count는 인구 수이고 population.daily_avg는 반복 통행을 포함한 명/일입니다. 세 값을 더해 총인구·고객 수로 만들지 않습니다. 상주·직장 인구도 중복 여부를 알 수 없으므로 서로 더하지 않습니다.
+- resident·worker는 동봉된 CSV 스냅샷입니다. 각 블록의 period_code·period와 sources, warnings를 확인합니다. 최상위 scope.period는 유동인구 기준이므로 모든 인구 자료의 기간으로 대체하지 않습니다. 공표 분기만으로 최신 현장 실측값이라고 단정하지 않습니다.
+- covered_trade_areas와 trade_area_count를 비교합니다. 일부 상권만 집계됐거나 블록이 null이면 나머지 자료만 사용하고 한계에 남깁니다. null을 인구 0명으로 바꾸거나, 파일 누락·상권 자료 없음·관측된 0을 동일하게 취급하지 않습니다.
+- resident의 persons_per_household는 평균 가구원 수입니다. 이것만으로 1인 가구 비중·가족 구성·구매력을 확정하지 않습니다. worker의 연령 분포도 특정 직업이나 소비 성향의 직접 증거는 아닙니다.
+- population_summary는 세 종류의 자료가 모두 있는 상권 교집합을 기준으로 합니다. basis_trade_areas를 확인하며 resident·worker 전체 합계와 분모가 같다고 가정하지 않습니다. basis_trade_areas가 0이거나 비율이 null이면 구성 판단을 보류합니다.
+- visitor_multiple은 해당 교집합의 일평균 통행량/상주인구 배수입니다. 외부 방문객 비중·고유 방문자 수·구매 전환율이 아닙니다. worker_to_resident_ratio는 직장/상주 인구 비율이고 worker_to_resident_index는 그 비율의 서울 기준 대비 배수입니다.
+- composition은 composition_rule에 따른 규칙 기반 구분입니다. 독립적인 관측 자료나 업종 성공 가능성이 아닙니다. 관련 분기가 다르면 비율은 서로 다른 시점을 비교한 참고값으로만 다루고 현재 인구 구성으로 단정하지 않습니다.
+- interpretation은 코드가 만든 요약이며 추가 관측 자료가 아닙니다. text를 그대로 결론으로 복사하지 말고 path의 실제 수치·단위·기간을 확인합니다. 요약과 원지표를 독립 근거로 중복 가산하지 않습니다. 평균 가구원 수에서 가구 유형을 단정한 문구 등은 위 해석 제한을 우선합니다.
+- 새 블록도 agent_id는 floating_population입니다. 인용 시 /resident/count, /worker/count 등 실제 값의 경로를 사용합니다. interpretation의 path는 값의 위치를 안내하는 문자열이므로 /interpretation/0/path 자체를 인구 수치의 근거로 인용하지 않습니다. 제외된 블록이나 null을 가리키는 요약은 사용하지 않습니다.
 
 ## 상권·경쟁 해석
 
