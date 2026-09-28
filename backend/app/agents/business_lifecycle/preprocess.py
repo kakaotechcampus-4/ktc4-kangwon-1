@@ -99,26 +99,29 @@ def preprocess_business_lifecycle_data(
         observed = groups.get(code, {})
         sources = INDUSTRY_TO_SEOUL.get(code, ())
         quarterly: dict[str, dict[str, float]] = {}
+        complete_quarters = 0
         for quarter in quarters:
             source_rows = observed.get(quarter, {})
-            # 일부 원천이 빠지면 업종 전체 합계라고 주장할 수 없습니다.
+            # 관측된 원천만 합산하고, 업종 전체를 관측했는지는 별도로 보존합니다.
             complete_sources = set(source_rows) == set(sources) and bool(sources)
             quarterly[quarter] = {
                 field: (
-                    sum(row[field] for row in source_rows.values())
-                    if complete_sources
-                    else float("nan")
+                    sum(row[field] for row in source_rows.values()) if source_rows else float("nan")
                 )
                 for field in ("similr_induty_stor_co", "opbiz_stor_co", "clsbiz_stor_co")
             }
+            if complete_sources and all(pd.notna(v) for v in quarterly[quarter].values()):
+                complete_quarters += 1
 
         def total(
             field: str,
             period: list[str],
             values: dict[str, dict[str, float]] = quarterly,
+            observed_codes: tuple[str, ...] = tuple(observed),
         ) -> float:
-            # sum은 NaN을 전파하므로 일부 결측을 0으로 보충하지 않습니다.
-            return sum(values[q][field] for q in period)
+            # 없는 분기는 제외하되, 관측 행의 결측 필드는 NaN으로 남깁니다.
+            present = [q for q in period if q in observed_codes]
+            return sum(values[q][field] for q in present) if present else float("nan")
 
         exposure = total("similr_induty_stor_co", quarters)
         opened = total("opbiz_stor_co", quarters)
@@ -132,7 +135,7 @@ def preprocess_business_lifecycle_data(
             total("clsbiz_stor_co", quarters[:4]),
             total("similr_induty_stor_co", quarters[:4]),
         )
-        complete = all(pd.notna(v) for values in quarterly.values() for v in values.values())
+        complete = complete_quarters == quarter_count
         if code in UNSUPPORTED_SERVICE_INDUSTRIES:
             status, reason = "unsupported", "서울시 생활밀접업종 데이터에 직접 대응 업종 없음"
         elif not observed:
@@ -143,7 +146,9 @@ def preprocess_business_lifecycle_data(
         elif not complete:
             status, reason = (
                 "incomplete",
-                "요청 분기·원본업종 또는 건수 일부 누락으로 완전 집계 불가",
+                f"요청 {quarter_count}분기 중 {len(observed)}분기 관측, "
+                f"완전 관측 {complete_quarters}분기. 분기·원본업종 또는 건수 일부 누락으로 "
+                "관측된 자료만 집계했으며 전체 기간·업종의 완전 집계가 아닙니다.",
             )
         else:
             status, reason = "observed", None
@@ -155,11 +160,16 @@ def preprocess_business_lifecycle_data(
                 "data_status": status,
                 "data_complete": complete,
                 "observed_quarters": len(observed),
+                "complete_quarters": complete_quarters,
+                "observed_quarter_codes": [q for q in quarters if q in observed],
+                "quarterly_source_ids": {q: sorted(observed[q]) for q in quarters if q in observed},
+                "recent_year_observed_quarters": sum(q in observed for q in recent),
+                "oldest_year_observed_quarters": sum(q in observed for q in quarters[:4]),
                 "expected_source_count": len(sources),
                 "observed_source_rows": sum(len(values) for values in observed.values()),
                 "expected_source_rows": len(sources) * quarter_count,
                 "latest_store_count": quarterly[base_quarter]["similr_induty_stor_co"],
-                "avg_store_count": exposure / quarter_count,
+                "avg_store_count": exposure / len(observed) if observed else float("nan"),
                 "period_open_count": opened,
                 "period_close_count": closed,
                 "period_net_change": opened - closed,

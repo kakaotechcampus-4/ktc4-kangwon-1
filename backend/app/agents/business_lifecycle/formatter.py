@@ -12,6 +12,7 @@ class BusinessLifecycleFormatterError(RuntimeError):
 def determine_status(
     scored_count: int,
     unscored_count: int,
+    partial_count: int = 0,
 ) -> str:
     """
     분석 결과를 기반으로 Agent 상태를 결정한다.
@@ -27,7 +28,7 @@ def determine_status(
         분석 가능한 업종이 하나도 없음
     """
 
-    if scored_count == 0:
+    if scored_count + partial_count == 0:
         return "no_data"
 
     if unscored_count > 0:
@@ -51,10 +52,12 @@ def format_scored_industry(
         "type": industry["type"],
         "confidence": industry["confidence"],
         "data_available": True,
+        "analysis_available": True,
         "score_available": True,
         "data_status": industry.get("data_status", "observed"),
         "data_complete": industry.get("data_complete", True),
         "metrics": industry.get("metrics", {}),
+        "source_coverage": industry.get("source_coverage", {}),
         "evidence": industry.get(
             "evidence",
             [],
@@ -67,15 +70,15 @@ def format_unscored_industry(
     industry: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    데이터 부족 등의 이유로 Lifecycle Score를
-    계산하지 못한 업종을 판단 보류 형태로 변환한다.
+    점수 없는 관측 자료와 분석 근거 부족을 구분해 전달합니다.
     """
 
+    analysis_available = industry.get("analysis_available", False)
     return {
         "industry_id": industry["industry_id"],
         "industry_name": industry["industry_name"],
         "score": None,
-        "type": "판단 보류",
+        "type": "부분 관측" if analysis_available else "판단 보류",
         "confidence": industry.get(
             "confidence",
             "none",
@@ -85,6 +88,7 @@ def format_unscored_industry(
             False,
         ),
         "score_available": False,
+        "analysis_available": analysis_available,
         "data_status": industry.get("data_status"),
         "data_complete": industry.get("data_complete", False),
         "metrics": industry.get("metrics", {}),
@@ -108,6 +112,11 @@ def build_warnings(
     warnings: list[str] = [MAPPING_REVIEW_WARNING]
 
     unscored_count = sum(1 for industry in industries if not industry["score_available"])
+    partial_count = sum(
+        1
+        for industry in industries
+        if industry["analysis_available"] and not industry["score_available"]
+    )
 
     low_confidence_count = sum(
         1
@@ -127,6 +136,13 @@ def build_warnings(
             f"점수가 계산된 업종 중 "
             f"{low_confidence_count}개 업종은 "
             "표본 규모가 작아 confidence가 low입니다."
+        )
+
+    if partial_count > 0:
+        warnings.append(
+            f"{partial_count}개 업종은 2분기 이상 관측되어 점수 없이 실제 지표만 전달합니다. "
+            "불완전 자료는 누락 분기·원본업종을 0으로 채우지 않은 관측 범위의 집계입니다. "
+            "업종별 warning과 source_coverage를 확인하고 전체 기간·업종으로 일반화하지 마세요."
         )
 
     warnings.append(
@@ -181,6 +197,7 @@ def format_for_mediator(
         "unavailable_industries",
         [],
     )
+    partial_industries = agent_result.get("partial_industries", [])
 
     if not isinstance(
         scored_industries,
@@ -194,7 +211,10 @@ def format_for_mediator(
     ):
         raise BusinessLifecycleFormatterError("unavailable_industries가 list가 아닙니다.")
 
-    entries = scored_industries + unscored_industries
+    if not isinstance(partial_industries, list):
+        raise BusinessLifecycleFormatterError("partial_industries가 list가 아닙니다.")
+
+    entries = scored_industries + partial_industries + unscored_industries
     if any(
         not isinstance(item, dict)
         or not isinstance(item.get("industry_id"), str)
@@ -217,7 +237,7 @@ def format_for_mediator(
     # 2. 판단 보류 업종
     # ========================================================
 
-    for industry in unscored_industries:
+    for industry in partial_industries + unscored_industries:
         industries.append(format_unscored_industry(industry))
 
     # ========================================================
@@ -260,11 +280,16 @@ def format_for_mediator(
     scored_count = sum(1 for industry in industries if industry["score_available"])
 
     unscored_count = len(industries) - scored_count
+    available_count = sum(1 for industry in industries if industry["analysis_available"])
+    partial_count = available_count - scored_count
 
     coverage = {
         "target_industries": EXPECTED_INDUSTRY_COUNT,
         "scored_industries": scored_count,
         "unscored_industries": unscored_count,
+        "partial_industries": partial_count,
+        "available_industries": available_count,
+        "unavailable_industries": len(industries) - available_count,
     }
 
     # ========================================================
@@ -274,6 +299,7 @@ def format_for_mediator(
     status = determine_status(
         scored_count=scored_count,
         unscored_count=unscored_count,
+        partial_count=partial_count,
     )
 
     scope = build_scope(
@@ -300,11 +326,11 @@ def format_for_mediator(
     data: dict[str, Any] = {}
 
     if status != "no_data":
+        summary = agent_result.get("summary", "")
+        if partial_count:
+            summary += f" {partial_count}개 업종은 점수 없이 관측 지표를 전달합니다."
         data = {
-            "summary": agent_result.get(
-                "summary",
-                "",
-            ),
+            "summary": summary.strip(),
             "metadata": build_metadata(
                 agent_result=agent_result,
                 metadata=metadata,

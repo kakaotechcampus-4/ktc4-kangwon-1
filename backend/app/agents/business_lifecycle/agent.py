@@ -87,6 +87,8 @@ def run_business_lifecycle_agent(
         ),
         # LLM 분석 완료 업종
         "industry_scores": (llm_result["industry_scores"]),
+        # 점수 산식에 필요한 자료가 없어도 2분기 이상 관측값은 중재에 전달합니다.
+        "partial_industries": agent_input["partial_industries"],
         # 데이터 부족으로 판단 보류
         "unavailable_industries": (agent_input["unavailable_industries"]),
     }

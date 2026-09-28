@@ -99,7 +99,7 @@ def validate_llm_result(
         source = calculated[industry["industry_id"]]
         for field in ("industry_name", "lifecycle_score", "confidence"):
             industry[field] = source[field]
-        for field in ("metrics", "data_status", "data_complete"):
+        for field in ("metrics", "data_status", "data_complete", "source_coverage"):
             if field in source:
                 industry[field] = source[field]
 

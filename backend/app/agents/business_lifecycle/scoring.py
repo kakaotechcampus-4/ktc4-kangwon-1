@@ -56,6 +56,7 @@ def calculate_lifecycle_scores(
 
     score_mask = (
         result_df["data_available"]
+        & (result_df["observed_quarters"] >= 2)
         & result_df["data_complete"]
         & result_df["recent_year_close_rate"].notna()
         & result_df["net_change_rate"].notna()
