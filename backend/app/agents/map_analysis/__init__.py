@@ -8,15 +8,18 @@
 사업자로 잡히기 때문임. 카카오는 지도에 등재된, 손님이 찾아갈 수 있는 곳만 셈.
 """
 
+from .agent import CATEGORY_CODES, search
 from .client import MapApiError, PlaceClient
 from .config import Settings
 from .schemas import Nearest, QueryResult, SearchResult
 
 __all__ = [
+    "CATEGORY_CODES",
     "MapApiError",
     "Nearest",
     "PlaceClient",
     "QueryResult",
     "SearchResult",
     "Settings",
+    "search",
 ]

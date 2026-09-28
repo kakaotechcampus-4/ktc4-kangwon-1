@@ -26,9 +26,9 @@ class Settings:
     retry_backoff_s: float = 1.5
     # 검색어 여러 개 동시에 던질 때 상한. 429 피하려고 낮게 잡음
     max_concurrency: int = 4
-    # 최근접·브랜드 뽑을 표본 크기
-    # 개수(meta.total_count)는 이 값이랑 무관하게 전수라서 여기 키울 이유 없음
-    sample_size: int = 5
+    # 최근접·브랜드 뽑을 표본 크기. 카카오 페이지 상한이 15라 더 못 올림
+    # 개수(meta.total_count)는 이 값이랑 무관하게 전수라서 count 정확도랑은 상관없음
+    sample_size: int = 15
 
     @classmethod
     def from_env(cls) -> Settings:

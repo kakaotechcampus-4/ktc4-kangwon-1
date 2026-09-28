@@ -25,9 +25,20 @@ class QueryResult(Schema):
 
     # 반경 안 전체 개수. meta.total_count 라서 목록 상한(45건)이랑 무관하게 정확함
     count: int = Field(ge=0)
-    # 0건이면 아예 안 실음. null 두면 읽는 쪽이 매번 분기해야 함
+
+    # count 를 얼마나 믿을지 판단하라고 같이 주는 값
+    #
+    # 카카오 키워드 검색은 "치킨집"이 아니라 "치킨과 연관된 곳"을 줌. 역삼에서 "치킨"으로
+    # 물었더니 68곳이 나왔는데 최근접이 샌드위치·인도음식·햄버거였음. count 자체를 고칠
+    # 방법이 없어서(45건 상한 때문에 전수를 못 셈) 대신 표본에서 실제로 분류가 맞은
+    # 건수를 같이 냄. matched 가 sampled 에 비해 적으면 count 를 조심해서 써야 함.
+    sampled: int = Field(default=0, ge=0)
+    matched: int = Field(default=0, ge=0)
+
+    # 분류가 맞은 것 중에서만 고름. 0건이면 아예 안 실음 —
+    # null 두면 읽는 쪽이 매번 분기해야 함
     nearest: Nearest | None = None
-    # 표본(sample_size)에서만 뽑아서 밀집 지역에서는 일부만 잡힘. count 랑 달리 전수 아님
+    # 역시 분류가 맞은 표본에서만 셈. 표본 기반이라 count 와 달리 전수 아님
     brands: dict[Text, int] = Field(default_factory=dict)
     # 이 검색어만 실패했을 때 채움. 나머지 검색어 결과는 그대로 돌려줌
     error: Text | None = None
