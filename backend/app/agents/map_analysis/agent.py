@@ -58,7 +58,6 @@ CATEGORY_ALIASES: dict[str, str] = {
     "주유소": "OL7",
     "충전소": "OL7",
     "지하철": "SW8",
-    "지하철역": "SW8",
     "마트": "MT1",
 }
 
