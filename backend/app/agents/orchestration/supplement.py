@@ -5,13 +5,10 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import ValidationError
 
-from app.agents.decision import agent as decision
 from app.schemas import (
     AgentAnalysis,
     AgentError,
     AnalysisTask,
-    DecisionRequest,
-    DecisionResult,
     SupplementEvent,
     SupplementPlan,
 )
@@ -33,42 +30,21 @@ def validate_tools(tools: list[SupplementTool]) -> None:
             raise ValueError("보완 자료의 채택 검증 함수가 필요합니다.")
 
 
-async def decide_with_supplement(
+async def execute_supplement(
     task: AnalysisTask,
     analyses: list[AgentAnalysis],
+    plan: SupplementPlan,
     *,
     tools: list[SupplementTool],
-    generate: decision.GenerateDecision | None,
     on_event: OnSupplement | None,
     operation_timeout: float,
-) -> DecisionResult:
+) -> tuple[list[AgentAnalysis], list[str], list[SupplementEvent]]:
+    """판단에 제시한 작업만 실행하고 자료·피드백·이벤트를 반환합니다."""
     sources = {item.agent_id: item.model_copy(deep=True) for item in analyses}
-    eligible = {
-        (tool.operation.agent_id, tool.operation.operation): tool
-        for tool in tools
-        if tool.eligible(
-            task.model_copy(deep=True), sources[tool.operation.agent_id].model_copy(deep=True)
-        )
-    }
-
-    def request() -> DecisionRequest:
-        return DecisionRequest(
-            request_id=task.request_id,
-            address=task.site.input_address,
-            analyses=list(sources.values()),
-        )
-
-    outcome = await decision.evaluate(
-        request(),
-        generate=generate,
-        operations=[tool.operation for tool in eligible.values()],
-    )
-    if isinstance(outcome, DecisionResult):
-        return outcome
-
+    eligible = {(tool.operation.agent_id, tool.operation.operation): tool for tool in tools}
     feedback = []
     context: list[SupplementEvent] = []
-    for asked in outcome.requests:
+    for asked in plan.requests:
 
         async def emit(status, message, analysis=None, adopted=False, asked=asked):
             event = SupplementEvent(
@@ -154,9 +130,4 @@ async def decide_with_supplement(
         else:
             feedback.append(message)
 
-    final = await decision.evaluate(
-        request(), generate=generate, feedback=feedback, supplement_context=context
-    )
-    if isinstance(final, SupplementPlan):
-        raise ValueError("보완 라운드를 추가 실행할 수 없습니다.")
-    return final
+    return list(sources.values()), feedback, context

@@ -1,9 +1,38 @@
 # 채움 백엔드
 
 주소를 받아 세 분석 에이전트를 실행하고 최종판단 결과를 SQLite에 저장합니다.
-**Python 3.12 · FastAPI · Pydantic · sqlite3**를 사용합니다.
+**Python 3.12 · FastAPI · Pydantic · LangGraph · sqlite3**를 사용합니다.
 
 ## 실행 흐름과 책임
+
+### LangGraph 실행 — MVP1.9 첫 단계
+
+`execute_analysis()` → `run_react()` 호출 방식은 유지하고 내부 흐름을 `orchestration/graph.py`로 옮겼습니다.
+기존 분석·모델 함수와 저장 콜백을 그대로 사용합니다.
+
+| 노드 | 역할 |
+| --- | --- |
+| `choose_action` | 모델 도구 선택 검증. 잘못된 순서·인자는 오류 관찰 후 재선택 |
+| `prepare_address` | 주소 변환·AnalysisTask 생성·Site 저장 콜백 |
+| `run_analyses` | 기존 `run_agents()`로 세 분석 병렬 실행·개별 결과 저장 |
+| `evaluate_decision` | 최종 결과면 종료, 필요한 보완 요청이면 보완 노드로 이동 |
+| `execute_supplement` | 제시된 부분 작업만 실행하고 판단 노드로 복귀 |
+
+오케스트레이터 모델은 최대 6회, 데이터 보완은 최대 1라운드입니다.
+최종판단의 출력 교정 1회는 별도이며 기존 로직을 유지합니다.
+기존 `run_analysis()` 고정 흐름은 변경하지 않았습니다.
+
+설치 갱신은 프로젝트 루트에서 실행합니다.
+
+```powershell
+conda activate chaeum
+python -m pip install -e "./backend[dev]"
+```
+
+LangGraph는 `>=1.2.12,<1.3`을 사용하며 모델 호출은 기존 엘리스 호환 클라이언트를 유지합니다.
+LangChain 모델 래퍼를 추가하지 않았지만 LangGraph의 하위 의존성은 함께 설치됩니다.
+그래프 상태는 요청별 메모리에만 유지합니다. 사용자 질문·체크포인트·중단 후 재개는 아직 없습니다.
+외부 LangSmith 자동 추적은 비활성화하고 기존 로컬 validation trace를 사용합니다.
 
 ### 작업 단위 보완 — 상권·개폐업 함수 연결
 
@@ -31,9 +60,9 @@
   `execute(task, previous) -> AgentAnalysis` 비동기 함수와 선택형 `accept(previous, candidate)`를 등록합니다.
 - `decision.evaluate()`: 기존 판단 내용 또는 `SupplementPlan`을 반환합니다.
   기존 `decision.analyze()`는 계속 `DecisionResult`만 반환합니다.
-- `orchestration/supplement.py`: 최대 한 라운드, 에이전트별 한 작업을 순서대로 실행합니다.
-  전체 분석기로 대체 호출하지 않습니다. `make_decision` 안에서 코드가 실행하므로
-  오케스트레이터 모델의 도구 선택 호출을 추가하지 않습니다.
+- `orchestration/supplement.py`: `execute_supplement()`가 에이전트별 부분 작업을 순서대로 실행합니다.
+  한 라운드 제한과 재판단 이동은 `graph.py`가 관리합니다. 전체 분석기로 대체 호출하지 않으며
+  보완 실행 때문에 오케스트레이터 모델의 도구 선택 호출을 추가하지 않습니다.
 - 모델에는 코드가 실행 가능하다고 판정한 작업만 제공합니다. 모델은 작업명·대상·사유만
   반환하며 주소·반경·임의 인자를 변경할 수 없습니다. 함수에는 원본의 깊은 복사본을 줍니다.
 - 작업 함수는 필요한 부분만 실행한 뒤 **갱신된 전체 AgentAnalysis**를 반환해야 합니다.
@@ -80,7 +109,8 @@ python -m unittest discover -s tests -p test_supplement_loop.py -v
 
 상권은 `AnalysisTask.radius_m`으로 조회·면적·밀도·세부 반경을 계산합니다.
 개폐업은 상권 폴리곤을 유지하며 `data.metadata.radius_applied=false`로 구분합니다.
-유동인구의 요청 반경 적용은 아직 보장하지 않습니다.
+인구 분석은 요청 반경과 겹치는 상권을 선택하고 유동·상주·직장 자료를 집계합니다.
+걸친 상권 전체를 포함하므로 정확한 반경 내부 인구 수는 아니며 실제 범위 차이는 warnings로 전달합니다.
 서울 음식점 백분위는 500m 요청에만 적용하고, 다른 반경에서는 null입니다.
 
 `execute_analysis(address, radius_m=300)`으로 요청 반경(미터)을 전달할 수 있습니다.

@@ -10,7 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.agents.decision.llm import generate_decision
+from app.agents.orchestration import supplement as supplement_module
 from app.agents.orchestration.tools import SupplementTool
+from app.agents.orchestration.workflow import prepare_task, run_agents
 from app.db import repository
 from app.db.connection import connect, initialize
 from app.llm.config import LLMSettings
@@ -108,6 +110,35 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
         )
         events = repository.list_supplement_events("test", db_path=self.path)
         self.assertEqual([e["status"] for e in events], ["requested", "succeeded"])
+
+    async def test_execute_boundary_returns_sources_without_deciding(self):
+        execute = getattr(supplement_module, "execute_supplement", None)
+        self.assertTrue(callable(execute), "보완 실행 함수가 필요합니다.")
+        task = await prepare_task(
+            "시험 주소", resolve=mock_resolve, request_id="test", radius_m=300
+        )
+        original = await run_agents(task, mock_agents())
+        plan = SupplementPlan.model_validate(self.generate("", "{}"))
+        events = []
+
+        async def emit(event):
+            events.append(event)
+
+        with patch("app.agents.decision.agent.evaluate", side_effect=AssertionError("판단 금지")):
+            updated, feedback, context = await execute(
+                task,
+                original,
+                plan,
+                tools=[self.tool()],
+                on_event=emit,
+                operation_timeout=1,
+            )
+        self.assertEqual(updated[0].data["office_worker_share"], 0.5)
+        self.assertEqual(original[0].data["office_worker_share"], 0.41)
+        self.assertEqual(updated[1:], original[1:])
+        self.assertEqual(feedback, [])
+        self.assertEqual([event.status for event in events], ["requested", "succeeded"])
+        self.assertEqual(context, events[1:])
 
     async def test_failure_preserves_original_and_records_limitation(self):
         async def fail(task, previous):

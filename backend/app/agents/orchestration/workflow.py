@@ -8,12 +8,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from functools import partial
-from importlib.resources import files
 from typing import Any
 
 from openai.types.chat import ChatCompletionMessage
@@ -41,8 +39,8 @@ from app.schemas import (
 )
 from app.services.settings import ExecutionSettings, validate_timeout
 
-from . import llm, tools
-from .supplement import OnSupplement, decide_with_supplement, validate_tools
+from . import tools
+from .supplement import OnSupplement, validate_tools
 
 AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]
 AgentRegistry = dict[AgentId, AnalysisAgent]
@@ -278,7 +276,7 @@ async def run_react(
     supplements: list[tools.SupplementTool] | None = None,
     on_supplement: OnSupplement | None = None,
 ) -> DecisionResult:
-    """도구 호출과 관찰을 반복합니다. 주소 도구와 세 분석기는 명시적으로 연결합니다."""
+    """입력 계약을 검증한 뒤 LangGraph로 도구 선택·판단·보완을 실행합니다."""
     radius_m = validate_radius(radius_m)
     supplements = list(supplements or [])
     validate_tools(supplements)
@@ -292,89 +290,20 @@ async def run_react(
     request_id = uuid.uuid4().hex if request_id is None else request_id
     if not isinstance(request_id, str) or not request_id.strip():
         raise ValueError("요청 ID가 비어 있습니다.")
-    messages: list[Any] = [
-        {"role": "system", "content": files(__package__).joinpath("prompt.md").read_text("utf-8")},
-        {
-            "role": "user",
-            "content": json.dumps({"address": address, "radius_m": radius_m}, ensure_ascii=False),
-        },
-    ]
-    task = None
-    analyses = None
-    choose = generate_action or llm.generate_action
-    for _ in range(6):
-        produced = await choose(messages, tools.TOOL_DEFINITIONS)
-        message = ChatCompletionMessage.model_validate(produced)
-        if message.refusal or not message.tool_calls or len(message.tool_calls) != 1:
-            raise RuntimeError("모델은 한 번에 하나의 도구를 호출해야 합니다.")
-        call = message.tool_calls[0]
-        if call.type != "function":
-            raise RuntimeError("지원하지 않는 도구 호출 형식입니다.")
-        messages.append(
-            message.model_dump(
-                include={"role", "content", "tool_calls"},
-                exclude_none=True,
-            )
-        )
-        try:
-            arguments = json.loads(call.function.arguments)
-        except (ValueError, TypeError):
-            arguments = None
-        name = call.function.name
-        expected = (
-            "prepare_address"
-            if task is None
-            else ("run_analyses" if analyses is None else "make_decision")
-        )
-        observation: dict[str, Any]
-        if arguments != {} or name != expected:
-            observation = {"status": "error", "message": f"빈 인자로 {expected}를 호출하세요."}
-        elif name == "prepare_address":
-            task = await prepare_task(
-                address, resolve=resolve, request_id=request_id, radius_m=radius_m
-            )
-            if on_task_prepared is not None:
-                await on_task_prepared(task)
-            observation = {"status": "ok", "task": task.model_dump(mode="json")}
-        elif name == "run_analyses":
-            assert task is not None
-            analyses = await run_agents(
-                task,
-                agents,
-                on_analysis_completed=on_analysis_completed,
-                agent_timeout=agent_timeout,
-            )
-            observation = {
-                "status": "ok",
-                "analyses": [
-                    item.model_dump(mode="json", include={"agent_id", "status", "scope"})
-                    for item in analyses
-                ],
-            }
-        else:
-            assert task is not None and analyses is not None
-            if supplements:
-                return await decide_with_supplement(
-                    task,
-                    analyses,
-                    tools=supplements,
-                    generate=generate,
-                    on_event=on_supplement,
-                    operation_timeout=agent_timeout,
-                )
-            return await decision.analyze(
-                DecisionRequest(
-                    request_id=task.request_id,
-                    address=task.site.input_address,
-                    analyses=analyses,
-                ),
-                generate=generate,
-            )
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": json.dumps(observation, ensure_ascii=False, allow_nan=False),
-            }
-        )
-    raise RuntimeError("오케스트레이터의 최대 모델 호출 횟수 6회를 초과했습니다.")
+    # 그래프가 기존 실행 함수를 재사용하므로 진입 시점에 불러옵니다.
+    from .graph import run_graph
+
+    return await run_graph(
+        address,
+        resolve=resolve,
+        agents=agents,
+        radius_m=radius_m,
+        request_id=request_id,
+        generate_action=generate_action,
+        generate=generate,
+        on_task_prepared=on_task_prepared,
+        on_analysis_completed=on_analysis_completed,
+        agent_timeout=agent_timeout,
+        supplements=supplements,
+        on_supplement=on_supplement,
+    )
