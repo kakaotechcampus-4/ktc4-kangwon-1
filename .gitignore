@@ -68,7 +68,3 @@ desktop.ini
 *.swo
 *.iml
 *~
-
-.ruff_cache/
-.superpowers/
-.playwright-mcp/

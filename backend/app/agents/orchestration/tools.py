@@ -1,12 +1,8 @@
-"""오케스트레이터가 사용하는 기존 주소 변환 도구를 공개합니다.
-
-목업 실행에서는 이 도구 대신 별도의 주소 변환 대역을 주입합니다.
-"""
+"""오케스트레이션 그래프가 쓰는 보완 도구와 지도 조회 타입을 정의합니다."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.address import resolve_site
 from app.schemas import (
     AgentAnalysis,
     AnalysisTask,
@@ -28,6 +24,3 @@ class SupplementTool:
     execute: Callable[[AnalysisTask, AgentAnalysis], Awaitable[AgentAnalysis]]
     eligible: Callable[[AnalysisTask, AgentAnalysis], bool]
     accept: Callable[[AgentAnalysis, AgentAnalysis], bool] | None = None
-
-
-__all__ = ["resolve_site", "SupplementTool"]

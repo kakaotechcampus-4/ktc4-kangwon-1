@@ -10,6 +10,7 @@ from importlib.resources import files
 from typing import Any, cast
 
 from app.agents.floating_population.selection import SELECTABLE
+from app.evidence import index_paths, industry_catalog
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.schemas import (
@@ -30,7 +31,6 @@ from app.schemas import (
     SupplementPlan,
 )
 
-from .evidence import index_paths, industry_catalog
 from .llm import InvalidDecisionCategory, generate_decision, validate_content
 
 GenerateDecision = Callable[

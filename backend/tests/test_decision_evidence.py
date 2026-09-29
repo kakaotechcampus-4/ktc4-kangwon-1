@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from app.agents.business_lifecycle.formatter import format_scored_industry
 from app.agents.decision.agent import DecisionContractError, evaluate
-from app.agents.decision.evidence import index_paths
+from app.evidence import index_paths
 from app.mocks import mock_agents, mock_generate, mock_site
 from app.schemas import AnalysisTask, DecisionRequest
 

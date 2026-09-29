@@ -16,8 +16,8 @@ from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
-from app.agents.decision.evidence import index_paths
 from app.agents.orchestration.workflow import run_agents
+from app.evidence import index_paths
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask
 

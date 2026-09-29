@@ -8,10 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from app.config import BACKEND_DIR as BACKEND_DIR
-from app.config import load_environment
-
-# 기존 CLI 가져오기 경로를 유지합니다.
-load_dotenv_if_present = load_environment
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 

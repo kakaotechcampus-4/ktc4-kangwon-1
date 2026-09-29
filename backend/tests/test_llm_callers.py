@@ -30,17 +30,10 @@ class CallerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(call.call_args.args[2], self.settings)
 
     async def test_mapping_examples_share_transport_and_keep_matching_policy(self):
-        from examples import match_upjong, match_upjong_by_small
+        from examples import match_upjong_by_small
 
         settings = LLMSettings(model="test", api_key="test", base_url="https://invalid.example/v1")
         rows = [{"SVC_INDUTY_CD": "CS100001", "SVC_INDUTY_CD_NM": "한식"}]
-        with patch(
-            "app.llm.client.complete_json",
-            new=AsyncMock(
-                return_value={"matches": [{"seoul_code": "CS100001", "candidates": ["I201"]}]}
-            ),
-        ):
-            self.assertEqual(await match_upjong.ask(settings, [], rows), {"CS100001": ["I201"]})
         picks = {}
         with patch(
             "app.llm.client.complete_json",

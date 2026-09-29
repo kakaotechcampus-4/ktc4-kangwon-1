@@ -1,7 +1,7 @@
 # 멀티에이전트 구현 기록
 
 기준: `feature/mvp-1.5-orchestra`, `d2c4571`. 기존 P0 판정 지시문 수정 위에서 작업했습니다.
-설계: [multi-agent-design.md](multi-agent-design.md), [순차 구현 계획](superpowers/plans/2026-09-29-multi-agent.md).
+설계: [multi-agent-design.md](multi-agent-design.md), [순차 구현 계획](archive/superpowers/plans/2026-09-29-multi-agent.md).
 실행 방법과 한도는 [backend/README.md](../backend/README.md)의 "실행 모드"·"한도"가 기준입니다.
 
 ## 반영한 내용

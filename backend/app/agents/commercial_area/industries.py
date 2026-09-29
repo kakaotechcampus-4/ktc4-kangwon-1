@@ -11,8 +11,6 @@ from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from .config import Settings
 from .schemas import MiddleCode, Store
 
-REQUIRED_COLUMNS = {"middle_code", "middle_name", "major_code", "major_name"}
-
 
 def load_middle_master(settings: Settings | None = None) -> list[MiddleCode]:
     """분석은 생성된 공통 카탈로그를 읽습니다."""

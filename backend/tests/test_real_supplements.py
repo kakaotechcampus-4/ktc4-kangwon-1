@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 from app.agents.business_lifecycle.client import SeoulOpenAPINoDataError
 from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.agents.commercial_area.config import Settings as CommercialSettings
-from app.agents.decision.evidence import index_paths
+from app.evidence import index_paths
 from app.industries.catalog import INDUSTRY_TO_SEOUL
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 

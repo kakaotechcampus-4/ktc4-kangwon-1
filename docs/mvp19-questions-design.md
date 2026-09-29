@@ -2,7 +2,7 @@
 
 작성일: 2026-09-28  
 구현 기준: `feature/mvp-1.5-orchestra` · `b835ef9`  
-상태: 구현·대역 검증 완료. 실제 LLM 질문 품질과 HTTP 연결은 별도 검증 대상이다. [진행 기록](mvp19-questions-progress.md)
+상태: 구현·대역 검증 완료. 실제 LLM 질문 품질과 HTTP 연결은 별도 검증 대상이다. [진행 기록](archive/mvp19-questions-progress.md)
 
 ## 1. 목표
 

@@ -89,7 +89,7 @@
 
 **왜 이 방식인가.** 모델의 자유도를 "해석과 선택"으로 좁히면 환각이 들어갈 공간 자체가 줄고, 남은 오류는 결정론적 검증으로 잡힙니다. 규칙(`citable`)은 **인덱서 한 곳**에서만 강제하므로 에이전트가 늘어도 정책이 하나입니다.
 
-**코드.** `backend/app/agents/decision/evidence.py`, `decision/agent.py` (`_validate_evidence`, `_correction_detail`)
+**코드.** `backend/app/evidence.py`, `decision/agent.py` (`_validate_evidence`, `_correction_detail`)
 
 ---
 

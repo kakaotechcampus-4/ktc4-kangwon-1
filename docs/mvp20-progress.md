@@ -1,6 +1,6 @@
 # MVP2.0 진행 기록
 
-기준 계획: `docs/mvp20-optimization-plan.md`
+기준 계획: [docs/archive/mvp20-optimization-plan.md](archive/mvp20-optimization-plan.md)
 기준 커밋: `0c2ea3e`, 작업 브랜치: `feature/mvp-1.5-orchestra`
 
 ## 범위와 판단

@@ -266,8 +266,8 @@ LQ·HHI·부재 업종 수의 분모가 이 75칸이라, 다른 체계로 바꾸
 갱신하려면 [상권업종분류 코드](https://www.data.go.kr/data/15067631/fileData.do)를 받아 아래를 실행한다.
 
 ```bash
-python examples/build_upjong_master.py --official-csv <받은파일.csv>
-python examples/build_industry_links.py --force    # has_seoul·note 를 다시 채운다
+python scripts/build_upjong_master.py --official-csv <받은파일.csv>
+python scripts/build_industry_links.py --force    # has_seoul·note 를 다시 채운다
 python scripts/build_industry_catalog.py          # catalog.py 재생성
 ```
 
@@ -276,11 +276,7 @@ python scripts/build_industry_catalog.py          # catalog.py 재생성
 
 원본 파일 인코딩이 CP949다. 스크립트가 자동으로 처리한다.
 
-## 반경 상한 확인
-
-```bash
-python examples/probe_radius.py
-```
+## 반경 상한
 
 소상공인 API가 몇 m까지 받는지 공개돼 있지 않다. 실측으로 2,000m까지 되는 것을 확인했다.
 
