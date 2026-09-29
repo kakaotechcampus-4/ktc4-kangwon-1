@@ -1,15 +1,9 @@
 import { DM_Mono } from 'next/font/google';
-import {
-  Building2,
-  Check,
-  Loader2,
-  Store,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { Check, Loader2, Pause } from 'lucide-react';
+import Card from '@/components/ui/Card';
+import ProgressBar from '@/components/ui/ProgressBar';
 import { colors } from '@/styles/tokens';
 import type {
-  ProgressPhase,
   ProgressStep,
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
@@ -20,263 +14,226 @@ const dmMono = DM_Mono({
 });
 
 type ProgressTrackerProps = {
-  phases: ProgressPhase[];
-  // phase.id별 진행중 경과 초 — done/pending인 phase는 값이 없어도 된다.
-  elapsedSeconds?: Record<string, number>;
+  steps: ProgressStep[];
+  // 답변 대기 단계에서 "N개 질문에 답하면…" 문구에 쓴다.
+  questionCount: number;
 };
 
-function formatElapsed(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
-}
-
-// 하위 항목 id별 아이콘 — 항목 라벨 자체는 mock 데이터가 들고 있고,
-// 아이콘은 화면 표현이라 여기서만 매핑한다. 목록에 없는 id는 Building2로 대체.
-const SUB_STEP_ICONS: Record<string, LucideIcon> = {
-  'basic-info': Building2,
-  'commercial-area': Store,
-  'floating-population': Users,
-  'business-lifecycle': Building2,
+// 단계 이름 뒤에 붙는 상태 문구 — "데이터 수집 완료", "추가 정보 확인 필요"처럼
+// 사용자가 라벨만 읽어도 어디까지 끝났는지 알 수 있게 한다.
+const STATUS_SUFFIX: Record<ProgressStepStatus, string> = {
+  done: '완료',
+  in_progress: '중',
+  waiting: '필요',
+  pending: '예정',
 };
 
 export default function ProgressTracker({
-  phases,
-  elapsedSeconds,
+  steps,
+  questionCount,
 }: ProgressTrackerProps) {
+  const doneCount = steps.filter((step) => step.status === 'done').length;
+  const isWaiting = steps.some((step) => step.status === 'waiting');
+
   return (
-    <div className="flex w-full flex-col gap-6">
-      {phases.map((phase, index) => (
-        <PhaseRow
-          key={phase.id}
-          phase={phase}
-          number={index + 1}
-          isLast={index === phases.length - 1}
-          elapsed={elapsedSeconds?.[phase.id]}
+    <Card
+      className="w-full gap-6"
+      style={{ padding: '26px 28px', borderRadius: '12px', borderWidth: '1px' }}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <p
+            className="text-xl font-bold"
+            style={{ color: colors.text.primary }}
+          >
+            실시간 분석 현황
+          </p>
+          <p
+            className={`${dmMono.className} text-sm`}
+            style={{ color: colors.text.secondary }}
+          >
+            {doneCount} / {steps.length}
+          </p>
+        </div>
+        <ProgressBar
+          value={(doneCount / steps.length) * 100}
+          color={isWaiting ? 'warning' : 'primary'}
         />
-      ))}
-    </div>
+      </div>
+
+      <ol className="flex flex-col">
+        {steps.map((step, index) => (
+          <StepRow
+            key={step.id}
+            step={step}
+            isLast={index === steps.length - 1}
+            questionCount={questionCount}
+          />
+        ))}
+      </ol>
+    </Card>
   );
 }
 
-function PhaseRow({
-  phase,
-  number,
+/**
+ * 완료·현재·예정 단계가 한눈에 갈리도록 세 단계로 무게를 나눈다.
+ * - 완료: 한 발 물러난 회색 글자
+ * - 현재(진행 중/답변 대기): 연한 배경 상자로 감싸 가장 먼저 눈에 띄게
+ * - 예정: 옅은 회색
+ */
+function StepRow({
+  step,
   isLast,
-  elapsed,
+  questionCount,
 }: {
-  phase: ProgressPhase;
-  number: number;
+  step: ProgressStep;
   isLast: boolean;
-  elapsed?: number;
+  questionCount: number;
 }) {
-  const isPending = phase.status === 'pending';
-  const isActive = phase.status === 'in_progress';
+  const isDone = step.status === 'done';
+  const isPending = step.status === 'pending';
+  const isWaiting = step.status === 'waiting';
+  const isCurrent = step.status === 'in_progress' || isWaiting;
+  const accent = isWaiting ? colors.accent.orange : colors.brand.primary;
 
   return (
-    <div className="flex gap-3">
+    <li className="flex gap-3.5">
       <div className="flex flex-col items-center">
-        <StatusBadge status={phase.status} number={number} size={32} />
-        {/* flex-1 라인이 오른쪽 컬럼(하위 항목 포함) 높이만큼 자동으로
-            늘어난다 — flex row의 stretch 정렬 덕분에 별도 좌표 계산 없이
-            다음 phase 배지까지 이어지는 타임라인을 만들 수 있다. */}
+        <StatusIcon status={step.status} />
+        {/* flex-1 라인이 오른쪽 글 높이만큼 늘어나 다음 아이콘까지 이어진다. */}
         {!isLast && (
           <div
             className="w-px flex-1"
             style={{
-              backgroundColor: colors.neutral.border,
+              backgroundColor: isDone
+                ? colors.brand.primary
+                : colors.neutral.border,
               minHeight: '16px',
             }}
           />
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-4 pb-2">
-        {/* relative 래퍼의 너비 = 아래 하위 항목 카드와 정확히 같은 W라서,
-            여기 right-4(=하위 항목 카드의 px-4와 동일)로 앵커링한 스피너가
-            카드 안 상태 아이콘과 같은 세로선 위에 정렬된다. */}
-        <div className="relative">
-          <div className="flex flex-col gap-1 pr-12">
+      <div className={`flex-1 ${isLast ? '' : 'pb-5'}`}>
+        <div
+          // 현재 단계만 배경 상자를 두르고, 음수 마진으로 글자 위치는 다른
+          // 단계와 같은 선에 맞춘다.
+          className={`flex flex-col gap-1 ${
+            isCurrent ? '-mt-2 rounded-lg border px-4 py-3.5' : ''
+          }`}
+          style={
+            isCurrent
+              ? {
+                  backgroundColor: `${accent}12`,
+                  borderColor: `${accent}59`,
+                }
+              : undefined
+          }
+        >
+          <p
+            className={`leading-snug ${
+              isCurrent ? 'text-base font-bold' : 'text-[15px] font-medium'
+            }`}
+            style={{
+              color: isWaiting
+                ? colors.accent.orange
+                : isCurrent
+                  ? colors.text.primary
+                  : isDone
+                    ? colors.text.secondary
+                    : colors.text.tertiary,
+            }}
+          >
+            {step.label} {STATUS_SUFFIX[step.status]}
+          </p>
+          {isWaiting ? (
+            // 왜 멈춰 있는지, 무엇을 하면 이어지는지를 설명 대신 보여준다.
             <p
-              className="text-base font-semibold"
+              className="text-sm leading-relaxed"
+              style={{ color: colors.text.secondary }}
+            >
+              분석이 잠시 멈춰 있어요.
+              <br />
+              {questionCount}개 질문에 답하면 바로 이어져요.
+            </p>
+          ) : (
+            <p
+              className="text-[13px] leading-relaxed"
               style={{
-                color: isPending
-                  ? 'var(--color-gray-500)'
-                  : colors.neutral.black,
+                color:
+                  isDone || isPending
+                    ? colors.text.tertiary
+                    : colors.text.secondary,
               }}
             >
-              {phase.title}
+              {step.description}
             </p>
-            <p
-              className="text-[13px]"
-              style={{
-                color: isPending
-                  ? 'var(--color-gray-400)'
-                  : 'var(--color-gray-500)',
-              }}
-            >
-              {phase.description}
-            </p>
-            {isActive && elapsed !== undefined && (
-              <p
-                className={`${dmMono.className} text-xs`}
-                style={{ color: 'var(--color-gray-400)' }}
-              >
-                {formatElapsed(elapsed)} 경과
-              </p>
-            )}
-          </div>
-
-          {/* done과 구분되는 "아직 진행 중" 신호. 아이콘 유무와 무관하게
-              항상 같은 자리를 차지해야(절대 위치라 레이아웃엔 애초에
-              영향 없음) 렌더링 시점에 따라 깜빡이지 않는다. */}
-          <div className="absolute top-0 right-4 flex size-6 items-center justify-center">
-            {isActive && (
-              <Loader2
-                size={24}
-                className="animate-spin"
-                style={{ color: colors.brand.primary }}
-              />
-            )}
-          </div>
+          )}
         </div>
-
-        {phase.subSteps && phase.subSteps.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {phase.subSteps.map((step) => (
-              <SubStepCard key={step.id} step={step} />
-            ))}
-          </div>
-        )}
       </div>
-    </div>
+    </li>
   );
 }
 
-function StatusBadge({
-  status,
-  number,
-  size,
-}: {
-  status: ProgressStepStatus;
-  number: number;
-  size: number;
-}) {
+function StatusIcon({ status }: { status: ProgressStepStatus }) {
+  const base = 'flex size-7 shrink-0 items-center justify-center rounded-full';
+
   if (status === 'done') {
     return (
+      // 완료는 연한 민트로 한 발 물러나게 — 진한 색은 현재 단계에만 쓴다.
       <div
-        className="flex shrink-0 items-center justify-center rounded-full"
+        className={base}
+        style={{ backgroundColor: `${colors.brand.primary}1F` }}
+      >
+        <Check size={15} strokeWidth={3} color={colors.brand.primary} />
+      </div>
+    );
+  }
+
+  if (status === 'in_progress') {
+    return (
+      <div
+        className={base}
         style={{
-          width: size,
-          height: size,
-          backgroundColor: colors.brand.dark,
+          backgroundColor: colors.neutral.white,
+          boxShadow: `0 0 0 2px ${colors.brand.primary}, 0 0 0 5px ${colors.brand.primary}26`,
         }}
       >
-        <Check
-          size={size * 0.45}
-          strokeWidth={2.5}
-          color={colors.neutral.white}
+        <Loader2
+          size={16}
+          className="animate-spin"
+          style={{ color: colors.brand.primary }}
         />
       </div>
     );
   }
 
-  if (status === 'in_progress') {
+  if (status === 'waiting') {
     return (
       <div
-        className="flex shrink-0 items-center justify-center rounded-full text-[14px] font-semibold"
+        className={base}
         style={{
-          width: size,
-          height: size,
-          backgroundColor: colors.brand.dark,
-          color: colors.neutral.white,
+          backgroundColor: colors.accent.orange,
+          boxShadow: `0 0 0 4px ${colors.accent.orange}2E`,
         }}
       >
-        {number}
+        <Pause
+          size={12}
+          strokeWidth={3}
+          color={colors.neutral.white}
+          fill={colors.neutral.white}
+        />
       </div>
     );
   }
 
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full border text-[14px]"
-      style={{
-        width: size,
-        height: size,
-        borderColor: colors.neutral.border,
-        backgroundColor: colors.neutral.white,
-        color: 'var(--color-gray-400)',
-      }}
-    >
-      {number}
-    </div>
-  );
-}
-
-function SubStepCard({ step }: { step: ProgressStep }) {
-  const Icon = SUB_STEP_ICONS[step.id] ?? Building2;
-
-  return (
-    <div
-      className="flex w-full items-center gap-3 rounded-lg border px-4 py-3.5"
+      className={`${base} border`}
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
       }}
-    >
-      <div
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg"
-        style={{ backgroundColor: `${colors.brand.primary}1A` }}
-      >
-        <Icon size={16} style={{ color: colors.brand.primary }} />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-0.5">
-        <p
-          className="text-sm font-medium"
-          style={{ color: colors.neutral.black }}
-        >
-          {step.label}
-        </p>
-        <p className="text-xs" style={{ color: 'var(--color-gray-500)' }}>
-          {step.description}
-        </p>
-      </div>
-
-      <SubStepStatusIcon status={step.status} />
-    </div>
-  );
-}
-
-function SubStepStatusIcon({ status }: { status: ProgressStepStatus }) {
-  if (status === 'done') {
-    return (
-      <div
-        className="flex size-5 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: colors.brand.primary }}
-      >
-        <Check size={11} strokeWidth={3} color={colors.neutral.white} />
-      </div>
-    );
-  }
-
-  if (status === 'in_progress') {
-    // done의 초록 체크(brand.primary)와 색이 겹치면 한눈에 구분이 안 돼서
-    // 진행중 스피너는 중립 회색으로 뺀다 — "아직 끝나지 않았다"는 신호는
-    // 색이 아니라 spin 애니메이션 자체로 준다.
-    return (
-      <Loader2
-        size={18}
-        className="shrink-0 animate-spin"
-        style={{ color: 'var(--color-gray-300)' }}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="size-5 shrink-0 rounded-full border"
-      style={{ borderColor: colors.neutral.border }}
     />
   );
 }
