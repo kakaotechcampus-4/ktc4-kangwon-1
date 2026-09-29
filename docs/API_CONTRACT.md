@@ -140,8 +140,79 @@ POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 지도 관측은 최종 결과의 `map_observation`에도 포함됩니다. map_analysis 근거 경로는
 이 객체의 data 안에서 해석하며, 기본 세 분석 source_analyses와 구분합니다.
 
-정식 POST는 실행 완료 또는 질문 대기까지 기다리는 기존 방식입니다. 작업 큐·실시간 trace
-스트림은 제공하지 않습니다. 상세 trace는 로컬 validation_tool에서만 기록합니다.
+POST는 기본(`wait=true`)으로 실행 완료 또는 질문 대기까지 기다립니다.
+진행 화면이 필요하면 아래 [비동기 실행과 진행 이벤트](#비동기-실행과-진행-이벤트)를 씁니다.
+
+## 비동기 실행과 진행 이벤트
+
+진행 중 화면(주소 확인 → 세 분석 → 전문가 → 판정 …)을 보여 줄 때 쓰는 흐름입니다. 폴링 방식이며 새 연결 방식(SSE·웹소켓)은 없습니다.
+
+```text
+POST /api/v1/analyses?wait=false        → 202 {request_id, status:"running"}
+GET  /api/v1/analyses/{id}/events?after=0 → 1초마다 반복, next_after를 다음 after로
+     finished=true가 되면 멈춤
+GET  /api/v1/analyses/{id}              → 결과(completed) · 질문(waiting_for_input) · 오류(failed)
+POST /api/v1/analyses/{id}/answers?wait=false → 202, 다시 events 폴링
+```
+
+`?mock=true`와 함께 쓰면 외부 호출 없이 같은 이벤트가 나옵니다. 중간 페이지는 이것으로 먼저 만듭니다.
+
+### `GET /api/v1/analyses/{request_id}/events?after=N`
+
+```json
+{
+  "request_id": "5f0c...",
+  "status": "running",
+  "finished": false,
+  "events": [
+    { "seq": 1, "at": "2026-09-30T02:10:01+00:00", "stage": "address", "event": "started", "detail": {} },
+    { "seq": 2, "at": "2026-09-30T02:10:01+00:00", "stage": "address", "event": "completed",
+      "detail": { "road_address": "서울 송파구 오금로 404" } }
+  ],
+  "next_after": 2
+}
+```
+
+- `status`: `pending`(202 직후 아직 저장 전) · `running` · `waiting_for_input` · `completed` · `failed`.
+- `finished`가 true면 폴링을 멈춥니다. 답변 재개 직후처럼 DB 상태가 바뀌기 전이어도 작업이 살아 있으면 `running`, `finished=false`입니다.
+- `seq`는 요청마다 1부터 빈틈없이 늘어납니다. 받은 마지막 `seq`를 `after`로 넘기면 새 이벤트만 옵니다.
+
+| stage | event | detail | 화면 문구 예 |
+| --- | --- | --- | --- |
+| `address` | started · completed | `road_address` | 주소를 확인하고 있어요 |
+| `floating_population` · `business_lifecycle` · `commercial_area` | started · completed | `status`(ok·partial·no_data·error) | 유동인구 / 개폐업 / 주변 상권을 계산하고 있어요 |
+| `brief.{전문가}` | started · completed | `source`(model·fallback), `findings` 수 | 인구 전문가가 자료를 요약하고 있어요 (multi_agent만) |
+| `decision` | started · completed | `action`: final · ask_specialists · supplement · map_lookup · ask_user | 판정관이 종합하고 있어요 |
+| `consult.{전문가}` | started · completed | `round`, `question`(300자 이내), `status`, `tools`(사용한 도구 이름) | 판정관이 상권 전문가에게 되묻고 있어요 (multi_agent만) |
+| `supplement` | started · completed | `agents` | 부족한 자료를 다시 조회하고 있어요 |
+| `map` | started · completed | `queries` 수, `status` | 주변 가게를 지도에서 찾고 있어요 |
+| `questions` | waiting | `count` | 임대인 질문 화면으로 이동 |
+| `run` | completed · failed | `status` 또는 `code` | 완료 / 실패 |
+
+- 전문가 이름: `floating_population`, `business_lifecycle`, `commercial_area`, `map_analysis`.
+- 세 분석은 동시에 돌기 때문에 started 셋이 먼저 오고 completed는 끝난 순서대로 옵니다.
+- `decision`은 여러 번 올 수 있습니다(되묻기·보완 뒤 재판단). 마지막 `action`이 `final`이면 곧 `run completed`가 옵니다.
+- detail에는 코드가 만든 요약만 있습니다. 모델 원문·근거 경로·키는 없습니다. 결과 화면 자료는 GET으로 받습니다.
+- 이벤트는 진행 표시용입니다. 이벤트 저장에 실패해도 분석은 계속되므로, 최종 상태는 항상 GET 결과를 기준으로 합니다.
+
+```ts
+async function follow(id: string, onEvent: (e: AnalysisEvent) => void) {
+  let after = 0;
+  for (;;) {
+    const page = await fetch(`${API}/api/v1/analyses/${id}/events?after=${after}`).then(r => r.json());
+    page.events.forEach(onEvent);
+    after = page.next_after;
+    if (page.finished) return page.status; // completed | failed | waiting_for_input
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+```
+
+**제한과 오류**
+
+- 서버 한 대에서 백그라운드 분석은 동시에 `ANALYSIS_MAX_CONCURRENCY`개(기본 2)까지입니다. 넘으면 **429** + `Retry-After: 30`.
+- 서버가 다시 시작되면 끊긴 실행 중 요청은 `failed`, `error.code = "INTERRUPTED"`가 됩니다. 같은 주소로 다시 요청합니다.
+- 작업표는 서버 프로세스 메모리에 있습니다. 서버를 여러 대 띄우는 배포에서는 외부 큐가 필요합니다.
 
 ## 화면이 알아야 할 것
 
@@ -170,7 +241,7 @@ POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 
 **6. 응답이 느립니다.**
 실제 호출은 공공데이터 API를 100회 넘게 부르고 모델도 부릅니다. 수십 초가 걸릴 수 있습니다.
-화면에는 진행 표시가 필요하고, `fetch` 타임아웃을 넉넉히 잡아야 합니다.
+진행 화면은 `wait=false`와 events 폴링을 씁니다. 기다리는 방식을 쓴다면 `fetch` 타임아웃을 넉넉히 잡습니다.
 
 ## 오류
 
@@ -180,6 +251,7 @@ POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 | 422 | 본문 형식이 틀림 (빈 주소 등) | FastAPI 기본 형식 |
 | 404 | GET 요청 ID가 없음 | `{"detail": "분석 요청을 찾을 수 없습니다."}` |
 | 409 | 질문 상태·답변 충돌 | 고정된 안전 메시지 |
+| 429 | `wait=false` 동시 실행 상한 초과 | `{"detail": "동시에 실행할 수 있는 분석 수를 넘었습니다. …"}` |
 | 502 | 주소·외부 API·모델 실패 | 고정된 안전 메시지 |
 | 500 | 결과 계약·저장 또는 저장 결과 조회 실패 | 고정된 안전 메시지 |
 

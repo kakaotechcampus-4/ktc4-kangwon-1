@@ -1,6 +1,6 @@
 # 멀티에이전트 전환 설계 (MVP 3.0 제안)
 
-> 상태: **제안 — 팀 합의 필요**. `schemas.py` 공통 계약을 바꾸므로 AGENTS.md 규칙 1에 따라 PR 합의 후 구현합니다.
+> 상태: **구현됨(선택 모드 `ANALYSIS_MODE=multi_agent`)**. 기본 모드 결정은 블라인드 평가 후 정합니다.
 > 관련 문서: [TECH_DECISIONS.md](TECH_DECISIONS.md) (ADR-02 · 03 · 09를 이 설계로 갱신 예정), [mvp20-progress.md](mvp20-progress.md)
 
 ## 1. 왜 바꾸나

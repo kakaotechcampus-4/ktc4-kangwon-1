@@ -98,7 +98,7 @@ backend/
 │     ├─ commercial_area/      # 점포 분포·경쟁·LQ 계산
 │     └─ map_analysis/         # 카카오맵 주변 업종·시설 조회
 ├─ examples/                 # 실행 예제·목업
-├─ scripts/                  # 업종표 생성·검사, 인구 스냅샷 갱신
+├─ scripts/                  # 업종표 생성·검사, 인구 스냅샷·상권 영역·밀도 기준선·업종 마스터 갱신
 ├─ tests/                    # 자동 검증
 ├─ storage/                  # 로컬 SQLite 파일
 ├─ .env.example              # 환경변수 예시
@@ -286,13 +286,17 @@ API 문서: <http://127.0.0.1:8000/docs>
 
 | 경로 | 동작 |
 | --- | --- |
-| `POST /api/v1/analyses` | `address`, 선택 `radius_m`·`allow_questions`·`with_map`을 받아 분석·저장 후 결과 반환 |
+| `POST /api/v1/analyses` | `address`, 선택 `radius_m`·`allow_questions`·`with_map`을 받아 분석·저장 후 결과 반환. `?wait=false`면 202와 `request_id`만 바로 반환 |
+| `GET /api/v1/analyses/{request_id}/events?after=N` | 진행 이벤트(단계 시작·완료) 폴링. 진행 화면용 |
 | `GET /api/v1/analyses/{request_id}` | 상태·주소·Site·결과·오류 조회. multi_agent 요청은 선택형 `deliberation` 포함 |
-| `POST /api/v1/analyses/{request_id}/answers` | 저장된 질문에 답하고 최종판단부터 재개 |
+| `POST /api/v1/analyses/{request_id}/answers` | 저장된 질문에 답하고 최종판단부터 재개. `?wait=false` 지원 |
 | `POST /api/v1/analyses/{request_id}/retry-decision` | 저장된 자료로 실패한 판단만 재시도 |
 | `GET /health` | 서버 상태 확인 |
 
-POST는 분석이 끝날 때까지 기다립니다(보통 40~110초). 작업 ID를 먼저 주는 백그라운드 API는 아닙니다.
+기본 POST는 분석이 끝날 때까지 기다립니다(보통 40~110초). 진행 화면은 `?wait=false`로 시작하고
+events를 1초마다 폴링합니다. 백그라운드 동시 실행은 `ANALYSIS_MAX_CONCURRENCY`개까지이고, 넘으면 429입니다.
+서버가 다시 시작되면 끊긴 실행 중 요청은 `INTERRUPTED`로 실패 처리합니다.
+진행 이벤트는 그래프의 `RunHooks.on_step`이 남기며, 저장에 실패해도 분석은 계속합니다(표시용 보조 자료).
 응답 형식은 [API 계약](../docs/API_CONTRACT.md)이 기준입니다.
 
 ### 검증 도구 (로컬, Git 제외)
@@ -336,6 +340,7 @@ python validation_tool/run.py --offline-multi --radius-m 300
 | `SQLITE_PATH` | DB 경로. 기본 `storage/chaeum.sqlite3` |
 | `ANALYSIS_AGENT_TIMEOUT_SECONDS` | 개별 분석 제한시간, 기본 180초 |
 | `ANALYSIS_TIMEOUT_SECONDS` | 전체 실행 제한시간, 기본 600초 |
+| `ANALYSIS_MAX_CONCURRENCY` | `wait=false` 백그라운드 동시 분석 수, 기본 2 |
 | `CORS_ALLOW_ORIGINS`, `MOCK_MODE` | HTTP 서버 설정 |
 
 모델 설정 우선순위는 **직접 주입 → 역할별 값 → 공통 값 → 코드 기본값**입니다.
@@ -356,6 +361,7 @@ SQLite 상대 경로는 실행 위치와 관계없이 `backend/` 기준입니다
 | `question_sessions` | 임대인 질문·답변·재개 스냅샷 |
 | `agent_briefs` | 전문가 브리핑 (multi_agent) |
 | `specialist_consults` | 전문가 되묻기 답변과 상태 (multi_agent) |
+| `analysis_events` | 진행 화면용 단계 이벤트(요약만). 판단 근거가 아님 |
 
 - 요청 상태: `pending → running → completed / failed`, 질문 중에는 `waiting_for_input`.
 - 분석 상태: `ok / partial / no_data / error`. 최종 결과가 `partial`·`no_data`여도 정상 저장되면 요청은 `completed`입니다.
