@@ -13,17 +13,25 @@ from langsmith import tracing_context
 
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
+from app.agents.specialists.agent import GenerateSpecialist, answer_query, write_brief
+from app.llm.budget import LLMBudget, current_scope, llm_scope
 from app.schemas import (
     AGENT_IDS,
     QUESTION_FIELDS,
     AgentAnalysis,
+    AgentBrief,
+    AnalysisMode,
     AnalysisTask,
+    ConsultPlan,
     DecisionRequest,
     DecisionResult,
+    LandlordAnswer,
     MapLookupPlan,
     MapObservation,
     QuestionPlan,
     Site,
+    SpecialistAnswer,
+    SpecialistId,
     SupplementEvent,
     SupplementOperation,
     SupplementPlan,
@@ -33,7 +41,20 @@ from app.schemas import (
 from app.services.settings import validate_timeout
 
 from . import tools, workflow
+from .consult import build_specialist_tools
 from .supplement import OnSupplement, execute_supplement, validate_tools
+
+# 브리핑은 도구 2회 + finish, 되묻기 답변은 도구 최대 4회 + finish입니다.
+BRIEF_STEPS = 3
+CONSULT_STEPS = 5
+
+
+def consult_steps(agent_id: str, share: int) -> int:
+    """배정된 호출 몫 안에서 finish까지 끝낼 수 있는 차례 수입니다."""
+    if agent_id == "map_analysis":
+        # 지도 검색 한 번은 업종 매핑 모델 호출을 한 번 더 쓸 수 있습니다.
+        share = 1 + (share - 1) // 2
+    return max(1, min(CONSULT_STEPS, share))
 
 
 class GraphState(TypedDict, total=False):
@@ -41,13 +62,24 @@ class GraphState(TypedDict, total=False):
 
     task: AnalysisTask
     analyses: list[AgentAnalysis]
-    outcome: DecisionResult | SupplementPlan | QuestionPlan | WaitingForInput | MapLookupPlan
+    outcome: (
+        DecisionResult
+        | SupplementPlan
+        | QuestionPlan
+        | WaitingForInput
+        | MapLookupPlan
+        | ConsultPlan
+    )
     map_done: bool
     map_observation: MapObservation
     operations: list[SupplementOperation]
     supplement_done: bool
     feedback: list[str]
     supplement_context: list[SupplementEvent]
+    briefs: list[AgentBrief]
+    answers: list[SpecialistAnswer]
+    consult_round: int
+    context: dict
 
 
 @dataclass(frozen=True)
@@ -59,6 +91,9 @@ class RunHooks:
     on_supplement: OnSupplement | None = None
     on_map_requested: tools.OnMapRequested | None = None
     on_map_completed: tools.OnMapCompleted | None = None
+    on_map_result: Callable[[MapObservation, bool], Awaitable[None]] | None = None
+    on_brief: Callable[[AgentBrief], Awaitable[None]] | None = None
+    on_consult: Callable[[SpecialistAnswer], Awaitable[None]] | None = None
     on_questions: (
         Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]] | None
     ) = None
@@ -77,9 +112,27 @@ async def run_graph(
     allow_questions: bool = False,
     map_lookup: tools.MapLookup | None = None,
     hooks: RunHooks | None = None,
+    mode: AnalysisMode = "single_decision",
+    generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
+    resume_state: GraphState | None = None,
+    user_answers: list[LandlordAnswer] | None = None,
 ) -> DecisionResult | WaitingForInput:
     """외부 호출 전에 실행 구성을 검증하고 고정 단계와 선택 분기를 실행합니다."""
     hooks = hooks or RunHooks()
+    if mode not in {"single_decision", "multi_agent"}:
+        raise ValueError("지원하지 않는 분석 모드입니다.")
+    if mode == "multi_agent" and (
+        not generate_specialists
+        or not set(AGENT_IDS) <= set(generate_specialists)
+        or (map_lookup is not None and "map_analysis" not in generate_specialists)
+        or not all(callable(fn) for fn in generate_specialists.values())
+    ):
+        raise ValueError("전문가 호출 함수를 등록해 주세요.")
+    if resume_state is not None and (
+        mode != "multi_agent" or allow_questions or resume_state["task"].request_id != request_id
+    ):
+        raise ValueError("재개 요청의 모드·식별자·질문 설정이 올바르지 않습니다.")
+    budget = current_scope()[0] or (LLMBudget() if mode == "multi_agent" else None)
     supplements = list(supplements or [])
     validate_tools(supplements)
     validate_radius(radius_m)
@@ -132,6 +185,30 @@ async def run_graph(
             analyses=state["analyses"],
             map_observation=state.get("map_observation"),
         )
+        if mode == "multi_agent":
+            context = state["context"]
+            request.map_observation = context.get("map_observation")
+            specialists = [*AGENT_IDS, *(["map_analysis"] if map_lookup else [])]
+            if state["consult_round"] >= 2 or budget is not None and budget.open_calls < 3:
+                specialists = []
+            outcome = await decision.evaluate(
+                request,
+                generate=generate,
+                site=task.site,
+                user_answers=user_answers,
+                question_fields=list(QUESTION_FIELDS)
+                if allow_questions and (budget is None or budget.open_calls > 0)
+                else None,
+                feedback=context.get("feedback"),
+                supplement_context=context.get("supplement_context"),
+                deliberation={
+                    "briefs": state["briefs"],
+                    "answers": state["answers"],
+                    "specialists": specialists,
+                    "consult_round": state["consult_round"],
+                },
+            )
+            return {"outcome": outcome}
         if state["supplement_done"]:
             outcome = await decision.evaluate(
                 request,
@@ -205,7 +282,12 @@ async def run_graph(
             questions=plan.questions,
         )
         await hooks.on_questions(
-            state["task"], waiting, state["supplement_done"], state.get("feedback", [])
+            state["task"],
+            waiting,
+            state["supplement_done"],
+            state["context"].get("feedback", [])
+            if mode == "multi_agent"
+            else state.get("feedback", []),
         )
         return {"outcome": waiting}
 
@@ -234,6 +316,101 @@ async def run_graph(
             "supplement_done": True,
         }
 
+    async def collect(coroutines):
+        results = await asyncio.gather(*coroutines, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
+        return results
+
+    def registered(state, agent_id, query=None):
+        return build_specialist_tools(
+            state["task"],
+            agent_id,
+            analyses=state["analyses"],
+            supplements=supplements,
+            map_lookup=map_lookup,
+            hooks=hooks,
+            context=state["context"],
+            query=query,
+            operation_timeout=agent_timeout,
+        )
+
+    def current_data(state, agent_id):
+        if agent_id == "map_analysis":
+            observation = state["context"].get("map_observation")
+            return observation.data.model_dump(mode="json") if observation else {}
+        return next(a.data for a in state["analyses"] if a.agent_id == agent_id)
+
+    async def write_briefs(state: GraphState) -> GraphState:
+        async def one(source):
+            assert generate_specialists is not None
+            brief = await write_brief(
+                state["task"],
+                source,
+                generate=generate_specialists[source.agent_id],
+                tools=registered(state, source.agent_id),
+                get_data=lambda: current_data(state, source.agent_id),
+                max_steps=BRIEF_STEPS,
+            )
+            if hooks.on_brief:
+                await hooks.on_brief(brief.model_copy(deep=True))
+            return brief
+
+        briefs = await collect(one(source) for source in list(state["analyses"]))
+        return {"briefs": briefs, "analyses": state["analyses"], "context": state["context"]}
+
+    async def consult(state: GraphState) -> GraphState:
+        plan = state["outcome"]
+        if not isinstance(plan, ConsultPlan) or state["consult_round"] >= 2:
+            raise ValueError("전문가 되묻기 한도를 초과했습니다.")
+        round_number = state["consult_round"] + 1
+        # 전문가가 병렬로 예산을 나눠 쓰므로 시작 전에 몫을 정해 finish 차례를 보장합니다.
+        share = budget.open_calls // len(plan.queries) if budget is not None else CONSULT_STEPS
+
+        async def one(query):
+            assert generate_specialists is not None
+            previous = next(
+                (
+                    a.model_copy(deep=True)
+                    for a in state["analyses"]
+                    if a.agent_id == query.agent_id
+                ),
+                None,
+            )
+            old_map = state["context"].get("map_observation")
+            answer = await answer_query(
+                state["task"],
+                query,
+                round_number,
+                analysis=previous,
+                observation=old_map,
+                generate=generate_specialists[query.agent_id],
+                tools=registered(state, query.agent_id, query),
+                get_data=lambda: current_data(state, query.agent_id),
+                max_steps=consult_steps(query.agent_id, share),
+            )
+            current = next((a for a in state["analyses"] if a.agent_id == query.agent_id), None)
+            if current is not None and current != previous:
+                answer.analysis = current.model_copy(deep=True)
+            if (
+                query.agent_id == "map_analysis"
+                and state["context"].get("map_observation") != old_map
+            ):
+                answer.map_observation = state["context"]["map_observation"].model_copy(deep=True)
+            answer = SpecialistAnswer.model_validate(answer)
+            if hooks.on_consult:
+                await hooks.on_consult(answer.model_copy(deep=True))
+            return answer
+
+        answers = await collect(one(query) for query in plan.queries)
+        return {
+            "answers": [*state["answers"], *answers],
+            "consult_round": round_number,
+            "analyses": state["analyses"],
+            "context": state["context"],
+        }
+
     builder = StateGraph(GraphState)
     builder.add_node("prepare_address", prepare_address)
     builder.add_node("run_analyses", run_analyses)
@@ -241,13 +418,22 @@ async def run_graph(
     builder.add_node("execute_supplement", supplement_node)
     builder.add_node("ask_user", ask_user)
     builder.add_node("execute_map", execute_map)
-    builder.add_edge(START, "prepare_address")
+    builder.add_edge(START, "evaluate_decision" if resume_state is not None else "prepare_address")
     builder.add_edge("prepare_address", "run_analyses")
-    builder.add_edge("run_analyses", "evaluate_decision")
+    if mode == "multi_agent":
+        builder.add_node("write_briefs", write_briefs)
+        builder.add_node("consult", consult)
+        builder.add_edge("run_analyses", "write_briefs")
+        builder.add_edge("write_briefs", "evaluate_decision")
+        builder.add_edge("consult", "evaluate_decision")
+    else:
+        builder.add_edge("run_analyses", "evaluate_decision")
     builder.add_conditional_edges(
         "evaluate_decision",
         lambda state: (
-            "map"
+            "consult"
+            if isinstance(state["outcome"], ConsultPlan)
+            else "map"
             if isinstance(state["outcome"], MapLookupPlan)
             else "supplement"
             if isinstance(state["outcome"], SupplementPlan)
@@ -260,6 +446,7 @@ async def run_graph(
             "supplement": "execute_supplement",
             "question": "ask_user",
             "final": END,
+            **({"consult": "consult"} if mode == "multi_agent" else {}),
         },
     )
     builder.add_edge("execute_supplement", "evaluate_decision")
@@ -269,9 +456,15 @@ async def run_graph(
     initial: GraphState = {
         "supplement_done": False,
         "map_done": False,
+        "briefs": [],
+        "answers": [],
+        "consult_round": 0,
+        "context": {},
     }
+    if resume_state is not None:
+        initial.update(resume_state)
     # 주소·분석 자료는 기존 로컬 trace에만 남기고 외부 자동 추적은 사용하지 않습니다.
-    with tracing_context(enabled=False):
+    with tracing_context(enabled=False), llm_scope(budget, "decision", final=True):
         final = await graph.ainvoke(initial, config={"recursion_limit": 32})
     result = final["outcome"]
     if not isinstance(result, (DecisionResult, WaitingForInput)):

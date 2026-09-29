@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 
+from app.evidence import scalar_records
 from app.industries.catalog import CATALOG_VERSION
 from app.mocks import mock_generate
 from app.schemas import MapData, MapObservation, MapQueryResult
@@ -12,7 +13,24 @@ from app.schemas import MapData, MapObservation, MapQueryResult
 def interactive_decision(*, with_map: bool, allow_questions: bool):
     def generate(prompt, payload):
         data = json.loads(payload)
-        if with_map and data.get("map_observation") is None:
+        multi = data.get("analysis_mode") == "multi_agent"
+        if (
+            multi
+            and with_map
+            and not any(a["query"]["agent_id"] == "map_analysis" for a in data["answers"])
+        ):
+            return {
+                "action": "ask_specialists",
+                "queries": [
+                    {
+                        "agent_id": "map_analysis",
+                        "question": "주변 지하철역을 확인해 주세요.",
+                        "why_needed": "접근성 확인",
+                        "expected_impact": "교통 근거",
+                    }
+                ],
+            }
+        if not multi and with_map and data.get("map_observation") is None:
             return {
                 "action": "map_lookup",
                 "queries": [
@@ -39,6 +57,42 @@ def interactive_decision(*, with_map: bool, allow_questions: bool):
         return mock_generate(prompt, payload)
 
     return generate
+
+
+async def specialist(messages, definitions):
+    """전문가의 도구 호출·근거 제출도 외부 모델 없이 검증합니다."""
+    payload = json.loads(messages[1]["content"])
+    if payload["agent_id"] == "map_analysis" and len(messages) == 2:
+        name, arguments = "search_facility", {"code": "SW8"}
+    else:
+        data = payload.get("analysis", {}).get("data", payload.get("data", {}))
+        records = scalar_records(data)
+        findings = (
+            [
+                {
+                    "claim": "원자료 확인",
+                    "signal": "context",
+                    "industry_code": records[0]["industry_code"],
+                    "evidence": [{"path": records[0]["path"]}],
+                }
+            ]
+            if records
+            else []
+        )
+        name, arguments = (
+            "finish",
+            {"headline": "목업 전문가 요약", "findings": findings, "limitations": []},
+        )
+    return {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "mock",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(arguments, ensure_ascii=False)},
+            }
+        ],
+    }
 
 
 async def map_observation(task, plan):

@@ -56,6 +56,7 @@ def initialize(db_path: str | Path | None = None) -> Path:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_requests)")}
             if "catalog_version" not in columns:
                 connection.execute("ALTER TABLE analysis_requests ADD COLUMN catalog_version TEXT")
+        _migrate_deliberation(connection, schema)
     finally:
         connection.close()
     return path
@@ -80,13 +81,12 @@ def _migrate_waiting(connection: sqlite3.Connection, schema: str) -> None:
                 "CREATE TABLE IF NOT EXISTS analysis_requests", "CREATE TABLE analysis_requests_new"
             )
             connection.execute(create)
+            columns = ",".join(
+                row[1] for row in connection.execute("PRAGMA table_info(analysis_requests)")
+            )
             connection.execute(
-                "INSERT INTO analysis_requests_new "
-                "(request_id,input_address,radius_m,site_json,status,result_json,error_json,"
-                "created_at,completed_at) "
-                "SELECT request_id,input_address,radius_m,site_json,status,result_json,error_json,"
-                "created_at,completed_at "
-                "FROM analysis_requests"
+                f"INSERT INTO analysis_requests_new ({columns}) "
+                f"SELECT {columns} FROM analysis_requests"
             )
             connection.execute("DROP TABLE analysis_requests")
             connection.execute("ALTER TABLE analysis_requests_new RENAME TO analysis_requests")
@@ -96,3 +96,60 @@ def _migrate_waiting(connection: sqlite3.Connection, schema: str) -> None:
                 raise sqlite3.IntegrityError("기존 이력의 외래키 무결성 검사가 실패했습니다.")
     finally:
         connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_deliberation(connection: sqlite3.Connection, schema: str) -> None:
+    """이전 요청은 기존 모드로 남기고 지도·보완 이력의 차수를 보존합니다."""
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        columns = {r[1] for r in connection.execute("PRAGMA table_info(analysis_requests)")}
+        if "analysis_mode" not in columns:
+            connection.execute(
+                "ALTER TABLE analysis_requests ADD COLUMN analysis_mode TEXT NOT NULL "
+                "DEFAULT 'single_decision' "
+                "CHECK (analysis_mode IN ('single_decision','multi_agent'))"
+            )
+        if "execution_json" not in columns:
+            connection.execute(
+                "ALTER TABLE analysis_requests ADD COLUMN execution_json "
+                "TEXT NOT NULL DEFAULT '{}' "
+                "CHECK (json_valid(execution_json) AND json_type(execution_json)='object')"
+            )
+        columns = {r[1] for r in connection.execute("PRAGMA table_info(supplement_events)")}
+        if "analysis_attempt" not in columns:
+            connection.execute(
+                "ALTER TABLE supplement_events ADD COLUMN analysis_attempt INTEGER "
+                "CHECK (analysis_attempt IS NULL OR "
+                "(typeof(analysis_attempt)='integer' AND analysis_attempt>=2))"
+            )
+            connection.execute(
+                "UPDATE supplement_events SET analysis_attempt=2 "
+                "WHERE json_type(event_json,'$.analysis')='object' AND EXISTS "
+                "(SELECT 1 FROM agent_results a WHERE a.request_id=supplement_events.request_id "
+                "AND a.agent_id=supplement_events.agent_id AND a.attempt=2 "
+                "AND json(a.analysis_json)=json(json_extract(event_json,'$.analysis')))"
+            )
+        columns = {r[1] for r in connection.execute("PRAGMA table_info(map_observations)")}
+        if "attempt" not in columns:
+            definition = next(
+                s for s in schema.split(";") if "CREATE TABLE IF NOT EXISTS map_observations" in s
+            )
+            connection.execute(
+                definition.replace("IF NOT EXISTS map_observations", "map_observations_new")
+            )
+            connection.execute(
+                "INSERT INTO map_observations_new "
+                "(request_id,attempt,adopted,plan_json,task_json,status,"
+                "observation_json,created_at,completed_at) "
+                "SELECT request_id,1,CASE WHEN status='completed' THEN 1 ELSE 0 END,"
+                "plan_json,task_json,status,observation_json,created_at,completed_at "
+                "FROM map_observations"
+            )
+            connection.execute("DROP TABLE map_observations")
+            connection.execute("ALTER TABLE map_observations_new RENAME TO map_observations")
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS one_running_map ON map_observations(request_id) "
+            "WHERE status='running'"
+        )
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise sqlite3.IntegrityError("기존 이력의 외래키 무결성 검사가 실패했습니다.")

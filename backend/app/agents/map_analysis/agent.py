@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from app.industries.catalog import CATALOG_VERSION
 from app.industries.lookup import get
+from app.llm.budget import BudgetStorageError
 from app.schemas import (
     AnalysisTask,
     MapData,
@@ -237,6 +238,8 @@ async def observe(
         mappings = await map_categories(
             categories, generate=generate_mapping, cache_path=mapping_cache_path
         )
+    except BudgetStorageError:
+        raise
     except (RuntimeError, ValueError):
         mappings = {}
         degraded = True

@@ -2,7 +2,15 @@
 
 from typing import Annotated, Any, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    model_validator,
+)
 
 from app.industries import lookup
 
@@ -532,3 +540,119 @@ class DecisionResult(DecisionContent):
     status: Literal["ok", "partial", "no_data"]  # type: ignore[assignment]
     source_analyses: list[AgentAnalysis]
     map_observation: MapObservation | None = None
+
+
+# 멀티에이전트의 브리핑·되묻기는 원본 분석 계약과 분리합니다.
+SpecialistId = Literal[
+    "floating_population", "business_lifecycle", "commercial_area", "map_analysis"
+]
+AnalysisMode = Literal["single_decision", "multi_agent"]
+
+
+def _known_industry_code(code: str) -> str:
+    if lookup.find(code) is None:
+        raise ValueError("공통 업종표에 없는 코드입니다.")
+    return code
+
+
+IndustryCode = Annotated[Text, AfterValidator(_known_industry_code)]
+
+
+class EvidenceRef(Schema):
+    path: Text = Field(pattern=r"^/(?:[^~]|~[01])*$")
+
+
+class Finding(Schema):
+    claim: Annotated[str, Field(min_length=1, max_length=200)]
+    signal: Literal["positive", "negative", "caution", "context"]
+    industry_code: IndustryCode | None = None
+    evidence: list[EvidenceRef] = Field(min_length=1, max_length=3)
+
+
+class ToolCallRecord(Schema):
+    tool: Text
+    arguments: dict[str, JsonValue]
+    status: Literal["ok", "error", "rejected"]
+    elapsed_ms: Annotated[int, Field(ge=0)]
+
+
+class AgentBrief(Schema):
+    request_id: Text
+    agent_id: SpecialistId
+    source: Literal["model", "fallback"]
+    headline: Annotated[str, Field(min_length=1, max_length=200)]
+    findings: list[Finding] = Field(max_length=8)
+    limitations: list[Text] = Field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list, max_length=4)
+
+
+class SpecialistQuery(Schema):
+    agent_id: SpecialistId
+    question: Annotated[str, Field(min_length=1, max_length=300)]
+    industry_codes: list[IndustryCode] = Field(default_factory=list, max_length=5)
+    why_needed: Text
+    expected_impact: Text
+
+    @model_validator(mode="after")
+    def check_codes(self) -> Self:
+        if len(set(self.industry_codes)) != len(self.industry_codes):
+            raise ValueError("질문 업종 코드가 중복되었습니다.")
+        return self
+
+
+class ConsultPlan(Schema):
+    action: Literal["ask_specialists"]
+    queries: list[SpecialistQuery] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def check_targets(self) -> Self:
+        if len({q.agent_id for q in self.queries}) != len(self.queries):
+            raise ValueError("한 라운드에서 전문가별 질문은 하나만 허용합니다.")
+        return self
+
+
+class SpecialistAnswer(Schema):
+    request_id: Text
+    round: Annotated[int, Field(ge=1, le=2)]
+    query: SpecialistQuery
+    status: Literal["answered", "partial", "unavailable"]
+    findings: list[Finding] = Field(max_length=5)
+    analysis: AgentAnalysis | None = None
+    map_observation: MapObservation | None = None
+    limitations: list[Text] = Field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def check_sources(self) -> Self:
+        if self.analysis is not None and (
+            self.analysis.request_id != self.request_id
+            or self.analysis.agent_id != self.query.agent_id
+        ):
+            raise ValueError("전문가 답변과 분석의 식별자가 다릅니다.")
+        if self.map_observation is not None and (
+            self.query.agent_id != "map_analysis"
+            or self.map_observation.request_id != self.request_id
+        ):
+            raise ValueError("지도 전문가만 같은 요청의 관측을 전달할 수 있습니다.")
+        if self.status == "answered" and not self.findings:
+            raise ValueError("답변 완료에는 검증할 근거가 필요합니다.")
+        if self.status == "unavailable" and self.findings:
+            raise ValueError("답변 불가에는 판단 근거를 넣지 않습니다.")
+        return self
+
+
+class QuestionSnapshotV2(QuestionSnapshot):
+    """원본 차수와 전문가 이력을 참조하며 예산을 재개 시 유지합니다."""
+
+    version: Literal[2] = 2  # type: ignore[assignment]
+    brief_agents: list[AgentId] = Field(min_length=3, max_length=3)
+    consult_round: Annotated[int, Field(ge=0, le=2)] = 0
+    map_attempt: Annotated[int, Field(gt=0)] | None = None
+    llm_calls: Annotated[int, Field(ge=0, le=24)] = 0
+    elapsed_seconds: Annotated[float, Field(ge=0)] = 0.0
+
+    @model_validator(mode="after")
+    def check_briefs(self) -> Self:
+        if set(self.brief_agents) != set(AGENT_IDS):
+            raise ValueError("세 전문가의 브리핑 참조가 필요합니다.")
+        return self

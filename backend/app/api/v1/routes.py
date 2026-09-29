@@ -16,6 +16,7 @@ from app.agents.orchestration.workflow import build_supplement_tools
 from app.db import repository
 from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import (
+    AGENT_IDS,
     DEFAULT_RADIUS_M,
     AnswerSubmission,
     DecisionResult,
@@ -31,7 +32,7 @@ from app.services.analysis import (
     retry_decision,
 )
 
-from .mock import interactive_decision, map_observation
+from .mock import interactive_decision, map_observation, specialist
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 
@@ -112,6 +113,7 @@ async def create_analysis(
                 request_id=request_id,
                 resolve=mock_resolve,
                 agents=mock_agents(),
+                generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
                 radius_m=body.radius_m,
                 allow_questions=body.allow_questions,
                 map_lookup=map_observation if body.with_map else None,
@@ -159,6 +161,24 @@ async def get_analysis(request_id: str, request: Request) -> dict[str, Any]:
             repository.get_request, request_id, db_path=request.app.state.execution_settings.db_path
         )
         if row is not None:
+            row.pop("execution_json", None)
+            if row["analysis_mode"] == "multi_agent":
+                state = await asyncio.to_thread(
+                    repository.get_deliberation,
+                    request_id,
+                    db_path=request.app.state.execution_settings.db_path,
+                )
+                row["deliberation"] = {
+                    "briefs": [b.model_dump(mode="json") for b in state["briefs"]],
+                    "answers": [
+                        a.model_dump(mode="json", exclude={"analysis", "map_observation"})
+                        for a in state["specialist_answers"]
+                    ],
+                    "consult_round": state["consult_round"],
+                    "map_attempt": state["map_attempt"],
+                    "budget": state["execution"].get("budget", {"used": 0, "calls": []}),
+                    "elapsed_seconds": state["execution"].get("elapsed_seconds", 0),
+                }
             # 과거 업종명·스키마는 저장 당시 값 그대로 반환합니다.
             for name in ("site", "result", "error"):
                 value = row.pop(f"{name}_json")
@@ -236,6 +256,15 @@ async def submit_answers(
             normalized,
             settings=request.app.state.execution_settings,
             generate=mock_generate if _mock_enabled(mock) else None,
+            **(
+                {
+                    "generate_specialists": dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
+                    "map_lookup": map_observation,
+                    "supplements": [],
+                }
+                if _mock_enabled(mock)
+                else {}
+            ),
         )
     except HTTPException:
         raise

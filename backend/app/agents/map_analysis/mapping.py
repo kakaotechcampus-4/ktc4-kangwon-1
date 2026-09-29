@@ -16,6 +16,7 @@ from pydantic import model_validator
 
 from app.config import BACKEND_DIR
 from app.industries.catalog import INDUSTRIES
+from app.llm.budget import BudgetStorageError
 from app.llm.client import complete_json
 from app.llm.config import LLMSettings
 from app.schemas import Schema, Text
@@ -116,6 +117,8 @@ async def map_categories(
         if not isinstance(result, dict) or set(result) != set(pending):
             raise ValueError("원본 분류와 매핑 응답 항목이 다릅니다.")
         validated = {key: CategoryMapping.model_validate(value) for key, value in result.items()}
+    except BudgetStorageError:
+        raise
     except (RuntimeError, ValueError):
         if cached:
             return cached

@@ -4,6 +4,7 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import get_args
 
 from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.agents.commercial_area.config import Settings as CommercialSettings
@@ -11,6 +12,7 @@ from app.agents.floating_population.config import Settings as FloatingSettings
 from app.config import AddressSettings
 from app.db.connection import resolve_path
 from app.llm.config import LLMSettings
+from app.schemas import AnalysisMode, SpecialistId
 
 
 def validate_timeout(value: float) -> None:
@@ -28,10 +30,14 @@ class ExecutionSettings:
     db_path: str | Path | None = None
     agent_timeout: float = 180.0
     overall_timeout: float = 600.0
+    analysis_mode: AnalysisMode = "single_decision"
+    specialist_llms: dict[SpecialistId, LLMSettings] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         validate_timeout(self.agent_timeout)
         validate_timeout(self.overall_timeout)
+        if self.analysis_mode not in get_args(AnalysisMode):
+            raise ValueError("지원하지 않는 분석 모드입니다.")
 
     @classmethod
     def from_env(cls) -> "ExecutionSettings":
@@ -44,4 +50,9 @@ class ExecutionSettings:
             db_path=resolve_path(),
             agent_timeout=float(os.getenv("ANALYSIS_AGENT_TIMEOUT_SECONDS", "180")),
             overall_timeout=float(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "600")),
+            analysis_mode=os.getenv("ANALYSIS_MODE", "single_decision"),  # type: ignore[arg-type]
+            specialist_llms={
+                role: LLMSettings.from_env(f"SPECIALIST_{role.upper()}")
+                for role in get_args(SpecialistId)
+            },
         )

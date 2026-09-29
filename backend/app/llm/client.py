@@ -1,12 +1,14 @@
 """HTTP 재시도·응답 종료 검증을 한 경계에 둡니다."""
 
 import json
+import time
 from typing import Any
 
 import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 
+from .budget import current_scope
 from .config import LLMSettings
 
 
@@ -82,6 +84,32 @@ async def _complete(
     messages: list[Any], settings: LLMSettings, *, tools: list[Any] | None = None
 ) -> ChatCompletionMessage:
     settings.require_credentials()
+    budget, role, final = current_scope()
+    attempt = (
+        await budget.reserve(
+            role, final=final, input_chars=len(json.dumps(messages, ensure_ascii=False))
+        )
+        if budget is not None
+        else None
+    )
+    started = time.monotonic()
+    usage: list[Any] = []
+    status = "error"
+    try:
+        result = await _request(messages, settings, tools=tools, usage=usage)
+        status = "ok"
+        return result
+    finally:
+        if budget is not None and attempt is not None:
+            await budget.finish(
+                attempt,
+                status=status,
+                elapsed_ms=int((time.monotonic() - started) * 1000),
+                usage=usage[0] if usage else None,
+            )
+
+
+async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage:
     options: dict[str, Any] = {}
     if settings.max_tokens is not None:
         options["max_completion_tokens"] = settings.max_tokens
@@ -96,7 +124,7 @@ async def _complete(
             api_key=settings.api_key,
             base_url=settings.base_url,
             timeout=settings.timeout_seconds,
-            max_retries=1,
+            max_retries=0 if current_scope()[0] is not None else 1,
         ) as client:
             response = await client.chat.completions.create(
                 model=settings.model or "", messages=messages, **options
@@ -115,6 +143,7 @@ async def _complete(
         or not response.choices
     ):
         raise LLMResponseError("LLM_INVALID_RESPONSE")
+    usage.append(response.usage)
     choice = response.choices[0]
     if not isinstance(choice, Choice) or not isinstance(choice.message, ChatCompletionMessage):
         raise LLMResponseError("LLM_INVALID_RESPONSE")

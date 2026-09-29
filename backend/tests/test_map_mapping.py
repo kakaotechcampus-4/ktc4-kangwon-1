@@ -64,6 +64,25 @@ async def mapper(prompt, raw):
 
 
 class MapMappingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_mapping_budget_storage_failure_is_not_partial_success(self):
+        from app.llm.budget import BudgetStorageError
+
+        async def failed(*_):
+            raise BudgetStorageError("저장 실패")
+
+        with tempfile.TemporaryDirectory() as folder:
+            async with httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload()))
+            ) as http:
+                with self.assertRaises(BudgetStorageError):
+                    await agent.observe(
+                        task(),
+                        plan(),
+                        client=PlaceClient(Settings(api_key="fake"), http),
+                        generate_mapping=failed,
+                        mapping_cache_path=Path(folder) / "cache.sqlite3",
+                    )
+
     async def test_cached_mapping_plus_model_failure_is_partial_and_keeps_both_places(self):
         from unittest.mock import patch
 

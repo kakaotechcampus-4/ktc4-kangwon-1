@@ -1,16 +1,20 @@
 """요청과 검증된 분석 결과를 짧은 트랜잭션으로 저장합니다."""
 
 import json
+import math
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from app.industries.catalog import CATALOG_VERSION
+from app.llm.budget import MAX_CALLS
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
+    AgentBrief,
     AgentError,
+    AnalysisMode,
     AnalysisTask,
     AnswerSubmission,
     DecisionRequest,
@@ -18,7 +22,9 @@ from app.schemas import (
     MapLookupPlan,
     MapObservation,
     QuestionSnapshot,
+    QuestionSnapshotV2,
     Site,
+    SpecialistAnswer,
     SupplementEvent,
     normalize_answers,
     validate_radius,
@@ -50,18 +56,22 @@ def create_request(
     address: str,
     *,
     radius_m: int | None = None,
+    analysis_mode: AnalysisMode = "single_decision",
     db_path: str | Path | None = None,
 ) -> None:
     request_id = _text(request_id)
     _text(address)
+    if analysis_mode not in {"single_decision", "multi_agent"}:
+        raise ValueError("지원하지 않는 분석 모드입니다.")
     if radius_m is not None:
         radius_m = validate_radius(radius_m)
     with connect(db_path) as db:
         db.execute(
             "INSERT INTO analysis_requests "
-            "(request_id, input_address, radius_m, catalog_version, status, created_at) "
-            "VALUES (?, ?, ?, ?, 'pending', ?)",
-            (request_id, address, radius_m, CATALOG_VERSION, _now()),
+            "(request_id, input_address, radius_m, catalog_version, "
+            "analysis_mode, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            (request_id, address, radius_m, CATALOG_VERSION, analysis_mode, _now()),
         )
 
 
@@ -269,23 +279,35 @@ def list_agent_results(
         return [dict(row) for row in rows]
 
 
-def save_supplement_event(event: SupplementEvent, *, db_path: str | Path | None = None) -> None:
-    """보완 결과 2차 이력과 이벤트를 한 트랜잭션으로 저장합니다."""
+def save_supplement_event(
+    event: SupplementEvent, *, db_path: str | Path | None = None
+) -> int | None:
+    """보완 차수를 발급하고 결과와 이벤트를 함께 저장합니다."""
     event = SupplementEvent.model_validate(event)
     with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
         row = db.execute(
             "SELECT status FROM analysis_requests WHERE request_id = ?",
             (event.request_id,),
         ).fetchone()
         if row is None or row[0] != "running":
             raise ValueError("실행 중인 요청이 없습니다.")
+        attempt = None
         if event.analysis is not None:
             analysis = event.analysis
+            previous = db.execute(
+                "SELECT MAX(attempt) FROM agent_results WHERE request_id=? AND agent_id=?",
+                (event.request_id, analysis.agent_id),
+            ).fetchone()[0]
+            if previous is None:
+                raise ValueError("보완할 원본 분석이 없습니다.")
+            attempt = previous + 1
             db.execute(
-                "INSERT INTO agent_results VALUES (?, ?, 2, ?, ?, ?)",
+                "INSERT INTO agent_results VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     event.request_id,
                     analysis.agent_id,
+                    attempt,
                     analysis.status,
                     analysis.model_dump_json(),
                     _now(),
@@ -293,15 +315,18 @@ def save_supplement_event(event: SupplementEvent, *, db_path: str | Path | None 
             )
         db.execute(
             "INSERT INTO supplement_events "
-            "(request_id, agent_id, status, event_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            "(request_id, agent_id, status, event_json, created_at, analysis_attempt) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 event.request_id,
                 event.request.agent_id,
                 event.status,
                 event.model_dump_json(),
                 _now(),
+                attempt,
             ),
         )
+        return attempt
 
 
 def list_supplement_events(
@@ -332,18 +357,22 @@ def _load_question_analyses(
         )
     ):
         raise ValueError("저장된 위치·반경과 질문 작업이 다릅니다.")
-    events = [
-        SupplementEvent.model_validate_json(r[0])
-        for r in db.execute(
-            "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id", (request_id,)
-        )
-    ]
-    expected = dict.fromkeys(AGENT_IDS, 1)
-    for event in events:
-        if event.adopted:
-            expected[event.request.agent_id] = 2
+    events, expected = _supplement_sources(db, request_id)
     if snapshot.source_attempts != expected or snapshot.supplement_done != bool(events):
         raise ValueError("채택된 분석 차수 또는 보완 이력이 다릅니다.")
+    if isinstance(snapshot, QuestionSnapshotV2):
+        state = _deliberation(db, request_id)
+        if (
+            row["analysis_mode"] != "multi_agent"
+            or set(snapshot.brief_agents) != {b.agent_id for b in state["briefs"]}
+            or snapshot.consult_round != state["consult_round"]
+            or snapshot.map_attempt != state["map_attempt"]
+            or snapshot.llm_calls != state["execution"].get("budget", {}).get("used", 0)
+            or snapshot.elapsed_seconds != state["execution"].get("elapsed_seconds", 0)
+        ):
+            raise ValueError("질문이 참조한 전문가·지도·예산 이력이 다릅니다.")
+    elif row["analysis_mode"] != "single_decision":
+        raise ValueError("질문 버전과 실행 모드가 다릅니다.")
     analyses = []
     for agent_id in AGENT_IDS:
         source = db.execute(
@@ -363,7 +392,7 @@ def _load_question_analyses(
 def load_question_analyses(
     snapshot: QuestionSnapshot, *, db_path: str | Path | None = None
 ) -> list[AgentAnalysis]:
-    snapshot = QuestionSnapshot.model_validate(snapshot)
+    snapshot = parse_snapshot(snapshot)
     with connect(db_path) as db:
         return _load_question_analyses(db, snapshot)
 
@@ -371,7 +400,7 @@ def load_question_analyses(
 def save_question_snapshot(
     snapshot: QuestionSnapshot, *, db_path: str | Path | None = None
 ) -> None:
-    snapshot = QuestionSnapshot.model_validate(snapshot)
+    snapshot = parse_snapshot(snapshot)
     request_id = snapshot.task.request_id
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
@@ -397,7 +426,7 @@ def get_question_snapshot(
         row = db.execute(
             "SELECT snapshot_json FROM question_sessions WHERE request_id=?", (_text(request_id),)
         ).fetchone()
-        return QuestionSnapshot.model_validate_json(row[0]) if row else None
+        return parse_snapshot(row[0]) if row else None
 
 
 def get_question_answers(
@@ -424,7 +453,7 @@ def claim_question_resume(
         ).fetchone()
         if row is None:
             raise ValueError("질문 대기 기록이 없습니다.")
-        snapshot = QuestionSnapshot.model_validate_json(row["snapshot_json"])
+        snapshot = parse_snapshot(row["snapshot_json"])
         normalized = normalize_answers(snapshot.waiting, submission)
         if row["answers_json"] is not None:
             if AnswerSubmission.model_validate_json(row["answers_json"]) != normalized:
@@ -453,7 +482,7 @@ def claim_question_resume(
 
 def start_map_lookup(
     task: AnalysisTask, plan: MapLookupPlan, *, db_path: str | Path | None = None
-) -> None:
+) -> int:
     task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
@@ -468,20 +497,33 @@ def start_map_lookup(
             or row["radius_m"] != task.radius_m
         ):
             raise ValueError("지도 조회할 실행 요청과 위치가 다릅니다.")
+        last = db.execute(
+            "SELECT MAX(attempt) FROM map_observations WHERE request_id=?", (task.request_id,)
+        ).fetchone()[0]
+        if last and row["analysis_mode"] == "single_decision":
+            raise sqlite3.IntegrityError("기존 모드는 지도 조회를 한 번만 저장합니다.")
+        attempt = (last or 0) + 1
         db.execute(
             "INSERT INTO map_observations "
-            "(request_id,plan_json,task_json,status,created_at) VALUES (?,?,?,'running',?)",
-            (task.request_id, plan.model_dump_json(), task.model_dump_json(), _now()),
+            "(request_id,attempt,plan_json,task_json,status,created_at) "
+            "VALUES (?,?,?,?,'running',?)",
+            (task.request_id, attempt, plan.model_dump_json(), task.model_dump_json(), _now()),
         )
+        return attempt
 
 
-def complete_map_lookup(observation: MapObservation, *, db_path: str | Path | None = None) -> None:
+def complete_map_lookup(
+    observation: MapObservation, *, adopted: bool = True, db_path: str | Path | None = None
+) -> None:
     observation = MapObservation.model_validate(observation)
+    if type(adopted) is not bool:
+        raise ValueError("지도 채택 여부가 올바르지 않습니다.")
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute(
             "SELECT m.*, r.status AS request_status FROM map_observations m "
-            "JOIN analysis_requests r USING(request_id) WHERE request_id=?",
+            "JOIN analysis_requests r USING(request_id) "
+            "WHERE request_id=? AND m.status='running'",
             (observation.request_id,),
         ).fetchone()
         if row is None or row["status"] != "running" or row["request_status"] != "running":
@@ -495,14 +537,28 @@ def complete_map_lookup(observation: MapObservation, *, db_path: str | Path | No
         ):
             raise ValueError("지도 관측의 위치·검색 대상이 다릅니다.")
         db.execute(
-            "UPDATE map_observations SET status='completed', observation_json=?, "
-            "completed_at=? WHERE request_id=?",
-            (observation.model_dump_json(), _now(), observation.request_id),
+            "UPDATE map_observations SET status='completed', observation_json=?, adopted=?, "
+            "completed_at=? WHERE request_id=? AND attempt=?",
+            (
+                observation.model_dump_json(),
+                int(adopted),
+                _now(),
+                observation.request_id,
+                row["attempt"],
+            ),
         )
 
 
 def _get_map_observation(db: sqlite3.Connection, request_id: str) -> MapObservation | None:
-    row = db.execute("SELECT * FROM map_observations WHERE request_id=?", (request_id,)).fetchone()
+    if db.execute(
+        "SELECT 1 FROM map_observations WHERE request_id=? AND status='running'", (request_id,)
+    ).fetchone():
+        raise ValueError("지도 관측 저장이 완료되지 않았습니다.")
+    row = db.execute(
+        "SELECT * FROM map_observations WHERE request_id=? AND adopted=1 "
+        "ORDER BY attempt DESC LIMIT 1",
+        (request_id,),
+    ).fetchone()
     if row is None:
         return None
     if row["status"] != "completed":
@@ -524,11 +580,21 @@ def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dic
     """진행 중인 조회도 상태와 공개 관측만 반환합니다."""
     with connect(db_path) as db:
         row = db.execute(
-            "SELECT status, observation_json FROM map_observations WHERE request_id=?",
+            "SELECT status, observation_json FROM map_observations WHERE request_id=? "
+            "ORDER BY attempt DESC LIMIT 1",
             (_text(request_id),),
         ).fetchone()
         return (
-            {"status": row[0], "observation": json.loads(row[1]) if row[1] else None}
+            {
+                "status": row[0],
+                "observation": (
+                    latest.model_dump(mode="json")
+                    if (latest := _get_map_observation(db, request_id))
+                    else None
+                )
+                if row[0] == "completed"
+                else None,
+            }
             if row
             else None
         )
@@ -549,19 +615,7 @@ def _load_resume_context(db: sqlite3.Connection, request_id: str) -> dict[str, A
         site=Site.model_validate_json(row["site_json"]),
         radius_m=row["radius_m"],
     )
-    events = [
-        SupplementEvent.model_validate_json(r[0])
-        for r in db.execute(
-            "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id",
-            (request_id,),
-        )
-    ]
-    attempts = dict.fromkeys(AGENT_IDS, 1)
-    for event in events:
-        if event.request_id != request_id:
-            raise ValueError("보완 요청 식별자가 다릅니다.")
-        if event.adopted:
-            attempts[event.request.agent_id] = 2
+    events, attempts = _supplement_sources(db, request_id)
     analyses = []
     for agent_id, attempt in attempts.items():
         source = db.execute(
@@ -581,10 +635,11 @@ def _load_resume_context(db: sqlite3.Connection, request_id: str) -> dict[str, A
     ).fetchone()
     answers, feedback = [], []
     if questions:
-        snapshot = QuestionSnapshot.model_validate_json(questions[0])
+        snapshot = parse_snapshot(questions[0])
         submission = AnswerSubmission.model_validate_json(questions[1])
         answers = normalize_answers(snapshot.waiting, submission).answers
-        analyses = _load_question_analyses(db, snapshot)
+        if not isinstance(snapshot, QuestionSnapshotV2):
+            analyses = _load_question_analyses(db, snapshot)
         feedback = snapshot.feedback
     observation = _get_map_observation(db, request_id)
     if observation and (observation.site != task.site or observation.radius_m != task.radius_m):
@@ -602,4 +657,188 @@ def _load_resume_context(db: sqlite3.Connection, request_id: str) -> dict[str, A
         "feedback": feedback,
         "supplement_context": events,
         "source_attempts": attempts,
+        "task": task,
+        "analysis_mode": row["analysis_mode"],
+        **_deliberation(db, request_id),
     }
+
+
+def parse_snapshot(value: QuestionSnapshot | dict | str) -> QuestionSnapshot | QuestionSnapshotV2:
+    data = (
+        value.model_dump(mode="json")
+        if isinstance(value, QuestionSnapshot)
+        else json.loads(value)
+        if isinstance(value, str)
+        else value
+    )
+    model = QuestionSnapshotV2 if data.get("version") == 2 else QuestionSnapshot
+    return model.model_validate(data)
+
+
+def _supplement_sources(db, request_id):
+    events, attempts = [], dict.fromkeys(AGENT_IDS, 1)
+    for row in db.execute(
+        "SELECT event_json,analysis_attempt FROM supplement_events WHERE request_id=? ORDER BY id",
+        (request_id,),
+    ):
+        event = SupplementEvent.model_validate_json(row[0])
+        if event.request_id != request_id:
+            raise ValueError("보완 요청 식별자가 다릅니다.")
+        if event.adopted:
+            if row[1] is None:
+                raise ValueError("채택한 보완의 분석 차수가 없습니다.")
+            attempts[event.request.agent_id] = row[1]
+        events.append(event)
+    return events, attempts
+
+
+def update_execution_state(
+    request_id: str,
+    *,
+    budget: dict | None = None,
+    elapsed_seconds: float | None = None,
+    capabilities: dict | None = None,
+    db_path=None,
+) -> None:
+    """소비 예산·활성 실행 시간은 되돌리지 않고 저장합니다."""
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT execution_json,status FROM analysis_requests WHERE request_id=?", (request_id,)
+        ).fetchone()
+        if row is None or row[1] != "running":
+            raise ValueError("실행 중인 요청이 없습니다.")
+        state = json.loads(row[0])
+        if budget is not None:
+            used = budget.get("used")
+            if (
+                type(used) is not int
+                or not state.get("budget", {}).get("used", 0) <= used <= MAX_CALLS
+                or not isinstance(budget.get("calls"), list)
+            ):
+                raise ValueError("모델 소비 예산이 올바르지 않습니다.")
+            state["budget"] = budget
+        if elapsed_seconds is not None:
+            if not math.isfinite(elapsed_seconds) or elapsed_seconds < state.get(
+                "elapsed_seconds", 0
+            ):
+                raise ValueError("누적 실행 시간은 줄일 수 없습니다.")
+            state["elapsed_seconds"] = elapsed_seconds
+        if capabilities is not None:
+            if "capabilities" in state and state["capabilities"] != capabilities:
+                raise ValueError("등록한 도구 범위를 변경할 수 없습니다.")
+            state["capabilities"] = capabilities
+        db.execute(
+            "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
+            (json.dumps(state, ensure_ascii=False, allow_nan=False), request_id),
+        )
+
+
+def _require_multi_running(db, request_id):
+    row = db.execute(
+        "SELECT analysis_mode,status FROM analysis_requests WHERE request_id=?", (request_id,)
+    ).fetchone()
+    if row is None or tuple(row) != ("multi_agent", "running"):
+        raise ValueError("실행 중인 멀티에이전트 요청이 없습니다.")
+
+
+def save_agent_brief(brief: AgentBrief, *, db_path=None) -> None:
+    brief = AgentBrief.model_validate(brief)
+    with connect(db_path) as db:
+        _require_multi_running(db, brief.request_id)
+        db.execute(
+            "INSERT INTO agent_briefs VALUES (?,?,?,?)",
+            (brief.request_id, brief.agent_id, brief.model_dump_json(), _now()),
+        )
+
+
+def list_agent_briefs(request_id: str, *, db_path=None) -> list[AgentBrief]:
+    with connect(db_path) as db:
+        return [
+            AgentBrief.model_validate_json(r[0])
+            for r in db.execute(
+                "SELECT brief_json FROM agent_briefs WHERE request_id=? ORDER BY agent_id",
+                (_text(request_id),),
+            )
+        ]
+
+
+def save_specialist_answer(answer: SpecialistAnswer, *, db_path=None) -> None:
+    answer = SpecialistAnswer.model_validate(answer)
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        _require_multi_running(db, answer.request_id)
+        if (
+            db.execute(
+                "SELECT count(*) FROM specialist_consults WHERE request_id=? AND round=?",
+                (answer.request_id, answer.round),
+            ).fetchone()[0]
+            >= 3
+        ):
+            raise ValueError("라운드당 전문가 답변은 최대 세 개입니다.")
+        db.execute(
+            "INSERT INTO specialist_consults VALUES (?,?,?,?,?,?)",
+            (
+                answer.request_id,
+                answer.round,
+                answer.query.agent_id,
+                answer.status,
+                answer.model_dump_json(),
+                _now(),
+            ),
+        )
+
+
+def list_specialist_answers(request_id: str, *, db_path=None) -> list[SpecialistAnswer]:
+    with connect(db_path) as db:
+        return [
+            SpecialistAnswer.model_validate_json(r[0])
+            for r in db.execute(
+                "SELECT answer_json FROM specialist_consults WHERE request_id=? "
+                "ORDER BY round,agent_id",
+                (_text(request_id),),
+            )
+        ]
+
+
+def _deliberation(db, request_id):
+    row = db.execute(
+        "SELECT execution_json FROM analysis_requests WHERE request_id=?", (request_id,)
+    ).fetchone()
+    briefs = [
+        AgentBrief.model_validate_json(r[0])
+        for r in db.execute(
+            "SELECT brief_json FROM agent_briefs WHERE request_id=? ORDER BY agent_id",
+            (request_id,),
+        )
+    ]
+    answers = [
+        SpecialistAnswer.model_validate_json(r[0])
+        for r in db.execute(
+            "SELECT answer_json FROM specialist_consults WHERE request_id=? "
+            "ORDER BY round,agent_id",
+            (request_id,),
+        )
+    ]
+    attempted = {}
+    for saved in db.execute(
+        "SELECT plan_json FROM map_observations WHERE request_id=? ORDER BY attempt", (request_id,)
+    ):
+        for query in MapLookupPlan.model_validate_json(saved[0]).unique_queries():
+            attempted[(query.kind, query.industry_code, query.facility_code, query.query)] = query
+    return {
+        "briefs": briefs,
+        "specialist_answers": answers,
+        "map_queries": list(attempted.values()),
+        "consult_round": max((a.round for a in answers), default=0),
+        "map_attempt": db.execute(
+            "SELECT MAX(attempt) FROM map_observations WHERE request_id=? AND adopted=1",
+            (request_id,),
+        ).fetchone()[0],
+        "execution": json.loads(row[0]) if row else {},
+    }
+
+
+def get_deliberation(request_id: str, *, db_path=None) -> dict[str, Any]:
+    with connect(db_path) as db:
+        return _deliberation(db, _text(request_id))

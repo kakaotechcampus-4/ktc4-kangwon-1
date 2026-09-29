@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from app.llm import client
 from app.llm.config import LLMSettings
-from app.schemas import DecisionContent, MapLookupPlan, QuestionPlan, SupplementPlan
+from app.schemas import ConsultPlan, DecisionContent, MapLookupPlan, QuestionPlan, SupplementPlan
 
 
 class InvalidDecisionCategory(ValueError):
@@ -37,12 +37,14 @@ def validate_content(payload) -> DecisionContent:
 
 async def generate_decision(
     system_prompt: str, input_json: str, settings: LLMSettings | None = None
-) -> DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan:
+) -> DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan:
     payload = await client.complete_json(
         system_prompt, input_json, settings or LLMSettings.from_env("DECISION")
     )
     schema = (
-        SupplementPlan
+        ConsultPlan
+        if isinstance(payload, dict) and payload.get("action") == "ask_specialists"
+        else SupplementPlan
         if isinstance(payload, dict) and payload.get("action") == "supplement"
         else QuestionPlan
         if isinstance(payload, dict) and payload.get("action") == "ask_user"
@@ -50,6 +52,16 @@ async def generate_decision(
         if isinstance(payload, dict) and payload.get("action") == "map_lookup"
         else DecisionContent
     )
+    if schema is ConsultPlan and isinstance(payload.get("queries"), list):
+        # 같은 전문가에게 겹친 질문은 첫 질문만 남깁니다. 허용 대상 확인은 판정 에이전트가 합니다.
+        seen: set = set()
+        kept = []
+        for query in payload["queries"]:
+            agent_id = query.get("agent_id") if isinstance(query, dict) else None
+            if agent_id is None or agent_id not in seen:
+                seen.add(agent_id)
+                kept.append(query)
+        payload["queries"] = kept
     try:
         if schema is DecisionContent:
             return validate_content(payload)

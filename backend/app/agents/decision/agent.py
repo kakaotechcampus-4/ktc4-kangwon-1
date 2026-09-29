@@ -15,6 +15,7 @@ from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
+    ConsultPlan,
     DecisionContent,
     DecisionRequest,
     DecisionResult,
@@ -38,8 +39,11 @@ GenerateDecision = Callable[
     | SupplementPlan
     | QuestionPlan
     | MapLookupPlan
+    | ConsultPlan
     | dict
-    | Awaitable[DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | dict],
+    | Awaitable[
+        DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan | dict
+    ],
 ]
 
 
@@ -93,7 +97,8 @@ async def evaluate(
     user_answers: list[LandlordAnswer] | None = None,
     site: Site | None = None,
     allow_map_lookup: bool = False,
-) -> DecisionResult | SupplementPlan | QuestionPlan | MapLookupPlan:
+    deliberation: dict | None = None,
+) -> DecisionResult | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan:
     """보완 가능 작업이 있을 때만 내부 보완 요청을 허용합니다."""
     request = DecisionRequest.model_validate(request)
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
@@ -102,9 +107,16 @@ async def evaluate(
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
     limitations = _collect_limitations(sources, available, observation, answers, feedback)
+    if deliberation is not None:
+        limitations.extend(
+            message
+            for item in [*deliberation["briefs"], *deliberation["answers"]]
+            for message in item.limitations
+        )
 
-    if available or operations:
-        prompt, payload, visible = _build_prompt(
+    if available or operations or deliberation is not None:
+        prompt, payload, visible = await asyncio.to_thread(
+            _build_prompt,
             request,
             operations,
             allowed_questions,
@@ -113,6 +125,7 @@ async def evaluate(
             feedback,
             supplement_context,
             allow_map_lookup,
+            deliberation,
         )
         failures: list[dict[str, Any]] = []
         for attempt in range(2):
@@ -129,6 +142,9 @@ async def evaluate(
                     operations=operations,
                     allowed_questions=allowed_questions,
                     allow_map_lookup=allow_map_lookup and observation is None,
+                    specialists=deliberation.get("specialists", [])
+                    if deliberation is not None
+                    else [],
                 )
                 if not isinstance(outcome, DecisionContent):
                     return outcome
@@ -156,13 +172,14 @@ async def evaluate(
                 # 데이터 보완과 별개로 같은 자료의 판단 출력만 한 번 교정합니다.
                 payload.pop("supplement_operations", None)
                 payload.pop("question_fields", None)
+                payload.pop("specialists", None)
                 payload["correction"] = correction
                 payload["previous_decision"] = previous
                 prompt += (
                     "\n이번 호출은 최종판단 출력 교정입니다. "
-                    "보완·지도·사용자 질문 요청은 금지됩니다. "
+                    "전문가 질문·보완·지도·사용자 질문 요청은 금지됩니다. "
                     "correction의 오류 위치·사유와 previous_decision을 확인하고 "
-                    "현재 analyses의 실제 값으로 전체 최종판단을 다시 작성하세요. "
+                    "현재 제공된 원자료 값으로 전체 최종판단을 다시 작성하세요. "
                     "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
                     "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
                     "industry_evidence에서 판단 업종에 연결된 경로를 그대로 사용하세요. "
@@ -363,47 +380,12 @@ def _validate_evidence(
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
     """지도 근거는 정상 조회의 허용 필드와 일치 업종만 인용합니다."""
+    from app.evidence import valid_map_path
+
     if observation is None or observation.status == "error":
         return False
-    parts = path.split("/")
-    if len(parts) != 4 or parts[0] or re.search(r"~(?![01])", path):
-        return False
-    _, section, key, field = [p.replace("~1", "/").replace("~0", "~") for p in parts]
     industry = lookup.find_by_name(industry_name)
-    if industry is None:
-        return False
-    data = observation.data
-    if section == "industries":
-        return key == industry.code and key in data.industries and field == "sampled_count"
-    if section == "queries":
-        query = data.queries.get(key)
-        # 키워드 전체 검색 건수를 특정 업종 수로 인용하지 못하게 합니다.
-        return bool(
-            query
-            and query.status == "ok"
-            and field == "total_count"
-            and (
-                query.request.kind == "infrastructure"
-                or query.request.industry_code == industry.code
-                and query.total_count == 0
-            )
-        )
-    if section == "places":
-        place = data.places.get(key)
-        if place is None or field not in {"name", "distance_m"}:
-            return False
-        if field == "distance_m" and place.distance_m is None:
-            return False
-        return (
-            place.mapping_status == "mapped"
-            and place.industry_code == industry.code
-            or place.mapping_status == "not_applicable"
-            and any(
-                q.status == "ok" and q.request.kind == "infrastructure" and key in q.place_ids
-                for q in data.queries.values()
-            )
-        )
-    return False
+    return bool(industry and valid_map_path(path, industry.code, observation.data.model_dump()))
 
 
 def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:
@@ -455,6 +437,7 @@ def _build_prompt(
     feedback,
     supplement_context,
     allow_map_lookup,
+    deliberation=None,
 ):
     """모델에 노출할 자료와 허용 작업만 구성합니다."""
     observation = request.map_observation
@@ -465,7 +448,8 @@ def _build_prompt(
     )
     if operations:
         prompt += (
-            "\n보완이 필요한 경우에만 다음 JSON 스키마의 요청을 반환할 수 있습니다. "
+            "\n'최종판단 전에 확인 도구를 먼저 검토' 규칙에 해당하면 "
+            "다음 JSON 스키마로 보완을 요청합니다. "
             "일반 최종판단은 기존 DecisionContent 형식을 유지합니다.\n"
             + json.dumps(SupplementPlan.model_json_schema(), ensure_ascii=False)
         )
@@ -480,20 +464,47 @@ def _build_prompt(
     payload["industry_evidence"] = industry_catalog(
         {key: item.data for key, item in visible.items()}
     )
-    if allow_map_lookup and observation is None:
-        prompt += "\n필요할 때만 지도 조회 JSON을 요청할 수 있습니다:\n" + json.dumps(
-            MapLookupPlan.model_json_schema(), ensure_ascii=False
+    if deliberation is not None:
+        from app.llm.budget import current_scope
+
+        from .context import build_context
+
+        payload = build_context(
+            request, briefs=deliberation["briefs"], answers=deliberation["answers"]
         )
+        payload["analysis_mode"] = "multi_agent"
+        payload["specialists"] = deliberation.get("specialists", [])
+        payload["consult_round"] = deliberation.get("consult_round", 0)
+        budget = current_scope()[0]
+        payload["limits"] = {
+            "remaining_consult_rounds": max(0, 2 - payload["consult_round"]),
+            "remaining_model_calls": budget.limit - budget.used if budget else None,
+            "reserved_final_calls": 2,
+        }
+        visible = {a.agent_id: a for a in request.analyses if a.status in {"ok", "partial"}}
+        if payload["specialists"]:
+            prompt += "\n멀티에이전트 모드: 부족한 정보는 ask_specialists로 전문가에게 묻습니다.\n"
+            prompt += json.dumps(ConsultPlan.model_json_schema(), ensure_ascii=False)
+        else:
+            prompt += "\n전문가 추가 질문은 금지됩니다. 현재 자료로 판단하세요."
+    if allow_map_lookup and observation is None:
+        prompt += (
+            "\n위 확인 도구 규칙에 해당하면 다음 JSON으로 지도 조회를 요청합니다:\n"
+            + json.dumps(MapLookupPlan.model_json_schema(), ensure_ascii=False)
+        )
+    elif deliberation is not None:
+        prompt += "\n직접 map_lookup은 금지됩니다. 지도 확인은 등록된 전문가에게만 요청하세요."
     else:
         prompt += "\n지도 추가 조회는 금지됩니다."
     if allowed_questions:
-        prompt += "\n필요한 경우에만 허용 항목으로 질문하세요. JSON 스키마:\n" + json.dumps(
-            QuestionPlan.model_json_schema(), ensure_ascii=False
+        prompt += (
+            "\n위 확인 도구 규칙에 해당하면 허용 항목으로 질문합니다. JSON 스키마:\n"
+            + json.dumps(QuestionPlan.model_json_schema(), ensure_ascii=False)
         )
         payload["question_fields"] = sorted(allowed_questions)
     else:
         prompt += (
-            "\n사용자 질문은 금지됩니다. 허용된 데이터 보완·지도 조회가 없으면 "
+            "\n사용자 질문은 금지됩니다. 허용된 전문가 질문·데이터 보완·지도 조회가 없으면 "
             "최종판단 또는 no_data를 반환하세요."
         )
     if answers:
@@ -511,13 +522,28 @@ def _build_prompt(
     return prompt, payload, visible
 
 
-def _parse_outcome(produced, *, final_only, operations, allowed_questions, allow_map_lookup):
+def _parse_outcome(
+    produced, *, final_only, operations, allowed_questions, allow_map_lookup, specialists=()
+):
     """모델의 행동을 한 번 구분하고 현재 허용 범위를 검증합니다."""
     action = (
         produced.get("action") if isinstance(produced, dict) else getattr(produced, "action", None)
     )
-    if action in {"map_lookup", "ask_user", "supplement"} and final_only:
+    if action in {"map_lookup", "ask_user", "supplement", "ask_specialists"} and final_only:
         raise ValueError("교정 단계에서는 최종판단만 허용합니다.")
+    if action == "ask_specialists":
+        # 같은 전문가에게 겹친 질문이나 허용되지 않은 전문가는 요청 전체를 실패시키지 않고
+        # 전문가별 첫 질문만 남깁니다. 남는 질문이 없으면 계약 오류입니다.
+        raw = produced if isinstance(produced, dict) else produced.model_dump(mode="json")
+        queries, seen = [], set()
+        for query in raw.get("queries") or []:
+            agent_id = query.get("agent_id") if isinstance(query, dict) else None
+            if agent_id in specialists and agent_id not in seen:
+                seen.add(agent_id)
+                queries.append(query)
+        if not queries:
+            raise ValueError("현재 단계에서 해당 전문가에게 질문할 수 없습니다.")
+        return ConsultPlan.model_validate({**raw, "queries": queries[:3]})
     if action == "map_lookup":
         if not allow_map_lookup:
             raise ValueError("현재 단계에서는 지도 조회를 요청할 수 없습니다.")
