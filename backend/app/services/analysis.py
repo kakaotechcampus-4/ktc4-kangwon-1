@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import sqlite3
 import uuid
 from collections.abc import Awaitable, Callable, Coroutine
@@ -42,6 +43,8 @@ from app.schemas import (
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
+
+logger = logging.getLogger(__name__)
 
 
 async def _settle[T](operation: Coroutine[Any, Any, T]) -> T:
@@ -149,7 +152,9 @@ async def resume_analysis(
                         supplements=supplements,
                         map_lookup=map_lookup,
                         agent_timeout=settings.agent_timeout,
-                        hooks=_storage_hooks(path, bundle["source_attempts"]),
+                        hooks=_storage_hooks(
+                            path, bundle["source_attempts"], request_id=submission.request_id
+                        ),
                         resume_state={
                             "task": bundle["task"],
                             "analyses": bundle["request"].analyses,
@@ -177,6 +182,7 @@ async def resume_analysis(
                         db_path=path,
                     )
                 )
+            await _emit(path, submission.request_id, "run", "completed", status=result.status)
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if owned:
@@ -369,7 +375,7 @@ async def execute_analysis(
                     mode=settings.analysis_mode,
                     generate_specialists=experts,
                     hooks=replace(
-                        _storage_hooks(path, source_attempts, on_supplement),
+                        _storage_hooks(path, source_attempts, on_supplement, request_id=request_id),
                         on_questions=save_questions if allow_questions else None,
                     ),
                 )
@@ -384,6 +390,7 @@ async def execute_analysis(
                         db_path=path,
                     )
                 )
+            await _emit(path, request_id, "run", "completed", status=result.status)
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if owned:
@@ -513,6 +520,8 @@ async def _record_failure(
         raise
     except Exception:
         error.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")
+        return
+    await _emit(path, request_id, "run", "failed", code=_failure_code(error, retry=retry))
 
 
 def build_specialist_generators(settings, injected=None, *, with_map=False):
@@ -529,7 +538,21 @@ def build_specialist_generators(settings, injected=None, *, with_map=False):
     }
 
 
-def _storage_hooks(path, source_attempts, on_supplement=None) -> RunHooks:
+async def _emit(path, request_id: str, stage: str, event: str, **detail) -> None:
+    """진행 이벤트는 화면 표시용이라 저장 실패가 분석을 멈추지 않게 기록만 남깁니다."""
+    try:
+        await _settle(
+            asyncio.to_thread(
+                repository.append_event, request_id, stage, event, detail, db_path=path
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("진행 이벤트를 저장하지 못했습니다: %s %s", stage, event, exc_info=True)
+
+
+def _storage_hooks(path, source_attempts, on_supplement=None, *, request_id=None) -> RunHooks:
     async def write(fn, *args, **kwargs):
         return await _settle(asyncio.to_thread(fn, *args, db_path=path, **kwargs))
 
@@ -567,6 +590,11 @@ def _storage_hooks(path, source_attempts, on_supplement=None) -> RunHooks:
         on_map_result=save_map,
         on_brief=save_brief,
         on_consult=save_answer,
+        on_step=(
+            (lambda stage, event, detail: _emit(path, request_id, stage, event, **detail))
+            if request_id
+            else None
+        ),
     )
 
 

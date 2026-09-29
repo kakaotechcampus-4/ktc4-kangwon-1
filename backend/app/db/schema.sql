@@ -133,3 +133,14 @@ CREATE TABLE IF NOT EXISTS question_sessions (
         AND json_extract(answers_json, '$.question_set_id') IS question_set_id
     ))
 );
+
+-- 진행 화면용 단계 이벤트입니다. 분석 판단의 근거가 아니며 요약만 저장합니다.
+CREATE TABLE IF NOT EXISTS analysis_events (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    seq INTEGER NOT NULL CHECK (seq > 0),
+    stage TEXT NOT NULL CHECK (length(stage) > 0),
+    event TEXT NOT NULL CHECK (event IN ('started', 'completed', 'failed', 'waiting')),
+    detail_json TEXT NOT NULL CHECK (json_valid(detail_json)),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (request_id, seq)
+);

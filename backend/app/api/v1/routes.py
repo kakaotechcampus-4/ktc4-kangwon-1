@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
+from collections.abc import Coroutine
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.address import GeocodeError
@@ -35,6 +38,45 @@ from app.services.analysis import (
 from .mock import interactive_decision, map_observation, specialist
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
+logger = logging.getLogger(__name__)
+FINISHED = {"completed", "failed", "waiting_for_input"}
+WAIT_QUERY = Query(
+    default=True,
+    description="false면 202와 request_id를 바로 돌려주고 백그라운드에서 실행합니다. "
+    "진행은 GET /analyses/{request_id}/events로 확인합니다.",
+)
+
+
+def _jobs(request: Request) -> dict[str, asyncio.Task]:
+    return request.app.state.__dict__.setdefault("jobs", {})
+
+
+def _start_job(request: Request, request_id: str, work: Coroutine) -> JSONResponse:
+    """분석을 백그라운드 작업으로 등록하고 바로 202를 돌려줍니다."""
+    # ponytail: 프로세스 안 작업표입니다. 서버를 여러 대 띄우면 외부 큐가 필요합니다.
+    jobs = _jobs(request)
+    if len(jobs) >= request.app.state.execution_settings.max_concurrency:
+        work.close()
+        raise HTTPException(
+            429,
+            "동시에 실행할 수 있는 분석 수를 넘었습니다. 잠시 뒤 다시 요청해 주세요.",
+            headers={"X-Request-ID": request_id, "Retry-After": "30"},
+        )
+    task = asyncio.create_task(work, name="analysis-" + request_id)
+    jobs[request_id] = task
+
+    def finished(done: asyncio.Task) -> None:
+        jobs.pop(request_id, None)
+        if not done.cancelled() and done.exception() is not None:
+            # 실패 상태와 이벤트는 서비스 계층이 DB에 남깁니다. 여기서는 로그만 씁니다.
+            logger.warning("백그라운드 분석 실패: %s", request_id, exc_info=done.exception())
+
+    task.add_done_callback(finished)
+    return JSONResponse(
+        {"request_id": request_id, "status": "running"},
+        status_code=202,
+        headers={"X-Request-ID": request_id},
+    )
 
 
 class AnalysisRequest(BaseModel):
@@ -94,7 +136,8 @@ async def create_analysis(
         default=False,
         description="외부 API·모델 호출 없이 고정 응답을 돌려줍니다. 화면 연동용입니다.",
     ),
-) -> DecisionResult | WaitingForInput:
+    wait: bool = WAIT_QUERY,
+) -> Any:
     """주소 준비부터 최종판단 또는 선택적 질문 대기까지 실행합니다.
 
     `mock=true`이거나 `MOCK_MODE` 환경변수가 켜져 있으면 외부 호출 없이
@@ -105,25 +148,25 @@ async def create_analysis(
     request_id = uuid.uuid4().hex
     headers = {"X-Request-ID": request_id}
     response.headers.update(headers)
-    try:
-        if _mock_enabled(mock):
-            return await runner(
-                body.address,
-                settings=request.app.state.execution_settings,
-                request_id=request_id,
-                resolve=mock_resolve,
-                agents=mock_agents(),
-                generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
-                radius_m=body.radius_m,
-                allow_questions=body.allow_questions,
-                map_lookup=map_observation if body.with_map else None,
-                generate=interactive_decision(with_map=body.with_map, allow_questions=True)
-                if body.allow_questions or body.with_map
-                else mock_generate,
-            )
+    if _mock_enabled(mock):
+        work = runner(
+            body.address,
+            settings=request.app.state.execution_settings,
+            request_id=request_id,
+            resolve=mock_resolve,
+            agents=mock_agents(),
+            generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
+            radius_m=body.radius_m,
+            allow_questions=body.allow_questions,
+            map_lookup=map_observation if body.with_map else None,
+            generate=interactive_decision(with_map=body.with_map, allow_questions=True)
+            if body.allow_questions or body.with_map
+            else mock_generate,
+        )
+    else:
         from app.agents.map_analysis.agent import observe
 
-        return await runner(
+        work = runner(
             body.address,
             settings=request.app.state.execution_settings,
             request_id=request_id,
@@ -132,6 +175,10 @@ async def create_analysis(
             map_lookup=observe if body.with_map else None,
             supplements=build_supplement_tools(request.app.state.execution_settings),
         )
+    if not wait:
+        return _start_job(request, request_id, work)
+    try:
+        return await work
     except GeocodeError as exc:
         invalid = exc.code in {
             "EMPTY_ADDRESS",
@@ -152,6 +199,41 @@ async def create_analysis(
         raise HTTPException(
             status_code=500, detail="분석 결과 처리 또는 저장에 실패했습니다.", headers=headers
         ) from exc
+
+
+@router.get(
+    "/analyses/{request_id}/events",
+    summary="진행 이벤트를 순번 이후부터 조회합니다 (진행 화면 폴링용)",
+)
+async def list_analysis_events(
+    request_id: str,
+    request: Request,
+    after: int = Query(default=0, ge=0, description="이미 받은 마지막 seq"),
+) -> dict[str, Any]:
+    path = request.app.state.execution_settings.db_path
+    row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
+    if row is None:
+        # 202 직후에는 백그라운드 작업이 아직 요청을 저장하기 전일 수 있습니다.
+        if request_id in _jobs(request):
+            return {
+                "request_id": request_id,
+                "status": "pending",
+                "finished": False,
+                "events": [],
+                "next_after": after,
+            }
+        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
+    events = await asyncio.to_thread(repository.list_events, request_id, after=after, db_path=path)
+    # 답변 재개 직후처럼 DB 상태가 아직 바뀌기 전이어도 작업이 살아 있으면 진행 중입니다.
+    active = request_id in _jobs(request)
+    status = "running" if active and row["status"] in FINISHED else row["status"]
+    return {
+        "request_id": request_id,
+        "status": status,
+        "finished": status in FINISHED,
+        "events": events,
+        "next_after": events[-1]["seq"] if events else after,
+    }
 
 
 @router.get("/analyses/{request_id}", summary="저장된 분석 상태와 결과를 조회합니다")
@@ -226,6 +308,7 @@ async def submit_answers(
     response: Response,
     runner: Annotated[Any, Depends(resume_runner)],
     mock: bool = False,
+    wait: bool = WAIT_QUERY,
 ):
     headers = {"X-Request-ID": request_id}
     response.headers.update(headers)
@@ -252,7 +335,7 @@ async def submit_answers(
         )
         if previous is not None and previous != normalized:
             raise HTTPException(409, "이미 제출한 답변은 변경할 수 없습니다.", headers=headers)
-        return await runner(
+        work = runner(
             normalized,
             settings=request.app.state.execution_settings,
             generate=mock_generate if _mock_enabled(mock) else None,
@@ -266,6 +349,9 @@ async def submit_answers(
                 else {}
             ),
         )
+        if not wait:
+            return _start_job(request, request_id, work)
+        return await work
     except HTTPException:
         raise
     except (

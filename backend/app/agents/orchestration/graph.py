@@ -97,6 +97,21 @@ class RunHooks:
     on_questions: (
         Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]] | None
     ) = None
+    # 진행 화면용 단계 이벤트입니다. detail에는 코드가 정한 요약만 넣습니다.
+    on_step: Callable[[str, str, dict], Awaitable[None]] | None = None
+
+
+def action_of(outcome) -> str:
+    """최종판단이 고른 다음 행동 이름입니다."""
+    if isinstance(outcome, ConsultPlan):
+        return "ask_specialists"
+    if isinstance(outcome, SupplementPlan):
+        return "supplement"
+    if isinstance(outcome, MapLookupPlan):
+        return "map_lookup"
+    if isinstance(outcome, QuestionPlan):
+        return "ask_user"
+    return "final"
 
 
 async def run_graph(
@@ -157,7 +172,12 @@ async def run_graph(
     ):
         raise ValueError("저장·관찰 콜백은 호출 가능한 함수여야 합니다.")
 
+    async def step(stage: str, event: str, **detail) -> None:
+        if hooks.on_step is not None:
+            await hooks.on_step(stage, event, detail)
+
     async def prepare_address(state: GraphState) -> GraphState:
+        await step("address", "started")
         task = await workflow.prepare_task(
             address,
             resolve=resolve,
@@ -166,18 +186,33 @@ async def run_graph(
         )
         if hooks.on_task_prepared is not None:
             await hooks.on_task_prepared(task)
+        await step("address", "completed", road_address=task.site.road_address)
         return {"task": task}
 
     async def run_analyses(state: GraphState) -> GraphState:
+        for agent_id in agents:
+            await step(agent_id, "started")
+
+        async def completed(analysis: AgentAnalysis) -> None:
+            if hooks.on_analysis_completed is not None:
+                await hooks.on_analysis_completed(analysis)
+            await step(analysis.agent_id, "completed", status=analysis.status)
+
         analyses = await workflow.run_agents(
             state["task"],
             agents,
-            on_analysis_completed=hooks.on_analysis_completed,
+            on_analysis_completed=completed,
             agent_timeout=agent_timeout,
         )
         return {"analyses": analyses}
 
     async def evaluate_decision(state: GraphState) -> GraphState:
+        await step("decision", "started")
+        result = await _evaluate(state)
+        await step("decision", "completed", action=action_of(result["outcome"]))
+        return result
+
+    async def _evaluate(state: GraphState) -> GraphState:
         task = state["task"]
         request = DecisionRequest(
             request_id=task.request_id,
@@ -251,6 +286,7 @@ async def run_graph(
         plan = MapLookupPlan.model_validate(plan)
         if hooks.on_map_requested is not None:
             await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
+        await step("map", "started", queries=len(plan.unique_queries()))
         try:
             async with asyncio.timeout(agent_timeout):
                 raw = await map_lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
@@ -270,6 +306,7 @@ async def run_graph(
             raise ValueError("지도 요청과 관측의 식별자·위치·검색 대상이 다릅니다.")
         if hooks.on_map_completed is not None:
             await hooks.on_map_completed(observed.model_copy(deep=True))
+        await step("map", "completed", status=observed.status)
         return {"map_done": True, "map_observation": observed}
 
     async def ask_user(state: GraphState) -> GraphState:
@@ -281,6 +318,7 @@ async def run_graph(
             question_set_id=uuid.uuid4().hex,
             questions=plan.questions,
         )
+        await step("questions", "waiting", count=len(plan.questions))
         await hooks.on_questions(
             state["task"],
             waiting,
@@ -297,6 +335,7 @@ async def run_graph(
             raise ValueError("현재 단계에서는 보완을 실행할 수 없습니다.")
         # 판단에 실제 제시한 작업만 허용하고 실행 직전에 조건을 다시 확인합니다.
         offered = {(op.agent_id, op.operation) for op in state["operations"]}
+        await step("supplement", "started", agents=sorted({r.agent_id for r in plan.requests}))
         updated, feedback, context = await execute_supplement(
             state["task"],
             state["analyses"],
@@ -309,6 +348,7 @@ async def run_graph(
             on_event=hooks.on_supplement,
             operation_timeout=agent_timeout,
         )
+        await step("supplement", "completed")
         return {
             "analyses": updated,
             "feedback": feedback,
@@ -345,6 +385,7 @@ async def run_graph(
     async def write_briefs(state: GraphState) -> GraphState:
         async def one(source):
             assert generate_specialists is not None
+            await step("brief." + source.agent_id, "started")
             brief = await write_brief(
                 state["task"],
                 source,
@@ -355,6 +396,12 @@ async def run_graph(
             )
             if hooks.on_brief:
                 await hooks.on_brief(brief.model_copy(deep=True))
+            await step(
+                "brief." + source.agent_id,
+                "completed",
+                source=brief.source,
+                findings=len(brief.findings),
+            )
             return brief
 
         briefs = await collect(one(source) for source in list(state["analyses"]))
@@ -379,6 +426,12 @@ async def run_graph(
                 None,
             )
             old_map = state["context"].get("map_observation")
+            await step(
+                "consult." + query.agent_id,
+                "started",
+                round=round_number,
+                question=query.question[:300],
+            )
             answer = await answer_query(
                 state["task"],
                 query,
@@ -401,6 +454,13 @@ async def run_graph(
             answer = SpecialistAnswer.model_validate(answer)
             if hooks.on_consult:
                 await hooks.on_consult(answer.model_copy(deep=True))
+            await step(
+                "consult." + query.agent_id,
+                "completed",
+                round=round_number,
+                status=answer.status,
+                tools=[call.tool for call in answer.tool_calls],
+            )
             return answer
 
         answers = await collect(one(query) for query in plan.queries)

@@ -842,3 +842,62 @@ def _deliberation(db, request_id):
 def get_deliberation(request_id: str, *, db_path=None) -> dict[str, Any]:
     with connect(db_path) as db:
         return _deliberation(db, _text(request_id))
+
+
+def append_event(
+    request_id: str, stage: str, event: str, detail: dict[str, Any], *, db_path=None
+) -> int:
+    """진행 이벤트를 요청별 순번으로 추가합니다."""
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        (seq,) = db.execute(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM analysis_events WHERE request_id = ?",
+            (_text(request_id),),
+        ).fetchone()
+        db.execute(
+            "INSERT INTO analysis_events VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                request_id,
+                seq,
+                _text(stage),
+                event,
+                json.dumps(detail, ensure_ascii=False, allow_nan=False),
+                _now(),
+            ),
+        )
+    return seq
+
+
+def list_events(request_id: str, *, after: int = 0, db_path=None) -> list[dict[str, Any]]:
+    """after 다음 순번부터 진행 이벤트를 돌려줍니다."""
+    with connect(db_path) as db:
+        rows = db.execute(
+            "SELECT seq, created_at, stage, event, detail_json FROM analysis_events "
+            "WHERE request_id = ? AND seq > ? ORDER BY seq",
+            (_text(request_id), after),
+        ).fetchall()
+    return [
+        {
+            "seq": row["seq"],
+            "at": row["created_at"],
+            "stage": row["stage"],
+            "event": row["event"],
+            "detail": json.loads(row["detail_json"]),
+        }
+        for row in rows
+    ]
+
+
+def fail_interrupted(*, db_path=None) -> int:
+    """서버가 멈춰 끊긴 실행 중 요청을 실패로 닫습니다. 서버 시작 때만 호출합니다."""
+    error = AgentError(
+        code="INTERRUPTED",
+        message="서버가 다시 시작되어 분석이 중단되었습니다. 다시 요청해 주세요.",
+    )
+    with connect(db_path) as db:
+        changed = db.execute(
+            "UPDATE analysis_requests SET error_json = ?, status = 'failed', completed_at = ? "
+            "WHERE status IN ('pending', 'running')",
+            (error.model_dump_json(), _now()),
+        )
+    return changed.rowcount

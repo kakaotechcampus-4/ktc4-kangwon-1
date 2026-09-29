@@ -32,10 +32,14 @@ class ExecutionSettings:
     overall_timeout: float = 600.0
     analysis_mode: AnalysisMode = "single_decision"
     specialist_llms: dict[SpecialistId, LLMSettings] = field(default_factory=dict)
+    # 백그라운드(wait=false) 동시 분석 수. 분석 1회가 외부 요청을 100회 넘게 만듭니다.
+    max_concurrency: int = 2
 
     def __post_init__(self) -> None:
         validate_timeout(self.agent_timeout)
         validate_timeout(self.overall_timeout)
+        if type(self.max_concurrency) is not int or self.max_concurrency < 1:
+            raise ValueError("동시 분석 수는 1 이상의 정수여야 합니다.")
         if self.analysis_mode not in get_args(AnalysisMode):
             raise ValueError("지원하지 않는 분석 모드입니다.")
 
@@ -51,6 +55,7 @@ class ExecutionSettings:
             agent_timeout=float(os.getenv("ANALYSIS_AGENT_TIMEOUT_SECONDS", "180")),
             overall_timeout=float(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "600")),
             analysis_mode=os.getenv("ANALYSIS_MODE", "single_decision"),  # type: ignore[arg-type]
+            max_concurrency=int(os.getenv("ANALYSIS_MAX_CONCURRENCY", "2")),
             specialist_llms={
                 role: LLMSettings.from_env(f"SPECIALIST_{role.upper()}")
                 for role in get_args(SpecialistId)
