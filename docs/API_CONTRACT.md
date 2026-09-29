@@ -242,3 +242,55 @@ curl http://127.0.0.1:8000/openapi.json -o openapi.json
 ```
 
 손으로 옮긴다면 **`backend/app/schemas.py`가 원본**입니다. 그쪽이 바뀌면 같이 고칩니다.
+## 멀티에이전트 모드 추가 계약
+
+서버 설정 `ANALYSIS_MODE=multi_agent`에서만 사용합니다. 기본값은 `single_decision`입니다.
+`AnalysisTask`, `AgentAnalysis`, `DecisionResult` 필드는 변경하지 않았습니다.
+POST 주소 분석·답변·최종판단 재시도 경로와 기존 응답 형태도 유지합니다.
+
+### 내부 메시지
+
+| 모델 | 주요 필드 | 제약 |
+| --- | --- | --- |
+| `AgentBrief` | 요청·전문가 ID, `source`, `headline`, `findings`, `limitations`, `tool_calls` | 초기 3개 전문가, 근거 최대 8개 |
+| `Finding` | `claim`, `signal`, `industry_code`, `evidence[].path` | 공통 75개 코드, 자기 원자료 경로만 인용 |
+| `ConsultPlan` | `action=ask_specialists`, `queries` | 라운드당 서로 다른 전문가 최대 3명 |
+| `SpecialistQuery` | 전문가, 질문, 업종 코드, 필요 이유·판단 영향 | 임의 주소·반경 변경 불가 |
+| `SpecialistAnswer` | 요청·라운드·질문, 상태, 근거, 도구 이력, 선택형 분석·지도 관측 | 최대 2라운드, 근거 최대 5개 |
+| `QuestionSnapshotV2` | 기존 task·질문·분석 차수 + 브리핑 ID·라운드·지도 차수·소비 예산·활성 시간 | 기존 v1 대기 자료도 재개 가능 |
+
+전문가 문장은 최종 근거가 아닙니다. 원자료 경로·소유 업종·직접 수치를 재검증합니다.
+문장의 의미·사업 적합성까지 자동 보증하지 않습니다. 폐업률 단위·기간·공간 범위는 원자료를 유지합니다.
+
+### 저장과 조회
+
+`GET /api/v1/analyses/{request_id}`에는 `analysis_mode`가 추가됩니다.
+멀티 모드에만 선택형 `deliberation`이 포함됩니다.
+
+| 필드 | 내용 |
+| --- | --- |
+| `briefs` | 최초 전문가 브리핑과 fallback 여부 |
+| `answers` | 라운드별 질문·답변·도구 실행 상태. 원본 분석·지도 중복 본문은 제외 |
+| `consult_round` | 소비한 되묻기 라운드 |
+| `map_attempt` | 최신 채택 지도 차수 |
+| `budget.used`, `budget.calls` | 실제 모델 요청 시도 누계, 역할·성공 여부·입출력 토큰·입력 문자 수·시간 |
+| `elapsed_seconds` | 사람 답변 대기를 제외한 활성 실행 누계 |
+
+모델이 usage를 주지 않으면 토큰은 `null`입니다. 대역은 실제 전송이 없어 호출 누계가 0입니다.
+최종 `source_analyses`와 지도 관측은 채택된 원자료입니다. 새 관측을 거절해도 이력은 남습니다.
+질문 후 환경변수가 달라져도 저장한 모드·도구 등록 범위·예산으로 이어갑니다.
+최종판단 재시도는 저장 자료만 쓰며 전문가·데이터 API는 재호출하지 않습니다.
+
+### DB 추가·변경
+
+| 테이블 | 키·추가 컬럼 | 의미 |
+| --- | --- | --- |
+| `analysis_requests` | `analysis_mode`, `execution_json` | 실행 모드, 소비 예산·활성 시간·등록 도구 범위 |
+| `agent_briefs` | PK `(request_id, agent_id)`, `brief_json`, `created_at` | 최초 브리핑, 덮어쓰기 금지 |
+| `specialist_consults` | PK `(request_id, round, agent_id)`, `status`, `answer_json`, `created_at` | 라운드별 전문가 답변 |
+| `map_observations` | PK `(request_id, attempt)`, `adopted` | 반복 관측과 채택 이력. 최종 결과는 최신 채택 관측 |
+| `supplement_events` | `analysis_attempt` | 이벤트의 분석 이력 차수. 결과 없는 시도는 NULL |
+
+기존 DB는 명시적 초기화 때 마이그레이션합니다. 기존 요청은 단일판정 모드,
+기존 지도 행은 1차로 보존합니다. 보완은 원본 이력과 대조 가능한 차수만 복원합니다.
+호출 예산 초과는 `LLM_BUDGET_EXHAUSTED`로 실패하며 유효하지 않은 판정을 성공으로 만들지 않습니다.
