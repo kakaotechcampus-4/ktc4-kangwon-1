@@ -313,6 +313,13 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             }
 
         def generate(prompt, input_json):
+            entries = json.loads(input_json)["industry_evidence"]
+            entry = next(
+                e
+                for e in entries
+                if e["agent_id"] == "business_lifecycle" and e["industry_code"] == "I210"
+            )
+            path = next(p for p in entry["paths"] if p.endswith("/metrics/avg_close_rate"))
             return {
                 "status": "ok",
                 "summary": "세 분석 자료 확인",
@@ -320,11 +327,11 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "limitations": [],
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                        "category": {"major": "음식점업", "middle": "기타 간이 음식점업"},
                         "score": 60,
                         "reasons": ["각 분석 원본 확인"],
                         "risks": [],
-                        "evidence": [{"agent_id": "business_lifecycle", "path": "/industries/0"}],
+                        "evidence": [{"agent_id": "business_lifecycle", "path": path}],
                     }
                 ],
             }

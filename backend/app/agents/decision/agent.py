@@ -29,6 +29,7 @@ from app.schemas import (
     SupplementPlan,
 )
 
+from .evidence import index_paths, industry_catalog
 from .llm import generate_decision
 
 GenerateDecision = Callable[
@@ -56,6 +57,8 @@ class DecisionContractError(ValueError):
             "evidence_path_invalid": "근거 경로 형식이 잘못되었습니다.",
             "evidence_not_found": "입력에 없는 근거입니다.",
             "evidence_empty": "빈 자료는 근거로 사용할 수 없습니다.",
+            "evidence_industry_mismatch": "판단 업종과 근거 업종이 다릅니다.",
+            "evidence_unavailable": "제외되거나 사용 불가능한 자료는 근거로 사용할 수 없습니다.",
         }
         super().__init__(messages[reason])
         self.diagnostics = {
@@ -147,6 +150,14 @@ async def evaluate(
         else:
             prompt += "\n데이터 보완 요청은 금지됩니다."
         payload = json.loads(_decision_input(request))
+        visible = {
+            item["agent_id"]: AgentAnalysis.model_validate(item)
+            for item in payload["analyses"]
+            if item["status"] in {"ok", "partial"}
+        }
+        payload["industry_evidence"] = industry_catalog(
+            {key: item.data for key, item in visible.items()}
+        )
         if allow_map_lookup and observation is None:
             prompt += "\n필요할 때만 지도 조회 JSON을 요청할 수 있습니다:\n" + json.dumps(
                 MapLookupPlan.model_json_schema(), ensure_ascii=False
@@ -227,7 +238,7 @@ async def evaluate(
                 raise
             try:
                 _validate_categories(content)
-                _validate_evidence(content, available, observation)
+                _validate_evidence(content, visible, observation)
                 break
             except DecisionContractError as exc:
                 correction = _correction_detail(exc, content, request)
@@ -248,7 +259,8 @@ async def evaluate(
                     "현재 analyses의 실제 값으로 전체 최종판단을 다시 작성하세요. "
                     "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
                     "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
-                    "candidates는 실제 입력 경로 후보일 뿐 같은 의미나 업종을 보장하지 않습니다. "
+                    "industry_evidence에서 판단 업종에 연결된 경로를 그대로 사용하세요. "
+                    "candidates는 같은 업종 또는 공통 자료의 경로이며 의미까지 보장하지 않습니다. "
                     "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
                     "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
                 )
@@ -306,28 +318,19 @@ def _correction_detail(
     )
     if evidence.agent_id == "map_analysis" and request.map_observation:
         data = request.map_observation.data.model_dump(mode="json")
-    paths: list[str] = []
-
-    def visit(value: Any, path: str = "", depth: int = 0) -> None:
-        if len(paths) >= 10000 or depth > 12:
-            return
-        if path and value is not None and value != "" and value != [] and value != {}:
-            if evidence.agent_id != "map_analysis" or _valid_map_evidence(
-                path, item.category.middle, request.map_observation
-            ):
-                paths.append(path)
-        children = (
-            value.items()
-            if isinstance(value, dict)
-            else enumerate(value)
-            if isinstance(value, list)
-            else ()
-        )
-        for key, child in children:
-            escaped = str(key).replace("~", "~0").replace("/", "~1")
-            visit(child, f"{path}/{escaped}", depth + 1)
-
-    visit(data)
+    industry = lookup.find_by_name(item.category.middle)
+    indexed = index_paths(data)
+    if evidence.agent_id == "map_analysis":
+        paths = [
+            p
+            for p in indexed
+            if _valid_map_evidence(p, item.category.middle, request.map_observation)
+        ]
+    else:
+        # 업종 자료가 있으면 공통 메타데이터보다 해당 업종을 우선합니다.
+        paths = [p for p, code in indexed.items() if industry and code == industry.code]
+        if not paths:
+            paths = [p for p, code in indexed.items() if code is None]
     detail["candidates"] = [
         {"path": path} for path in get_close_matches(evidence.path, paths, n=8, cutoff=0.2)
     ]
@@ -383,6 +386,7 @@ def _validate_evidence(
     observation: MapObservation | None = None,
 ) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
+    indexes = {agent_id: index_paths(source.data) for agent_id, source in sources.items()}
     for index, item in enumerate(content.recommendations + content.not_recommended):
         field = (
             f"recommendations.{index}"
@@ -420,6 +424,13 @@ def _validate_evidence(
                 and not value
             ):
                 raise DecisionContractError(location + ".path", "evidence_empty")
+            indexed = indexes[evidence.agent_id]
+            if path not in indexed:
+                raise DecisionContractError(location + ".path", "evidence_unavailable")
+            owner = indexed[path]
+            industry = lookup.find_by_name(item.category.middle)
+            if owner is not None and (industry is None or owner != industry.code):
+                raise DecisionContractError(location + ".path", "evidence_industry_mismatch")
 
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
