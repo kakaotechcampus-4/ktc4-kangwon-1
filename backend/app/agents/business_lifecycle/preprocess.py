@@ -1,3 +1,4 @@
+import asyncio
 import math
 from typing import Any
 
@@ -17,8 +18,12 @@ from app.industries.catalog import (
     SEOUL_TO_INDUSTRY as SEOUL_TO_SERVICE,
 )
 
-from .client import fetch_recent_store_data, get_recent_quarters
+from .client import SeoulOpenAPINoDataError, fetch_recent_store_data, get_recent_quarters
 from .config import Settings
+
+
+class UpstreamDataError(ValueError):
+    """외부 자료의 숫자·범위·매핑이 올바르지 않습니다."""
 
 
 def calculate_rate(numerator: float, denominator: float) -> float | None:
@@ -32,17 +37,17 @@ def _number(value: Any, *, count: bool) -> float:
     if value is None:
         return float("nan")
     if isinstance(value, bool):
-        raise ValueError("개폐업 숫자에 bool을 사용할 수 없습니다.")
+        raise UpstreamDataError("개폐업 숫자에 bool을 사용할 수 없습니다.")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("개폐업 숫자 형식이 올바르지 않습니다.") from exc
+        raise UpstreamDataError("개폐업 숫자 형식이 올바르지 않습니다.") from exc
     if not math.isfinite(number) or number < 0 or (count and not number.is_integer()):
-        raise ValueError("개폐업 숫자 범위가 올바르지 않습니다.")
+        raise UpstreamDataError("개폐업 숫자 범위가 올바르지 않습니다.")
     return number
 
 
-def preprocess_business_lifecycle_data(
+async def preprocess_business_lifecycle_data(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
@@ -50,15 +55,22 @@ def preprocess_business_lifecycle_data(
     settings: Settings | None = None,
 ) -> pd.DataFrame:
     """원본 건수를 공통 업종으로 합산한 뒤 분자·분모에서 비율을 재계산합니다."""
-    quarters = get_recent_quarters(base_quarter=base_quarter, count=quarter_count)
-    rows = fetch_recent_store_data(
+    rows = await fetch_recent_store_data(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
         settings=settings,
     )
+    return await asyncio.to_thread(_aggregate_rows, rows, area_code, base_quarter, quarter_count)
+
+
+def _aggregate_rows(
+    rows: list[dict], area_code: str, base_quarter: str, quarter_count: int
+) -> pd.DataFrame:
+    """조회가 끝난 원자료만 작업 스레드에서 계산합니다."""
+    quarters = get_recent_quarters(base_quarter=base_quarter, count=quarter_count)
     if not rows:
-        raise ValueError("서울시 Open API에서 조회된 데이터가 없습니다.")
+        raise SeoulOpenAPINoDataError("서울시 Open API에서 조회된 데이터가 없습니다.")
 
     # 같은 원천키의 값이 다르면 어느 행이 맞는지 추정하지 않습니다.
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -69,9 +81,9 @@ def preprocess_business_lifecycle_data(
             str(row.get("svc_induty_cd")),
         )
         if key[0] not in quarters or key[1] != str(area_code):
-            raise ValueError("요청 범위 밖 분기 또는 상권 데이터가 섞였습니다.")
+            raise UpstreamDataError("요청 범위 밖 분기 또는 상권 데이터가 섞였습니다.")
         if key in unique and row != unique[key]:
-            raise ValueError("같은 분기·상권·원본업종에 상충하는 중복 데이터가 있습니다.")
+            raise UpstreamDataError("같은 분기·상권·원본업종에 상충하는 중복 데이터가 있습니다.")
         unique[key] = row
 
     numeric = (
@@ -88,7 +100,7 @@ def preprocess_business_lifecycle_data(
         if source in EXCLUDED_SEOUL_INDUSTRIES:
             continue
         if source not in SEOUL_TO_SERVICE:
-            raise ValueError(f"공통 카탈로그에 없는 서울시 업종입니다: {source}")
+            raise UpstreamDataError(f"공통 카탈로그에 없는 서울시 업종입니다: {source}")
         row = dict(raw)
         for field in numeric:
             row[field] = _number(raw.get(field), count=field.endswith("_co"))
@@ -143,6 +155,7 @@ def preprocess_business_lifecycle_data(
                 }
             )
 
+        # 분모는 분기별 점포 수 합계입니다. 비율은 가중 분기 평균이며 연간 누적률이 아닙니다.
         exposure = total("similr_induty_stor_co", quarters)
         opened = total("opbiz_stor_co", quarters)
         closed = total("clsbiz_stor_co", quarters)

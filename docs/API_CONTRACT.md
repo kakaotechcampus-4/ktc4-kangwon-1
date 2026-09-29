@@ -79,7 +79,7 @@ HTTP 요청은 이때 종료되며 서버는 답변이 올 때까지 연결을 �
   "summary": "점심 직장인 수요가 뚜렷하고 커피·음료는 이미 포화에 가깝습니다.",
   "recommendations": [
     {
-      "category": { "major": "음식점업", "middle": "한식 음식점업" },
+      "category": { "code": "I201", "major": "음식점업", "middle": "한식 음식점업" },
       "score": 72,
       "reasons": ["직장인 비중이 41%로 점심 수요를 기대할 수 있습니다."],
       "evidence": [
@@ -96,6 +96,11 @@ HTTP 요청은 이때 종료되며 서버는 답변이 올 때까지 연결을 �
 ```
 
 ### `GET /api/v1/analyses/{request_id}`
+
+새 최종판단의 `category`는 공통 업종 `code`와 기존 `major`·`middle`을 함께 제공합니다.
+모델 입력은 코드만 사용할 수 있고 서버가 공식명을 채웁니다. 이름을 함께 보내면 코드와 일치해야 합니다.
+코드 없는 과거 저장 결과도 조회할 수 있습니다. 요청 당시 업종표 버전이 현재와 다르거나
+기록되지 않은 요청은 질문 재개·최종판단 재시도 대신 새 분석이 필요합니다.
 
 POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 `pending` / `running` / `waiting_for_input` / `completed` / `failed`이며 `site`, `result`, `error`는 JSON 객체 또는 null입니다.

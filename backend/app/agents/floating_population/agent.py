@@ -21,14 +21,14 @@ import httpx
 
 from app.geo import to_epsg5181
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
+from app.seoul import SeoulOpenApiTimeout
 
-from . import llm
+from . import selection as selection_rules
 from .classify import classify
 from .client import MissingApiKeyError, SeoulOpenApiError, SeoulOpenDataClient
 from .config import Settings
 from .geo import _overlapping_areas
 from .interpret import interpret
-from .llm import SelectBlocks
 from .metrics import _aggregate, _benchmark, _radius_profile, _reliability, _trend
 from .models import PopulationRecord, period_ko, quarter_days
 from .population import (
@@ -48,6 +48,7 @@ from .schemas import (
     TypeJudgement,
     WorkerPopulation,
 )
+from .selection import SelectBlocks
 
 AGENT_ID: AgentId = "floating_population"
 
@@ -220,7 +221,7 @@ async def analyze(
         series = await client.fetch_flpop_series(main_codes, settings.trend_quarters)
         quarter, latest = series[-1]
         records = [r for r in latest if r.trdar_cd in main_codes]
-    except httpx.TimeoutException:
+    except (httpx.TimeoutException, SeoulOpenApiTimeout):
         return failed("UPSTREAM_TIMEOUT", "서울시 API 응답 시간이 초과되었습니다.")
     except (SeoulOpenApiError, httpx.HTTPError):
         return failed("UPSTREAM_ERROR", "서울시 API 조회에 실패했습니다.")
@@ -247,6 +248,9 @@ async def analyze(
     trend = _trend(series, main_codes)
 
     warnings = list(BASE_WARNINGS)
+    unnamed = [a.trdar_cd for a, _ in hits if not a.trdar_cd_nm]
+    if unnamed:
+        warnings.append(f"상권명이 없어 코드로 표시한 상권이 있습니다: {', '.join(unnamed)}")
     warnings.append(
         "radius_profile 은 상권 안 인구가 고르게 분포한다고 보고 면적 비율로 안분한 "
         "추정값입니다 — 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 없습니다."
@@ -309,7 +313,7 @@ async def analyze(
         trade_areas=[
             TradeArea(
                 code=a.trdar_cd,
-                name=a.trdar_cd_nm,
+                name=a.trdar_cd_nm or f"상권 {a.trdar_cd} (명칭 미제공)",
                 kind=a.trdar_se_nm,
                 adstrd=a.adstrd_nm,
                 distance_m=round(d, 1),
@@ -332,11 +336,11 @@ async def analyze(
         resident=resident,
         worker=worker,
         population_summary=summary,
-        # 바로 아래에서 실제 선별 결과로 덮어쓴다. 모델이 없거나 실패해도 계약은 채워진다.
+        # 아래에서 선별 결과로 덮어씁니다.
         selection=Selection(
             applied=False,
-            selectable=list(llm.SELECTABLE),
-            included=list(llm.SELECTABLE),
+            selectable=list(selection_rules.SELECTABLE),
+            included=list(selection_rules.SELECTABLE),
             dropped=[],
         ),
         sources=[Source(**s, period=period_ko(quarter)) for s in SOURCES]
@@ -349,20 +353,10 @@ async def analyze(
 
     data.interpretation = interpret(data)
 
-    # 넘길 블록을 고른다. 숫자는 이미 다 계산돼 있고 모델은 고르기만 한다.
-    selection, select_warning = await llm._select(data, select)
+    # 기본은 자료 유무·비교 가능 분기 수로 선별하고, 주입한 함수가 있으면 사용합니다.
+    selection, select_warning = await selection_rules._select(data, select)
     data.selection = selection
     # 원본 차트는 반환·저장하고 최종판단이 프롬프트 복사본에만 선별을 적용합니다.
-    if selection.applied and selection.dropped:
-        # 해석 문장은 선별 대상이 아니라 결정 입력에 항상 남는다. 뺀 블록의 값을 문장으로
-        # 되살리지 않도록, 그 블록을 근거로 삼는 문장은 함께 뺀다.
-        data.interpretation = [
-            f for f in data.interpretation if f.path.split("/")[1] not in selection.dropped
-        ]
-        warnings.append(
-            f"최종판단 입력에서만 자료 {len(selection.dropped)}개를 제외합니다"
-            f"({', '.join(selection.dropped)}). {selection.reason}".strip()
-        )
     if select_warning:
         warnings.append(select_warning)
 

@@ -31,25 +31,3 @@ class SupplementTool:
 
 
 __all__ = ["resolve_site", "SupplementTool"]
-
-# 도구 인자는 비워 두고 요청 자료는 실행기가 관리합니다.
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-                "additionalProperties": False,
-            },
-        },
-    }
-    for name, description in (
-        ("prepare_address", "사용자 주소를 변환하고 분석 공통 입력을 준비합니다."),
-        ("run_analyses", "주소 준비 후 세 분석 에이전트를 병렬 실행합니다."),
-        ("make_decision", "최종판단을 요청합니다. 등록된 보완은 코드가 최대 1회 실행합니다."),
-    )
-]

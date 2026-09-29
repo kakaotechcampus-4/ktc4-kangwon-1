@@ -13,6 +13,32 @@ from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 
 class RepositoryTests(unittest.TestCase):
+    def test_retry_rejects_changed_or_unknown_catalog_without_claiming(self):
+        from app.schemas import AgentError
+
+        repo.fail_request(
+            "request", AgentError(code="ANALYSIS_FAILED", message="시험"), db_path=self.path
+        )
+        failed_at = repo.get_request("request", db_path=self.path)["completed_at"]
+        for version in ("other", None):
+            with connect(self.path) as db:
+                db.execute("UPDATE analysis_requests SET catalog_version=?", (version,))
+            with self.assertRaisesRegex(repo.DecisionRetryConflictError, "업종표 버전"):
+                repo.claim_decision_retry("request", failed_at, db_path=self.path)
+            self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "failed")
+
+    def test_catalog_version_is_saved_and_old_rows_remain_unknown(self):
+        from app.industries.catalog import CATALOG_VERSION
+
+        self.assertEqual(
+            repo.get_request("request", db_path=self.path)["catalog_version"], CATALOG_VERSION
+        )
+        with connect(self.path) as db:
+            db.execute("ALTER TABLE analysis_requests DROP COLUMN catalog_version")
+        initialize(self.path)
+        initialize(self.path)
+        self.assertIsNone(repo.get_request("request", db_path=self.path)["catalog_version"])
+
     def test_radius_migration_preserves_old_requests(self):
         with connect(self.path) as db:
             db.execute("ALTER TABLE analysis_requests DROP COLUMN radius_m")

@@ -9,7 +9,7 @@ from difflib import get_close_matches
 from importlib.resources import files
 from typing import Any, cast
 
-from app.agents.floating_population.llm import SELECTABLE
+from app.agents.floating_population.selection import SELECTABLE
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.schemas import (
@@ -30,7 +30,7 @@ from app.schemas import (
 )
 
 from .evidence import index_paths, industry_catalog
-from .llm import generate_decision
+from .llm import InvalidDecisionCategory, generate_decision, validate_content
 
 GenerateDecision = Callable[
     [str, str],
@@ -50,6 +50,7 @@ class DecisionContractError(ValueError):
 
     def __init__(self, field: str, reason: str):
         messages = {
+            "invalid_category": "업종 코드 또는 명칭이 공통 업종표와 일치하지 않습니다.",
             "unknown_industry": "공통 목록에 없는 중분류 업종입니다.",
             "major_mismatch": "업종의 대분류가 일치하지 않습니다.",
             "duplicate_industry": "같은 중분류 업종을 여러 번 판단할 수 없습니다.",
@@ -97,161 +98,66 @@ async def evaluate(
     request = DecisionRequest.model_validate(request)
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
     available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
-    limitations = list(feedback or [])
     observation = request.map_observation
-    if observation is not None:
-        limitations.extend(observation.warnings)
-        if observation.status in {"error", "partial"}:
-            limitations.append("지도 조회·매핑 일부 또는 전체 실패: 확인된 자료만 사용합니다.")
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
-    if answers:
-        limitations.append(
-            "임대인 답변은 사용자 제공 정보이며 시설·용도·입점 가능성을 검증한 자료가 아닙니다."
-        )
-        limitations.extend(
-            f"사용자 정보 미확인: {a.field}" for a in answers if a.status != "answered"
-        )
-
-    for agent_id in AGENT_IDS:
-        source = sources.get(agent_id)
-        if source is None:
-            limitations.append(f"분석 누락: {agent_id}")
-        elif source.status == "error":
-            detail = source.error.message if source.error else "사유 없음"
-            limitations.append(f"분석 실패: {agent_id} ({detail})")
-        elif source.status == "no_data":
-            limitations.append(f"자료 없음: {agent_id}")
-        else:
-            if source.status == "partial":
-                limitations.append(f"부분 분석: {agent_id}")
-            limitations.extend(f"{agent_id}: {warning}" for warning in source.warnings)
-
-    scopes = {
-        (item.scope.area, item.scope.period)
-        for item in available.values()
-        if item.scope is not None
-    }
-    if len(scopes) > 1:
-        limitations.append("분석 지역 또는 기준 기간이 달라 지표를 직접 비교하기 어렵습니다.")
+    limitations = _collect_limitations(sources, available, observation, answers, feedback)
 
     if available or operations:
-        prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
-        prompt += "\n\n## 공통 중분류 목록 (코드 | 대분류 공식명 | 중분류 공식명)\n"
-        prompt += "\n".join(
-            f"{code} | {INDUSTRY_MAJORS[code][1]} | {name}" for code, name in INDUSTRIES.items()
+        prompt, payload, visible = _build_prompt(
+            request,
+            operations,
+            allowed_questions,
+            answers,
+            site,
+            feedback,
+            supplement_context,
+            allow_map_lookup,
         )
-        if operations:
-            prompt += (
-                "\n보완이 필요한 경우에만 다음 JSON 스키마의 요청을 반환할 수 있습니다. "
-                "일반 최종판단은 기존 DecisionContent 형식을 유지합니다.\n"
-                + json.dumps(SupplementPlan.model_json_schema(), ensure_ascii=False)
-            )
-        else:
-            prompt += "\n데이터 보완 요청은 금지됩니다."
-        payload = json.loads(_decision_input(request))
-        visible = {
-            item["agent_id"]: AgentAnalysis.model_validate(item)
-            for item in payload["analyses"]
-            if item["status"] in {"ok", "partial"}
-        }
-        payload["industry_evidence"] = industry_catalog(
-            {key: item.data for key, item in visible.items()}
-        )
-        if allow_map_lookup and observation is None:
-            prompt += "\n필요할 때만 지도 조회 JSON을 요청할 수 있습니다:\n" + json.dumps(
-                MapLookupPlan.model_json_schema(), ensure_ascii=False
-            )
-        else:
-            prompt += "\n지도 추가 조회는 금지됩니다."
-        if allowed_questions:
-            prompt += "\n필요한 경우에만 허용 항목으로 질문하세요. JSON 스키마:\n" + json.dumps(
-                QuestionPlan.model_json_schema(), ensure_ascii=False
-            )
-            payload["question_fields"] = sorted(allowed_questions)
-        else:
-            prompt += (
-                "\n사용자 질문은 금지됩니다. 허용된 데이터 보완·지도 조회가 없으면 "
-                "최종판단 또는 no_data를 반환하세요."
-            )
-        if answers:
-            payload["user_answers"] = [a.model_dump(mode="json") for a in answers]
-        if site is not None:
-            payload["site"] = Site.model_validate(site).model_dump(mode="json")
-        if operations:
-            payload["supplement_operations"] = [item.model_dump() for item in operations]
-        if feedback:
-            payload["supplement_feedback"] = feedback
-        if supplement_context:
-            payload["supplement_context"] = [
-                item.model_dump(mode="json", exclude={"analysis"}) for item in supplement_context
-            ]
         failures: list[dict[str, Any]] = []
         for attempt in range(2):
+            content = None
             try:
                 produced = (generate or generate_decision)(
                     prompt, json.dumps(payload, ensure_ascii=False)
                 )
                 if inspect.isawaitable(produced):
                     produced = await produced
-            except (Exception, asyncio.CancelledError) as exc:
-                if failures:
-                    cast(Any, exc).failures = failures
-                raise
-            if attempt and (
-                isinstance(produced, (MapLookupPlan, QuestionPlan, SupplementPlan))
-                or isinstance(produced, dict)
-                and produced.get("action") in {"map_lookup", "ask_user", "supplement"}
-            ):
-                error = ValueError("교정 단계에서는 최종판단만 허용합니다.")
-                cast(Any, error).failures = failures
-                raise error
-            if isinstance(produced, MapLookupPlan) or (
-                isinstance(produced, dict) and produced.get("action") == "map_lookup"
-            ):
-                if attempt or not allow_map_lookup or observation is not None:
-                    raise ValueError("현재 단계에서는 지도 조회를 요청할 수 없습니다.")
-                return MapLookupPlan.model_validate(produced)
-            if isinstance(produced, QuestionPlan) or (
-                isinstance(produced, dict) and produced.get("action") == "ask_user"
-            ):
-                questions = QuestionPlan.model_validate(produced)
-                if (
-                    attempt
-                    or not allowed_questions
-                    or not {q.field for q in questions.questions} <= allowed_questions
-                ):
-                    raise ValueError("현재 단계에서는 해당 사용자 질문을 허용하지 않습니다.")
-                return questions
-            if isinstance(produced, SupplementPlan) or (
-                isinstance(produced, dict) and produced.get("action") == "supplement"
-            ):
-                plan = SupplementPlan.model_validate(produced)
-                if not operations or attempt:
-                    raise ValueError("현재 단계에서는 보완 요청을 허용하지 않습니다.")
-                return plan
-            try:
-                content = DecisionContent.model_validate(produced)
-            except ValueError as exc:
-                if failures:
-                    cast(Any, exc).failures = failures
-                raise
-            try:
+                outcome = _parse_outcome(
+                    produced,
+                    final_only=bool(attempt),
+                    operations=operations,
+                    allowed_questions=allowed_questions,
+                    allow_map_lookup=allow_map_lookup and observation is None,
+                )
+                if not isinstance(outcome, DecisionContent):
+                    return outcome
+                content = outcome
                 _validate_categories(content)
                 _validate_evidence(content, visible, observation)
                 break
-            except DecisionContractError as exc:
-                correction = _correction_detail(exc, content, request)
+            except (InvalidDecisionCategory, DecisionContractError) as error:
+                if isinstance(error, InvalidDecisionCategory):
+                    exc = DecisionContractError(error.field, "invalid_category")
+                    correction: dict[str, Any] = dict(exc.diagnostics)
+                    previous = error.payload
+                else:
+                    if content is None:
+                        error.failures = failures
+                        raise
+                    exc = error
+                    correction = _correction_detail(exc, content, request)
+                    previous = content.model_dump(mode="json")
                 correction["correction_attempt"] = attempt
                 failures.append(correction)
                 exc.failures = failures
                 if attempt:
-                    raise
+                    raise exc from None
                 # 데이터 보완과 별개로 같은 자료의 판단 출력만 한 번 교정합니다.
                 payload.pop("supplement_operations", None)
                 payload.pop("question_fields", None)
                 payload["correction"] = correction
-                payload["previous_decision"] = content.model_dump(mode="json")
+                payload["previous_decision"] = previous
                 prompt += (
                     "\n이번 호출은 최종판단 출력 교정입니다. "
                     "보완·지도·사용자 질문 요청은 금지됩니다. "
@@ -264,6 +170,10 @@ async def evaluate(
                     "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
                     "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
                 )
+            except (Exception, asyncio.CancelledError) as exc:
+                if failures:
+                    cast(Any, exc).failures = failures
+                raise
     else:
         limitations.extend(
             f"보완 후에도 판단 자료 없음: {item.request.decision_question}"
@@ -278,6 +188,7 @@ async def evaluate(
         )
 
     # 요청 정보와 자료 부족 표시는 모델이 변경하지 못하게 붙입니다.
+    assert content is not None
     payload = content.model_dump()
     if content.status == "ok" and limitations:
         payload["status"] = "partial"
@@ -357,6 +268,22 @@ def _decision_input(request: DecisionRequest) -> str:
         if "population_raw" not in included and isinstance(data.get("population"), dict):
             for field in ("by_age", "by_time", "by_day"):
                 data["population"].pop(field, None)
+        removed = [f"/{block}" for block in SELECTABLE if block not in included]
+        if "population_raw" not in included:
+            removed.extend(f"/population/{field}" for field in ("by_age", "by_time", "by_day"))
+        if isinstance(data.get("interpretation"), list):
+            # 원본 근거 경로의 배열 위치는 유지하고 제외한 자료의 문장만 가립니다.
+            data["interpretation"] = [
+                None
+                if isinstance(finding, dict)
+                and isinstance(finding.get("path"), str)
+                and any(
+                    finding["path"] == path or finding["path"].startswith(path + "/")
+                    for path in removed
+                )
+                else finding
+                for finding in data["interpretation"]
+            ]
     return json.dumps(payload, ensure_ascii=False, allow_nan=False)
 
 
@@ -377,6 +304,7 @@ def _validate_categories(content: DecisionContent) -> None:
         if industry.code in seen:
             raise DecisionContractError(field + ".middle", "duplicate_industry")
         seen.add(industry.code)
+        item.category.code = industry.code
         item.category.middle = industry.name
 
 
@@ -476,3 +404,131 @@ def _valid_map_evidence(path: str, industry_name: str, observation: MapObservati
             )
         )
     return False
+
+
+def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:
+    """원본의 실패·범위 차이·미확인 답변을 모읍니다."""
+    limitations = list(feedback or [])
+    if observation is not None:
+        limitations.extend(observation.warnings)
+        if observation.status in {"error", "partial"}:
+            limitations.append("지도 조회·매핑 일부 또는 전체 실패: 확인된 자료만 사용합니다.")
+    if answers:
+        limitations.append(
+            "임대인 답변은 사용자 제공 정보이며 시설·용도·입점 가능성을 검증한 자료가 아닙니다."
+        )
+        limitations.extend(
+            f"사용자 정보 미확인: {a.field}" for a in answers if a.status != "answered"
+        )
+
+    for agent_id in AGENT_IDS:
+        source = sources.get(agent_id)
+        if source is None:
+            limitations.append(f"분석 누락: {agent_id}")
+        elif source.status == "error":
+            detail = source.error.message if source.error else "사유 없음"
+            limitations.append(f"분석 실패: {agent_id} ({detail})")
+        elif source.status == "no_data":
+            limitations.append(f"자료 없음: {agent_id}")
+        else:
+            if source.status == "partial":
+                limitations.append(f"부분 분석: {agent_id}")
+            limitations.extend(f"{agent_id}: {warning}" for warning in source.warnings)
+
+    scopes = {
+        (item.scope.area, item.scope.period)
+        for item in available.values()
+        if item.scope is not None
+    }
+    if len(scopes) > 1:
+        limitations.append("분석 지역 또는 기준 기간이 달라 지표를 직접 비교하기 어렵습니다.")
+
+    return limitations
+
+
+def _build_prompt(
+    request,
+    operations,
+    allowed_questions,
+    answers,
+    site,
+    feedback,
+    supplement_context,
+    allow_map_lookup,
+):
+    """모델에 노출할 자료와 허용 작업만 구성합니다."""
+    observation = request.map_observation
+    prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
+    prompt += "\n\n## 공통 중분류 목록 (코드 | 대분류 공식명 | 중분류 공식명)\n"
+    prompt += "\n".join(
+        f"{code} | {INDUSTRY_MAJORS[code][1]} | {name}" for code, name in INDUSTRIES.items()
+    )
+    if operations:
+        prompt += (
+            "\n보완이 필요한 경우에만 다음 JSON 스키마의 요청을 반환할 수 있습니다. "
+            "일반 최종판단은 기존 DecisionContent 형식을 유지합니다.\n"
+            + json.dumps(SupplementPlan.model_json_schema(), ensure_ascii=False)
+        )
+    else:
+        prompt += "\n데이터 보완 요청은 금지됩니다."
+    payload = json.loads(_decision_input(request))
+    visible = {
+        item["agent_id"]: AgentAnalysis.model_validate(item)
+        for item in payload["analyses"]
+        if item["status"] in {"ok", "partial"}
+    }
+    payload["industry_evidence"] = industry_catalog(
+        {key: item.data for key, item in visible.items()}
+    )
+    if allow_map_lookup and observation is None:
+        prompt += "\n필요할 때만 지도 조회 JSON을 요청할 수 있습니다:\n" + json.dumps(
+            MapLookupPlan.model_json_schema(), ensure_ascii=False
+        )
+    else:
+        prompt += "\n지도 추가 조회는 금지됩니다."
+    if allowed_questions:
+        prompt += "\n필요한 경우에만 허용 항목으로 질문하세요. JSON 스키마:\n" + json.dumps(
+            QuestionPlan.model_json_schema(), ensure_ascii=False
+        )
+        payload["question_fields"] = sorted(allowed_questions)
+    else:
+        prompt += (
+            "\n사용자 질문은 금지됩니다. 허용된 데이터 보완·지도 조회가 없으면 "
+            "최종판단 또는 no_data를 반환하세요."
+        )
+    if answers:
+        payload["user_answers"] = [a.model_dump(mode="json") for a in answers]
+    if site is not None:
+        payload["site"] = Site.model_validate(site).model_dump(mode="json")
+    if operations:
+        payload["supplement_operations"] = [item.model_dump() for item in operations]
+    if feedback:
+        payload["supplement_feedback"] = feedback
+    if supplement_context:
+        payload["supplement_context"] = [
+            item.model_dump(mode="json", exclude={"analysis"}) for item in supplement_context
+        ]
+    return prompt, payload, visible
+
+
+def _parse_outcome(produced, *, final_only, operations, allowed_questions, allow_map_lookup):
+    """모델의 행동을 한 번 구분하고 현재 허용 범위를 검증합니다."""
+    action = (
+        produced.get("action") if isinstance(produced, dict) else getattr(produced, "action", None)
+    )
+    if action in {"map_lookup", "ask_user", "supplement"} and final_only:
+        raise ValueError("교정 단계에서는 최종판단만 허용합니다.")
+    if action == "map_lookup":
+        if not allow_map_lookup:
+            raise ValueError("현재 단계에서는 지도 조회를 요청할 수 없습니다.")
+        return MapLookupPlan.model_validate(produced)
+    if action == "ask_user":
+        questions = QuestionPlan.model_validate(produced)
+        if not allowed_questions or not {q.field for q in questions.questions} <= allowed_questions:
+            raise ValueError("현재 단계에서는 해당 사용자 질문을 허용하지 않습니다.")
+        return questions
+    if action == "supplement":
+        if not operations:
+            raise ValueError("현재 단계에서는 보완 요청을 허용하지 않습니다.")
+        return SupplementPlan.model_validate(produced)
+    return validate_content(produced)

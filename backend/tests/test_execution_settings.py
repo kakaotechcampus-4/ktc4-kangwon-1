@@ -1,17 +1,34 @@
 """상위에서 정한 설정이 요청 사이에 섞이지 않는지 검증합니다."""
 
 import asyncio
-import io
 import json
 import os
 import unittest
 from unittest.mock import patch
 
-from app.agents.orchestration.workflow import build_react_agents, default_agents, run_agents
+import httpx
+
+from app.agents.orchestration.workflow import build_react_agents, run_agents
 from app.schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, Scope, Site
 
 
 class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
+    def test_unused_analysis_model_options_do_not_block_execution_settings(self):
+        from app.services.settings import ExecutionSettings
+
+        with patch.dict(
+            os.environ,
+            {
+                "FLOATING_POPULATION_LLM_TIMEOUT_SECONDS": "unused",
+                "BUSINESS_LIFECYCLE_LLM_MAX_TOKENS": "unused",
+                "COMMERCIAL_AREA_LLM_TIMEOUT_SECONDS": "unused",
+                "ORCHESTRATION_LLM_TIMEOUT_SECONDS": "unused",
+            },
+            clear=True,
+        ):
+            settings = ExecutionSettings.from_env()
+        self.assertEqual(settings.agent_timeout, 180)
+
     async def test_lifecycle_api_snapshot_reaches_probe_and_quarter_requests(self):
         from test_business_lifecycle_agent import task
         from test_industry_pipeline import raw_rows
@@ -27,12 +44,13 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
                 ]
             }
 
+        httpx_client = httpx.AsyncClient
         for base_quarter in ("20244", ""):
             seen = []
 
-            def respond(url, *, timeout, seen=seen):
-                parts = url.split("/")
-                seen.append((parts[3], timeout))
+            def respond(request, *, seen=seen):
+                parts = str(request.url).rstrip("/").split("/")
+                seen.append((parts[3], request.extensions["timeout"]["read"]))
                 rows = [
                     {key.upper(): value for key, value in row.items()}
                     for row in raw_rows()
@@ -40,8 +58,9 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
                 ]
                 for row in rows:
                     row["STDR_YYQU_CD"] = parts[-2]
-                return io.BytesIO(
-                    json.dumps(
+                return httpx.Response(
+                    200,
+                    json=(
                         {
                             "VwsmTrdarStorQq": {
                                 "RESULT": {"CODE": "INFO-000"},
@@ -49,7 +68,7 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
                                 "row": rows,
                             }
                         }
-                    ).encode()
+                    ),
                 )
 
             with patch.dict(
@@ -68,12 +87,17 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
                 os.environ["BUSINESS_LIFECYCLE_API_KEY"] = "later-env-key"
                 os.environ["BUSINESS_LIFECYCLE_TIMEOUT_SECONDS"] = "0.75"
                 with (
-                    patch("app.agents.business_lifecycle.client.urlopen", side_effect=respond),
+                    patch(
+                        "httpx.AsyncClient",
+                        side_effect=lambda **kw: httpx_client(
+                            transport=httpx.MockTransport(respond), **kw
+                        ),
+                    ),
                     patch("app.llm.client.complete_json", side_effect=completion),
                 ):
                     result = await registry["business_lifecycle"](task())
             self.assertEqual(result.status, "partial")
-            self.assertEqual(seen, [("captured-key", 0.25)] * (4 if base_quarter else 5))
+            self.assertEqual(seen, [("captured-key", 0.25)] * 4)
 
     async def test_parallel_registries_keep_per_agent_settings(self):
         from app.services.settings import ExecutionSettings
@@ -84,11 +108,13 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
             async def analyze(task, **kwargs):
                 await asyncio.sleep(0)
                 if agent_id == "commercial_area":
-                    model = kwargs["settings"].llm_model
+                    model = kwargs["settings"].sbiz_service_key
                 elif agent_id == "floating_population":
-                    model = kwargs["select"].keywords["settings"].model
+                    self.assertNotIn("select", kwargs)
+                    model = None
                 else:
-                    model = kwargs["llm_settings"].model
+                    self.assertNotIn("llm_settings", kwargs)
+                    model = None
                 seen.append((task.request_id, agent_id, model))
                 return AgentAnalysis(
                     request_id=task.request_id,
@@ -108,7 +134,7 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
             for request in ("first", "second"):
                 with patch.dict(
                     os.environ,
-                    {f"{name.upper()}_LLM_MODEL": f"{request}-{name}" for name in AGENT_IDS},
+                    {"COMMERCIAL_AREA_API_KEY": f"{request}-commercial_area"},
                     clear=True,
                 ):
                     registries.append(build_react_agents(ExecutionSettings.from_env()))
@@ -133,7 +159,7 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             set(seen),
             {
-                (request, name, f"{request}-{name}")
+                (request, name, f"{request}-{name}" if name == "commercial_area" else None)
                 for request in ("first", "second")
                 for name in AGENT_IDS
             },
@@ -141,8 +167,9 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
 
     def test_default_registry_uses_all_three_and_legacy_commercial_settings(self):
         from app.agents.commercial_area.config import Settings
+        from app.services.settings import ExecutionSettings
 
-        registry = default_agents(Settings(analysis_radius_m=200))
+        registry = build_react_agents(ExecutionSettings(commercial=Settings(analysis_radius_m=200)))
         self.assertEqual(set(registry), set(AGENT_IDS))
 
     def test_shape_path_uses_captured_settings_without_opening_real_files(self):

@@ -31,18 +31,24 @@ def _industry(row: dict, path: str) -> str | None:
 
 
 def index_paths(data: dict[str, Any]) -> dict[str, str | None]:
-    """값이 있는 경로와 소유 업종을 반환합니다. None은 공통 자료입니다."""
+    """인용 경로와 소유 업종을 반환합니다. citable은 전체·필드별 차단을 지원합니다."""
     paths: dict[str, str | None] = {}
 
-    def visit(value: Any, path: str, owner: str | None = None, blocked: bool = False) -> bool:
+    def visit(
+        value: Any, path: str, owner: str | None = None, blocked: bool = False
+    ) -> tuple[bool, bool]:
         scoped = owner is not None
+        policy = value.get("citable") if isinstance(value, dict) else None
         if isinstance(value, dict):
             identified = _industry(value, path)
             if identified is not None:
                 blocked = blocked or owner is not None and owner != identified
                 owner, scoped = identified, True
             blocked = (
-                blocked or value.get("data_available") is False or value.get("confidence") == "none"
+                blocked
+                or policy is False
+                or value.get("data_available") is False
+                or value.get("confidence") == "none"
             )
         blocked = blocked or owner == ""
         children = (
@@ -53,7 +59,10 @@ def index_paths(data: dict[str, Any]) -> dict[str, str | None]:
             else ()
         )
         descendant_scoped = False
+        descendant_blocked = False
         for key, child in children:
+            if key == "citable":
+                continue
             child_owner = owner
             if path.endswith("/industry_counts"):
                 industry = lookup.find_by_name(str(key))
@@ -62,19 +71,31 @@ def index_paths(data: dict[str, Any]) -> dict[str, str | None]:
             unavailable_score = (
                 isinstance(value, dict) and key == "score" and value.get("score_available") is False
             )
-            descendant_scoped |= visit(
-                child, f"{path}/{escaped}", child_owner, blocked or unavailable_score
+            field_blocked = isinstance(policy, dict) and policy.get(key) is False
+            child_scoped, child_blocked = visit(
+                child,
+                f"{path}/{escaped}",
+                child_owner,
+                blocked or unavailable_score or field_blocked,
             )
+            descendant_scoped |= child_scoped
+            descendant_blocked |= child_blocked
         present = (
             value is not None
             and not (isinstance(value, str) and not value.strip())
             and value != []
             and value != {}
         )
-        # 여러 업종을 감싼 상위 목록·객체로 개별 업종 검사를 우회하지 못합니다.
-        if path and present and not blocked and not (owner is None and descendant_scoped):
+        # 금지된 하위 자료·다른 업종을 상위 객체 인용으로 우회하지 못합니다.
+        if (
+            path
+            and present
+            and not blocked
+            and not descendant_blocked
+            and not (owner is None and descendant_scoped)
+        ):
             paths[path] = owner
-        return scoped or descendant_scoped
+        return scoped or descendant_scoped, blocked or descendant_blocked
 
     visit(data, "")
     return paths

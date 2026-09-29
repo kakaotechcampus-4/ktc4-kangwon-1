@@ -16,7 +16,7 @@ from app.agents.orchestration.workflow import prepare_task, run_agents
 from app.db import repository
 from app.db.connection import connect, initialize
 from app.llm.config import LLMSettings
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import SupplementOperation, SupplementPlan
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
@@ -74,7 +74,6 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
             radius_m=300,
             resolve=mock_resolve,
             agents=mock_agents(),
-            generate_action=mock_action,
             generate=self.generate,
             settings=ExecutionSettings(),
             supplements=[self.tool()],

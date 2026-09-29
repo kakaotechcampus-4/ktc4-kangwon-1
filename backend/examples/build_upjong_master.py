@@ -13,6 +13,7 @@ from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present
 from app.agents.commercial_area.industries import master_from_stores, write_master
 from app.agents.commercial_area.schemas import MiddleCode
+from app.industries import MASTER_PATH
 
 OFFICIAL_COLUMN_CANDIDATES = {
     "middle_code": ("중분류코드", "indsMclsCd", "상권업종중분류코드"),
@@ -105,8 +106,8 @@ def main() -> int:
         rows = asyncio.run(from_api(settings, args.radius))
         source = "API 응답 수집"
 
-    write_master(settings.upjong_master_path, rows)
-    print(f"\n{source} → {settings.upjong_master_path}")
+    write_master(MASTER_PATH, rows)
+    print(f"\n{source} → {MASTER_PATH}")
     print(f"중분류 {len(rows)}개 저장 (공식 체계는 75개)")
     if len(rows) < 75:
         print("75개보다 적습니다. 공식 업종코드 CSV로 다시 만드는 것을 권장합니다.")

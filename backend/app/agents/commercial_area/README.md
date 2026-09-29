@@ -11,24 +11,23 @@
 
 ## 무엇을 계산하나
 
-집적·경쟁 지표 11종을 요청 반경으로 계산한다. 세부 반경은 50·200·500m 중
+집적·경쟁 지표를 요청 반경으로 계산한다. 세부 반경은 50·200·500m 중
 요청 반경 이하의 값과 요청 반경 자체를 사용한다.
 
-공통 진입점에서는 `AnalysisTask.radius_m`이 기준이다. `ANALYSIS_RADIUS_M`은
-단독 실행 예제의 입력 기본값이며 서비스 요청을 덮어쓰지 않는다.
+공통 진입점에서는 `AnalysisTask.radius_m`이 기준이다. 단독 예제는 `--radius`로 입력한다.
 주변 LQ는 요청 반경보다 큰 비교 반경만 사용한다. 없으면 주변 LQ를 비우고 partial로 반환한다.
 서울 음식점 백분위는 500m 표본이므로 다른 요청 반경에서는 null이다. 밀도 자체는 계산한다.
 
 | 지표 | 필드 |
 | --- | --- |
 | 점포 수 | `store_total`, `by_major[].count`, `by_middle[].count` |
-| 동종 / 이종 업체 수 | `by_middle[].same_type_count` / `diff_type_count` |
-| 업종별 밀도 + 2차항 | `by_middle[].density_per_km2` / `density_sq` |
+| 동종 / 이종 업체 수 | `by_middle[].count` / `diff_type_count` |
+| 업종별 밀도 | `by_middle[].density_per_km2` |
 | 음식점 밀도 | `restaurant_density` (단위 `stores_per_km2`) |
 | 업종 다양성 | `diversity.hhi_major` / `hhi_middle` / `effective_categories` |
 | 반경 대비 특화도 | `by_middle[].lq` (분석 반경 비중 ÷ 반경 2km 비중) |
 | 자치구 대비 특화도 | `by_middle[].lq_district`, `district_specialization` |
-| 마샬리안 / 제이코비안 | `by_middle[].marshallian` / `jacobian` |
+| 이종 업체 밀도 | `by_middle[].jacobian` |
 | 누적 유인 (Nelson 2원칙) | `by_middle[].major_cluster_count` / `major_cluster_diversity` |
 | 프랜차이즈 / 개인사업자 비율 | `franchise` |
 | 반경별 순위·해설 | `by_radius[]` |
@@ -76,9 +75,8 @@ pip install -e ".[dev]"
 | --- | --- | --- |
 | `COMMERCIAL_AREA_API_KEY` | 소상공인 상가정보 (필수) | `status: error` |
 | `FRANCHISE_API_KEY` | 공정위 브랜드 목록 | 프랜차이즈 지표 생략 + `partial` |
-| `ELICE_API_KEY` / `ELICE_BASE_URL` / `ELICE_MODEL` | 요약 생성 | 요약 생략 |
 | `GEOCODING_API_KEY` | 공통 주소 도구의 카카오 REST 키 | 주소 설정 오류 |
-| `ANALYSIS_RADIUS_M` | 분석 반경 (기본 500) | 500m |
+| `SBIZ_MAX_CONCURRENCY` | 서버 워커의 공유 동시 조회 상한 | 4 |
 
 공공데이터 키 2개는 [공공데이터포털](https://www.data.go.kr) 계정의 **일반 인증키 하나**를 양쪽에 넣으면 된다. 단 API마다 활용신청을 따로 해야 한다.
 
@@ -136,7 +134,7 @@ result = asyncio.run(
 | `franchise` | 결정·화면 | 프랜차이즈·개인사업자 수와 비율, 업종별 내역, 브랜드 기준 연도 |
 | `lq_baseline` · `district_baseline` | 결정 | 두 기준선이 **무엇이었는지**. 배수를 해석하려면 분모를 알아야 한다 |
 | `district_specialization` | 결정·화면 | 자치구 대비 특화 상위 10 |
-| `summary` · `summary_text` | 화면 | 모델이 쓴 사람 읽는 문장 |
+| `summary` · `summary_text` | 화면 | 규칙으로 생성한 조회 반경·점포 수 설명 |
 | `sources` | 결정·화면 | 맨 뒤. 공공누리 출처표시 의무라 화면이 하드코딩하지 않게 함께 싣는다. **쓴 자료만 들어가므로 길이를 가정하지 않는다** |
 
 **기준선 정보를 함께 싣는 이유.** `lq: 4.21`만 주면 무엇과 비교한 4.21인지 알 수 없다.
@@ -173,8 +171,9 @@ result = asyncio.run(
 - **`by_middle` 75행 전부를 차트로 그리면 안 된다.** ⚠️ **가장 위험한 자리다.**
   0건 업종이 22개 섞여 있어 축을 잡아먹고, 상위 3종이 전체의 절반을 차지해 나머지가 안 보인다.
   상위 N개만 자르거나 `by_radius[].top_by_count`(이미 순위로 잘려 있다)를 쓴다.
-- **`marshallian` · `jacobian` · `density_sq`** — 사용자에게 보여줄 이름이 아니다.
-  프롬프트에도 "마샬리안, 제이코비안은 쓰지 않는다"로 막아 두었다. 판단용 내부 지표다.
+- `same_type_count`·`marshallian`·`density_sq`·`restaurant_density.squared`는 중복 표현이라 제거했다.
+  점포 수와 밀도는 `count`·`density_per_km2`·`restaurant_density.value`를 사용한다.
+- `jacobian`은 이종 점포 밀도이며 별도 적합성 점수가 아니다.
 - **`lq` 를 기준 없이 "3배"로 표시하면 안 된다.** `lq`와 `lq_district`는 분모가 다르다.
   반드시 "반경 2km 안에서" / "노원구 전체와 비교하면"을 붙인다.
 - **`major_cluster_count` · `major_cluster_diversity`** — 누적 유인의 재료 두 개다.

@@ -51,6 +51,11 @@ def initialize(db_path: str | Path | None = None) -> Path:
                     "CHECK (radius_m IS NULL OR (typeof(radius_m) = 'integer' AND radius_m > 0))"
                 )
         _migrate_waiting(connection, schema)
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_requests)")}
+            if "catalog_version" not in columns:
+                connection.execute("ALTER TABLE analysis_requests ADD COLUMN catalog_version TEXT")
     finally:
         connection.close()
     return path

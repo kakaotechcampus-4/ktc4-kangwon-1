@@ -1,8 +1,10 @@
 """팀 간 연결에 필요한 입력과 출력을 정의합니다."""
 
-from typing import Annotated, Literal, Self, get_args
+from typing import Annotated, Any, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
+
+from app.industries import lookup
 
 # 공통 기본 타입과 검증 규칙
 AgentId = Literal["floating_population", "business_lifecycle", "commercial_area"]
@@ -461,8 +463,31 @@ class Evidence(Schema):
 
 
 class Category(Schema):
+    code: Text | None = None
     major: Text
     middle: Text
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_code(cls, value: Any) -> Any:
+        """코드 입력은 공식명을 채우고, 과거 이름 입력도 유지합니다."""
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        code = data.get("code")
+        if code is not None:
+            industry = lookup.find(code) if isinstance(code, str) else None
+            if industry is None:
+                raise ValueError("공통 업종표에 없는 코드입니다.")
+            for key, expected in (("major", industry.major_name), ("middle", industry.name)):
+                if key in data and data[key] != expected:
+                    raise ValueError("업종 코드와 명칭이 일치하지 않습니다.")
+                data[key] = expected
+        elif isinstance(data.get("middle"), str):
+            industry = lookup.find_by_name(data["middle"])
+            if industry and data.get("major") == industry.major_name:
+                data.update(code=industry.code, middle=industry.name)
+        return data
 
 
 class IndustryAssessment(Schema):

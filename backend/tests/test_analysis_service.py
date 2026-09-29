@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, Mock, patch
 from pydantic import ValidationError
 from test_business_lifecycle_agent import fake_area
 from test_industry_pipeline import raw_rows
-from test_orchestration_react import action
 
 from app.agents.business_lifecycle.agent import analyze as analyze_lifecycle
 from app.agents.business_lifecycle.config import Settings as LifecycleSettings
+from app.agents.decision.agent import DecisionContractError
 from app.db import repository as repo
 from app.db.connection import initialize
 from app.schemas import AGENT_IDS, AgentAnalysis, Scope, Site
@@ -25,6 +25,28 @@ from app.services.settings import ExecutionSettings
 
 
 class ServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_failure_messages_distinguish_causes_without_exception_text(self):
+        for index, (error, code, word) in enumerate(
+            (
+                (
+                    DecisionContractError("recommendations.0.category", "invalid_category"),
+                    "DECISION_CONTRACT_INVALID",
+                    "검증",
+                ),
+                (TimeoutError("secret-key"), "ANALYSIS_TIMEOUT", "시간"),
+                (sqlite3.OperationalError("secret-key"), "STORAGE_ERROR", "저장"),
+            )
+        ):
+            self.generate.side_effect = error
+            request_id = f"failure-{index}"
+            with self.subTest(code=code), self.assertRaises(type(error)):
+                await self.run_service(request_id=request_id)
+            row = repo.get_request(request_id, db_path=self.path)
+            saved = json.loads(row["error_json"])
+            self.assertEqual(saved["code"], code)
+            self.assertIn(word, saved["message"])
+            self.assertNotIn("secret-key", row["error_json"])
+
     async def test_radius_reaches_all_agents_and_storage(self):
         received = []
 
@@ -109,13 +131,6 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
             agents=self.agents() if agents is None else agents,
             request_id=request_id,
             generate=self.generate,
-            generate_action=AsyncMock(
-                side_effect=[
-                    action("prepare_address"),
-                    action("run_analyses"),
-                    action("make_decision"),
-                ]
-            ),
             **kwargs,
         )
 
@@ -162,6 +177,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                 json.loads(row["error_json"])["code"],
                 "ANALYSIS_CANCELLED" if cancel else "ANALYSIS_TIMEOUT",
             )
+            self.assertIn("취소" if cancel else "시간", json.loads(row["error_json"])["message"])
 
     async def test_cancel_waits_for_insert_or_commit_and_preserves_ownership(self):
         for operation, duplicate, expected in (
@@ -369,7 +385,6 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         agents["business_lifecycle"] = partial(
             analyze_lifecycle,
             settings=settings.lifecycle,
-            llm_settings=settings.lifecycle_llm,
             area_resolver=fake_area,
         )
         with (

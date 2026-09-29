@@ -11,7 +11,6 @@ import json
 import sys
 from pathlib import Path
 
-from openai.types.chat import ChatCompletionMessage
 from prepare_task import MOCK_ADDRESS, mock_resolve
 
 from app.config import load_environment
@@ -36,23 +35,6 @@ async def run(offline: bool, *, db_path: str | Path | None = None):
 
         return analyze
 
-    actions = iter(("prepare_address", "run_analyses", "make_decision"))
-
-    async def mock_action(messages, definitions):
-        name = next(actions)
-        return ChatCompletionMessage.model_validate(
-            {
-                "role": "assistant",
-                "tool_calls": [
-                    {
-                        "id": f"call-{name}",
-                        "type": "function",
-                        "function": {"name": name, "arguments": "{}"},
-                    }
-                ],
-            }
-        )
-
     def mock_decision(system_prompt, input_json):
         return json.loads((folder / "response.json").read_text("utf-8"))
 
@@ -60,7 +42,6 @@ async def run(offline: bool, *, db_path: str | Path | None = None):
         source.address,
         resolve=mock_resolve,
         agents={item.agent_id: make_agent(item) for item in source.analyses},
-        generate_action=mock_action if offline else None,
         generate=mock_decision if offline else None,
         db_path=db_path,
         settings=ExecutionSettings() if offline else ExecutionSettings.from_env(),

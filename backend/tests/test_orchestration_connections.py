@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
-from test_orchestration_react import action
+from orchestration_support import run_flow, run_service
 from test_orchestrator_e2e import MASTER, sample_stores
 
 from app.agents.business_lifecycle.area_resolver import BusinessAreaNoDataError
@@ -70,20 +70,13 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         if hasattr(self, "environment_loader"):
             self.environment_loader.assert_not_called()
 
-    async def run_react(self, agents, generate):
-        return await workflow.run_react(
+    async def run_flow(self, agents, generate):
+        return await run_flow(
             self.site.input_address,
             resolve=AsyncMock(return_value=self.site),
             agents=agents,
             generate=generate,
             request_id=self.task.request_id,
-            generate_action=AsyncMock(
-                side_effect=[
-                    action("prepare_address"),
-                    action("run_analyses"),
-                    action("make_decision"),
-                ]
-            ),
         )
 
     async def test_registration_and_parallel_execution(self):
@@ -193,20 +186,11 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(module.Settings, "from_env", return_value=module.Settings())
             )
         self.enterContext(patch.object(floating, "SeoulOpenDataClient", return_value=fp_client))
-        self.enterContext(
-            patch.object(
-                floating.llm,
-                "select_blocks",
-                new=AsyncMock(
-                    return_value=(list(floating.llm.SELECTABLE), "시험에서 모든 블록 유지"),
-                ),
-            )
-        )
         self.enterContext(patch.object(commercial, "StoreClient", return_value=ca_client))
         self.enterContext(patch.object(commercial, "load_middle_master", return_value=MASTER))
         self.enterContext(patch.object(commercial, "load_brands", new=AsyncMock(return_value=[])))
         self.enterContext(
-            patch.object(commercial, "summarize", new=AsyncMock(return_value=(None, None)))
+            patch("app.llm.client.complete_json", side_effect=AssertionError("모델 호출 금지"))
         )
         return fp_client, ca_client
 
@@ -235,7 +219,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "limitations": [],
             }
 
-        result = await self.run_react(build_react_agents(), generate)
+        result = await self.run_flow(build_react_agents(), generate)
         DecisionResult.model_validate(result)
         self.assertEqual(result.status, "partial")
         self.assertEqual(len(result.source_analyses), 3)
@@ -244,8 +228,11 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.source_analyses[2].data["store_total"], 8)
         self.assertEqual(
-            captured[0]["analyses"], [a.model_dump(mode="json") for a in result.source_analyses]
+            captured[0]["analyses"][1:],
+            [a.model_dump(mode="json") for a in result.source_analyses[1:]],
         )
+        self.assertNotIn("by_age", captured[0]["analyses"][0]["data"]["population"])
+        self.assertIn("by_age", result.source_analyses[0].data["population"])
         self.assertEqual(result.source_analyses[1].status, "no_data")
         fp_client.aclose.assert_awaited_once()
         ca_client.aclose.assert_awaited_once()
@@ -258,21 +245,19 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             return content
 
         with self.assertRaisesRegex(ValueError, "사용할 수 없는 분석"):
-            await self.run_react(build_react_agents(), bad_evidence)
+            await self.run_flow(build_react_agents(), bad_evidence)
 
-    async def test_three_real_analyzers_are_saved_and_lifecycle_receives_its_llm_settings(self):
+    async def test_three_real_analyzers_are_saved_without_analysis_model_calls(self):
         from dataclasses import replace
 
         from test_business_lifecycle_agent import fake_area
         from test_industry_pipeline import raw_rows
 
         from app.db.repository import get_request, list_agent_results
-        from app.llm.config import LLMSettings
         from app.services.analysis import execute_analysis
         from app.services.settings import ExecutionSettings
 
         self.prepare_real_agents()
-        expected_model = "lifecycle-only-model"
         settings = ExecutionSettings.from_env()
         settings = replace(
             settings,
@@ -283,7 +268,6 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 api_key="captured-key",
                 request_timeout_s=0.25,
             ),
-            lifecycle_llm=LLMSettings(model=expected_model),
         )
 
         def request_page(**kwargs):
@@ -300,16 +284,6 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                     "list_total_count": len(rows),
                     "row": rows,
                 }
-            }
-
-        async def interpret(prompt, input_json, settings):
-            self.assertEqual(settings.model, expected_model)
-            payload = json.loads(input_json)
-            return {
-                "industry_scores": [
-                    dict(item, type="안정형", evidence=[], warning=None)
-                    for item in payload["industries"]
-                ]
             }
 
         def generate(prompt, input_json):
@@ -341,7 +315,9 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             patch.dict(os.environ, {"BUSINESS_LIFECYCLE_API_KEY": "later-env-key"}),
             patch.object(lifecycle, "resolve_area", new=fake_area),
             patch("app.agents.business_lifecycle.client.request_page", side_effect=request_page),
-            patch("app.llm.client.complete_json", side_effect=interpret),
+            patch(
+                "app.llm.client.complete_json", side_effect=AssertionError("분석 모델 호출 금지")
+            ),
         ):
             path = Path(temporary) / "three.sqlite3"
             result = await execute_analysis(
@@ -350,13 +326,6 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 db_path=path,
                 resolve=AsyncMock(return_value=self.site),
                 generate=generate,
-                generate_action=AsyncMock(
-                    side_effect=[
-                        action("prepare_address"),
-                        action("run_analyses"),
-                        action("make_decision"),
-                    ]
-                ),
             )
             self.assertTrue(
                 all(item.status in {"ok", "partial"} for item in result.source_analyses)
@@ -388,14 +357,14 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                     "limitations": ["판단할 자료 부족"],
                 }
             )
-            result = await self.run_react(build_react_agents(), generate)
+            result = await self.run_flow(build_react_agents(), generate)
             self.assertEqual(result.source_analyses[0].error.code, "AGENT_CRASHED")
             self.assertEqual(result.source_analyses[2].data["store_total"], 8)
             self.assertEqual(result.status, "no_data")
             generate.assert_called_once()
         self.site = self.site.model_copy(update={"latitude": 0.0, "longitude": 0.0})
         generate = Mock(side_effect=AssertionError("판단 모델 호출 금지"))
-        result = await self.run_react(build_react_agents(), generate)
+        result = await self.run_flow(build_react_agents(), generate)
         self.assertEqual(result.status, "no_data")
         generate.assert_not_called()
 
@@ -416,10 +385,11 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(secret, result.model_dump_json())
 
         fp_client.fetch_trdar_areas.side_effect = None
-        floating.llm.select_blocks.side_effect = RuntimeError(
-            f"https://example.test/?key={secret} response=private"
-        )
-        result = await floating.analyze(self.task)
+
+        async def unavailable(_payload):
+            raise RuntimeError(f"https://example.test/?key={secret} response=private")
+
+        result = await floating.analyze(self.task, select=unavailable)
         self.assertNotIn(secret, result.model_dump_json())
 
     async def test_invalid_contract_stops_both_paths_before_decision(self):
@@ -446,9 +416,9 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                     generate = Mock(side_effect=AssertionError("판단 모델 호출 금지"))
                     with self.assertRaises(ValueError):
                         if react:
-                            await self.run_react(agents, generate)
+                            await self.run_flow(agents, generate)
                         else:
-                            await workflow.run_analysis(
+                            await run_service(
                                 self.site.input_address,
                                 site=self.site,
                                 agents=agents,

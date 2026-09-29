@@ -1,11 +1,11 @@
 import asyncio
-from collections.abc import Callable
+import inspect
+from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Any
 
 from pydantic import ValidationError
 
-from app.llm.config import LLMSettings
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope, Site
 
 from .area_resolver import (
@@ -19,26 +19,33 @@ from .client import (
     SeoulOpenAPIError,
     SeoulOpenAPINoDataError,
     detect_latest_valid_quarter,
+    page_session,
 )
 from .config import Settings
-from .formatter import BusinessLifecycleFormatterError, format_for_mediator
+from .formatter import BusinessLifecycleFormatterError, describe_industry, format_for_mediator
 from .input_builder import build_agent_input
-from .llm import BusinessLifecycleAgentError, run_llm_analysis
+from .preprocess import UpstreamDataError
+
+
+class BusinessLifecycleAgentError(RuntimeError):
+    """개폐업 파이프라인 실행 오류입니다."""
+
 
 AGENT_ID: AgentId = "business_lifecycle"
 
 
 ResolveArea = Callable[[Site, Settings], BusinessArea]
-RunPipeline = Callable[[str, str, int, str | None, str | None], dict[str, Any]]
+RunPipeline = Callable[
+    [str, str, int, str | None, str | None], dict[str, Any] | Awaitable[dict[str, Any]]
+]
 
 
-def run_business_lifecycle_agent(
+async def run_business_lifecycle_agent(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
     request_id: str | None = None,
     area_name: str | None = None,
-    llm_settings: LLMSettings | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     """
@@ -48,14 +55,14 @@ def run_business_lifecycle_agent(
     → 전처리
     → 점수 계산
     → Agent Input
-    → LLM 해석
+    → 관측 건수 설명
     """
 
     # ========================================================
     # 1. Agent Input 생성
     # ========================================================
 
-    agent_input = build_agent_input(
+    agent_input = await build_agent_input(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
@@ -65,10 +72,10 @@ def run_business_lifecycle_agent(
     )
 
     # ========================================================
-    # 2. 점수가 있는 업종만 LLM 분석
+    # 2. 점수가 있는 업종의 관측 건수를 설명
     # ========================================================
 
-    llm_result = run_llm_analysis(agent_input=agent_input, settings=llm_settings)
+    scores = [describe_industry(industry) for industry in agent_input["industries"]]
 
     # ========================================================
     # 3. 최종 Agent 결과 생성
@@ -81,12 +88,12 @@ def run_business_lifecycle_agent(
         "coverage": agent_input["coverage"],
         "taxonomy": agent_input["taxonomy"],
         "scoring_method": agent_input["scoring_method"],
-        "summary": llm_result.get(
-            "summary",
-            "",
+        "summary": (
+            f"최근 {quarter_count}개 분기의 개폐업 자료로 {len(scores)}개 업종을 비교했습니다."
+            if scores
+            else "개폐업 관측 자료는 보존했으나 비교 가능한 자료가 부족해 상대 점수를 보류했습니다."
         ),
-        # LLM 분석 완료 업종
-        "industry_scores": (llm_result["industry_scores"]),
+        "industry_scores": scores,
         # 데이터 부족으로 판단 보류
         "unavailable_industries": (agent_input["unavailable_industries"]),
     }
@@ -99,21 +106,23 @@ async def analyze(
     settings: Settings | None = None,
     area_resolver: ResolveArea | None = None,
     run_pipeline: RunPipeline | None = None,
-    llm_settings: LLMSettings | None = None,
 ) -> AgentAnalysis:
     """팀 공통 인터페이스로 Business Lifecycle 분석을 실행합니다."""
     task = AnalysisTask.model_validate(task)
-    settings = settings or Settings.from_env()
-    return await asyncio.to_thread(
-        _analyze_sync,
-        task,
-        settings,
-        area_resolver or resolve_area,
-        run_pipeline or partial(_run_pipeline, llm_settings=llm_settings, settings=settings),
-    )
+    try:
+        settings = settings or Settings.from_env()
+    except (ValueError, TypeError) as exc:
+        return _error(task, "CONFIG_ERROR", exc)
+    async with page_session(settings.request_timeout_s):
+        return await _analyze(
+            task,
+            settings,
+            area_resolver or resolve_area,
+            run_pipeline or partial(_run_pipeline, settings=settings),
+        )
 
 
-def _analyze_sync(
+async def _analyze(
     task: AnalysisTask,
     settings: Settings,
     area_resolver: ResolveArea,
@@ -122,22 +131,29 @@ def _analyze_sync(
     site = task.site
 
     try:
-        area = _resolve_area(
+        area = await asyncio.to_thread(
+            _resolve_area,
             site=site,
             settings=settings,
             area_resolver=area_resolver,
         )
-        base_quarter = _choose_base_quarter(
+        base_quarter = await _choose_base_quarter(
             area_code=area.area_code,
             settings=settings,
         )
-        agent_result = run_pipeline(
+        call = partial(
+            run_pipeline,
             area.area_code,
             base_quarter,
             settings.quarter_count,
             task.request_id,
             area.area_name,
         )
+        agent_result: Any = (
+            call() if inspect.iscoroutinefunction(run_pipeline) else await asyncio.to_thread(call)
+        )
+        if inspect.isawaitable(agent_result):
+            agent_result = await agent_result
         return format_for_mediator(
             agent_result,
             scope_area=f"{area.area_name} ({area.area_code})",
@@ -159,7 +175,6 @@ def _analyze_sync(
                     "method": (
                         "env_override" if _has_area_override(settings) else "official_polygon"
                     ),
-                    "distance_m": round(area.distance_m, 1),
                     "coordinate_system": "EPSG:5181",
                 },
             },
@@ -185,14 +200,9 @@ def _analyze_sync(
         return _error(task, "INVALID_INPUT", exc)
     except ValidationError:
         raise
+    except UpstreamDataError as exc:
+        return _error(task, "UPSTREAM_ERROR", exc)
     except ValueError as exc:
-        if _is_no_data_error(exc):
-            return _no_data(
-                task=task,
-                area=site.input_address,
-                period="서울시 점포 개폐업 데이터",
-                warning="조회된 개폐업 데이터가 없습니다.",
-            )
         return _error(task, "INVALID_INPUT", exc)
     except SeoulOpenAPIError as exc:
         return _error(task, "SeoulOpenAPIError", exc)
@@ -227,7 +237,6 @@ def _resolve_area(
             dong_name=None,
             x=0.0,
             y=0.0,
-            distance_m=0.0,
             warning="환경변수로 지정한 상권을 사용했습니다.",
         )
 
@@ -238,27 +247,25 @@ def _has_area_override(settings: Settings) -> bool:
     return bool(settings.area_code_override and settings.area_name_override)
 
 
-def _run_pipeline(
+async def _run_pipeline(
     area_code: str,
     base_quarter: str,
     quarter_count: int,
     request_id: str | None,
     area_name: str | None,
-    llm_settings: LLMSettings | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
-    return run_business_lifecycle_agent(
+    return await run_business_lifecycle_agent(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
         request_id=request_id,
         area_name=area_name,
-        llm_settings=llm_settings,
         settings=settings,
     )
 
 
-def _choose_base_quarter(
+async def _choose_base_quarter(
     area_code: str,
     settings: Settings,
 ) -> str:
@@ -272,7 +279,7 @@ def _choose_base_quarter(
             )
         return settings.base_quarter_override
 
-    return detect_latest_valid_quarter(
+    return await detect_latest_valid_quarter(
         area_code=area_code,
         candidate_count=settings.latest_quarter_search_count,
         settings=settings,
@@ -292,10 +299,6 @@ def _period_label(agent_result: dict[str, Any]) -> str:
     if base_quarter:
         return str(base_quarter)
     return "기준 기간 확인 불가"
-
-
-def _is_no_data_error(exc: ValueError) -> bool:
-    return "조회된 데이터가 없습니다" in str(exc)
 
 
 def _no_data(

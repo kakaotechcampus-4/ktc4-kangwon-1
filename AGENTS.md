@@ -15,7 +15,7 @@ backend/    FastAPI · Python 3.12 · 비동기(asyncio)
 docs/       규칙 문서 (컨벤션 · Git · API 계약)
 ```
 
-데이터 흐름은 한 방향입니다.
+기본 흐름은 고정이며 최종판단 이후 필요한 보완·지도 조회·질문만 선택합니다.
 
 ```
 주소 → 좌표(address.py)
@@ -35,7 +35,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 2. **외부 호출은 전부 비동기다.** `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
    `httpx.Client`, `time.sleep`을 새로 넣지 마세요 — 분석 한 번이 100회 넘는 HTTP 요청을 만들고,
    동기 호출은 FastAPI 이벤트 루프를 통째로 멈춥니다.
-   기존 개폐업 동기 I/O 파이프라인은 `asyncio.to_thread()`로 격리해 이벤트 루프를 막지 않습니다.
+   파일·SQLite·SHP 읽기는 `asyncio.to_thread()`로 격리합니다. 서울 API 전송은 `app/seoul.py`에서 공유합니다.
 
 3. **일반 분석 실패는 에이전트 결과로 수집한다.** 외부 API 실패는 `status="error"`와 `error`,
    부분 실패는 `status="partial"` + `warnings`로 표현해 다른 에이전트를 계속 실행합니다.
@@ -53,10 +53,12 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 
 ```bash
 # 백엔드
+conda activate chaeum
 cd backend
-.venv/Scripts/python -m ruff check . && .venv/Scripts/python -m ruff format .
-.venv/Scripts/python -m mypy
-.venv/Scripts/python -m unittest discover -s tests
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
+python -m unittest discover -s tests
 
 # 프론트엔드
 cd frontend

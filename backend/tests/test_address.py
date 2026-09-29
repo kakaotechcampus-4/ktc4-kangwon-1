@@ -7,10 +7,10 @@ from functools import partial
 from unittest.mock import patch
 
 import httpx
+from orchestration_support import run_service
 
 from app import address, config
-from app.agents.commercial_area.config import Settings
-from app.agents.orchestration.workflow import prepare_task, run_agents, run_analysis
+from app.agents.orchestration.workflow import prepare_task, run_agents
 from app.mocks import mock_agents, mock_generate
 from app.schemas import AgentAnalysis, Scope
 
@@ -213,7 +213,10 @@ class AddressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(requests), 1)
         self.assertIs(seen[0], task.site)
 
-    async def test_legacy_workflow_settings_forward_key_and_timeout(self):
+    async def test_service_settings_forward_key_and_timeout(self):
+        from app.config import AddressSettings
+        from app.services.settings import ExecutionSettings
+
         requests = []
 
         def handler(request):
@@ -225,10 +228,12 @@ class AddressTests(unittest.IsolatedAsyncioTestCase):
             async def resolve(text, settings):
                 return await address.resolve_site(text, settings, client=client)
 
-            with patch("app.agents.orchestration.tools.resolve_site", side_effect=resolve):
-                result = await run_analysis(
+            with patch("app.services.analysis.resolve_site", side_effect=resolve):
+                result = await run_service(
                     ROAD,
-                    settings=Settings(geocoding_api_key="legacy", request_timeout_s=7),
+                    settings=ExecutionSettings(
+                        address=AddressSettings(api_key="legacy", timeout=7)
+                    ),
                     agents=mock_agents(),
                     generate=mock_generate,
                 )

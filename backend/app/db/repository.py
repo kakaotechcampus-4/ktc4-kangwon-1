@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.industries.catalog import CATALOG_VERSION
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
@@ -58,9 +59,9 @@ def create_request(
     with connect(db_path) as db:
         db.execute(
             "INSERT INTO analysis_requests "
-            "(request_id, input_address, radius_m, status, created_at) "
-            "VALUES (?, ?, ?, 'pending', ?)",
-            (request_id, address, radius_m, _now()),
+            "(request_id, input_address, radius_m, catalog_version, status, created_at) "
+            "VALUES (?, ?, ?, ?, 'pending', ?)",
+            (request_id, address, radius_m, CATALOG_VERSION, _now()),
         )
 
 
@@ -221,6 +222,10 @@ def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> di
         ).fetchone()
         if row is None or row["status"] != "failed" or row["completed_at"] != failed_at:
             raise DecisionRetryConflictError("현재 실패 기록과 재시도 요청이 다릅니다.")
+        if row["catalog_version"] != CATALOG_VERSION:
+            raise DecisionRetryConflictError(
+                "업종표 버전이 다르거나 확인되지 않아 새 분석이 필요합니다."
+            )
         if json.loads(row["error_json"])["code"] not in {
             "DECISION_CONTRACT_INVALID",
             "DECISION_RETRY_FAILED",
@@ -228,59 +233,7 @@ def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> di
         }:
             raise DecisionRetryConflictError("이 실패는 최종판단 재시도 대상이 아닙니다.")
         try:
-            task = AnalysisTask(
-                request_id=request_id,
-                site=Site.model_validate_json(row["site_json"]),
-                radius_m=row["radius_m"],
-            )
-            events = [
-                SupplementEvent.model_validate_json(r[0])
-                for r in db.execute(
-                    "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id",
-                    (request_id,),
-                )
-            ]
-            attempts = dict.fromkeys(AGENT_IDS, 1)
-            for event in events:
-                if event.request_id != request_id:
-                    raise ValueError("보완 요청 식별자가 다릅니다.")
-                if event.adopted:
-                    attempts[event.request.agent_id] = 2
-            analyses = []
-            for agent_id, attempt in attempts.items():
-                source = db.execute(
-                    "SELECT analysis_json FROM agent_results "
-                    "WHERE request_id=? AND agent_id=? AND attempt=?",
-                    (request_id, agent_id, attempt),
-                ).fetchone()
-                if source is None:
-                    raise ValueError("분석 이력이 부족합니다.")
-                analysis = AgentAnalysis.model_validate_json(source[0])
-                if (analysis.request_id, analysis.agent_id) != (request_id, agent_id):
-                    raise ValueError("분석 식별자가 다릅니다.")
-                analyses.append(analysis)
-            questions = db.execute(
-                "SELECT snapshot_json,answers_json FROM question_sessions WHERE request_id=?",
-                (request_id,),
-            ).fetchone()
-            answers, feedback = [], []
-            if questions:
-                snapshot = QuestionSnapshot.model_validate_json(questions[0])
-                submission = AnswerSubmission.model_validate_json(questions[1])
-                answers = normalize_answers(snapshot.waiting, submission).answers
-                analyses = _load_question_analyses(db, snapshot)
-                feedback = snapshot.feedback
-            observation = _get_map_observation(db, request_id)
-            if observation and (
-                observation.site != task.site or observation.radius_m != task.radius_m
-            ):
-                raise ValueError("지도 관측 위치가 다릅니다.")
-            request = DecisionRequest(
-                request_id=request_id,
-                address=task.site.input_address,
-                analyses=analyses,
-                map_observation=observation,
-            )
+            context = _load_resume_context(db, request_id)
         except (ValueError, TypeError) as exc:
             raise DecisionRetryConflictError(
                 "최종판단을 재시도할 저장 입력이 완전하지 않습니다."
@@ -294,14 +247,7 @@ def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> di
             "WHERE request_id=?",
             (request_id,),
         )
-        return {
-            "request": request,
-            "site": task.site,
-            "answers": answers,
-            "feedback": feedback,
-            "supplement_context": events,
-            "source_attempts": attempts,
-        }
+        return context
 
 
 def get_request(request_id: str, *, db_path: str | Path | None = None) -> dict[str, Any] | None:
@@ -472,7 +418,7 @@ def claim_question_resume(
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute(
-            "SELECT q.*, r.status FROM question_sessions q "
+            "SELECT q.*, r.status, r.catalog_version FROM question_sessions q "
             "JOIN analysis_requests r USING(request_id) WHERE request_id=?",
             (submission.request_id,),
         ).fetchone()
@@ -488,6 +434,8 @@ def claim_question_resume(
             return False
         if row["status"] != "waiting_for_input":
             raise ValueError("질문 대기 중인 요청만 재개할 수 있습니다.")
+        if row["catalog_version"] != CATALOG_VERSION:
+            raise AnswerConflictError("업종표 버전이 다르거나 확인되지 않아 새 분석이 필요합니다.")
         _load_question_analyses(db, snapshot)
         db.execute(
             "UPDATE question_sessions SET answers_json=?, answered_at=? WHERE request_id=?",
@@ -584,3 +532,74 @@ def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dic
             if row
             else None
         )
+
+
+def load_resume_context(request_id: str, *, db_path=None) -> dict[str, Any]:
+    """질문 재개와 실패 재시도가 동일한 저장 자료를 복원합니다."""
+    with connect(db_path) as db:
+        return _load_resume_context(db, request_id)
+
+
+def _load_resume_context(db: sqlite3.Connection, request_id: str) -> dict[str, Any]:
+    row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
+    if row is None or row["catalog_version"] != CATALOG_VERSION:
+        raise ValueError("요청 또는 현재 업종표 버전의 저장 자료가 없습니다.")
+    task = AnalysisTask(
+        request_id=request_id,
+        site=Site.model_validate_json(row["site_json"]),
+        radius_m=row["radius_m"],
+    )
+    events = [
+        SupplementEvent.model_validate_json(r[0])
+        for r in db.execute(
+            "SELECT event_json FROM supplement_events WHERE request_id=? ORDER BY id",
+            (request_id,),
+        )
+    ]
+    attempts = dict.fromkeys(AGENT_IDS, 1)
+    for event in events:
+        if event.request_id != request_id:
+            raise ValueError("보완 요청 식별자가 다릅니다.")
+        if event.adopted:
+            attempts[event.request.agent_id] = 2
+    analyses = []
+    for agent_id, attempt in attempts.items():
+        source = db.execute(
+            "SELECT analysis_json FROM agent_results "
+            "WHERE request_id=? AND agent_id=? AND attempt=?",
+            (request_id, agent_id, attempt),
+        ).fetchone()
+        if source is None:
+            raise ValueError("분석 이력이 부족합니다.")
+        analysis = AgentAnalysis.model_validate_json(source[0])
+        if (analysis.request_id, analysis.agent_id) != (request_id, agent_id):
+            raise ValueError("분석 식별자가 다릅니다.")
+        analyses.append(analysis)
+    questions = db.execute(
+        "SELECT snapshot_json,answers_json FROM question_sessions WHERE request_id=?",
+        (request_id,),
+    ).fetchone()
+    answers, feedback = [], []
+    if questions:
+        snapshot = QuestionSnapshot.model_validate_json(questions[0])
+        submission = AnswerSubmission.model_validate_json(questions[1])
+        answers = normalize_answers(snapshot.waiting, submission).answers
+        analyses = _load_question_analyses(db, snapshot)
+        feedback = snapshot.feedback
+    observation = _get_map_observation(db, request_id)
+    if observation and (observation.site != task.site or observation.radius_m != task.radius_m):
+        raise ValueError("지도 관측 위치가 다릅니다.")
+    request = DecisionRequest(
+        request_id=request_id,
+        address=task.site.input_address,
+        analyses=analyses,
+        map_observation=observation,
+    )
+    return {
+        "request": request,
+        "site": task.site,
+        "answers": answers,
+        "feedback": feedback,
+        "supplement_context": events,
+        "source_attempts": attempts,
+    }

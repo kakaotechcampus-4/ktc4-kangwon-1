@@ -7,6 +7,34 @@ from app.llm.config import LLMSettings
 from app.schemas import DecisionContent, MapLookupPlan, QuestionPlan, SupplementPlan
 
 
+class InvalidDecisionCategory(ValueError):
+    """검증 전 출력은 교정 입력으로만 보관하고 공개 진단에는 넣지 않습니다."""
+
+    def __init__(self, payload: dict, field: str):
+        super().__init__("업종 코드 또는 명칭이 공통 업종표와 일치하지 않습니다.")
+        self.payload = payload
+        self.field = field
+
+
+def validate_content(payload) -> DecisionContent:
+    """공통 계약은 유지하면서 모델의 업종 오류만 교정 단계로 전달합니다."""
+    try:
+        return DecisionContent.model_validate(payload)
+    except ValidationError as exc:
+        errors = exc.errors()
+        if isinstance(payload, dict) and all(
+            len(e["loc"]) == 3
+            and e["loc"][0] in {"recommendations", "not_recommended"}
+            and isinstance(e["loc"][1], int)
+            and e["loc"][2] == "category"
+            and e["type"] == "value_error"
+            for e in errors
+        ):
+            field = ".".join(str(part) for part in errors[0]["loc"])
+            raise InvalidDecisionCategory(payload, field) from None
+        raise
+
+
 async def generate_decision(
     system_prompt: str, input_json: str, settings: LLMSettings | None = None
 ) -> DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan:
@@ -23,6 +51,8 @@ async def generate_decision(
         else DecisionContent
     )
     try:
+        if schema is DecisionContent:
+            return validate_content(payload)
         return schema.model_validate(payload)
     except ValidationError as exc:
         # 알 수 없는 추가 키는 모델이 만든 문자열이므로 공개 오류에 싣지 않습니다.

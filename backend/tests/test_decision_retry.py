@@ -10,13 +10,47 @@ from unittest.mock import Mock, patch
 from app.agents.decision.agent import DecisionContractError, evaluate
 from app.db import repository
 from app.db.connection import initialize
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve, mock_site
+from app.mocks import mock_agents, mock_generate, mock_resolve, mock_site
 from app.schemas import AgentError, AnalysisTask, AnswerSubmission, DecisionRequest
 from app.services import analysis
 from app.services.settings import ExecutionSettings
 
 
 class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transient_retry_failure_keeps_saved_input_retryable(self):
+        for error in (TimeoutError(), asyncio.CancelledError()):
+            with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory() as folder:
+                settings = ExecutionSettings(db_path=Path(folder) / "db.sqlite3")
+                with self.assertRaises(RuntimeError):
+                    await analysis.execute_analysis(
+                        "시험",
+                        settings=settings,
+                        request_id="test",
+                        resolve=mock_resolve,
+                        agents=mock_agents(),
+                        generate=Mock(side_effect=RuntimeError()),
+                    )
+                before = repository.list_agent_results("test", db_path=settings.db_path)
+                failed = repository.get_request("test", db_path=settings.db_path)
+                with self.assertRaises(type(error)):
+                    await analysis.retry_decision(
+                        "test",
+                        failed_at=failed["completed_at"],
+                        settings=settings,
+                        generate=Mock(side_effect=error),
+                    )
+                failed = repository.get_request("test", db_path=settings.db_path)
+                result = await analysis.retry_decision(
+                    "test",
+                    failed_at=failed["completed_at"],
+                    settings=settings,
+                    generate=mock_generate,
+                )
+                self.assertEqual(result.request_id, "test")
+                self.assertEqual(
+                    before, repository.list_agent_results("test", db_path=settings.db_path)
+                )
+
     async def test_correction_has_real_candidates_and_failed_paths(self):
         task = AnalysisTask(request_id="test", site=mock_site())
         request = DecisionRequest(
@@ -51,14 +85,13 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
                     request_id="test",
                     resolve=mock_resolve,
                     agents=mock_agents(),
-                    generate_action=mock_action,
                     generate=Mock(return_value=broken),
                 )
             before = repository.list_agent_results("test", db_path=settings.db_path)
             failed = repository.get_request("test", db_path=settings.db_path)
             self.assertTrue(hasattr(analysis, "retry_decision"), "최종판단 재시도 필요")
             with patch(
-                "app.services.analysis.run_react", side_effect=AssertionError("분석 재실행 금지")
+                "app.services.analysis.run_graph", side_effect=AssertionError("분석 재실행 금지")
             ):
                 result = await analysis.retry_decision(
                     "test",
@@ -139,7 +172,6 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
                 request_id="test",
                 resolve=mock_resolve,
                 agents=mock_agents(),
-                generate_action=mock_action,
                 generate=interactive_decision(with_map=True, allow_questions=True),
                 map_lookup=map_observation,
                 allow_questions=True,

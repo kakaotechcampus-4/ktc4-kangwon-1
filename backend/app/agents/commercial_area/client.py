@@ -9,6 +9,7 @@ import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import httpx
 
@@ -25,6 +26,22 @@ NODATA_RESULT_CODES = {"03"}
 NODATA_KEYWORDS = ("NODATA", "NO_DATA", "데이터없음", "데이터가_없")
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DEFAULT_RETRY_BACKOFF_S = 1.5
+STORE_CACHE_FIELDS = (
+    "bizesId",
+    "bizesNm",
+    "brchNm",
+    "indsLclsCd",
+    "indsLclsNm",
+    "indsMclsCd",
+    "indsMclsNm",
+    "indsSclsCd",
+    "indsSclsNm",
+    "lat",
+    "lon",
+    "rdnmAdr",
+    "signguCd",
+    "signguNm",
+)
 
 
 class SbizApiError(Exception):
@@ -43,16 +60,13 @@ class NoDataError(SbizApiError):
 
 
 def _cache_path(settings: Settings, key: str) -> Path:
-    settings.cache_dir.mkdir(parents=True, exist_ok=True)
     return settings.cache_dir / f"{key}.json"
 
 
 def _read_cache(path: Path, ttl_hours: int) -> Any | None:
-    if not path.exists():
-        return None
-    if time.time() - path.stat().st_mtime > ttl_hours * 3600:
-        return None
     try:
+        if not path.exists() or time.time() - path.stat().st_mtime > ttl_hours * 3600:
+            return None
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
             return None
@@ -61,13 +75,21 @@ def _read_cache(path: Path, ttl_hours: int) -> Any | None:
         if not isinstance(payload.get("meta"), dict):
             return None
         return payload
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
         return None
 
 
 def _write_cache(path: Path, payload: Any) -> None:
     try:
-        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        compact = {
+            "items": [
+                {key: row[key] for key in STORE_CACHE_FIELDS if key in row}
+                for row in payload["items"]
+            ],
+            "meta": payload["meta"],
+        }
+        path.write_text(json.dumps(compact, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 
@@ -174,6 +196,11 @@ def reference_date_of(items: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _to_stores(items: list[dict[str, Any]]) -> list[Store]:
+    """대용량 캐시 변환을 작업 스레드에서 한 번에 처리합니다."""
+    return [store for item in items if (store := to_store(item)) is not None]
+
+
 def _retry_after_seconds(response: httpx.Response) -> float | None:
     raw = response.headers.get("Retry-After")
     if not raw:
@@ -183,6 +210,20 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
         return min(seconds, 30.0) if math.isfinite(seconds) and seconds >= 0 else None
     except ValueError:
         return None
+
+
+_REQUEST_LIMITS: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    WeakKeyDictionary()
+)
+
+
+def _request_limit(max_concurrency: int) -> asyncio.Semaphore:
+    # ponytail: 서버 워커의 단일 루프에서 공유합니다. 다중 프로세스 쿼터는 별도 조정이 필요합니다.
+    # 같은 워커는 최초 설정을 유지하며 요청마다 한도를 늘리지 않습니다.
+    loop = asyncio.get_running_loop()
+    if loop not in _REQUEST_LIMITS:
+        _REQUEST_LIMITS[loop] = asyncio.Semaphore(max(1, max_concurrency))
+    return _REQUEST_LIMITS[loop]
 
 
 class StoreClient:
@@ -253,7 +294,8 @@ class StoreClient:
         for attempt in range(self.settings.max_retries + 1):
             wait_s = min(base_backoff * (attempt + 1), 30.0)
             try:
-                response = await self._http().get(url, params=params)
+                async with _request_limit(self.settings.max_concurrency):
+                    response = await self._http().get(url, params=params)
                 self.calls_made += 1
                 if response.status_code in RETRY_STATUS_CODES:
                     wait_s = _retry_after_seconds(response) or wait_s
@@ -289,6 +331,10 @@ class StoreClient:
                 if attempt < self.settings.max_retries:
                     await asyncio.sleep(wait_s)
                     continue
+            except httpx.HTTPError as exc:
+                raise SbizApiError(
+                    "BAD_RESPONSE", "상가정보 API 응답 처리에 실패했습니다."
+                ) from exc
         raise SbizApiError("UPSTREAM_FAILED", "상가정보 API 조회에 실패했습니다.")
 
     async def _collect_pages(
@@ -311,28 +357,31 @@ class StoreClient:
         if last_page <= 1:
             return items, total_count
 
-        semaphore = asyncio.Semaphore(max(1, self.settings.max_concurrency))
+        pages = iter(range(2, last_page + 1))
+        results: dict[int, list[dict[str, Any]]] = {}
 
-        async def one(page: int) -> list[dict[str, Any]]:
-            async with semaphore:
+        async def worker() -> None:
+            for page in pages:
                 try:
                     page_payload = await fetch_page(page)
                 except NoDataError:
-                    return []
-            return _extract_items(page_payload)[0]
+                    results[page] = []
+                else:
+                    results[page] = _extract_items(page_payload)[0]
 
         # 한 페이지가 실패하면 남은 요청을 취소한다.
         # gather 는 예외만 올려보내고 나머지를 계속 돌려서, 어차피 버릴 조회에
         # 쿼터를 그대로 쓴다. 자치구 조회는 67페이지라 손실이 크다.
-        tasks: list[asyncio.Task[list[dict[str, Any]]]] = []
+        # 페이지 전부를 공유 슬롯 대기열에 넣지 않고 진행 중인 수만큼만 요청합니다.
         try:
             async with asyncio.TaskGroup() as group:
-                tasks = [group.create_task(one(page)) for page in range(2, last_page + 1)]
+                for _ in range(min(last_page - 1, max(1, self.settings.max_concurrency))):
+                    group.create_task(worker())
         except* SbizApiError as failures:
             raise failures.exceptions[0] from None
 
-        for task in tasks:
-            items.extend(task.result())
+        for page in range(2, last_page + 1):
+            items.extend(results[page])
         return items, total_count
 
     async def stores_in_radius(
@@ -346,12 +395,12 @@ class StoreClient:
         cache_lat = snap_to_grid(lat, grid_m) if grid_m else round(lat, 6)
         cache_lon = snap_to_grid(lon, grid_m) if grid_m else round(lon, 6)
         cache_key = f"radius_{radius_m}_{cache_lat}_{cache_lon}"
-        path = _cache_path(self.settings, cache_key)
+        path = await asyncio.to_thread(_cache_path, self.settings, cache_key)
 
         if use_cache:
-            cached = _read_cache(path, self.settings.cache_ttl_hours)
+            cached = await asyncio.to_thread(_read_cache, path, self.settings.cache_ttl_hours)
             if cached is not None:
-                stores = [s for s in (to_store(i) for i in cached["items"]) if s]
+                stores = await asyncio.to_thread(_to_stores, cached["items"])
                 return stores, {**cached["meta"], "from_cache": True}
 
         items, total_count = await self._collect_pages(
@@ -364,13 +413,13 @@ class StoreClient:
             "fetched": len(items),
             "truncated": len(items) < total_count,
             "radius_m": radius_m,
-            "reference_date": reference_date_of(items),
+            "reference_date": await asyncio.to_thread(reference_date_of, items),
             "from_cache": False,
         }
         if use_cache:
-            _write_cache(path, {"items": items, "meta": meta})
+            await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
 
-        stores = [s for s in (to_store(i) for i in items) if s]
+        stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta
 
     async def stores_in_radius_with_fallback(
@@ -396,10 +445,10 @@ class StoreClient:
 
     async def stores_in_district(self, signgu_cd: str) -> tuple[list[Store], dict[str, Any]]:
         cache_key = f"district_{signgu_cd}"
-        path = _cache_path(self.settings, cache_key)
-        cached = _read_cache(path, self.settings.district_cache_ttl_hours)
+        path = await asyncio.to_thread(_cache_path, self.settings, cache_key)
+        cached = await asyncio.to_thread(_read_cache, path, self.settings.district_cache_ttl_hours)
         if cached is not None:
-            stores = [s for s in (to_store(i) for i in cached["items"]) if s]
+            stores = await asyncio.to_thread(_to_stores, cached["items"])
             return stores, {**cached["meta"], "from_cache": True}
 
         items, total_count = await self._collect_pages(
@@ -412,10 +461,10 @@ class StoreClient:
             "total_count": total_count,
             "fetched": len(items),
             "truncated": len(items) < total_count,
-            "reference_date": reference_date_of(items),
+            "reference_date": await asyncio.to_thread(reference_date_of, items),
             "from_cache": False,
         }
-        _write_cache(path, {"items": items, "meta": meta})
+        await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
 
-        stores = [s for s in (to_store(i) for i in items) if s]
+        stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta

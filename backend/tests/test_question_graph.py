@@ -3,11 +3,11 @@
 import unittest
 from unittest.mock import AsyncMock, Mock
 
+from orchestration_support import run_flow
 from test_questions import question
 
-from app.agents.orchestration import graph
-from app.agents.orchestration.workflow import run_react
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.agents.decision import agent as decision
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import DecisionRequest, DecisionResult, LandlordAnswer, WaitingForInput
 
 
@@ -16,12 +16,11 @@ class QuestionGraphTests(unittest.IsolatedAsyncioTestCase):
         args = dict(
             resolve=mock_resolve,
             agents=mock_agents(),
-            generate_action=mock_action,
             generate=Mock(return_value=dict(action="ask_user", questions=[question()])),
             request_id="r",
         )
         args.update(changes)
-        return await run_react("시험 주소", **args)
+        return await run_flow("시험 주소", **args)
 
     async def test_wait_then_resume_only_decision(self):
         saved, sources = [], []
@@ -44,10 +43,10 @@ class QuestionGraphTests(unittest.IsolatedAsyncioTestCase):
         request = DecisionRequest(
             request_id="r", address=saved[0][0].site.input_address, analyses=sources
         )
-        final = await graph.resume_graph(
+        final = await decision.evaluate(
             request,
             site=saved[0][0].site,
-            answers=[LandlordAnswer(field="floor", status="unknown")],
+            user_answers=[LandlordAnswer(field="floor", status="unknown")],
             feedback=[],
             supplement_context=[],
             generate=mock_generate,

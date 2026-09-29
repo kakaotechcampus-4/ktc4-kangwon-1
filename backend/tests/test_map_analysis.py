@@ -9,11 +9,10 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.map_analysis.agent import search
+from app.agents.map_analysis.agent import category_code, observe
 from app.agents.map_analysis.client import MapApiError, PlaceClient
 from app.agents.map_analysis.config import Settings
-from app.agents.map_analysis.schemas import SearchResult
-from app.schemas import Site
+from app.schemas import AnalysisTask, MapLookupPlan, MapObservation, Site
 
 HIT: dict[str, Any] = {
     "meta": {"total_count": 100, "pageable_count": 45, "is_end": False},
@@ -240,159 +239,39 @@ def page(total: int, documents: list[dict[str, Any]] | None = None) -> dict[str,
     }
 
 
-def place(name: str, category: str, distance: str) -> dict[str, Any]:
-    return {"place_name": name, "category_name": category, "distance": distance}
+class MapAnalysisObserveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_facilities_aliases_duplicates_radius_and_partial_failure(self):
+        paths = []
 
-
-class MapAnalysisSearchTests(unittest.IsolatedAsyncioTestCase):
-    async def run_search(self, handler: Any, queries: list[str], **kwargs: Any) -> SearchResult:
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-            client = PlaceClient(settings(), client=http)
-            return await search(GANGNAM, queries, client=client, **kwargs)
-
-    async def test_each_query_becomes_one_request_and_one_result(self):
-        seen: list[str] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            seen.append(request.url.params.get("query") or "")
-            return httpx.Response(200, json=page(10))
-
-        result = await self.run_search(handler, ["치킨", "한식", "피자"])
-        self.assertEqual(seen, ["치킨", "한식", "피자"])
-        self.assertEqual(list(result.results), ["치킨", "한식", "피자"])
-        # 공통 계약을 한 번 더 통과시켜 둔다
-        SearchResult.model_validate(result.model_dump())
-
-    async def test_duplicate_queries_are_asked_once(self):
-        calls: list[int] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            calls.append(1)
-            return httpx.Response(200, json=page(3))
-
-        result = await self.run_search(handler, ["치킨", " 치킨 ", "치킨"])
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(list(result.results), ["치킨"])
-
-    async def test_category_words_use_the_category_endpoint(self):
-        paths: list[str] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request):
             paths.append(request.url.path)
-            self.assertNotEqual(request.url.params.get("category_group_code"), None)
-            return httpx.Response(200, json=page(2))
-
-        # 키워드로 물으면 지하철역 14 vs 카테고리 2 로 부풀어서 분류 경로를 써야 한다
-        await self.run_search(handler, ["지하철역", "유치원"])
-        self.assertEqual(paths, ["/v2/local/search/category.json"] * 2)
-
-    async def test_plain_words_use_the_keyword_endpoint(self):
-        def handler(request: httpx.Request) -> httpx.Response:
-            self.assertEqual(request.url.path, "/v2/local/search/keyword.json")
-            return httpx.Response(200, json=page(100))
-
-        await self.run_search(handler, ["치킨"])
-
-    async def test_count_nearest_and_brands_are_extracted(self):
-        documents = [
-            place("스타벅스 강남점", "음식점 > 카페 > 커피전문점 > 스타벅스", "12"),
-            place("농민백암순대 강남직영점", "음식점 > 한식 > 순대", "30"),
-            place("스타벅스 역삼점", "음식점 > 카페 > 커피전문점 > 스타벅스", "44"),
-        ]
-        result = await self.run_search(
-            lambda request: httpx.Response(200, json=page(216, documents)), ["커피"]
-        )
-        found = result.results["커피"]
-        self.assertEqual(found.count, 216)
-        # 표본 3건 중 분류에 "커피"가 든 것은 둘
-        self.assertEqual((found.sampled, found.matched), (3, 2))
-        self.assertIsNotNone(found.nearest)
-        assert found.nearest is not None
-        self.assertEqual(found.nearest.name, "스타벅스 강남점")
-        # 문자열 "12" 가 정수로 바뀌어야 한다
-        self.assertEqual(found.nearest.distance_m, 12)
-        # 순대는 브랜드가 아니므로 빠진다
-        self.assertEqual(found.brands, {"스타벅스": 2})
-
-    async def test_zero_result_has_no_nearest(self):
-        result = await self.run_search(
-            lambda request: httpx.Response(200, json=page(0)), ["말고기"]
-        )
-        found = result.results["말고기"]
-        self.assertEqual(found.count, 0)
-        self.assertIsNone(found.nearest)
-        self.assertEqual(found.brands, {})
-        # null 대신 키 자체가 빠져야 한다
-        self.assertNotIn("nearest", found.model_dump(exclude_none=True))
-
-    async def test_one_failing_query_does_not_kill_the_others(self):
-        def handler(request: httpx.Request) -> httpx.Response:
-            if request.url.params.get("query") == "한식":
-                return httpx.Response(500)
-            return httpx.Response(200, json=page(7))
-
-        result = await self.run_search(handler, ["치킨", "한식", "피자"])
-        self.assertEqual(result.results["치킨"].count, 7)
-        self.assertEqual(result.results["피자"].count, 7)
-        self.assertEqual(result.results["한식"].error, "UPSTREAM_FAILED")
-        self.assertEqual(result.results["한식"].count, 0)
-
-    async def test_radius_is_passed_through_and_recorded(self):
-        def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.params["radius"], "300")
-            return httpx.Response(200, json=page(1))
-
-        result = await self.run_search(handler, ["치킨"], radius_m=300)
-        self.assertEqual(result.radius_m, 300)
-
-    async def test_school_words_never_leak_into_keyword_search(self):
-        # "초등학교"를 키워드로 보내면 반경에 학교가 없는데도 도시락집이 1건 잡혔다.
-        # 교육환경보호구역 판단에 그대로 쓰이면 거짓말이 되므로 분류 경로로 가야 한다.
-        seen: list[str | None] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            self.assertEqual(request.url.path, "/v2/local/search/category.json")
-            seen.append(request.url.params.get("category_group_code"))
+            code = request.url.params["category_group_code"]
+            if code == "SC4":
+                return httpx.Response(401)
             return httpx.Response(200, json=page(0))
 
-        result = await self.run_search(handler, ["초등학교", "중학교", "대학교"])
-        self.assertEqual(seen, ["SC4", "SC4", "SC4"])
-        self.assertEqual(result.results["초등학교"].count, 0)
-
-    async def test_keyword_mismatch_is_reported_and_nearest_is_filtered(self):
-        # 역삼에서 "치킨" 68곳이 나왔는데 최근접이 샌드위치집이었다.
-        # count 는 못 고치니 표본 일치 건수를 같이 내고, 최근접은 일치한 것에서만 고른다.
-        documents = [
-            place("렌위치 역삼GFC점", "음식점 > 패스트푸드 > 샌드위치", "36"),
-            place("아그라 역삼GFC점", "음식점 > 아시아음식 > 인도음식", "37"),
-            place("치킨공식", "음식점 > 치킨", "169"),
+        queries = [
+            dict(
+                kind="infrastructure",
+                facility_code=category_code(name),
+                why_needed="접근성 확인",
+                expected_impact="후보 비교",
+            )
+            for name in ["지하철역", "지하철", "초등학교"]
         ]
-        result = await self.run_search(
-            lambda request: httpx.Response(200, json=page(68, documents)), ["치킨"]
-        )
-        found = result.results["치킨"]
-        self.assertEqual(found.count, 68)
-        self.assertEqual((found.sampled, found.matched), (3, 1))
-        assert found.nearest is not None
-        self.assertEqual(found.nearest.name, "치킨공식")
-
-    async def test_category_search_counts_every_sample_as_matched(self):
-        # 분류 조회는 카카오가 이미 걸러 준 결과라 검색어가 이름에 없어도 전부 맞다고 본다
-        documents = [place("역삼역 2호선", "교통,수송 > 지하철,전철 > 수도권2호선", "36")]
-        result = await self.run_search(
-            lambda request: httpx.Response(200, json=page(1, documents)), ["지하철역"]
-        )
-        found = result.results["지하철역"]
-        self.assertEqual((found.sampled, found.matched), (1, 1))
-        assert found.nearest is not None
-        self.assertEqual(found.nearest.name, "역삼역 2호선")
-
-    async def test_empty_query_list_is_rejected(self):
-        with patch("httpx.AsyncClient.send", side_effect=AssertionError("외부 연결 금지")):
-            for queries in ([], ["", "   "]):
-                with self.subTest(queries=queries):
-                    with self.assertRaises(ValueError):
-                        await search(GANGNAM, queries, settings=settings())
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            result = await observe(
+                AnalysisTask(request_id="map-test", site=GANGNAM, radius_m=300),
+                MapLookupPlan(action="map_lookup", queries=queries),
+                client=PlaceClient(settings(), client=http),
+            )
+        MapObservation.model_validate(result.model_dump())
+        self.assertEqual(paths, ["/v2/local/search/category.json"] * 2)
+        self.assertEqual(result.radius_m, 300)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.data.queries["q1"].total_count, 0)
+        self.assertEqual(result.data.queries["q2"].error, "KAKAO_AUTH")
 
 
 if __name__ == "__main__":

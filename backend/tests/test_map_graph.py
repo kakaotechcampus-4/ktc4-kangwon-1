@@ -3,12 +3,12 @@
 import unittest
 from unittest.mock import Mock
 
+from orchestration_support import run_flow
 from test_map_mapping import plan
 from test_questions import question
 
 from app.agents.map_analysis.agent import failed_observation
-from app.agents.orchestration.workflow import run_react
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 
 
 class MapGraphTests(unittest.IsolatedAsyncioTestCase):
@@ -54,11 +54,10 @@ class MapGraphTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(final.map_observation)
 
     async def run_flow(self, generate, lookup, **kwargs):
-        return await run_react(
+        return await run_flow(
             "시험",
             resolve=mock_resolve,
             agents=mock_agents(),
-            generate_action=mock_action,
             generate=generate,
             request_id="r",
             radius_m=300,

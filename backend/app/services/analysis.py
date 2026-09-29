@@ -11,14 +11,12 @@ from typing import Any, Literal, overload
 from app.address import resolve_site
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
-from app.agents.orchestration import llm
+from app.agents.orchestration.graph import RunHooks, run_graph
 from app.agents.orchestration.supplement import OnSupplement, validate_tools
 from app.agents.orchestration.tools import MapLookup, SupplementTool
 from app.agents.orchestration.workflow import (
     AgentRegistry,
-    GenerateAction,
     build_react_agents,
-    run_react,
 )
 from app.db import repository
 from app.db.connection import initialize
@@ -29,7 +27,6 @@ from app.schemas import (
     AgentError,
     AnalysisTask,
     AnswerSubmission,
-    DecisionRequest,
     DecisionResult,
     MapLookupPlan,
     MapObservation,
@@ -77,8 +74,6 @@ async def resume_analysis(
     overall_timeout: float | None = None,
 ) -> DecisionResult:
     """답변을 한 번만 수락하고 저장된 분석으로 최종판단을 재개합니다."""
-    from app.agents.orchestration.graph import resume_graph
-
     submission = AnswerSubmission.model_validate(submission)
     settings = settings or ExecutionSettings.from_env()
     db_path = db_path if db_path is not None else settings.db_path
@@ -110,76 +105,22 @@ async def resume_analysis(
                         "이미 실패한 재개 요청입니다. 이력을 확인하세요."
                     )
                 raise AnalysisAlreadyRunningError("동일 답변으로 최종판단을 실행 중입니다.")
-            snapshot = await asyncio.to_thread(
-                repository.get_question_snapshot, submission.request_id, db_path=path
+            bundle = await asyncio.to_thread(
+                repository.load_resume_context, submission.request_id, db_path=path
             )
-            answers = await asyncio.to_thread(
-                repository.get_question_answers, submission.request_id, db_path=path
-            )
-            if snapshot is None or answers is None:
-                raise ValueError("재개에 필요한 질문·답변 기록이 없습니다.")
-            analyses = await asyncio.to_thread(
-                repository.load_question_analyses, snapshot, db_path=path
-            )
-            rows = await asyncio.to_thread(
-                repository.list_supplement_events, submission.request_id, db_path=path
-            )
-            result = await resume_graph(
-                DecisionRequest(
-                    request_id=submission.request_id,
-                    address=snapshot.task.site.input_address,
-                    analyses=analyses,
-                    map_observation=await asyncio.to_thread(
-                        repository.get_map_observation, submission.request_id, db_path=path
-                    ),
-                ),
-                site=snapshot.task.site,
-                answers=answers.answers,
-                feedback=snapshot.feedback,
-                supplement_context=[
-                    SupplementEvent.model_validate_json(row["event_json"]) for row in rows
-                ],
-                generate=generate,
-            )
+            result = await _evaluate_saved(bundle, generate=generate)
             await _settle(
                 asyncio.to_thread(
                     repository.complete_request,
                     result,
-                    source_attempts={str(k): v for k, v in snapshot.source_attempts.items()},
+                    source_attempts=bundle["source_attempts"],
                     db_path=path,
                 )
             )
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if owned:
-
-            def fail_if_running(error: BaseException = exc) -> None:
-                row = repository.get_request(submission.request_id, db_path=path)
-                if row and row["status"] == "running":
-                    code = (
-                        error.code
-                        if isinstance(error, decision.DecisionContractError)
-                        else "ANALYSIS_CANCELLED"
-                        if isinstance(error, asyncio.CancelledError)
-                        else "ANALYSIS_TIMEOUT"
-                        if isinstance(error, TimeoutError)
-                        else "STORAGE_ERROR"
-                        if isinstance(error, sqlite3.Error)
-                        else "ANALYSIS_FAILED"
-                    )
-                    repository.fail_request(
-                        submission.request_id,
-                        AgentError(code=code, message="답변 후 최종판단 또는 저장에 실패했습니다."),
-                        diagnostics=getattr(error, "failures", None),
-                        db_path=path,
-                    )
-
-            try:
-                await _settle(asyncio.to_thread(fail_if_running))
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                exc.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")
+            await _record_failure(submission.request_id, exc, path)
         raise
 
 
@@ -191,7 +132,6 @@ async def execute_analysis(
     radius_m: int = DEFAULT_RADIUS_M,
     resolve: Callable[[str], Awaitable[Site]] | None = None,
     agents: AgentRegistry | None = None,
-    generate_action: GenerateAction | None = None,
     generate: GenerateDecision | None = None,
     request_id: str | None = None,
     agent_timeout: float | None = None,
@@ -212,7 +152,6 @@ async def execute_analysis(
     radius_m: int = DEFAULT_RADIUS_M,
     resolve: Callable[[str], Awaitable[Site]] | None = None,
     agents: AgentRegistry | None = None,
-    generate_action: GenerateAction | None = None,
     generate: GenerateDecision | None = None,
     request_id: str | None = None,
     agent_timeout: float | None = None,
@@ -232,7 +171,6 @@ async def execute_analysis(
     radius_m: int = DEFAULT_RADIUS_M,
     resolve: Callable[[str], Awaitable[Site]] | None = None,
     agents: AgentRegistry | None = None,
-    generate_action: GenerateAction | None = None,
     generate: GenerateDecision | None = None,
     request_id: str | None = None,
     agent_timeout: float | None = None,
@@ -261,9 +199,6 @@ async def execute_analysis(
     settings = settings or ExecutionSettings.from_env()
     resolve = resolve if resolve is not None else partial(resolve_site, settings=settings.address)
     agents = agents if agents is not None else build_react_agents(settings)
-    generate_action = generate_action or partial(
-        llm.generate_action, settings=settings.orchestration_llm
-    )
     generate = generate or partial(decision.generate_decision, settings=settings.decision_llm)
     db_path = db_path if db_path is not None else settings.db_path
     agent_timeout = settings.agent_timeout if agent_timeout is None else agent_timeout
@@ -273,6 +208,8 @@ async def execute_analysis(
     if not callable(resolve):
         raise ValueError("주소 변환 함수가 필요합니다.")
 
+    if not callable(generate) or (on_supplement is not None and not callable(on_supplement)):
+        raise ValueError("판단·보완 알림은 호출 가능한 함수여야 합니다.")
     validate_timeout(agent_timeout)
     validate_timeout(overall_timeout)
     owned = False
@@ -329,24 +266,25 @@ async def execute_analysis(
             # INSERT 성공을 확인한 호출만 이 요청의 실패 상태를 변경할 수 있습니다.
             await _settle(create())
             await _settle(asyncio.to_thread(repository.mark_running, request_id, db_path=path))
-            result = await run_react(
+            result = await run_graph(
                 address,
                 radius_m=radius_m,
                 resolve=resolve,
                 agents=agents,
                 request_id=request_id,
-                generate_action=generate_action,
                 generate=generate,
-                on_task_prepared=save_task,
-                on_analysis_completed=save_analysis,
                 agent_timeout=agent_timeout,
                 supplements=supplements,
-                on_supplement=save_supplement,
                 allow_questions=allow_questions,
                 map_lookup=map_lookup,
-                on_map_requested=start_map,
-                on_map_completed=save_map,
-                on_questions=save_questions if allow_questions else None,
+                hooks=RunHooks(
+                    on_task_prepared=save_task,
+                    on_analysis_completed=save_analysis,
+                    on_supplement=save_supplement,
+                    on_map_requested=start_map,
+                    on_map_completed=save_map,
+                    on_questions=save_questions if allow_questions else None,
+                ),
             )
             if isinstance(result, WaitingForInput):
                 return result
@@ -360,34 +298,8 @@ async def execute_analysis(
             )
             return result
     except (Exception, asyncio.CancelledError) as exc:
-        if not owned:
-            raise
-        code, message = "ANALYSIS_FAILED", "분석 실행 또는 결과 검증에 실패했습니다."
-        if isinstance(exc, asyncio.CancelledError):
-            code, message = "ANALYSIS_CANCELLED", "분석 실행이 취소됐습니다."
-        elif isinstance(exc, TimeoutError):
-            code, message = "ANALYSIS_TIMEOUT", "전체 분석 제한시간이 초과됐습니다."
-        elif isinstance(exc, sqlite3.Error):
-            code, message = "STORAGE_ERROR", "결과 저장에 실패했습니다."
-        elif isinstance(exc, decision.DecisionContractError):
-            code, message = exc.code, str(exc)
-
-        def fail_if_open(error: BaseException = exc) -> None:
-            row = repository.get_request(request_id, db_path=path)
-            if row and row["status"] in {"pending", "running"}:
-                repository.fail_request(
-                    request_id,
-                    AgentError(code=code, message=message),
-                    diagnostics=getattr(error, "failures", None),
-                    db_path=path,
-                )
-
-        try:
-            await _settle(asyncio.to_thread(fail_if_open))
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            exc.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")
+        if owned:
+            await _record_failure(request_id, exc, path)
         raise
 
 
@@ -399,8 +311,6 @@ async def retry_decision(
     generate: GenerateDecision | None = None,
 ) -> DecisionResult:
     """데이터를 재조회하지 않고 저장된 자료로 최종판단만 다시 실행합니다."""
-    from app.agents.orchestration.graph import resume_graph
-
     settings = settings or ExecutionSettings.from_env()
     if generate is None:
         settings.decision_llm.require_credentials()
@@ -421,14 +331,7 @@ async def retry_decision(
             await _settle(claim())
             assert bundle is not None
             source_attempts = bundle["source_attempts"]
-            result = await resume_graph(
-                bundle["request"],
-                site=bundle["site"],
-                answers=bundle["answers"],
-                feedback=bundle["feedback"],
-                supplement_context=bundle["supplement_context"],
-                generate=generate,
-            )
+            result = await _evaluate_saved(bundle, generate=generate)
             await _settle(
                 asyncio.to_thread(
                     repository.complete_request,
@@ -440,22 +343,70 @@ async def retry_decision(
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if bundle is not None:
-
-            def fail(error: BaseException = exc) -> None:
-                row = repository.get_request(request_id, db_path=path)
-                if row and row["status"] == "running":
-                    repository.fail_request(
-                        request_id,
-                        AgentError(
-                            code=getattr(error, "code", "DECISION_RETRY_FAILED"),
-                            message="최종판단 재시도에 실패했습니다.",
-                        ),
-                        diagnostics=getattr(error, "failures", []),
-                        db_path=path,
-                    )
-
-            try:
-                await _settle(asyncio.to_thread(fail))
-            except Exception:
-                exc.add_note("재시도 실패 상태를 저장하지 못했습니다.")
+            await _record_failure(request_id, exc, path, retry=True)
         raise
+
+
+async def _evaluate_saved(bundle: dict[str, Any], *, generate: GenerateDecision) -> DecisionResult:
+    """저장된 입력으로 판단만 실행하며 추가 외부 조회를 허용하지 않습니다."""
+    result = await decision.evaluate(
+        bundle["request"],
+        site=bundle["site"],
+        user_answers=bundle["answers"],
+        feedback=bundle["feedback"],
+        supplement_context=bundle["supplement_context"],
+        generate=generate,
+    )
+    if not isinstance(result, DecisionResult):
+        raise ValueError("재개 후에는 최종판단만 허용합니다.")
+    return result
+
+
+def _failure_code(error: BaseException, *, retry: bool = False) -> str:
+    if isinstance(error, decision.DecisionContractError):
+        return error.code
+    if retry:
+        return "DECISION_RETRY_FAILED"
+    if isinstance(error, asyncio.CancelledError):
+        return "ANALYSIS_CANCELLED"
+    if isinstance(error, TimeoutError):
+        return "ANALYSIS_TIMEOUT"
+    if isinstance(error, sqlite3.Error):
+        return "STORAGE_ERROR"
+    return "ANALYSIS_FAILED"
+
+
+async def _record_failure(
+    request_id: str, error: BaseException, path: Path, *, retry: bool = False
+) -> None:
+    """소유한 미완료 요청만 실패로 기록하고 원래 예외를 보존합니다."""
+
+    def persist() -> None:
+        row = repository.get_request(request_id, db_path=path)
+        if row and row["status"] in {"pending", "running"}:
+            messages = {
+                "DECISION_CONTRACT_INVALID": "최종판단의 업종 또는 근거 검증에 실패했습니다.",
+                "ANALYSIS_CANCELLED": "분석 요청이 취소되었습니다.",
+                "ANALYSIS_TIMEOUT": "분석 제한시간이 초과되었습니다.",
+                "STORAGE_ERROR": "분석 결과를 저장하지 못했습니다. 저장소 상태를 확인해 주세요.",
+            }
+            repository.fail_request(
+                request_id,
+                AgentError(
+                    code=_failure_code(error, retry=retry),
+                    # 재시도 가능 코드는 유지하고 원인은 원문 없이 구분합니다.
+                    message=messages.get(
+                        _failure_code(error),
+                        "최종판단 재시도에 실패했습니다." if retry else "분석 실행에 실패했습니다.",
+                    ),
+                ),
+                diagnostics=getattr(error, "failures", None),
+                db_path=path,
+            )
+
+    try:
+        await _settle(asyncio.to_thread(persist))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        error.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")

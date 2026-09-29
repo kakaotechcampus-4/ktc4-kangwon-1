@@ -24,9 +24,6 @@ class ExecutionSettings:
     floating: FloatingSettings = field(default_factory=FloatingSettings)
     commercial: CommercialSettings = field(default_factory=CommercialSettings)
     lifecycle: LifecycleSettings = field(default_factory=LifecycleSettings)
-    floating_llm: LLMSettings = field(default_factory=LLMSettings)
-    lifecycle_llm: LLMSettings = field(default_factory=LLMSettings)
-    orchestration_llm: LLMSettings = field(default_factory=LLMSettings)
     decision_llm: LLMSettings = field(default_factory=LLMSettings)
     db_path: str | Path | None = None
     agent_timeout: float = 180.0
@@ -43,9 +40,6 @@ class ExecutionSettings:
             floating=FloatingSettings.from_env(),
             commercial=CommercialSettings.from_env(),
             lifecycle=LifecycleSettings.from_env(),
-            floating_llm=LLMSettings.from_env("FLOATING_POPULATION"),
-            lifecycle_llm=LLMSettings.from_env("BUSINESS_LIFECYCLE"),
-            orchestration_llm=LLMSettings.from_env("ORCHESTRATION"),
             decision_llm=LLMSettings.from_env("DECISION"),
             db_path=resolve_path(),
             agent_timeout=float(os.getenv("ANALYSIS_AGENT_TIMEOUT_SECONDS", "180")),

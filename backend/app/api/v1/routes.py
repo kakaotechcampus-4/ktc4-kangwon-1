@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.address import GeocodeError
 from app.agents.orchestration.workflow import build_supplement_tools
 from app.db import repository
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import (
     DEFAULT_RADIUS_M,
     AnswerSubmission,
@@ -118,7 +118,6 @@ async def create_analysis(
                 generate=interactive_decision(with_map=body.with_map, allow_questions=True)
                 if body.allow_questions or body.with_map
                 else mock_generate,
-                generate_action=mock_action,
             )
         from app.agents.map_analysis.agent import observe
 

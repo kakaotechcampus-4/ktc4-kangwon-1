@@ -3,25 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from collections.abc import Awaitable, Callable
-from importlib.resources import files
-from typing import Any, Literal, TypedDict
+from dataclasses import dataclass, fields
+from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
-from openai.types.chat import ChatCompletionMessage
 
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
 from app.schemas import (
+    AGENT_IDS,
     QUESTION_FIELDS,
     AgentAnalysis,
     AnalysisTask,
     DecisionRequest,
     DecisionResult,
-    LandlordAnswer,
     MapLookupPlan,
     MapObservation,
     QuestionPlan,
@@ -30,21 +28,17 @@ from app.schemas import (
     SupplementOperation,
     SupplementPlan,
     WaitingForInput,
+    validate_radius,
 )
+from app.services.settings import validate_timeout
 
-from . import llm, tools, workflow
-from .supplement import OnSupplement, execute_supplement
-
-NextNode = Literal["choose_action", "prepare_address", "run_analyses", "evaluate_decision"]
+from . import tools, workflow
+from .supplement import OnSupplement, execute_supplement, validate_tools
 
 
 class GraphState(TypedDict, total=False):
     """요청별 데이터만 보관하며 실행 함수와 비밀키는 포함하지 않습니다."""
 
-    messages: list[Any]
-    action_calls: int
-    next_node: NextNode
-    call_id: str
     task: AnalysisTask
     analyses: list[AgentAnalysis]
     outcome: DecisionResult | SupplementPlan | QuestionPlan | WaitingForInput | MapLookupPlan
@@ -56,15 +50,18 @@ class GraphState(TypedDict, total=False):
     supplement_context: list[SupplementEvent]
 
 
-def _observation(messages: list[Any], call_id: str, value: dict[str, Any]) -> list[Any]:
-    return [
-        *messages,
-        {
-            "role": "tool",
-            "tool_call_id": call_id,
-            "content": json.dumps(value, ensure_ascii=False, allow_nan=False),
-        },
-    ]
+@dataclass(frozen=True)
+class RunHooks:
+    """서비스가 관리하는 저장·관찰 콜백입니다."""
+
+    on_task_prepared: Callable[[AnalysisTask], Awaitable[None]] | None = None
+    on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None
+    on_supplement: OnSupplement | None = None
+    on_map_requested: tools.OnMapRequested | None = None
+    on_map_completed: tools.OnMapCompleted | None = None
+    on_questions: (
+        Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]] | None
+    ) = None
 
 
 async def run_graph(
@@ -74,75 +71,38 @@ async def run_graph(
     agents: workflow.AgentRegistry,
     radius_m: int,
     request_id: str,
-    generate_action: workflow.GenerateAction | None,
-    generate: GenerateDecision | None,
-    on_task_prepared: Callable[[AnalysisTask], Awaitable[None]] | None,
-    on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None,
-    agent_timeout: float,
-    supplements: list[tools.SupplementTool],
-    on_supplement: OnSupplement | None,
+    generate: GenerateDecision | None = None,
+    agent_timeout: float = 180.0,
+    supplements: list[tools.SupplementTool] | None = None,
     allow_questions: bool = False,
     map_lookup: tools.MapLookup | None = None,
-    on_map_requested: tools.OnMapRequested | None = None,
-    on_map_completed: tools.OnMapCompleted | None = None,
-    on_questions: Callable[[AnalysisTask, WaitingForInput, bool, list[str]], Awaitable[None]]
-    | None = None,
+    hooks: RunHooks | None = None,
 ) -> DecisionResult | WaitingForInput:
-    """검증된 입력으로 실행합니다. 외부 진입점은 workflow.run_react입니다."""
-    choose = generate_action or llm.generate_action
-
-    async def choose_action(state: GraphState) -> GraphState:
-        if state["action_calls"] >= 6:
-            raise RuntimeError("오케스트레이터의 최대 모델 호출 횟수 6회를 초과했습니다.")
-        message = ChatCompletionMessage.model_validate(
-            await choose(state["messages"], tools.TOOL_DEFINITIONS)
-        )
-        if message.refusal or not message.tool_calls or len(message.tool_calls) != 1:
-            raise RuntimeError("모델은 한 번에 하나의 도구를 호출해야 합니다.")
-        call = message.tool_calls[0]
-        if call.type != "function":
-            raise RuntimeError("지원하지 않는 도구 호출 형식입니다.")
-        messages = [
-            *state["messages"],
-            message.model_dump(
-                include={"role", "content", "tool_calls"},
-                exclude_none=True,
-            ),
-        ]
-        expected = (
-            "prepare_address"
-            if "task" not in state
-            else "run_analyses"
-            if "analyses" not in state
-            else "make_decision"
-        )
-        try:
-            arguments = json.loads(call.function.arguments)
-        except (ValueError, TypeError):
-            arguments = None
-        route: NextNode
-        if arguments != {} or call.function.name != expected:
-            messages = _observation(
-                messages,
-                call.id,
-                {
-                    "status": "error",
-                    "message": f"빈 인자로 {expected}를 호출하세요.",
-                },
-            )
-            route = "choose_action"
-        elif expected == "prepare_address":
-            route = "prepare_address"
-        elif expected == "run_analyses":
-            route = "run_analyses"
-        else:
-            route = "evaluate_decision"
-        return {
-            "messages": messages,
-            "action_calls": state["action_calls"] + 1,
-            "call_id": call.id,
-            "next_node": route,
-        }
+    """외부 호출 전에 실행 구성을 검증하고 고정 단계와 선택 분기를 실행합니다."""
+    hooks = hooks or RunHooks()
+    supplements = list(supplements or [])
+    validate_tools(supplements)
+    validate_radius(radius_m)
+    validate_timeout(agent_timeout)
+    if not isinstance(address, str) or not address.strip():
+        raise ValueError("주소가 비어 있습니다.")
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("요청 ID가 비어 있습니다.")
+    if set(agents) != set(AGENT_IDS) or not all(callable(a) for a in agents.values()):
+        raise ValueError("세 분석 에이전트의 호출 함수를 등록해 주세요.")
+    if not callable(resolve) or (generate is not None and not callable(generate)):
+        raise ValueError("주소 변환·최종판단은 호출 가능한 함수여야 합니다.")
+    if map_lookup is not None and not callable(map_lookup):
+        raise ValueError("지도 조회 함수가 필요합니다.")
+    if type(allow_questions) is not bool:
+        raise ValueError("질문 허용 여부는 참 또는 거짓이어야 합니다.")
+    if allow_questions and hooks.on_questions is None:
+        raise ValueError("질문을 저장할 수 없는 실행입니다.")
+    if any(
+        (hook := getattr(hooks, field.name)) is not None and not callable(hook)
+        for field in fields(hooks)
+    ):
+        raise ValueError("저장·관찰 콜백은 호출 가능한 함수여야 합니다.")
 
     async def prepare_address(state: GraphState) -> GraphState:
         task = await workflow.prepare_task(
@@ -151,38 +111,18 @@ async def run_graph(
             radius_m=radius_m,
             request_id=request_id,
         )
-        if on_task_prepared is not None:
-            await on_task_prepared(task)
-        return {
-            "task": task,
-            "messages": _observation(
-                state["messages"],
-                state["call_id"],
-                {"status": "ok", "task": task.model_dump(mode="json")},
-            ),
-        }
+        if hooks.on_task_prepared is not None:
+            await hooks.on_task_prepared(task)
+        return {"task": task}
 
     async def run_analyses(state: GraphState) -> GraphState:
         analyses = await workflow.run_agents(
             state["task"],
             agents,
-            on_analysis_completed=on_analysis_completed,
+            on_analysis_completed=hooks.on_analysis_completed,
             agent_timeout=agent_timeout,
         )
-        return {
-            "analyses": analyses,
-            "messages": _observation(
-                state["messages"],
-                state["call_id"],
-                {
-                    "status": "ok",
-                    "analyses": [
-                        item.model_dump(mode="json", include={"agent_id", "status", "scope"})
-                        for item in analyses
-                    ],
-                },
-            ),
-        }
+        return {"analyses": analyses}
 
     async def evaluate_decision(state: GraphState) -> GraphState:
         task = state["task"]
@@ -192,8 +132,6 @@ async def run_graph(
             analyses=state["analyses"],
             map_observation=state.get("map_observation"),
         )
-        if not supplements and not allow_questions and map_lookup is None:
-            return {"outcome": await decision.analyze(request, generate=generate)}
         if state["supplement_done"]:
             outcome = await decision.evaluate(
                 request,
@@ -234,8 +172,8 @@ async def run_graph(
         if state["map_done"] or map_lookup is None or not isinstance(plan, MapLookupPlan):
             raise ValueError("지도 조회를 추가 실행할 수 없습니다.")
         plan = MapLookupPlan.model_validate(plan)
-        if on_map_requested is not None:
-            await on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
+        if hooks.on_map_requested is not None:
+            await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
         try:
             async with asyncio.timeout(agent_timeout):
                 raw = await map_lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
@@ -253,20 +191,20 @@ async def run_graph(
             or [q.request for q in observed.data.queries.values()] != plan.unique_queries()
         ):
             raise ValueError("지도 요청과 관측의 식별자·위치·검색 대상이 다릅니다.")
-        if on_map_completed is not None:
-            await on_map_completed(observed.model_copy(deep=True))
+        if hooks.on_map_completed is not None:
+            await hooks.on_map_completed(observed.model_copy(deep=True))
         return {"map_done": True, "map_observation": observed}
 
     async def ask_user(state: GraphState) -> GraphState:
         plan = state["outcome"]
-        if not allow_questions or on_questions is None or not isinstance(plan, QuestionPlan):
+        if not allow_questions or hooks.on_questions is None or not isinstance(plan, QuestionPlan):
             raise ValueError("질문을 저장할 수 없는 실행입니다.")
         waiting = WaitingForInput(
             request_id=state["task"].request_id,
             question_set_id=uuid.uuid4().hex,
             questions=plan.questions,
         )
-        await on_questions(
+        await hooks.on_questions(
             state["task"], waiting, state["supplement_done"], state.get("feedback", [])
         )
         return {"outcome": waiting}
@@ -286,7 +224,7 @@ async def run_graph(
                 for tool in supplements
                 if (tool.operation.agent_id, tool.operation.operation) in offered
             ],
-            on_event=on_supplement,
+            on_event=hooks.on_supplement,
             operation_timeout=agent_timeout,
         )
         return {
@@ -297,24 +235,15 @@ async def run_graph(
         }
 
     builder = StateGraph(GraphState)
-    builder.add_node("choose_action", choose_action)
     builder.add_node("prepare_address", prepare_address)
     builder.add_node("run_analyses", run_analyses)
     builder.add_node("evaluate_decision", evaluate_decision)
     builder.add_node("execute_supplement", supplement_node)
     builder.add_node("ask_user", ask_user)
     builder.add_node("execute_map", execute_map)
-    builder.add_edge(START, "choose_action")
-    builder.add_conditional_edges(
-        "choose_action",
-        lambda state: state["next_node"],
-        {
-            name: name
-            for name in ("choose_action", "prepare_address", "run_analyses", "evaluate_decision")
-        },
-    )
-    builder.add_edge("prepare_address", "choose_action")
-    builder.add_edge("run_analyses", "choose_action")
+    builder.add_edge(START, "prepare_address")
+    builder.add_edge("prepare_address", "run_analyses")
+    builder.add_edge("run_analyses", "evaluate_decision")
     builder.add_conditional_edges(
         "evaluate_decision",
         lambda state: (
@@ -338,20 +267,6 @@ async def run_graph(
     builder.add_edge("ask_user", END)
     graph = builder.compile()
     initial: GraphState = {
-        "messages": [
-            {
-                "role": "system",
-                "content": files(__package__).joinpath("prompt.md").read_text("utf-8"),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"address": address, "radius_m": radius_m},
-                    ensure_ascii=False,
-                ),
-            },
-        ],
-        "action_calls": 0,
         "supplement_done": False,
         "map_done": False,
     }
@@ -362,37 +277,3 @@ async def run_graph(
     if not isinstance(result, (DecisionResult, WaitingForInput)):
         raise ValueError("그래프가 최종판단 결과를 반환하지 않았습니다.")
     return result
-
-
-async def resume_graph(
-    request: DecisionRequest,
-    *,
-    site: Site,
-    answers: list[LandlordAnswer],
-    feedback: list[str],
-    supplement_context: list[SupplementEvent],
-    generate: GenerateDecision | None = None,
-) -> DecisionResult:
-    """저장된 분석으로 판단만 실행합니다. 주소·분석·보완 노드는 등록하지 않습니다."""
-    request = DecisionRequest.model_validate(request)
-
-    async def evaluate_decision(state: GraphState) -> GraphState:
-        outcome = await decision.evaluate(
-            request,
-            site=site,
-            user_answers=answers,
-            feedback=feedback,
-            supplement_context=supplement_context,
-            generate=generate,
-        )
-        if not isinstance(outcome, DecisionResult):
-            raise ValueError("답변 후에는 최종판단만 허용합니다.")
-        return {"outcome": outcome}
-
-    builder = StateGraph(GraphState)
-    builder.add_node("evaluate_decision", evaluate_decision)
-    builder.add_edge(START, "evaluate_decision")
-    builder.add_edge("evaluate_decision", END)
-    with tracing_context(enabled=False):
-        result = await builder.compile().ainvoke({})
-    return result["outcome"]

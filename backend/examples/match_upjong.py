@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
 from app.agents.commercial_area.industries import load_middle_master  # noqa: E402
 from app.agents.commercial_area.schemas import MiddleCode  # noqa: E402
+from app.llm.config import LLMSettings  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent / "schema_compare"
 OUT_PATH = OUT_DIR / "업종매칭_서울시기준.csv"
@@ -82,7 +83,9 @@ def master_block(master: list[MiddleCode]) -> str:
     return "코드\t대분류\t중분류명\n" + "\n".join(lines)
 
 
-async def ask(settings: Settings, master: list[MiddleCode], chunk: list[dict]) -> dict[str, list]:
+async def ask(
+    settings: LLMSettings, master: list[MiddleCode], chunk: list[dict]
+) -> dict[str, list]:
     from app.llm import client
 
     listing = "\n".join(f"{r['SVC_INDUTY_CD']}\t{r['SVC_INDUTY_CD_NM']}" for r in chunk)
@@ -90,7 +93,7 @@ async def ask(settings: Settings, master: list[MiddleCode], chunk: list[dict]) -
         f"[소상공인 상권업종 중분류 {len(master)}종]\n{master_block(master)}\n\n"
         f"[분류할 서울시 생활밀접업종 {len(chunk)}종]\n코드\t업종명\n{listing}"
     )
-    payload = await client.complete_json(SYSTEM, user, settings.llm_settings())
+    payload = await client.complete_json(SYSTEM, user, settings)
     return {
         str(row.get("seoul_code")): list(row.get("candidates") or [])
         for row in payload.get("matches") or []
@@ -100,17 +103,17 @@ async def ask(settings: Settings, master: list[MiddleCode], chunk: list[dict]) -
 async def main_async() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv_if_present()
-    settings = Settings.from_env()
+    settings = LLMSettings.from_env("INDUSTRY_MAPPING")
     for name, value in (
-        ("ELICE_MODEL", settings.llm_model),
-        ("ELICE_API_KEY", settings.llm_api_key),
-        ("ELICE_BASE_URL", settings.llm_base_url),
+        ("ELICE_MODEL", settings.model),
+        ("ELICE_API_KEY", settings.api_key),
+        ("ELICE_BASE_URL", settings.base_url),
     ):
         if not value:
             print(f"{name}이 없습니다.")
             return 1
 
-    master = sorted(load_middle_master(settings), key=lambda m: m.code)
+    master = sorted(load_middle_master(Settings.from_env()), key=lambda m: m.code)
     known = {m.code: m for m in master}
     seoul = sorted(read_csv(OUT_DIR / "seoul_industries.csv"), key=lambda r: r["SVC_INDUTY_CD"])
     print(f"서울시 {len(seoul)}종 × 소상공인 {len(master)}종")

@@ -12,7 +12,7 @@ from test_questions import question
 
 from app.agents.map_analysis.agent import failed_observation
 from app.db import repository as repo
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import AnswerSubmission
 from app.services import analysis as service
 
@@ -52,7 +52,6 @@ class MapServiceTests(unittest.IsolatedAsyncioTestCase):
             db_path=self.path,
             resolve=mock_resolve,
             agents=mock_agents(),
-            generate_action=mock_action,
             generate=generate,
             map_lookup=self.lookup,
             allow_questions=True,

@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, patch
 
 from langchain_core.callbacks import AsyncCallbackHandler
 from langgraph.graph import StateGraph
+from orchestration_support import run_flow
 
 from app.agents.orchestration.tools import SupplementTool
-from app.agents.orchestration.workflow import run_react
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import SupplementOperation
 
 
@@ -24,13 +24,12 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         options = dict(
             resolve=mock_resolve,
             agents=mock_agents(),
-            generate_action=mock_action,
             generate=mock_generate,
             request_id="graph-test",
             radius_m=300,
         )
         options.update(overrides)
-        return await run_react("시험 주소", **options)
+        return await run_flow("시험 주소", **options)
 
     async def test_graph_routes_supplement_back_to_decision_only(self):
         visited = []
@@ -93,11 +92,8 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             visited,
             [
-                "choose_action",
                 "prepare_address",
-                "choose_action",
                 "run_analyses",
-                "choose_action",
                 "evaluate_decision",
                 "execute_supplement",
                 "evaluate_decision",
@@ -107,24 +103,6 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(inputs), 2)
         self.assertNotIn("supplement_operations", inputs[1])
         self.assertEqual(result.source_analyses[2].data["detail"], 0)
-
-    async def test_sixth_model_call_can_finish_without_seventh(self):
-        async def choose(messages, definitions):
-            if choose_mock.await_count <= 3:
-                message = await mock_action([], definitions)
-                message.tool_calls[0].function.name = "unknown"
-                return message
-            valid = [
-                m
-                for m in messages
-                if m.get("role") == "tool" and json.loads(m["content"])["status"] == "ok"
-            ]
-            return await mock_action(valid, definitions)
-
-        choose_mock = AsyncMock(side_effect=choose)
-        result = await self.run_flow(generate_action=choose_mock)
-        self.assertEqual(result.request_id, "graph-test")
-        self.assertEqual(choose_mock.await_count, 6)
 
     async def test_callback_failure_waits_for_started_analyses(self):
         finished = []

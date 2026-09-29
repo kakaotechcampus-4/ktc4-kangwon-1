@@ -13,12 +13,11 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 from app.agents.decision import analyze as decide
-from app.agents.decision.agent import DecisionContractError
+from app.agents.decision.agent import DecisionContractError, _decision_input
 from app.agents.floating_population import agent, population
 from app.agents.floating_population.client import SeoulOpenApiError, SeoulOpenDataClient
 from app.agents.floating_population.config import Settings
 from app.agents.floating_population.interpret import TIME_LABELS, _peak
-from app.agents.floating_population.llm import SelectionUnavailable
 from app.agents.floating_population.models import (
     AGE_BANDS,
     DAYS,
@@ -36,6 +35,7 @@ from app.agents.floating_population.population import (
     worker_block,
     write_snapshot,
 )
+from app.agents.floating_population.selection import SelectionUnavailable
 from app.geo import to_epsg5181
 from app.schemas import AnalysisTask, DecisionRequest, Site
 
@@ -268,9 +268,12 @@ class FetchAllRowsTests(unittest.IsolatedAsyncioTestCase):
     def client(self, handler, **settings) -> SeoulOpenDataClient:
         http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         self.addAsyncCleanup(http.aclose)
-        return SeoulOpenDataClient(
-            Settings(api_key="test-key", page_size=1000, **settings), http=http
-        )
+        from scripts.fetch_population_snapshot import SnapshotClient
+
+        client = SnapshotClient(Settings(api_key="test-key", page_size=1000), http=http)
+        for key, value in settings.items():
+            setattr(client, key, value)
+        return client
 
     @staticmethod
     def body(rows: list[dict], total: int) -> httpx.Response:
@@ -403,6 +406,37 @@ class _AnalyzeFixture(unittest.IsolatedAsyncioTestCase):
 
 
 class AnalyzeWithPopulationTests(_AnalyzeFixture):
+    async def test_custom_selection_programming_error_is_not_hidden(self):
+        self.use_snapshots(self.resident, self.worker)
+
+        async def broken(_payload):
+            raise TypeError("선별 구현 오류")
+
+        with self.assertRaises(TypeError):
+            await self.run_analyze(select=broken)
+
+    async def test_default_selection_never_calls_model_and_keeps_raw_data(self):
+        self.use_snapshots(self.resident, self.worker)
+        with patch("app.llm.client.complete_json", side_effect=AssertionError("모델 호출 금지")):
+            result = await self.run_analyze(select=None)
+        selection = result.data["selection"]
+        self.assertTrue(selection["applied"])
+        self.assertNotIn("population_raw", selection["included"])
+        self.assertIn("trade_areas", selection["included"])
+        self.assertIn("radius_profile", selection["included"])
+        self.assertNotIn("trend", selection["included"])
+        self.assertTrue(result.data["population"]["by_age"])
+        self.assertFalse(any("최종판단 입력에서만" in w for w in result.warnings))
+
+    async def test_missing_selected_area_name_keeps_counts_and_reports_limitation(self):
+        self.use_snapshots(self.resident, self.worker)
+        self.areas[0].trdar_cd_nm = ""
+        result = await self.run_analyze(select=None)
+        self.assertEqual(result.data["population"]["daily_avg"], 8000)
+        area = next(a for a in result.data["trade_areas"] if a["code"] == "A")
+        self.assertIn("명칭 미제공", area["name"])
+        self.assertTrue(any("상권명" in w for w in result.warnings))
+
     async def test_blocks_are_added_next_to_floating_population(self):
         self.use_snapshots(self.resident, self.worker)
         client = self.fake_client()
@@ -555,7 +589,7 @@ class InterpretationTests(_AnalyzeFixture):
         qoq = result.data["trend"]["qoq_change"]
         self.assertIn(f"직전 분기보다 {qoq:+.1%}", trend["text"])
 
-    async def test_sentences_about_dropped_blocks_are_removed(self):
+    async def test_dropped_sentences_remain_in_source_but_not_decision_input(self):
         self.use_snapshots(self.resident, self.worker)
         series = [
             ("20261", [_flpop("A", 3000), _flpop("B", 4000)]),
@@ -569,8 +603,17 @@ class InterpretationTests(_AnalyzeFixture):
         paths = [f["path"] for f in result.data["interpretation"]]
 
         self.assertEqual(result.data["selection"]["dropped"], ["trend"])
-        self.assertFalse(any(p.startswith("/trend") for p in paths))
+        self.assertTrue(any(p.startswith("/trend") for p in paths))
         self.assertIn("/population_summary/worker_to_resident_index", paths)
+        request = DecisionRequest(
+            request_id=result.request_id, address="시험 주소", analyses=[result]
+        )
+        projected = json.loads(_decision_input(request))["analyses"][0]["data"]
+        self.assertFalse(
+            any(f and f["path"].startswith("/trend") for f in projected["interpretation"])
+        )
+        self.assertEqual(len(projected["interpretation"]), len(paths))
+        self.assertTrue(any(f["path"].startswith("/trend") for f in result.data["interpretation"]))
 
     async def test_numbers_in_sentences_match_data(self):
         self.use_snapshots(self.resident, self.worker)

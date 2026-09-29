@@ -1,6 +1,7 @@
 """개폐업 에이전트 전체 파이프라인을 단독 실행합니다."""
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 
@@ -18,11 +19,13 @@ def main() -> int:
     args = parser.parse_args()
 
     load_environment()
-    result = run_business_lifecycle_agent(
-        area_code=args.area_code,
-        base_quarter=args.base_quarter,
-        quarter_count=args.count,
-        request_id=args.request_id,
+    result = asyncio.run(
+        run_business_lifecycle_agent(
+            area_code=args.area_code,
+            base_quarter=args.base_quarter,
+            quarter_count=args.count,
+            request_id=args.request_id,
+        )
     )
 
     print("분석 업종:", len(result["industry_scores"]))

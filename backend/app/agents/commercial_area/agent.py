@@ -6,14 +6,13 @@ import asyncio
 from collections import Counter
 from dataclasses import replace
 
-from app.industries import MASTER_PATH, TAXONOMY
+from app.industries import TAXONOMY
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from .client import SbizApiError, StoreClient
 from .config import Settings
 from .franchise import build_franchise, load_brands
 from .industries import load_middle_master
-from .llm import render_summary_text, summarize
 from .metrics import (
     build_district_specialization,
     build_diversity,
@@ -32,6 +31,7 @@ from .sources import (
     build_sources,
     franchise_base_year,
 )
+from .summary import render_summary_text
 from .trade_areas import build_trade_areas
 
 AGENT_ID: AgentId = "commercial_area"
@@ -42,7 +42,6 @@ PUBLIC_ERROR_CODES = {
     "NO_KEY",
     "NO_RADIUS",
     "UPSTREAM_FAILED",
-    "UPSTREAM_TIMEOUT",
 }
 
 
@@ -261,22 +260,31 @@ async def analyze(
         )
 
         data = payload.model_dump()
+        # 생성 문장과 음식점 전체 밀도는 개별 업종 추천의 직접 근거가 아닙니다.
+        data["citable"] = {"summary": False, "summary_text": False, "restaurant_density": False}
+        for row in data["by_middle"]:
+            if row["count"] < settings.min_count_for_specialization:
+                row["citable"] = {"lq": False, "lq_district": False}
         data["lq_retryable"] = lq_retryable
-        data["taxonomy"] = (
-            dict(TAXONOMY)
-            if settings.upjong_master_path.resolve() == MASTER_PATH.resolve()
-            else {"id": "custom-middle", "industry_count": len(master)}
-        )
+        data["taxonomy"] = dict(TAXONOMY)
         data["coverage"] = {
             "mapped_store_count": mapped_count,
             "unmapped_store_count": unmapped_count,
         }
-        summary, summary_warning = await summarize(data, settings)
-        if summary_warning:
-            warnings.append(summary_warning)
-        if summary:
-            data["summary"] = Summary.model_validate(summary).model_dump()
-            data["summary_text"] = render_summary_text(summary)
+        summary = Summary.model_validate(
+            {
+                "overall": f"반경 {radius}m에서 조회한 점포는 {len(stores)}개입니다.",
+                "radius_notes": [
+                    {
+                        "radius_m": row["radius_m"],
+                        "text": f"조회 점포 {row['store_total']}개입니다.",
+                    }
+                    for row in data["by_radius"]
+                ],
+            }
+        ).model_dump()
+        data["summary"] = summary
+        data["summary_text"] = render_summary_text(summary)
 
         return AgentAnalysis(
             request_id=task.request_id,

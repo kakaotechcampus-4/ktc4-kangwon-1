@@ -11,7 +11,7 @@ from test_questions import question
 
 from app.agents.orchestration.tools import SupplementTool
 from app.db import repository as repo
-from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import AnswerSubmission, SupplementOperation, WaitingForInput
 from app.services import analysis as service
 from app.services.settings import ExecutionSettings
@@ -48,7 +48,6 @@ class QuestionServiceTests(unittest.IsolatedAsyncioTestCase):
             request_id="r",
             resolve=self.resolve,
             agents=self.agents,
-            generate_action=mock_action,
             generate=Mock(return_value=self.plan),
             allow_questions=True,
         )
@@ -135,7 +134,7 @@ class QuestionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(repo.get_question_snapshot("r", db_path=self.path))
 
     async def test_old_execution_cannot_fail_claimed_resume(self):
-        actual = service.run_react
+        actual = service.run_graph
 
         async def finish_then_fail(*args, **kwargs):
             waiting = await actual(*args, **kwargs)
@@ -145,7 +144,7 @@ class QuestionServiceTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.to_thread(repo.claim_question_resume, submission, db_path=self.path)
             raise RuntimeError("대기 반환 중 호출자 오류")
 
-        with patch.object(service, "run_react", side_effect=finish_then_fail):
+        with patch.object(service, "run_graph", side_effect=finish_then_fail):
             with self.assertRaises(RuntimeError):
                 await self.start()
         self.assertEqual(repo.get_request("r", db_path=self.path)["status"], "running")

@@ -47,7 +47,7 @@ lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Catego
 
 ## 고치는 법
 
-원본은 `data/*.csv` 셋이고, `catalog.py` 와 `data/industry_master.json` 은 **자동 생성물**이다.
+원본은 `data/*.csv` 셋이고, `catalog.py`는 **자동 생성물**이다.
 생성물은 직접 고치지 않는다.
 
 | 파일 | 내용 |
@@ -55,11 +55,10 @@ lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Catego
 | `data/industries.csv` | 75종 마스터 |
 | `data/seoul_to_industry.csv` | 서울시 99 → 중분류 |
 | `data/legacy70_to_industry.csv` | 개폐업 70 → 중분류 (마이그레이션용) |
-| `data/industry_master.json` | **생성물.** 개폐업 `industry_master.json` 과 같은 모양 |
 
 ```bash
 cd backend
-python scripts/build_industry_catalog.py            # 검증 후 catalog.py · industry_master.json 재생성
+python scripts/build_industry_catalog.py            # 검증 후 catalog.py 재생성
 python scripts/build_industry_catalog.py --check    # 검증만. CI 가 이걸 돌린다
 ```
 

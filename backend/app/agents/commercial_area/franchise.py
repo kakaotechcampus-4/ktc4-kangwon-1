@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from collections import Counter
@@ -32,11 +33,11 @@ def brand_cache_path(settings: Settings) -> Path:
 
 def load_cached_brands(settings: Settings) -> list[str] | None:
     path = brand_cache_path(settings)
-    if not path.exists():
-        return None
     try:
+        if not path.exists():
+            return None
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
         return None
     if isinstance(payload, dict):
         payload = payload.get("brands")
@@ -46,9 +47,9 @@ def load_cached_brands(settings: Settings) -> list[str] | None:
 
 
 def save_brands(settings: Settings, brands: Sequence[str]) -> None:
-    settings.cache_dir.mkdir(parents=True, exist_ok=True)
     path = brand_cache_path(settings)
     try:
+        settings.cache_dir.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps({"brands": sorted(set(brands))}, ensure_ascii=False),
             encoding="utf-8",
@@ -97,7 +98,7 @@ def _brand_items(payload: Any) -> list[dict[str, Any]]:
 
 
 async def load_brands(settings: Settings) -> list[str] | None:
-    cached = load_cached_brands(settings)
+    cached = await asyncio.to_thread(load_cached_brands, settings)
     if cached:
         return cached
     if not settings.ftc_service_key:
@@ -108,7 +109,7 @@ async def load_brands(settings: Settings) -> list[str] | None:
         return None
     if not brands:
         return None
-    save_brands(settings, brands)
+    await asyncio.to_thread(save_brands, settings, brands)
     return brands
 
 

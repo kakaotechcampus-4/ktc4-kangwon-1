@@ -1,3 +1,5 @@
+import asyncio
+
 import pandas as pd
 
 from .config import Settings
@@ -64,9 +66,11 @@ def calculate_lifecycle_scores(
     )
 
     score_df = result_df.loc[score_mask].copy()
+    # 비교 대상이 하나면 백분위 순위가 성립하지 않습니다. 관측값은 보존합니다.
+    insufficient_peers = len(score_df) < 2
 
     # ========================================================
-    # 2. 최근 1년 폐업률 안정성
+    # 2. 최근 최대 4개 분기의 가중 평균 폐업률 안정성
     #
     # 낮을수록 높은 점수
     # ========================================================
@@ -81,7 +85,7 @@ def calculate_lifecycle_scores(
     )
 
     # ========================================================
-    # 3. 최근 3년 순증감률
+    # 3. 전체 기간의 가중 분기 평균 순증감률
     #
     # 높을수록 높은 점수
     # ========================================================
@@ -96,7 +100,7 @@ def calculate_lifecycle_scores(
     )
 
     # ========================================================
-    # 4. 최근 3년 회전 안정성
+    # 4. 전체 기간의 가중 분기 평균 회전 안정성
     #
     # turnover_rate가 낮을수록
     # 개폐업 교체가 덜 빈번하다고 판단
@@ -115,7 +119,7 @@ def calculate_lifecycle_scores(
     # 5. 폐업률 변화 점수
     #
     # close_rate_trend
-    # = 최근 1년 폐업률 - 가장 오래된 1년 폐업률
+    # = 최근 최대 4개 분기 평균 폐업률 - 처음 최대 4개 분기 평균 폐업률
     #
     # 값이 낮을수록 좋음
     #
@@ -165,6 +169,9 @@ def calculate_lifecycle_scores(
         ),
         axis=1,
     )
+    if insufficient_peers:
+        score_df[score_columns] = float("nan")
+        score_df["confidence"] = "low"
 
     # ========================================================
     # 8. 공통 75개 Master에 점수 다시 결합
@@ -193,7 +200,7 @@ def calculate_lifecycle_scores(
     return final_df
 
 
-def score_business_lifecycle(
+async def score_business_lifecycle(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
@@ -204,14 +211,15 @@ def score_business_lifecycle(
     API 조회 → 전처리 → 점수 계산까지 실행한다.
     """
 
-    preprocessed_df = preprocess_business_lifecycle_data(
+    preprocessed_df = await preprocess_business_lifecycle_data(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
         settings=settings,
     )
 
-    return calculate_lifecycle_scores(
+    return await asyncio.to_thread(
+        calculate_lifecycle_scores,
         df=preprocessed_df,
         quarter_count=quarter_count,
     )

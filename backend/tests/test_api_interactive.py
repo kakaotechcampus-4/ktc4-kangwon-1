@@ -129,7 +129,7 @@ class InteractiveApiTests(unittest.TestCase):
     def test_real_path_registers_optional_tools(self):
         from app.api.v1.mock import interactive_decision, map_observation
         from app.api.v1.routes import analysis_runner
-        from app.mocks import mock_action, mock_agents, mock_resolve
+        from app.mocks import mock_agents, mock_resolve
         from app.services.analysis import execute_analysis
 
         async def run(address, **kwargs):
@@ -142,7 +142,6 @@ class InteractiveApiTests(unittest.TestCase):
                     **kwargs,
                     "resolve": mock_resolve,
                     "agents": mock_agents(),
-                    "generate_action": mock_action,
                     "generate": interactive_decision(with_map=True, allow_questions=False),
                     "supplements": [],
                 },

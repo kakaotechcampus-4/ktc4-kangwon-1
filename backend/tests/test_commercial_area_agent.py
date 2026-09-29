@@ -1,7 +1,6 @@
 """상권 경쟁 분석 에이전트가 팀 전달 규약을 지키는지 검사합니다."""
 
 import asyncio
-import json
 import math
 import tempfile
 import unittest
@@ -15,11 +14,11 @@ import httpx
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.industries import write_master
-from app.agents.commercial_area.llm import build_user_message
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
+from app.agents.decision.evidence import index_paths
 from app.agents.orchestration.workflow import run_agents
+from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask
 
 MASTER = [
@@ -124,11 +123,8 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
-        master_path = root / "upjong_codes.csv"
-        write_master(master_path, MASTER)
         self.settings = Settings(
             cache_dir=root / "cache",
-            upjong_master_path=master_path,
             sbiz_service_key="test-key",
         )
         self.task = AnalysisTask.model_validate({"request_id": "request-001", "site": SITE})
@@ -143,8 +139,6 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
             result = await analyze(task, settings=self.settings, store_client=client)
             self.assertEqual(client.radius_calls, [radius])
             self.assertEqual(result.data["radius_m"], radius)
-            message = json.loads(build_user_message(result.data))
-            self.assertEqual(message["lq_baseline"], result.data["lq_baseline"])
             self.assertIn(f"반경 {radius}m", result.scope.area)
             self.assertEqual(
                 [row["radius_m"] for row in result.data["by_radius"]],
@@ -217,13 +211,13 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_error_when_api_fails(self):
         class FailingClient(FakeClient):
             async def stores_in_radius(self, *args, **kwargs):
-                raise SbizApiError("UPSTREAM_TIMEOUT", "응답 시간 초과")
+                raise SbizApiError("UPSTREAM_FAILED", "응답 시간 초과")
 
         result = await analyze(
             self.task, settings=self.settings, store_client=FailingClient(self.settings, [])
         )
         self.assertEqual(result.status, "error")
-        self.assertEqual(result.error.code, "UPSTREAM_TIMEOUT")
+        self.assertEqual(result.error.code, "UPSTREAM_FAILED")
         self.assertEqual(result.data, {})
 
     async def test_error_does_not_expose_external_details(self):
@@ -257,7 +251,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
             store_client=FakeClient(self.settings, sample_stores()),
         )
         codes = {row["code"] for row in result.data["by_middle"]}
-        self.assertEqual(codes, {m.code for m in MASTER})
+        self.assertEqual(codes, set(INDUSTRIES))
         self.assertEqual(
             sum(row["count"] for row in result.data["by_middle"]), result.data["store_total"]
         )
@@ -337,7 +331,9 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([s["radius_m"] for s in slices], list(self.settings.breakdown_radii))
         for entry in slices:
             self.assertLessEqual(len(entry["top_by_count"]), self.settings.rank_size)
-            self.assertEqual(entry["category_count"] + entry["absent_category_count"], len(MASTER))
+            self.assertEqual(
+                entry["category_count"] + entry["absent_category_count"], len(INDUSTRIES)
+            )
 
     async def test_trade_areas_are_empty_outside_seoul(self):
         task = AnalysisTask.model_validate(
@@ -355,34 +351,101 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["trade_areas"], [])
         self.assertIsNone(result.data["restaurant_density"]["seoul_percentile"])
 
-    async def test_summary_absent_without_llm_settings(self):
-        result = await analyze(
-            self.task,
-            settings=self.settings,
-            store_client=FakeClient(self.settings, sample_stores()),
-        )
-        self.assertIsNone(result.data.get("summary"))
-        self.assertTrue(any("ELICE" in w for w in result.warnings))
+    async def test_summary_is_computed_without_model(self):
+        with patch("app.llm.client.complete_json", side_effect=AssertionError("모델 호출 금지")):
+            result = await analyze(
+                self.task,
+                settings=self.settings,
+                store_client=FakeClient(self.settings, sample_stores()),
+            )
+        self.assertIn("10", result.data["summary"]["overall"])
+        self.assertFalse(any("ELICE" in w for w in result.warnings))
 
-    async def test_malformed_summary_notes_keep_calculated_data_through_run_agents(self):
+    async def test_summary_and_restaurant_density_are_not_evidence(self):
+        with patch(
+            "app.llm.client.complete_json",
+            side_effect=AssertionError("모델 호출 금지"),
+        ):
+            result = await analyze(
+                self.task,
+                settings=self.settings,
+                store_client=FakeClient(self.settings, sample_stores()),
+            )
+        paths = index_paths(result.data)
+        self.assertIn("10", result.data["summary"]["overall"])
+        self.assertIn("10", result.data["summary_text"])
+        self.assertIn("/store_total", paths)
+        for prefix in ("/summary", "/summary_text", "/restaurant_density"):
+            self.assertFalse(any(path == prefix or path.startswith(prefix + "/") for path in paths))
+
+    async def test_small_sample_lq_is_not_citable_but_count_is_preserved(self):
+        from app.industries import lookup
+
+        stores = [
+            replace(store, middle_name=lookup.get(store.middle_code).name)
+            for store in sample_stores()
+        ]
+        with patch(
+            "app.agents.commercial_area.agent.load_middle_master",
+            return_value=[
+                MiddleCode(
+                    code="I201",
+                    name=lookup.get("I201").name,
+                    major_code="I2",
+                    major_name="음식점업",
+                ),
+                MiddleCode(
+                    code="I212",
+                    name=lookup.get("I212").name,
+                    major_code="I2",
+                    major_name="음식점업",
+                ),
+            ],
+        ):
+            result = await analyze(
+                self.task, settings=self.settings, store_client=FakeClient(self.settings, stores)
+            )
+        paths = index_paths(result.data)
+        index = next(i for i, row in enumerate(result.data["by_middle"]) if row["code"] == "I212")
+        self.assertEqual(result.data["by_middle"][index]["count"], 3)
+        self.assertIn(f"/by_middle/{index}/count", paths)
+        self.assertNotIn(f"/by_middle/{index}/lq", paths)
+        self.assertNotIn(f"/by_middle/{index}/lq_district", paths)
+
+        boundary_stores = stores + [replace(stores[6], store_id=f"boundary-{i}") for i in range(2)]
+        with patch(
+            "app.agents.commercial_area.agent.load_middle_master",
+            return_value=[
+                MiddleCode(
+                    code="I212",
+                    name=lookup.get("I212").name,
+                    major_code="I2",
+                    major_name="음식점업",
+                )
+            ],
+        ):
+            boundary = await analyze(
+                self.task,
+                settings=self.settings,
+                store_client=FakeClient(self.settings, boundary_stores),
+            )
+        self.assertEqual(boundary.data["by_middle"][0]["count"], 5)
+        self.assertIn("/by_middle/0/lq", index_paths(boundary.data))
+
+    async def test_calculated_data_is_preserved_without_model_through_run_agents(self):
         baseline = await analyze(
             self.task,
             settings=self.settings,
             store_client=FakeClient(self.settings, sample_stores()),
         )
-        settings = replace(
-            self.settings,
-            llm_model="test-model",
-            llm_api_key="test-key",
-            llm_base_url="https://invalid.example/v1",
-        )
+        settings = self.settings
         for field in ("radius_notes", "index_notes"):
             with (
                 self.subTest(field=field),
                 patch(
                     "app.llm.client.complete_json",
                     new=AsyncMock(return_value={field: 1, "overall": "PRIVATE-MODEL-BODY"}),
-                ),
+                ) as model,
             ):
                 analyses = await run_agents(
                     self.task,
@@ -395,6 +458,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )
                 result = analyses[0]
+                model.assert_not_awaited()
                 self.assertEqual(result.status, baseline.status)
                 self.assertIsNone(result.error)
                 self.assertEqual(result.data["store_total"], 10)
@@ -403,7 +467,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                     6,
                 )
                 self.assertEqual(result.data, baseline.data)
-                self.assertTrue(any("요약 실패" in warning for warning in result.warnings))
+                self.assertFalse(any("요약 실패" in warning for warning in result.warnings))
                 self.assertNotIn("PRIVATE-MODEL-BODY", result.model_dump_json())
 
 

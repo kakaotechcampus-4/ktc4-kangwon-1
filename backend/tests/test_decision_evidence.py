@@ -2,14 +2,163 @@
 
 import json
 import unittest
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock, patch
 
+from app.agents.business_lifecycle.formatter import format_scored_industry
 from app.agents.decision.agent import DecisionContractError, evaluate
+from app.agents.decision.evidence import index_paths
 from app.mocks import mock_agents, mock_generate, mock_site
 from app.schemas import AnalysisTask, DecisionRequest
 
 
 class EvidenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_invalid_category_is_corrected_at_both_model_boundaries(self):
+        for category in (
+            {"code": "I299"},
+            {"code": "I201", "major": "음식점업", "middle": "한식 음식점업 "},
+            {"code": "I201", "major": "다른 분류", "middle": "한식 음식점업"},
+        ):
+            for real_model in (False, True):
+                bad = self.response("/industries/1/metrics/net")
+                bad["recommendations"][0]["category"] = category
+                good = self.response("/industries/1/metrics/net")
+                call = AsyncMock(side_effect=[bad, good])
+                with self.subTest(category=category, real_model=real_model):
+                    if real_model:
+                        with patch("app.llm.client.complete_json", call):
+                            result = await evaluate(self.request)
+                    else:
+                        result = await evaluate(self.request, generate=call)
+                    self.assertEqual(result.recommendations[0].category.code, "I201")
+                    correction = json.loads(call.call_args_list[1].args[1])["correction"]
+                    self.assertEqual(correction["reason"], "invalid_category")
+                    self.assertEqual(correction["field"], "recommendations.0.category")
+
+    async def test_repeated_invalid_code_stops_after_one_correction(self):
+        bad = self.response("/industries/1/metrics/net")
+        bad["recommendations"][0]["category"] = {"code": "I299"}
+        call = AsyncMock(return_value=bad)
+        with patch("app.llm.client.complete_json", call):
+            with self.assertRaises(DecisionContractError) as raised:
+                await evaluate(self.request)
+        self.assertEqual(call.await_count, 2)
+        self.assertEqual(len(raised.exception.failures), 2)
+
+    def test_lifecycle_rule_describes_counts_without_changing_metrics(self):
+        from app.agents.business_lifecycle.formatter import describe_industry
+
+        for opened, closed, label in (
+            (3, 1, "개업 우위"),
+            (1, 3, "폐업 우위"),
+            (2, 2, "개폐업 균형"),
+        ):
+            source = {
+                "lifecycle_score": 61,
+                "confidence": "low",
+                "metrics": {"period_open_count": opened, "period_close_count": closed},
+            }
+            result = describe_industry(source)
+            self.assertEqual(result["type"], label)
+            self.assertEqual(result["metrics"], source["metrics"])
+            self.assertEqual(result["lifecycle_score"], 61)
+            self.assertNotIn("type", source)
+
+    def test_agent_sample_citation_paths(self):
+        samples = [
+            (
+                {"population": {"daily_avg": 120}, "resident": {"count": 0}},
+                {
+                    "/population/daily_avg": None,
+                    "/population": None,
+                    "/resident/count": None,
+                    "/resident": None,
+                },
+            ),
+            (
+                {
+                    "industries": [
+                        {
+                            "industry_id": "I201",
+                            "metrics": {"net": 0},
+                            "type": "설명",
+                            "citable": {"type": False},
+                        }
+                    ]
+                },
+                {
+                    "/industries/0/industry_id": "I201",
+                    "/industries/0/metrics/net": "I201",
+                    "/industries/0/metrics": "I201",
+                },
+            ),
+            (
+                {"by_middle": [{"code": "I201", "count": 2, "lq": 3, "citable": {"lq": False}}]},
+                {"/by_middle/0/code": "I201", "/by_middle/0/count": "I201"},
+            ),
+        ]
+        for data, expected in samples:
+            with self.subTest(data=data):
+                self.assertEqual(index_paths(data), expected)
+
+    def test_citable_false_blocks_subtree_and_ancestors_but_keeps_siblings(self):
+        data = {
+            "group": {
+                "observed": 0,
+                "generated": {
+                    "citable": False,
+                    "text": "추정",
+                    "nested": {"citable": True, "value": 9},
+                },
+            }
+        }
+        self.assertEqual(index_paths(data), {"/group/observed": None})
+
+    def test_field_policy_preserves_values_without_allowing_parent_citation(self):
+        data = {
+            "industries": [
+                {
+                    "industry_id": "I201",
+                    "metrics": {"net": 0},
+                    "type": "성장",
+                    "evidence": ["생성 문장"],
+                    "citable": {"type": False, "evidence": False},
+                }
+            ]
+        }
+        paths = index_paths(data)
+        self.assertIn("/industries/0/metrics/net", paths)
+        for path in (
+            "/industries",
+            "/industries/0",
+            "/industries/0/type",
+            "/industries/0/evidence/0",
+            "/industries/0/citable/type",
+        ):
+            self.assertNotIn(path, paths)
+
+    def test_lifecycle_generated_text_is_not_evidence(self):
+        row = format_scored_industry(
+            {
+                "industry_id": "I201",
+                "industry_name": "한식 음식점업",
+                "lifecycle_score": 60,
+                "type": "성장",
+                "confidence": "high",
+                "metrics": {"net": 2},
+                "evidence": ["생성 문장"],
+            }
+        )
+        paths = index_paths({"industries": [row]})
+        self.assertIn("/industries/0/metrics/net", paths)
+        self.assertNotIn("/industries/0/type", paths)
+        self.assertNotIn("/industries/0/evidence/0", paths)
+
+    async def test_evaluate_rejects_citable_false_including_parent(self):
+        self.source.data["industries"][1]["generated"] = {"citable": False, "text": "추정"}
+        for path in ("/industries/1/generated/text", "/industries/1"):
+            with self.subTest(path=path), self.assertRaises(DecisionContractError):
+                await evaluate(self.request, generate=Mock(return_value=self.response(path)))
+
     async def asyncSetUp(self):
         task = AnalysisTask(request_id="evidence", site=mock_site())
         self.request = DecisionRequest(

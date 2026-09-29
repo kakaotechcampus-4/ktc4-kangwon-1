@@ -69,6 +69,7 @@ async def supplement(
         "industries": [
             {
                 "industry_id": row["code"],
+                "citable": {"lq": row["count"] >= settings.min_count_for_specialization},
                 "lq": _ratio_against(
                     row["count"],
                     data["store_total"],

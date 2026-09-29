@@ -90,6 +90,19 @@ class QuestionRepositoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             repo.claim_question_resume(changed, db_path=self.path)
 
+    def test_catalog_mismatch_keeps_waiting_and_answers_unclaimed(self):
+        self.save()
+        submission = AnswerSubmission(request_id="r", question_set_id="q", answers=[])
+        for version in ("other", None):
+            with connect(self.path) as db:
+                db.execute("UPDATE analysis_requests SET catalog_version=?", (version,))
+            with self.assertRaisesRegex(repo.AnswerConflictError, "업종표 버전"):
+                repo.claim_question_resume(submission, db_path=self.path)
+            self.assertEqual(
+                repo.get_request("r", db_path=self.path)["status"], "waiting_for_input"
+            )
+            self.assertIsNone(repo.get_question_answers("r", db_path=self.path))
+
     def test_rejected_second_attempt_does_not_replace_selected_source(self):
         original = AgentAnalysis.model_validate_json(
             repo.list_agent_results("r", db_path=self.path)[0]["analysis_json"]

@@ -7,8 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from app.agents.business_lifecycle.client import SeoulOpenAPINoDataError
 from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.agents.commercial_area.config import Settings as CommercialSettings
+from app.agents.decision.evidence import index_paths
 from app.industries.catalog import INDUSTRY_TO_SEOUL
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
@@ -70,9 +72,15 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             result.data["supplement_lq"]["industries"][0]["lq"], 0.6667, places=4
         )
         self.assertTrue(module.accept(previous, result))
+        self.assertNotIn("/supplement_lq/industries/0/lq", index_paths(result.data))
         self.assertEqual(result.status, "partial")
         self.assertEqual(result.scope, previous.scope)
         client.aclose.assert_awaited_once()
+
+        previous.data["by_middle"][0]["count"] = 5
+        with patch.object(module, "StoreClient", return_value=client):
+            boundary = await module.supplement(self.task, previous, settings=CommercialSettings())
+        self.assertIn("/supplement_lq/industries/0/lq", index_paths(boundary.data))
 
     async def test_quarter_details_keep_zero_missing_and_scores_separate(self):
         module = importlib.import_module("app.agents.business_lifecycle.supplement")
@@ -80,7 +88,14 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             "business_lifecycle",
             {
                 "metadata": {"area_code": "test-area", "base_quarter": "20244", "quarter_count": 4},
-                "industries": [{"industry_id": "I201", "score": 72}],
+                "industries": [
+                    {
+                        "industry_id": "I201",
+                        "score": 72,
+                        "confidence": "none",
+                        "metrics": {"period_open_count": None, "period_close_count": None},
+                    }
+                ],
             },
         )
         rows = [
@@ -108,6 +123,102 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["industries"], previous.data["industries"])
         self.assertTrue(module.accept(previous, result))
 
+        self.assertEqual(entry["confidence"], "none")
+        self.assertNotIn(
+            "/supplement_quarters/industries/0/closed_counts/3", index_paths(result.data)
+        )
+        changed = result.model_copy(deep=True)
+        changed.data["supplement_quarters"]["industries"][0]["confidence"] = "high"
+        self.assertFalse(module.accept(previous, changed))
+
+    def test_quarter_totals_must_match_original_metrics(self):
+        module = importlib.import_module("app.agents.business_lifecycle.supplement")
+        previous = self.previous(
+            "business_lifecycle",
+            {
+                "metadata": {"area_code": "test-area", "base_quarter": "20244", "quarter_count": 2},
+                "industries": [
+                    {
+                        "industry_id": "I201",
+                        "confidence": "low",
+                        "metrics": {
+                            "period_open_count": 3,
+                            "period_close_count": 1,
+                            "period_net_change": 2,
+                            "latest_store_count": 10,
+                            "avg_store_count": 9,
+                        },
+                    }
+                ],
+            },
+        )
+        candidate = previous.model_copy(deep=True)
+        candidate.data["supplement_quarters"] = {
+            "area_code": "test-area",
+            "quarters": ["20243", "20244"],
+            "industries": [
+                {
+                    "industry_id": "I201",
+                    "confidence": "low",
+                    "store_counts": [8, 10],
+                    "opened_counts": [1, 2],
+                    "closed_counts": [0, 1],
+                    "close_rates": [0, 10],
+                }
+            ],
+        }
+        self.assertTrue(module.accept(previous, candidate))
+        for field, values in (
+            ("opened_counts", [1, 3]),
+            ("closed_counts", [None, 1]),
+            ("store_counts", [8, 11]),
+            ("close_rates", [0, 50]),
+        ):
+            changed = candidate.model_copy(deep=True)
+            changed.data["supplement_quarters"]["industries"][0][field] = values
+            with self.subTest(field=field):
+                self.assertFalse(module.accept(previous, changed))
+
+    def test_recent_totals_exclude_fifth_oldest_quarter(self):
+        module = importlib.import_module("app.agents.business_lifecycle.supplement")
+        previous = self.previous(
+            "business_lifecycle",
+            {
+                "metadata": {"area_code": "test-area", "base_quarter": "20251", "quarter_count": 5},
+                "industries": [
+                    {
+                        "industry_id": "I201",
+                        "confidence": "low",
+                        "metrics": {
+                            "period_open_count": 104,
+                            "period_close_count": 24,
+                            "recent_year_open_count": 4,
+                            "recent_year_close_count": 4,
+                            "recent_year_net_change": 0,
+                        },
+                    }
+                ],
+            },
+        )
+        candidate = previous.model_copy(deep=True)
+        candidate.data["supplement_quarters"] = {
+            "area_code": "test-area",
+            "quarters": ["20241", "20242", "20243", "20244", "20251"],
+            "industries": [
+                {
+                    "industry_id": "I201",
+                    "confidence": "low",
+                    "store_counts": [100] * 5,
+                    "opened_counts": [100, 1, 1, 1, 1],
+                    "closed_counts": [20, 1, 1, 1, 1],
+                    "close_rates": [20, 1, 1, 1, 1],
+                }
+            ],
+        }
+        self.assertTrue(module.accept(previous, candidate))
+        previous.data["industries"][0]["metrics"]["recent_year_open_count"] = 104
+        self.assertFalse(module.accept(previous, candidate))
+
     async def test_empty_quarter_query_is_not_adopted(self):
         module = importlib.import_module("app.agents.business_lifecycle.supplement")
         previous = self.previous(
@@ -120,7 +231,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.agents.business_lifecycle.preprocess.fetch_recent_store_data", return_value=[]
         ):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(SeoulOpenAPINoDataError):
                 await module.supplement(self.task, previous, settings=LifecycleSettings())
 
     async def test_registered_real_functions_are_adopted_and_saved(self):
@@ -128,7 +239,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
 
         from app.agents.orchestration import build_supplement_tools
         from app.db import repository
-        from app.mocks import mock_action, mock_agents, mock_generate, mock_resolve
+        from app.mocks import mock_agents, mock_generate, mock_resolve
         from app.services.analysis import execute_analysis
         from app.services.settings import ExecutionSettings
 
@@ -141,6 +252,11 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 if agent_id == "commercial_area":
                     result.data.update({"radius_m": task.radius_m, "lq_retryable": True})
                 else:
+                    for row, code in zip(result.data["industries"], ("I201", "I212"), strict=True):
+                        row["industry_id"] = code
+                        row.setdefault("metrics", {}).update(
+                            period_open_count=None, period_close_count=None
+                        )
                     result.data["metadata"] = {
                         "area_code": "test-area",
                         "base_quarter": "20244",
@@ -206,7 +322,6 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 db_path=path,
                 resolve=mock_resolve,
                 agents=agents,
-                generate_action=mock_action,
                 generate=generate,
                 settings=settings,
                 supplements=build_supplement_tools(settings),

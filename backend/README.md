@@ -5,22 +5,21 @@
 
 ## 실행 흐름과 책임
 
-### LangGraph 실행 — MVP1.9 첫 단계
+### LangGraph 실행 — 고정 순서·선택 분기
 
-`execute_analysis()` → `run_react()` 호출 방식은 유지하고 내부 흐름을 `orchestration/graph.py`로 옮겼습니다.
-기존 분석·모델 함수와 저장 콜백을 그대로 사용합니다.
+`execute_analysis()`가 입력을 검증한 뒤 `orchestration/graph.py`의 `run_graph()`를 호출합니다.
+최초 순서는 고정 엣지로 실행하며 저장 콜백은 `RunHooks`로 전달합니다.
 
 | 노드 | 역할 |
 | --- | --- |
-| `choose_action` | 모델 도구 선택 검증. 잘못된 순서·인자는 오류 관찰 후 재선택 |
 | `prepare_address` | 주소 변환·AnalysisTask 생성·Site 저장 콜백 |
 | `run_analyses` | 기존 `run_agents()`로 세 분석 병렬 실행·개별 결과 저장 |
 | `evaluate_decision` | 최종 결과면 종료, 필요한 보완 요청이면 보완 노드로 이동 |
 | `execute_supplement` | 제시된 부분 작업만 실행하고 판단 노드로 복귀 |
 
-오케스트레이터 모델은 최대 6회, 데이터 보완은 최대 1라운드입니다.
-최종판단의 출력 교정 1회는 별도이며 기존 로직을 유지합니다.
-기존 `run_analysis()` 고정 흐름은 변경하지 않았습니다.
+오케스트레이터 LLM 호출은 없습니다. 데이터 보완·지도 조회는 각각 최대 1회입니다.
+질문은 허용된 요청에서 최대 3개·1회이며, 최종판단 출력 교정 1회는 별도입니다.
+옛 `run_analysis()`·`run_react()`·`resume_graph()` 진입점은 제거했습니다.
 
 설치 갱신은 프로젝트 루트에서 실행합니다.
 
@@ -40,7 +39,7 @@ LangChain 모델 래퍼를 추가하지 않았지만 LangGraph의 하위 의존�
 `execute_analysis(..., supplements=[...])`에 `SupplementTool`을 명시적으로 주입할 때만
 보완을 활성화합니다. 서비스 기본값은 빈 목록입니다.
 `build_supplement_tools(settings)`로 실제 두 작업을 등록할 수 있으며 validation 도구의 일반 실행에는 연결되어 있습니다.
-유동인구 원본과 HTTP API는 변경하지 않았습니다.
+HTTP 실제 실행은 보완 등록표를 전달합니다. 인구 보완 함수는 아직 등록하지 않습니다.
 
 | 작업 | 수행 범위 | 추가 근거 |
 | --- | --- | --- |
@@ -117,8 +116,8 @@ python -m unittest discover -s tests -p test_supplement_loop.py -v
 `execute_analysis(address, radius_m=300)`으로 요청 반경(미터)을 전달할 수 있습니다.
 생략하면 500m이며 양의 정수만 허용합니다. 검증은 저장·외부 호출 전에 수행합니다.
 세 분석 에이전트에는 동일한 `AnalysisTask.radius_m`이 전달됩니다.
-상권의 실제 조회·집계에도 적용합니다. 개폐업은 폴리곤 기준이고 유동인구는 기존 설정을 사용합니다.
-HTTP 입력과 최종판단 계약은 변경하지 않았습니다.
+상권은 반경 내부 점포를 집계하고 개폐업은 포함 폴리곤, 인구는 반경과 겹치는 상권 자료를 사용합니다.
+요청 반경이 같아도 실제 자료 범위가 같다는 뜻은 아닙니다.
 
 `analysis_requests.radius_m`은 요청 조건이며 실제 적용 범위가 아닙니다.
 DB 초기화 시 기존 테이블에도 컬럼을 추가하며 과거 기록은 NULL로 보존합니다.
@@ -128,10 +127,10 @@ API별 최대 지원 반경은 별도 확인이 필요합니다. 상권 주 조�
 ```text
 HTTP API 또는 실행 스크립트
   → services.analysis.execute_analysis()
-      → orchestration.run_react()
+      → orchestration.run_graph()
           → prepare_address: prepare_task() → address.resolve_site()
           → run_analyses: run_agents() → 세 analyze() 병렬 실행
-          → make_decision: decision.analyze() → DecisionResult
+          → evaluate_decision: decision.evaluate() → 최종 결과 또는 선택 분기
       → 요청·분석 결과·최종판단 이력 저장
 ```
 
@@ -148,24 +147,27 @@ HTTP API 또는 실행 스크립트
 backend/
 ├─ app/
 │  ├─ agents/
-│  │  ├─ orchestration/       # 주소 준비·도구 선택·병렬 실행
+│  │  ├─ orchestration/       # 주소 준비·병렬 실행·선택 분기
 │  │  ├─ floating_population/ # 유동인구 분석
 │  │  ├─ business_lifecycle/  # 개폐업 분석
 │  │  ├─ commercial_area/     # 상권·경쟁 분석
+│  │  ├─ map_analysis/        # 선택적 주변 시설·업종 조회
 │  │  └─ decision/            # 최종 업종 판단
 │  ├─ industries/            # 공통 75개 업종·조회·매핑
-│  │  └─ data/               # 원본 CSV와 생성된 업종 JSON
+│  │  └─ data/               # 원본 CSV·매핑표
 │  ├─ llm/                   # 공통 모델 호출·설정
 │  ├─ services/              # 실행 설정과 분석·저장 연결
 │  ├─ db/                    # 연결·테이블·저장소
 │  ├─ api/v1/                # HTTP 요청·응답
 │  ├─ address.py             # 카카오 주소 검색·후보 검증
+│  ├─ seoul.py               # 서울 API 비동기 전송·본문 검증
+│  ├─ geo.py                 # 공통 좌표 변환
 │  ├─ schemas.py             # 공통 입출력 계약
 │  ├─ config.py              # 환경 파일 로딩
 │  ├─ mocks.py               # 외부 호출 없는 대역
 │  └─ main.py                # FastAPI 앱 생성
 ├─ examples/                # 실행 예제·목업
-├─ scripts/                 # 업종 카탈로그 생성·검사
+├─ scripts/                 # 업종표 생성·검사·인구 스냅샷 갱신
 ├─ tests/                   # 자동 검증
 ├─ storage/                 # 로컬 SQLite 파일
 ├─ .env.example             # 환경변수 예시
@@ -174,17 +176,17 @@ backend/
 
 ## 에이전트별 역할
 
-이미지는 구조를 빠르게 파악하기 위한 설명 자료입니다. 정확한 입출력은 [schemas.py](app/schemas.py), 실행 동작은 현재 코드를 기준으로 확인합니다.
+이미지는 이전 구조의 설명 자료이며 이번 최적화를 반영하지 않았습니다. 정확한 입출력은 [schemas.py](app/schemas.py), 실행 동작은 현재 코드를 기준으로 확인합니다.
 
 <details>
 <summary>오케스트레이터 — 순서 통제와 결과 수집</summary>
 
 ![오케스트레이터 구조](../docs/agent/오케스트라.png)
 
-- `workflow.py`: `prepare_task()`, `build_react_agents()`, `run_agents()`, `run_react()`.
-- `tools.py`: 도구 정의. `llm.py`: 도구 선택 모델 호출. `prompt.md`: 실행 규칙.
+- `workflow.py`: `prepare_task()`, `build_react_agents()`, `run_agents()`.
+- `graph.py`: 고정 엣지와 선택 분기. `tools.py`: 주소·보완·지도 함수 계약.
 - 주소 준비 → 세 분석 병렬 실행 → 최종판단 순서를 코드로 통제합니다.
-- 한 번에 도구 하나, 최대 6회 모델 호출의 제한형 ReAct입니다. 반환값은 모델의 안내 문장이 아닌 `DecisionResult`입니다.
+- 순서 선택용 모델은 없습니다. 최종 결과는 `DecisionResult`, 질문 대기는 `WaitingForInput`입니다.
 
 </details>
 
@@ -195,7 +197,7 @@ backend/
 
 - `agent.py`의 `analyze()`가 분석 진입점입니다.
 - `metrics.py`: 집계·기준선·추세·반경·신뢰도 계산.
-- `geo.py`: 좌표·상권 겹침 판정. `llm.py`: 자료 선별과 실패 시 대체 처리.
+- `geo.py`: 상권 겹침 판정. `selection.py`: 규칙 기반 자료 선별.
 - 유동인구는 업종별 관측치가 아닌 공통 수요 자료입니다. 75개 업종으로 인구를 임의 배분하지 않습니다.
 
 </details>
@@ -205,10 +207,10 @@ backend/
 
 ![개폐업 에이전트 구조](../docs/agent/개폐업.png)
 
-- `agent.py`의 `analyze()`가 공통 입력을 받습니다. 기존 동기 작업은 스레드로 격리합니다.
-- `input_builder.py`: 모델 입력 조립. `preprocess.py`: 전처리.
+- `agent.py`의 `analyze()`가 공통 입력을 받습니다. 서울 API는 비동기로 조회하고 SHP 읽기는 스레드로 격리합니다.
+- `input_builder.py`: 분석 입력 조립. `preprocess.py`: 전처리.
 - `scoring.py`: 점수 계산. `formatter.py`: 출력 변환.
-- `llm.py`: 배치 호출·응답 검증. `prompt.md`: 분석 지침.
+- 계산된 건수로 설명을 생성하며 내부 LLM 호출은 없습니다.
 - 서울시 원본 업종을 공통 업종으로 집계한 뒤 지표를 계산합니다. 미지원·결측·불완전 관측·실제 0을 구분합니다.
 
 </details>
@@ -219,7 +221,7 @@ backend/
 ![상권 에이전트 구조](../docs/agent/상권.png)
 
 - `agent.py`의 `analyze()`가 점포 조회·지표 계산·요약을 연결합니다.
-- `industries.py`가 분석에 필요한 업종 마스터를 읽고 씁니다.
+- `industries.py`가 공통 `catalog.py`를 읽습니다. 요약은 `summary.py`의 규칙으로 만듭니다.
 - 공통 중분류 기준으로 점포를 집계하고 매핑되지 않은 점포는 별도 표시합니다.
 - 자료 누락·프랜차이즈 정보 부재 등은 결과 상태와 주의사항에 반영합니다.
 
@@ -267,7 +269,7 @@ Python 버전은 `3.12.x`여야 합니다. Conda 환경이 없다면 먼저 `con
 | 실행 방식 | 데이터 | LLM | 확인 범위 |
 | --- | --- | --- | --- |
 | `run_orchestration.py --mock --offline` | 완성된 분석 결과 목업 | 대역 | 흐름·계약·DB 저장 |
-| `run_orchestration.py --mock` | 완성된 분석 결과 목업 | 실제 | 오케스트레이터·최종판단 모델 연결 |
+| `run_orchestration.py --mock` | 완성된 분석 결과 목업 | 실제 | 최종판단 모델 연결 |
 | `run_api_mock.py` | 데이터 API 원본 응답 목업 | 실제 | 유동인구·상권 전처리와 모델 연결 |
 | HTTP API 실제 모드 | 실제 API | 실제 | 주소부터 분석·저장까지 |
 
@@ -305,6 +307,8 @@ API 문서: <http://127.0.0.1:8000/docs>
 | --- | --- |
 | `POST /api/v1/analyses` | `{"address":"서울특별시 송파구 오금로 404"}`를 받아 분석·저장 후 최종 결과 반환 |
 | `GET /api/v1/analyses/{request_id}` | 저장된 요청 상태·주소·Site·결과·오류 조회 |
+| `POST /api/v1/analyses/{request_id}/answers` | 저장된 질문에 답변 후 최종판단만 재개 |
+| `POST /api/v1/analyses/{request_id}/retry-decision` | 저장 자료로 실패한 판단 재시도 |
 | `GET /health` | 서버 상태 확인 |
 
 POST는 분석 완료까지 기다립니다. 즉시 작업 ID를 반환하는 백그라운드 작업 API가 아닙니다. 별도의 저장 전용 HTTP API도 없습니다.
@@ -359,7 +363,7 @@ POST는 분석 완료까지 기다립니다. 즉시 작업 ID를 반환하는 �
 [app/industries/](app/industries/README.md)가 공통 75개 업종과 매핑의 기준입니다.
 
 - 원본: `industries/data/*.csv`.
-- 생성물: `catalog.py`, `industries/data/industry_master.json`. 생성물을 직접 수정하지 않습니다.
+- 생성물: `catalog.py`. 실행 코드는 이 표를 공통으로 읽습니다. 생성물을 직접 수정하지 않습니다.
 - 서울시 업종 매핑 99건 중 모델 판정 53건은 사람 검수가 필요합니다.
 - 자료 없음·매핑 불가·실제 0을 구분하고, 비율은 가능한 원시 분자·분모에서 재계산합니다.
 - 근거 경로의 업종 일치, 기간·반경 차이 해석, 실제 추천 품질은 별도 검증 대상입니다.
@@ -395,20 +399,20 @@ python scripts/build_industry_catalog.py --check
 - 질문 대기는 프로세스 종료 후에도 재개할 수 있지만, 실행 중 강제 종료의 자동 복구는 지원하지 않습니다.
 
 LangGraph 전용 체크포인터가 아니라 질문 경계의 SQLite 상태를 복원하는 방식입니다.
-HTTP API·프론트엔드는 질문 기능과 아직 연결하지 않았습니다.
+HTTP API는 질문 반환·답변 재개를 지원합니다. 프론트 연동 검증은 이번 범위가 아닙니다.
 
 [설계](../docs/mvp19-questions-design.md) · [구현 계획](../docs/mvp19-questions-plan.md)
 
 ## 선택적 지도 조회
 
 `execute_analysis(..., map_lookup=observe)`로 카카오맵 도구를 명시적으로 연결합니다.
-`observe`는 `app.agents.map_analysis.agent`에 있습니다. 기본 호출과 HTTP 경로는 자동 변경되지 않습니다.
+`observe`는 `app.agents.map_analysis.agent`에 있습니다. HTTP 요청에서 `with_map=true`일 때 연결합니다.
 최종판단이 요청하면 오케스트레이터가 같은 좌표·반경으로 최대 1배치·5개 검색을 실행합니다.
 원본 장소를 보존하고 업종 조회 표본만 공통 75개 업종으로 매핑합니다. 시설은 별도 분류입니다.
 지도 요청·결과는 `map_observations`에 저장하며 답변 후 재개 시 재조회하지 않습니다.
 최종 JSON의 선택형 `map_observation`과 `Evidence.agent_id="map_analysis"`는 공통 계약 변경입니다.
 기존 저장 결과는 해당 필드 없이 읽을 수 있습니다. 세 분석의 AgentId·실행 차수는 유지합니다.
-실제 API·매핑 LLM 품질 검증과 프론트·HTTP 연결은 별도입니다.
+실제 매핑 품질 검증과 프론트 연동 검증은 별도입니다.
 
 [지도 도구 사용법](app/agents/map_analysis/README.md) · [설계](../docs/mvp19-map-design.md)
 

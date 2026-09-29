@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from app.agents.business_lifecycle.agent import (
     AGENT_ID,
+    BusinessLifecycleAgentError,
     analyze,
 )
 from app.agents.business_lifecycle.area_resolver import (
@@ -16,8 +17,8 @@ from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaNoDataError,
     BusinessAreaResolverError,
 )
+from app.agents.business_lifecycle.client import SeoulOpenAPINoDataError
 from app.agents.business_lifecycle.config import Settings
-from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
@@ -48,7 +49,6 @@ def fake_area(site: Site, settings: Settings) -> BusinessArea:
         dong_name="가락동",
         x=0,
         y=0,
-        distance_m=91.2,
     )
 
 
@@ -263,7 +263,7 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
             request_id: str | None,
             area_name: str | None,
         ) -> dict[str, Any]:
-            raise ValueError("서울시 Open API에서 조회된 데이터가 없습니다.")
+            raise SeoulOpenAPINoDataError("조회 조건에 맞는 자료가 없습니다.")
 
         result = await analyze(
             task(),
