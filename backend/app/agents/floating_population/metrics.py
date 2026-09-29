@@ -52,11 +52,7 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
 
     days = quarter_days(quarter)
     return Population(
-        unit=(
-            f"daily_avg 는 명/일 ({period_ko(quarter)} 합계 ÷ {days}일). "
-            "같은 사람의 반복 통행이 중복 집계된 통행량이며 사람 수가 아님. "
-            "by_age·by_time·by_day 는 분기 합계 원값"
-        ),
+        unit=f"daily_avg 는 명/일(분기 합계 ÷ {days}일), by_age·by_time·by_day 는 분기 합계",
         share_unit="비율 (0~1)",
         daily_avg=round(total / days, 1),
         female_ratio=round(female / denom, 4),
@@ -82,7 +78,7 @@ def _benchmark(
     time_index = baseline.time_indices(population.time_per_hour_share)
     mean_per_area = quarter_total / (trade_area_count or 1)
     return Benchmark(
-        unit="배수 (1.0 = 서울 전체 상권 평균). 단 mean_daily_per_trade_area 는 명/일",
+        unit="배수(1.0 = 서울 평균), mean_daily_per_trade_area 는 명/일",
         baseline=baseline.BASELINE_LABEL,
         age_index={
             a: baseline.index(population.age_share[a], baseline.AGE_SHARE_AVG[a]) for a in AGE_BANDS
@@ -111,8 +107,7 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
     최대 2% 의 가짜 증감이 섞인다.
     """
     points_by_quarter: dict[str, QuarterPoint] = {}
-    requested_quarters = {quarter for quarter, _ in series}
-    latest_quarter = max(requested_quarters, default=None)
+    latest_quarter = max((quarter for quarter, _ in series), default=None)
     for quarter, records in series:
         rs = [r for r in records if r.trdar_cd in main_codes]
         if not rs:
@@ -157,7 +152,7 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
         direction = "보합"
 
     return Trend(
-        unit="명 (분기 합계) · daily_avg 는 명/일 · 변화율은 비율(0.05 = +5%)",
+        unit="daily_avg 는 명/일, 변화율은 비율(0.05 = +5%)",
         quarters=points,
         qoq_change=qoq,
         yoy_change=yoy,
@@ -214,16 +209,11 @@ def _radius_profile(
             )
         )
     return RadiusProfile(
-        unit="명 (분기 합계) · daily_avg 는 명/일",
+        unit="total 은 분기 합계, daily_avg 는 명/일",
+        # 화면이 차트 캡션으로 그대로 보여준다(FloatingPopulationSection). 사람이 읽을 문장.
         method=(
-            "면적 안분 — 상권 구역을 면적 등가원으로 근사하고, 반경 원과 겹친 면적 비율만큼 "
-            "인구를 나눠 셌습니다. 상권 안에서 인구가 고르게 분포한다고 가정한 값이므로 "
-            "실측값이 아니라 추정값입니다. 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 "
-            "없어 쓰는 방법입니다. "
-            "⚠️ 그래서 같은 반경이라도 population 의 값보다 작습니다 — population 은 반경에 "
-            "걸친 상권을 구역째 합산하고(바깥 경계가 반경을 넘습니다), 이 곡선은 겹친 만큼만 "
-            "셉니다. 서로 다른 질문의 답이지 모순이 아닙니다. 지역의 대표 수치로는 "
-            "population 을, 반경에 따른 증가 추이로는 이 곡선을 쓰십시오."
+            "반경과 겹친 상권 면적만큼 인구를 나눠 센 추정값입니다(상권 안 인구가 고르게 "
+            "분포한다고 가정). 반경에 걸친 상권 전체를 더하는 대표 수치보다 작게 나옵니다."
         ),
         points=points,
     )

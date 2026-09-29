@@ -1,4 +1,4 @@
-"""서울 열린데이터광장 Open API 클라이언트 (길단위인구 · 상권영역).
+"""서울 열린데이터광장 Open API 클라이언트 (길단위인구 · 상권영역 · 주거인구 · 직장인구).
 
 요청 형식: {base}/{KEY}/json/{SERVICE}/{START}/{END}/[{추가 경로 인자}/]
 응답 형식: {"<SERVICE>": {"list_total_count": N, "RESULT": {"CODE": "INFO-000", ...}, "row": [...]}}
@@ -94,19 +94,6 @@ class SeoulOpenDataClient:
         )
         return [TrdarArea.from_api_row(r) for r in rows]
 
-    async def fetch_flpop(self, trdar_cds: set[str]) -> tuple[str, list[FlpopRecord]]:
-        """최신 분기의 길단위인구를 받아 대상 상권만 거른다.
-
-        반환: (기준년분기, 레코드 목록). API 가 상권코드 필터를 지원하지 않아 그 분기 전체를
-        받은 뒤 거른다 — 1회 호출(4페이지)로 끝나므로 그대로 둔다.
-        """
-        quarter = await self.latest_quarter()
-        rows = await self._fetch_all(
-            self.settings.flpop_service, self.settings.flpop_max_pages, extra=quarter
-        )
-        records = [FlpopRecord.from_api_row(r) for r in rows]
-        return quarter, [r for r in records if r.trdar_cd in trdar_cds]
-
     async def fetch_flpop_series(
         self, trdar_cds: set[str], quarters: int
     ) -> list[tuple[str, list[FlpopRecord]]]:
@@ -138,6 +125,38 @@ class SeoulOpenDataClient:
             series.append((c, [r for r in records if r.trdar_cd in trdar_cds]))
         return series
 
+    async def fetch_all_rows(self, service: str) -> list[dict]:
+        """분기 필터가 먹지 않는 서비스(주거·직장인구)의 **전 분기·서울 전체** 원자료 행.
+
+        스냅샷 CSV 를 만들 때만 쓴다(`examples/fetch_population_snapshot.py`) — 에이전트는 부르지
+        않는다. 두 서비스는 경로 끝에 분기를 붙여도 걸러지지 않고(`20262` 를 붙여도 35,908행
+        전부) 분기순 정렬도 아니라 끝까지 받아야 한다.
+
+        첫 페이지로 총 행 수를 안 뒤 나머지를 동시에 받되 **동시 요청을 `page_concurrency` 로
+        묶고 페이지마다 재시도한다.** 60여 개를 한꺼번에 보내면 서울시 API 가 JSON 이 아닌 오류
+        응답을 돌려주고, 8개로 묶으면 재시도 없이 다 받아졌다(2026-09-26 확인).
+        """
+        size = self.settings.page_size
+        retries = self.settings.page_retries
+        limit = asyncio.Semaphore(self.settings.page_concurrency)
+
+        async def page(start: int) -> dict:
+            for attempt in range(retries + 1):
+                try:
+                    async with limit:
+                        return await self._get_page(service, start, start + size - 1)
+                except (SeoulOpenApiError, httpx.HTTPError, ValueError):
+                    if attempt == retries:
+                        raise
+                await asyncio.sleep(1 + attempt)  # 기다리는 동안은 동시 슬롯을 비워 둔다
+            raise AssertionError("도달하지 않는다")
+
+        first = await page(1)
+        # 상한을 두지 않는다 — 행이 분기순이 아니라 잘라내면 최신 분기 행이 무작위로 빠진다.
+        total = int(first.get("list_total_count", 0))
+        rest = await asyncio.gather(*(page(s) for s in range(size + 1, total + 1, size)))
+        return [r for body in (first, *rest) for r in body.get("row", [])]
+
     async def latest_quarter(self) -> str:
         """데이터가 존재하는 가장 최신 분기. 오늘 분기부터 거꾸로 1행씩 탐침한다."""
         code = quarter_code(self.today)
@@ -162,18 +181,9 @@ class SeoulOpenDataClient:
         start = 1
         for _ in range(max_pages):
             end = start + self.settings.page_size - 1
-            payload = await self._get(service, start, end, extra=extra)
-            body = payload.get(service)
-            if body is None:
-                raise SeoulOpenApiError(
-                    f"응답에 '{service}' 키가 없음 — 서비스명 오류 가능. 응답: {str(payload)[:200]}"
-                )
-            code = body.get("RESULT", {}).get("CODE", "")
-            if code == "INFO-200":  # 해당하는 데이터 없음 (마지막 페이지 이후)
+            body = await self._get_page(service, start, end, extra=extra)
+            if body.get("RESULT", {}).get("CODE") == "INFO-200":  # 마지막 페이지 이후
                 break
-            if code and code != "INFO-000":
-                message = body.get("RESULT", {}).get("MESSAGE")
-                raise SeoulOpenApiError(f"{service} {code}: {message}")
             page = body.get("row", [])
             rows.extend(page)
             total = int(body.get("list_total_count", 0))
@@ -181,6 +191,19 @@ class SeoulOpenDataClient:
                 break
             start = end + 1
         return rows
+
+    async def _get_page(self, service: str, start: int, end: int, extra: str | None = None) -> dict:
+        """한 페이지의 서비스 본문. 결과 코드가 정상(INFO-000)·자료 없음(INFO-200)이 아니면 예외."""
+        payload = await self._get(service, start, end, extra=extra)
+        body = payload.get(service)
+        if body is None:
+            raise SeoulOpenApiError(
+                f"응답에 '{service}' 키가 없음 — 서비스명 오류 가능. 응답: {str(payload)[:200]}"
+            )
+        code = body.get("RESULT", {}).get("CODE", "")
+        if code and code not in ("INFO-000", "INFO-200"):
+            raise SeoulOpenApiError(f"{service} {code}: {body.get('RESULT', {}).get('MESSAGE')}")
+        return body
 
     async def _get(self, service: str, start: int, end: int, extra: str | None = None) -> dict:
         s = self.settings
