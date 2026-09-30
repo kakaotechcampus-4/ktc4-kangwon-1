@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.agents.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
 from app.agents.commercial_area.industries import load_middle_master  # noqa: E402
+from app.llm.config import LLMSettings  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent / "schema_compare"
 OUT_PATH = OUT_DIR / "업종매칭_소분류근거.csv"
@@ -95,9 +96,9 @@ def tokens(name: str) -> set[str]:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv_if_present()
-    settings = Settings.from_env()
+    settings = LLMSettings.from_env("INDUSTRY_MAPPING")
 
-    middle = {m.code: m for m in load_middle_master(settings)}
+    middle = {m.code: m for m in load_middle_master(Settings.from_env())}
     seoul = sorted(read_csv(OUT_DIR / "seoul_industries.csv"), key=lambda r: r["SVC_INDUTY_CD"])
 
     # 소분류 두 곳에서 모은다. 공식 목록은 2023-02-28판이고, 실제 응답에는 최신 이름이 온다.
@@ -141,7 +142,7 @@ def main() -> int:
     print(f"  이름이 그대로 있는 것 {len(picks)}종")
 
     pending = [r for r in seoul if r["SVC_INDUTY_CD"] not in picks]
-    if pending and settings.llm_model and settings.llm_api_key and settings.llm_base_url:
+    if pending and settings.model and settings.api_key and settings.base_url:
         print(f"  모델에게 물을 것 {len(pending)}종")
         asyncio.run(fill_with_model(settings, small, pending, picks, hints))
 
@@ -203,7 +204,7 @@ async def fill_with_model(settings, small, pending, picks, hints) -> None:
             f"[소상공인 소분류 {len(small)}종]\n소분류코드\t소분류명\t중분류코드\n"
             f"{listing}\n\n[분류할 서울시 업종]\n코드\t업종명\n{targets}"
         )
-        payload = await client.complete_json(SYSTEM, user, settings.llm_settings())
+        payload = await client.complete_json(SYSTEM, user, settings)
         for row in payload.get("matches") or []:
             kept = [c for c in (row.get("small_codes") or []) if c in small]
             if kept:

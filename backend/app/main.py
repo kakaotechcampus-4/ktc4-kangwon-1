@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
 from app.config import load_environment
+from app.db import repository
 from app.db.connection import initialize
 from app.services.settings import ExecutionSettings
 
@@ -29,8 +30,14 @@ def allowed_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await asyncio.to_thread(initialize, app.state.execution_settings.db_path)
+    path = app.state.execution_settings.db_path
+    await asyncio.to_thread(initialize, path)
+    # 이전 프로세스가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
+    await asyncio.to_thread(repository.fail_interrupted, db_path=path)
+    app.state.jobs = {}
     yield
+    for task in list(app.state.jobs.values()):
+        task.cancel()
 
 
 def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = True) -> FastAPI:

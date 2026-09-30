@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -27,8 +28,19 @@ class Settings:
     # 검색어 여러 개 동시에 던질 때 상한. 429 피하려고 낮게 잡음
     max_concurrency: int = 4
     # 최근접·브랜드 뽑을 표본 크기. 카카오 페이지 상한이 15라 더 못 올림
-    # 개수(meta.total_count)는 이 값이랑 무관하게 전수라서 count 정확도랑은 상관없음
+    # meta.total_count는 검색 결과 건수이며 실제 영업 점포 전수가 아닙니다.
     sample_size: int = 15
+
+    def __post_init__(self) -> None:
+        for value, low, high in (
+            (self.sample_size, 1, 15),
+            (self.max_concurrency, 1, 20),
+            (self.max_retries, 0, 5),
+        ):
+            if type(value) is not int or not low <= value <= high:
+                raise ValueError("지도 조회 설정 범위가 올바르지 않습니다.")
+        if not math.isfinite(self.request_timeout_s) or self.request_timeout_s <= 0:
+            raise ValueError("지도 조회 제한시간이 올바르지 않습니다.")
 
     @classmethod
     def from_env(cls) -> Settings:

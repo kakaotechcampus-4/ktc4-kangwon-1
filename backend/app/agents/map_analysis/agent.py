@@ -8,15 +8,29 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
-from datetime import date
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
-from app.schemas import DEFAULT_RADIUS_M, Site
+from pydantic import ValidationError
+
+from app.industries.catalog import CATALOG_VERSION
+from app.industries.lookup import get
+from app.llm.budget import BudgetStorageError
+from app.schemas import (
+    AnalysisTask,
+    MapData,
+    MapIndustry,
+    MapLookupPlan,
+    MapObservation,
+    MapPlace,
+    MapQueryResult,
+)
 
 from .client import MapApiError, PlaceClient
 from .config import Settings
-from .schemas import Nearest, QueryResult, SearchResult
+from .mapping import GenerateMapping, map_categories
 
 # 카카오가 정한 18종 분류. 이름은 응답의 category_group_name 을 그대로 옮김
 #
@@ -61,10 +75,10 @@ CATEGORY_ALIASES: dict[str, str] = {
     "마트": "MT1",
 }
 
-__all__ = ["CATEGORY_CODES", "search"]
+__all__ = ["CATEGORY_CODES", "CATEGORY_ALIASES", "observe"]
 
 
-def _category_code(query: str) -> str | None:
+def category_code(query: str) -> str | None:
     """18종 분류에 해당하는 말이면 그 코드를, 아니면 None"""
     key = query.strip().replace(" ", "")
     return CATEGORY_CODES.get(key) or CATEGORY_ALIASES.get(key)
@@ -77,111 +91,214 @@ def _distance_m(document: dict[str, Any]) -> int | None:
         return None
     try:
         value = int(float(raw))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return value if value >= 0 else None
 
 
-def _matched(documents: list[Any], query: str, *, by_category: bool) -> list[dict[str, Any]]:
-    """검색어와 분류가 실제로 맞는 표본만 남김
-
-    분류 조회는 카카오가 이미 그 분류로 걸러 준 결과라 전부 맞다고 봄.
-    키워드 조회는 그렇지 않아서 category_name 에 검색어가 들어 있는지 확인함.
-    """
-    kept = [d for d in documents if isinstance(d, dict)]
-    if by_category:
-        return kept
-    key = query.strip()
-    return [d for d in kept if key in str(d.get("category_name") or "")]
-
-
-def _nearest(documents: list[dict[str, Any]]) -> Nearest | None:
-    """sort=distance 로 받으므로 맨 앞이 제일 가까운 곳"""
-    for document in documents:
-        name = str(document.get("place_name") or "").strip()
-        distance = _distance_m(document)
-        if not name or distance is None:
-            continue
-        url = str(document.get("place_url") or "").strip()
-        return Nearest(name=name, distance_m=distance, place_url=url or None)
-    return None
-
-
-def _brands(documents: list[dict[str, Any]]) -> dict[str, int]:
-    """category_name 끝자락에서 브랜드 이름을 셈
-
-    "음식점 > 카페 > 커피전문점 > 스타벅스" 처럼 마지막 조각이 브랜드인 경우가 있음.
-    그런데 "음식점 > 한식 > 순대" 의 순대는 브랜드가 아님. 둘을 가르려고
-    **가게 이름이 그 조각으로 시작하는지**를 봄 — "스타벅스 강남점"은 걸리고
-    "농민백암순대 강남직영점"은 안 걸림. 어림짐작이라 상호를 다르게 쓰는
-    브랜드는 놓침.
-
-    표본(sample_size)에서만 세므로 전수가 아님. count 와 달리 참고용임.
-    """
-    counts: dict[str, int] = {}
-    for document in documents:
-        parts = [p.strip() for p in str(document.get("category_name") or "").split(">")]
-        name = str(document.get("place_name") or "").strip()
-        if len(parts) < 3 or not parts[-1] or not name.startswith(parts[-1]):
-            continue
-        counts[parts[-1]] = counts.get(parts[-1], 0) + 1
-    return counts
-
-
-def _to_result(payload: dict[str, Any], query: str, *, by_category: bool) -> QueryResult:
-    documents = payload["documents"]
-    kept = _matched(documents, query, by_category=by_category)
-    return QueryResult(
-        count=payload["meta"]["total_count"],
-        sampled=len(documents),
-        matched=len(kept),
-        nearest=_nearest(kept),
-        brands=_brands(kept),
+def failed_observation(task: AnalysisTask, plan: MapLookupPlan, code: str) -> MapObservation:
+    """외부 실패를 검색 0건과 구분합니다."""
+    return MapObservation(
+        request_id=task.request_id,
+        observation_id=uuid.uuid4().hex,
+        site=task.site,
+        radius_m=task.radius_m,
+        queried_at=datetime.now(UTC).isoformat(),
+        master_version=CATALOG_VERSION,
+        status="error",
+        warnings=["지도 조회 실패"],
+        data=MapData(
+            queries={
+                f"q{i}": MapQueryResult(
+                    request=q,
+                    status="error",
+                    method="category" if q.facility_code else "keyword",
+                    category_code=q.facility_code,
+                    error=code,
+                )
+                for i, q in enumerate(plan.unique_queries(), 1)
+            }
+        ),
     )
 
 
-async def search(
-    site: Site,
-    queries: Sequence[str],
+async def observe(
+    task: AnalysisTask,
+    plan: MapLookupPlan,
     *,
-    radius_m: int = DEFAULT_RADIUS_M,
     settings: Settings | None = None,
     client: PlaceClient | None = None,
-) -> SearchResult:
-    """좌표 반경 안에서 검색어별 개수·최근접·브랜드를 찾아 돌려줌"""
-    settings = settings or Settings.from_env()
-    # 같은 말을 두 번 물어도 요청을 두 번 보내지 않음. 순서는 부른 쪽 그대로 유지
-    wanted = list(dict.fromkeys(q.strip() for q in queries if q and q.strip()))
-    if not wanted:
-        raise ValueError("검색어가 비어 있습니다.")
+    generate_mapping: GenerateMapping | None = None,
+    mapping_cache_path: Path | None = None,
+) -> MapObservation:
+    """원본 장소를 보존하고 조회 표본만 공통 업종으로 집계합니다."""
+    task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
+    place_client = client or PlaceClient(settings or Settings.from_env())
+    wanted = plan.unique_queries()
 
-    owns_client = client is None
-    place_client = client or PlaceClient(settings)
+    def category(q):
+        if q.facility_code:
+            return q.facility_code
+        # 카카오 대응이 명확한 음식점·카페만 제한합니다. 다른 업종은 임의 배정하지 않습니다.
+        if q.industry_code == "I212":
+            return "CE7"
+        return "FD6" if get(q.industry_code).major_code == "I2" else None
 
-    async def one(query: str) -> QueryResult:
+    async def one(q):
         try:
-            code = _category_code(query)
-            if code:
-                payload = await place_client.search_category(
-                    code, site.latitude, site.longitude, radius_m
+            if q.facility_code:
+                return await place_client.search_category(
+                    q.facility_code, task.site.latitude, task.site.longitude, task.radius_m
                 )
-            else:
-                payload = await place_client.search_keyword(
-                    query, site.latitude, site.longitude, radius_m
-                )
-            return _to_result(payload, query, by_category=code is not None)
+            return await place_client.search_keyword(
+                q.query,
+                task.site.latitude,
+                task.site.longitude,
+                task.radius_m,
+                category_group_code=category(q),
+            )
         except MapApiError as exc:
-            # 검색어 하나가 죽어도 나머지는 살려 보냄. 하나 때문에 전체가 비면 도구로 못 씀
-            return QueryResult(count=0, error=exc.code)
+            return exc.code
 
     try:
-        results = await asyncio.gather(*(one(query) for query in wanted))
+        responses = await asyncio.gather(*(one(q) for q in wanted))
     finally:
-        if owns_client:
+        if client is None:
             await place_client.aclose()
-
-    return SearchResult(
-        radius_m=radius_m,
-        queried_at=date.today().isoformat(),
-        results=dict(zip(wanted, results, strict=True)),
+    queries: dict[str, MapQueryResult] = {}
+    places: dict[str, MapPlace] = {}
+    industry_ids: set[str] = set()
+    conflicts: set[str] = set()
+    warnings = ["지도 등록 정보의 첫 페이지 표본이며 실제 영업 점포 전수가 아닙니다."]
+    degraded = False
+    for i, (q, response) in enumerate(zip(wanted, responses, strict=True), 1):
+        base: dict[str, Any] = dict(
+            request=q,
+            method="category" if q.facility_code else "keyword",
+            category_code=q.facility_code,
+        )
+        if isinstance(response, str):
+            queries[f"q{i}"] = MapQueryResult(**base, status="error", error=response)
+            continue
+        ids = []
+        for document in response["documents"]:
+            if (
+                not isinstance(document, dict)
+                or not isinstance(document.get("id"), str)
+                or not document["id"].strip()
+                or not str(document.get("place_name") or "").strip()
+            ):
+                degraded = True
+                continue
+            pid = document["id"]
+            try:
+                place = MapPlace(
+                    name=document["place_name"],
+                    category_name=document.get("category_name") or "",
+                    category_code=document.get("category_group_code") or "",
+                    distance_m=_distance_m(document),
+                    place_url=document.get("place_url") or None,
+                )
+            except ValidationError:
+                degraded = True
+                continue
+            if pid in places and (places[pid].category_name, places[pid].category_code) != (
+                place.category_name,
+                place.category_code,
+            ):
+                conflicts.add(pid)
+            else:
+                places[pid] = place
+            if pid not in ids:
+                ids.append(pid)
+            if q.kind == "industry":
+                industry_ids.add(pid)
+        is_end = response["meta"].get("is_end")
+        queries[f"q{i}"] = MapQueryResult(
+            **base,
+            status="ok",
+            total_count=response["meta"]["total_count"],
+            place_ids=ids,
+            has_more=not is_end if type(is_end) is bool else None,
+        )
+    if degraded:
+        warnings.append("형식이 잘못된 장소를 제외하고 유효한 장소만 보존했습니다.")
+    categories = {}
+    category_ids: dict[tuple[str, str], str] = {}
+    for pid in sorted(industry_ids - conflicts):
+        p = places[pid]
+        if not p.category_name.strip() and not p.category_code.strip():
+            continue
+        key = (p.category_name, p.category_code)
+        if key not in category_ids:
+            cid = f"c{len(category_ids) + 1}"
+            category_ids[key] = cid
+            categories[cid] = {"name": p.category_name, "code": p.category_code}
+    try:
+        mappings = await map_categories(
+            categories, generate=generate_mapping, cache_path=mapping_cache_path
+        )
+    except BudgetStorageError:
+        raise
+    except (RuntimeError, ValueError):
+        mappings = {}
+        degraded = True
+        warnings.append("업종 매핑 실패: 원본 장소만 보존했습니다.")
+    for pid in industry_ids:
+        p = places[pid]
+        mapping = mappings.get(category_ids.get((p.category_name, p.category_code), ""))
+        changes: dict[str, Any]
+        if pid in conflicts:
+            changes = dict(mapping_status="ambiguous", reason="원본 분류 충돌")
+        elif mapping is None:
+            changes = dict(mapping_status="unmapped", reason="매핑 결과 없음")
+        else:
+            changes = dict(
+                mapping_status=mapping.status,
+                industry_code=mapping.industry_code,
+                mapping_method="llm",
+                reason=mapping.reason,
+            )
+        places[pid] = MapPlace.model_validate({**p.model_dump(), **changes})
+        degraded |= places[pid].mapping_status != "mapped"
+    unmapped_count = sum(places[pid].mapping_status != "mapped" for pid in industry_ids)
+    if unmapped_count:
+        warnings.append(
+            f"업종 미확정 장소 {unmapped_count}곳은 원본만 보존하고 업종별 건수에서 제외했습니다."
+        )
+    groups: dict[str, list[str]] = {}
+    for pid, p in places.items():
+        if p.industry_code:
+            groups.setdefault(p.industry_code, []).append(pid)
+    industries = {
+        code: MapIndustry(
+            name=get(code).name,
+            major=get(code).major_name,
+            place_ids=sorted(ids),
+            sampled_count=len(ids),
+        )
+        for code, ids in groups.items()
+    }
+    successes = [q for q in queries.values() if q.status == "ok"]
+    status = (
+        "error"
+        if not successes
+        else "partial"
+        if len(successes) != len(queries) or degraded
+        else "no_data"
+        if all(q.total_count == 0 for q in successes)
+        else "ok"
+    )
+    return MapObservation.model_validate(
+        dict(
+            request_id=task.request_id,
+            observation_id=uuid.uuid4().hex,
+            site=task.site,
+            radius_m=task.radius_m,
+            queried_at=datetime.now(UTC).isoformat(),
+            master_version=CATALOG_VERSION,
+            status=status,
+            data=MapData(queries=queries, places=places, industries=industries),
+            warnings=warnings,
+        )
     )

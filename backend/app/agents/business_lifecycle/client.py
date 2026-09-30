@@ -1,9 +1,15 @@
-import json
+import asyncio
 import os
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from datetime import date
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+
+import httpx
+
+from app.seoul import SeoulOpenApiError as SeoulOpenAPIError
+from app.seoul import previous_quarter, request_json
 
 from .config import Settings
 
@@ -12,10 +18,6 @@ SERVICE_NAME = "VwsmTrdarStorQq"
 
 PAGE_SIZE = 1000
 TIMEOUT_SECONDS = 10
-
-
-class SeoulOpenAPIError(RuntimeError):
-    """서울 열린데이터광장 API 호출 오류."""
 
 
 class SeoulOpenAPINoDataError(SeoulOpenAPIError):
@@ -39,59 +41,57 @@ def get_api_key(settings: Settings | None = None) -> str:
     return api_key
 
 
-def build_url(
-    api_key: str,
-    start_index: int,
-    end_index: int,
-    quarter: str,
-    area_code: str,
-) -> str:
-    return (
-        f"{SEOUL_API_BASE_URL}"
-        f"/{api_key}"
-        f"/json"
-        f"/{SERVICE_NAME}"
-        f"/{start_index}"
-        f"/{end_index}"
-        f"/{quarter}"
-        f"/{area_code}"
-    )
+_PAGE_SESSION: ContextVar[tuple[httpx.AsyncClient, dict] | None] = ContextVar(
+    "lifecycle_pages", default=None
+)
 
 
-def request_page(
+@asynccontextmanager
+async def page_session(request_timeout_s: float, *, http: httpx.AsyncClient | None = None):
+    """한 분석 안에서 연결과 최신 분기 탐색 페이지를 재사용합니다."""
+    client = http or httpx.AsyncClient(timeout=request_timeout_s)
+    token = _PAGE_SESSION.set((client, {}))
+    try:
+        yield
+    finally:
+        _PAGE_SESSION.reset(token)
+        if http is None:
+            await client.aclose()
+
+
+async def request_page(
     api_key: str,
     quarter: str,
     area_code: str,
     start_index: int,
     end_index: int,
-    timeout: float = TIMEOUT_SECONDS,
+    timeout: float = TIMEOUT_SECONDS,  # noqa: ASYNC109 — HTTP 연결 제한 시간입니다.
+    *,
+    http: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    url = build_url(
+    session = _PAGE_SESSION.get() if http is None else None
+    key = (api_key, quarter, area_code, start_index, end_index, timeout)
+    if session is not None:
+        client, pages = session
+        if key not in pages:
+            pages[key] = await request_page(
+                api_key, quarter, area_code, start_index, end_index, timeout, http=client
+            )
+        return deepcopy(pages[key])
+    if http is None:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await request_page(
+                api_key, quarter, area_code, start_index, end_index, timeout, http=client
+            )
+    return await request_json(
+        http,
+        base_url=SEOUL_API_BASE_URL,
         api_key=api_key,
-        start_index=start_index,
-        end_index=end_index,
-        quarter=quarter,
-        area_code=area_code,
+        service=SERVICE_NAME,
+        start=start_index,
+        end=end_index,
+        extra=f"{quarter}/{area_code}",
     )
-
-    try:
-        with urlopen(
-            url,
-            timeout=timeout,
-        ) as response:
-            raw_data = response.read().decode("utf-8")
-
-    except HTTPError as exc:
-        raise SeoulOpenAPIError(f"서울시 API HTTP 오류: {exc.code}") from exc
-
-    except URLError as exc:
-        raise SeoulOpenAPIError(f"서울시 API 연결 실패: {exc.reason}") from exc
-
-    try:
-        return json.loads(raw_data)
-
-    except json.JSONDecodeError as exc:
-        raise SeoulOpenAPIError("서울시 API 응답을 JSON으로 해석할 수 없습니다.") from exc
 
 
 def extract_service_data(
@@ -150,7 +150,7 @@ def normalize_row(
     }
 
 
-def fetch_store_data(
+async def fetch_store_data(
     area_code: str,
     quarter: str,
     *,
@@ -168,7 +168,7 @@ def fetch_store_data(
     while True:
         end_index = start_index + PAGE_SIZE - 1
 
-        response_data = request_page(
+        response_data = await request_page(
             api_key=api_key,
             quarter=quarter,
             area_code=area_code,
@@ -210,23 +210,6 @@ def validate_quarter_code(
 
     if quarter not in (1, 2, 3, 4):
         raise ValueError("분기는 1~4 중 하나여야 합니다.")
-
-
-def previous_quarter(
-    quarter_code: str,
-) -> str:
-    validate_quarter_code(quarter_code)
-
-    year = int(quarter_code[:4])
-    quarter = int(quarter_code[4])
-
-    quarter -= 1
-
-    if quarter == 0:
-        quarter = 4
-        year -= 1
-
-    return f"{year}{quarter}"
 
 
 def latest_closed_quarter(
@@ -285,7 +268,7 @@ def get_candidate_quarters(
     return quarters
 
 
-def detect_latest_valid_quarter(
+async def detect_latest_valid_quarter(
     area_code: str,
     *,
     candidate_count: int = 12,
@@ -300,7 +283,7 @@ def detect_latest_valid_quarter(
         count=candidate_count,
         today=today,
     ):
-        rows = fetch_store_data(
+        rows = await fetch_store_data(
             area_code=area_code,
             quarter=quarter,
             settings=settings,
@@ -355,7 +338,7 @@ def get_recent_quarters(
     return quarters
 
 
-def fetch_store_data_for_quarters(
+async def fetch_store_data_for_quarters(
     area_code: str,
     quarters: list[str],
     *,
@@ -365,21 +348,23 @@ def fetch_store_data_for_quarters(
     여러 분기의 데이터를 조회하여 하나의 리스트로 합친다.
     """
 
-    all_rows: list[dict[str, Any]] = []
+    # ponytail: 분석당 최대 4분기만 조회합니다. 다중 워커 쿼터는 별도 조정이 필요합니다.
+    limit = asyncio.Semaphore(4)
 
-    for quarter in quarters:
-        rows = fetch_store_data(
-            area_code=area_code,
-            quarter=quarter,
-            settings=settings,
-        )
+    async def fetch(quarter: str) -> list[dict[str, Any]]:
+        async with limit:
+            return await fetch_store_data(area_code=area_code, quarter=quarter, settings=settings)
 
-        all_rows.extend(rows)
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(fetch(quarter)) for quarter in quarters]
+    except* Exception as failures:
+        # 진행 중인 조회를 정리한 뒤 기존 호출자가 처리하던 원래 예외를 전달합니다.
+        raise failures.exceptions[0] from None
+    return [row for task in tasks for row in task.result()]
 
-    return all_rows
 
-
-def fetch_recent_store_data(
+async def fetch_recent_store_data(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
@@ -392,12 +377,17 @@ def fetch_recent_store_data(
     실제 preprocess.py에서는 이 함수를 호출하면 된다.
     """
 
+    if _PAGE_SESSION.get() is None:
+        async with page_session(settings.request_timeout_s if settings else TIMEOUT_SECONDS):
+            return await fetch_recent_store_data(
+                area_code, base_quarter, quarter_count, settings=settings
+            )
     quarters = get_recent_quarters(
         base_quarter=base_quarter,
         count=quarter_count,
     )
 
-    return fetch_store_data_for_quarters(
+    return await fetch_store_data_for_quarters(
         area_code=area_code,
         quarters=quarters,
         settings=settings,

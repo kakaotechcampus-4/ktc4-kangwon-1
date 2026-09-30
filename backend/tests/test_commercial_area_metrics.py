@@ -71,12 +71,20 @@ def ring_stores():
 
 
 class MetricsTests(unittest.TestCase):
+    def test_zero_count_categories_are_not_ranked(self):
+        slices = build_radius_slices(sample_stores(), 37.5, 127.0, MASTER, Settings())
+        for item in slices:
+            for rows in (item.top_by_count, item.bottom_by_count, item.top_by_concentration):
+                self.assertTrue(all(row.count > 0 for row in rows))
+        self.assertGreater(slices[-1].absent_category_count, 0)
+
     def test_area_and_density(self):
         self.assertTrue(math.isclose(area_km2(500), math.pi * 0.25, rel_tol=1e-9))
         rows = build_middle_rows(sample_stores(), 500, MASTER)
         han = next(r for r in rows if r.code == "I201")
         self.assertTrue(math.isclose(han.density_per_km2, 6 / area_km2(500), rel_tol=1e-3))
-        self.assertTrue(math.isclose(han.density_sq, han.density_per_km2**2, rel_tol=1e-3))
+        self.assertNotIn("density_sq", han.model_dump())
+        self.assertNotIn("marshallian", han.model_dump())
 
     def test_counts_sum_to_total(self):
         stores = sample_stores()
@@ -93,7 +101,8 @@ class MetricsTests(unittest.TestCase):
     def test_same_and_diff_type_counts(self):
         stores = sample_stores()
         han = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "I201")
-        self.assertEqual(han.same_type_count, 6)
+        self.assertEqual(han.count, 6)
+        self.assertNotIn("same_type_count", han.model_dump())
         self.assertEqual(han.diff_type_count, len(stores) - 6)
 
     def test_hhi_bounds_and_effective_categories(self):

@@ -52,7 +52,10 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
 
     days = quarter_days(quarter)
     return Population(
-        unit=f"daily_avg 는 명/일(분기 합계 ÷ {days}일), by_age·by_time·by_day 는 분기 합계",
+        unit=(
+            f"daily_avg 는 겹친 상권 전체 합산 통행량(명/일, 분기 합계 ÷ {days}일), "
+            "by_age·by_time·by_day 는 분기 합계"
+        ),
         share_unit="비율 (0~1)",
         daily_avg=round(total / days, 1),
         female_ratio=round(female / denom, 4),
@@ -209,7 +212,7 @@ def _radius_profile(
             )
         )
     return RadiusProfile(
-        unit="total 은 분기 합계, daily_avg 는 명/일",
+        unit="면적 안분 추정 통행량: total 은 분기 합계, daily_avg 는 명/일",
         # 화면이 차트 캡션으로 그대로 보여준다(FloatingPopulationSection). 사람이 읽을 문장.
         method=(
             "반경과 겹친 상권 면적만큼 인구를 나눠 센 추정값입니다(상권 안 인구가 고르게 "

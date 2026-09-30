@@ -8,11 +8,10 @@ import json
 import sys
 
 from app.address import GeocodeError, resolve_site
-from app.agents.map_analysis import search
+from app.agents.map_analysis import observe
+from app.agents.map_analysis.agent import category_code
 from app.agents.map_analysis.config import Settings, load_dotenv_if_present
-from app.schemas import DEFAULT_RADIUS_M, Site
-
-DEFAULT_QUERIES = ["한식", "커피", "편의점", "지하철역", "초등학교"]
+from app.schemas import DEFAULT_RADIUS_M, AnalysisTask, MapLookupPlan, Site
 
 
 async def run() -> int:
@@ -23,6 +22,7 @@ async def run() -> int:
     parser.add_argument("--lon", type=float)
     parser.add_argument("--radius", type=int, default=DEFAULT_RADIUS_M)
     parser.add_argument("--query", action="append", dest="queries")
+    parser.add_argument("--industry-code", help="업종 조회 시 공통 75개 업종 코드")
     args = parser.parse_args()
 
     load_dotenv_if_present()
@@ -42,10 +42,19 @@ async def run() -> int:
             longitude=args.lon,
         )
 
-    result = await search(
-        site,
-        args.queries or DEFAULT_QUERIES,
-        radius_m=args.radius,
+    queries = []
+    for query in args.queries or ["지하철역", "초등학교"]:
+        code = category_code(query)
+        if args.industry_code:
+            target = dict(kind="industry", industry_code=args.industry_code, query=query)
+        elif code:
+            target = dict(kind="infrastructure", facility_code=code)
+        else:
+            parser.error("업종 키워드는 --industry-code를 함께 지정하세요.")
+        queries.append({**target, "why_needed": "주변 현황 확인", "expected_impact": "후보 비교"})
+    result = await observe(
+        AnalysisTask(request_id="map-example", site=site, radius_m=args.radius),
+        MapLookupPlan(action="map_lookup", queries=queries),
         settings=Settings.from_env(),
     )
     print(json.dumps(result.model_dump(exclude_none=True), ensure_ascii=False, indent=2))

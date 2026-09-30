@@ -8,7 +8,7 @@
 쓰려고 해도 22개 분기 전체(약 3.6만 행, 36페이지)를 받아야 했다. 분석마다 70여 번 요청이 나가
 12~20초가 걸렸고, 한꺼번에 보내면 서울시 API 가 오류 응답을 주어 블록이 비는 일도 있었다.
 그래서 최신 분기의 서울 전체 행만 `data/resident.csv`·`data/worker.csv` 로 동봉하고
-(`examples/fetch_population_snapshot.py` 로 갱신) 여기서는 그 파일을 읽는다.
+(`scripts/fetch_population_snapshot.py` 로 갱신) 여기서는 그 파일을 읽는다.
 `commercial_area` 의 `data/seoul_trade_areas.csv` 와 같은 방식이다.
 
 서울 기준선은 그 파일의 서울 전체 행에서 바로 계산한다 — 상수로 박지 않는다.

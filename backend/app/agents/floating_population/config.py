@@ -8,10 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from app.config import BACKEND_DIR as BACKEND_DIR
-from app.config import load_environment
-
-# 기존 CLI 가져오기 경로를 유지합니다.
-load_dotenv_if_present = load_environment
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
@@ -26,18 +22,9 @@ WORKER_SERVICE = "VwsmTrdarWrcPopltnQq"  # 상권분석서비스(직장인구-�
 
 @dataclass(frozen=True)
 class Settings:
-    # 에이전트는 이 값이 아니라 `AnalysisTask.radius_m` 을 쓴다(사용자가 고른 반경).
-    # 예제 스크립트가 넘기는 인자라 남겨 둔다.
-    analysis_radius_m: int = 500
-
     page_size: int = 1000
     trdar_area_max_pages: int = 20
     flpop_max_pages: int = 5
-    # 주거·직장인구 스냅샷 생성용(에이전트는 API 를 부르지 않는다). 분기 필터가 먹지 않아
-    # 22개 분기 전량(약 3.6만 행)을 받는다. 한꺼번에 보내면 서울시 API 가 오류 응답을 주므로
-    # 동시 요청을 묶고 페이지마다 재시도한다.
-    page_concurrency: int = 8
-    page_retries: int = 2
     quarter_probe_limit: int = 12  # 최신 분기를 찾아 거꾸로 살펴볼 분기 수(3년)
     request_timeout_s: float = 15.0
 
@@ -53,8 +40,6 @@ class Settings:
     base_url: str = SEOUL_OPEN_API_BASE
     flpop_service: str = FLPOP_SERVICE
     trdar_area_service: str = TRDAR_AREA_SERVICE
-    resident_service: str = RESIDENT_SERVICE
-    worker_service: str = WORKER_SERVICE
 
     api_key: str | None = None
 
@@ -66,8 +51,5 @@ class Settings:
             "flpop_service": os.environ.get("SEOUL_FLPOP_SERVICE"),
             "trdar_area_service": os.environ.get("SEOUL_TRDAR_AREA_SERVICE"),
         }
-        radius = os.environ.get("ANALYSIS_RADIUS_M")
-        if radius:
-            env_values["analysis_radius_m"] = int(radius)
         env_values.update(overrides)
         return cls(**{k: v for k, v in env_values.items() if v is not None})

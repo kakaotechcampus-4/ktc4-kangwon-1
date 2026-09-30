@@ -1,7 +1,6 @@
 """원본 API 목업에서 실제 계산과 최종판단 연결을 검사합니다."""
 
 import copy
-import importlib
 import json
 import os
 import tempfile
@@ -10,13 +9,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from test_orchestration_react import action
 
-from app.agents.floating_population.llm import SELECTABLE
 from app.schemas import DecisionResult
 from examples import run_api_mock
-
-commercial_agent = importlib.import_module("app.agents.commercial_area.agent")
 
 
 class ApiMockTests(unittest.IsolatedAsyncioTestCase):
@@ -46,30 +41,8 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
                 clear=True,
             )
         )
-        self.select = self.enterContext(
-            patch(
-                "app.agents.floating_population.llm.select_blocks",
-                new=AsyncMock(return_value=(list(SELECTABLE), "목업 전체 자료 유지")),
-            )
-        )
-        self.summary = self.enterContext(
-            patch.object(
-                commercial_agent,
-                "summarize",
-                new=AsyncMock(return_value=(None, None)),
-            )
-        )
-        self.choose = self.enterContext(
-            patch(
-                "app.agents.orchestration.llm.generate_action",
-                new=AsyncMock(
-                    side_effect=[
-                        action("prepare_address"),
-                        action("run_analyses"),
-                        action("make_decision"),
-                    ]
-                ),
-            )
+        self.enterContext(
+            patch("app.llm.client.complete_json", side_effect=AssertionError("분석 모델 호출 금지"))
         )
         self.generate = self.enterContext(
             patch(
@@ -80,8 +53,6 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         self.network.assert_not_called()
-        if self.summary.await_args:
-            self.assertFalse(self.summary.await_args.args[1].cache_dir.exists())
 
     @staticmethod
     def decision(prompt, input_json, settings=None):
@@ -115,6 +86,7 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         commercial = sources["commercial_area"]
         self.assertEqual(population.data["population"]["daily_avg"], 10000)
         self.assertEqual(len(population.data["trend"]["quarters"]), 2)
+        self.assertIn("trend", population.data["selection"]["included"])
         self.assertEqual(commercial.data["store_total"], 6)
         self.assertEqual(commercial.data["lq_baseline"]["store_total"], 10)
         self.assertEqual(commercial.data["district_baseline"]["store_total"], 12)
@@ -122,13 +94,9 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sources["business_lifecycle"].error.code, "AGENT_NOT_CONNECTED")
         self.assertEqual(result.status, "partial")
         self.assertTrue(any("가상 분석" in line for line in result.limitations))
-        self.select.assert_awaited_once()
-        self.summary.assert_awaited_once()
+        self.assertIn("6개", commercial.data["summary"]["overall"])
         self.generate.assert_awaited_once()
-        self.assertEqual(self.choose.await_count, 3)
         self.assertEqual(self.fixture, self.original)
-        settings = self.summary.await_args.args[1]
-        self.assertEqual(settings.llm_api_key, "test-key")
 
     async def test_changed_raw_input_changes_calculation(self):
         record = self.fixture["responses"]["population"]["20262"]["VwsmTrdarFlpopQq"]["row"][0]
@@ -151,5 +119,3 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, "no_data")
         self.assertEqual(result.recommendations, [])
         self.generate.assert_not_called()
-        self.select.assert_not_called()
-        self.summary.assert_not_called()

@@ -15,7 +15,7 @@
 상권 폴리곤 면적(중앙값 약 0.07km²)을 쓰면 우리 분모(0.7854km²)와 10배 넘게 달라
 어디를 찍든 최하위가 나오기 때문이다.
 
-갱신은 `python examples/build_density_baseline.py` 로 다시 받아 이 상수를 바꾼다.
+갱신은 `python scripts/build_density_baseline.py` 로 다시 받아 이 상수를 바꾼다.
 
 ⚠️ **서울 상권 분포다.** 서울 밖에서는 `None` 을 낸다.
 """
@@ -30,7 +30,7 @@ from typing import Final
 BASELINE_SAMPLE_SIZE: Final = 1650
 BASELINE_SCOPE: Final = "서울 상권 반경 500m"
 
-# 5%p 간격 경계값(5% ~ 95%). examples/build_density_baseline.py --emit 이 찍어준다.
+# 5%p 간격 경계값(5% ~ 95%). scripts/build_density_baseline.py --emit 이 찍어준다.
 SEOUL_RESTAURANT_DENSITY_PERCENTILES: Final[tuple[float, ...]] = (
     98.04,  # 5%
     150.11,  # 10%

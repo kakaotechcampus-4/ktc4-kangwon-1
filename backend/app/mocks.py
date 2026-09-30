@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from openai.types.chat import ChatCompletionMessage
-
 from app.schemas import AgentAnalysis, AgentId, AnalysisTask, Scope, Site
 
 MOCK_ADDRESS = "서울특별시 송파구 위례광장로 120 155호"
@@ -38,23 +36,6 @@ def mock_site(address: str | None = None) -> Site:
 
 async def mock_resolve(address: str) -> Site:
     return mock_site(address)
-
-
-async def mock_action(messages: list[Any], definitions: list[Any]) -> ChatCompletionMessage:
-    step = sum(message.get("role") == "tool" for message in messages)
-    name = ("prepare_address", "run_analyses", "make_decision")[step]
-    return ChatCompletionMessage.model_validate(
-        {
-            "role": "assistant",
-            "tool_calls": [
-                {
-                    "id": f"call-{name}",
-                    "type": "function",
-                    "function": {"name": name, "arguments": "{}"},
-                }
-            ],
-        }
-    )
 
 
 def _analysis(task: AnalysisTask, agent_id: AgentId, data: dict[str, Any]) -> AgentAnalysis:

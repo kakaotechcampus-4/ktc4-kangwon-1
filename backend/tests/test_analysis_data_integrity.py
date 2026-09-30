@@ -18,7 +18,6 @@ from app.agents.business_lifecycle.area_resolver import (
     read_dbf,
     read_polygon_shapes,
 )
-from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError, validate_llm_result
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.agents.commercial_area.metrics import build_radius_slices
@@ -40,67 +39,25 @@ def _flpop(quarter: str, total: float) -> FlpopRecord:
     )
 
 
-class BusinessLifecycleValidationTests(unittest.TestCase):
-    def test_llm_ids_are_one_to_one_and_calculated_fields_win(self):
-        source = {
-            "industries": [
-                {
-                    "industry_id": "I201",
-                    "industry_name": "계산 이름",
-                    "lifecycle_score": 71.5,
-                    "confidence": "high",
-                }
-            ]
-        }
-        llm = {
-            "industry_scores": [
-                {
-                    "industry_id": "I201",
-                    "industry_name": "변조 이름",
-                    "lifecycle_score": -999,
-                    "confidence": "none",
-                    "type": "성장형",
-                    "evidence": ["근거"],
-                    "warning": None,
-                }
-            ]
-        }
-
-        validate_llm_result(source, llm)
-
-        self.assertEqual(llm["industry_scores"][0]["industry_name"], "계산 이름")
-        self.assertEqual(llm["industry_scores"][0]["lifecycle_score"], 71.5)
-        self.assertEqual(llm["industry_scores"][0]["confidence"], "high")
-
-    def test_duplicate_llm_id_is_rejected(self):
-        source = {"industries": [{"industry_id": "I201"}, {"industry_id": "I202"}]}
-        llm = {"industry_scores": [{"industry_id": "I201"}, {"industry_id": "I201"}]}
-        with self.assertRaises(BusinessLifecycleAgentError):
-            validate_llm_result(source, llm)
-
-    def test_invalid_llm_rows_and_ids_are_rejected(self):
-        cases = [
-            ({"industries": [{"industry_id": "I201"}]}, ["bad"]),
-            ({"industries": [{"industry_id": "I201"}]}, [{"industry_id": []}]),
-            ({"industries": [{"industry_id": "I201"}]}, [{"industry_id": True}]),
-            ({"industries": [{"industry_id": True}]}, [{"industry_id": "I201"}]),
-            ({"industries": [{"industry_id": "I201"}]}, [{"industry_id": 1}]),
-            ({"industries": [{"industry_id": "UNKNOWN"}]}, [{"industry_id": "UNKNOWN"}]),
-        ]
-        for source, scores in cases:
-            with (
-                self.subTest(source=source, scores=scores),
-                self.assertRaises(BusinessLifecycleAgentError),
-            ):
-                validate_llm_result(source, {"industry_scores": scores})
-
-    def test_duplicate_input_id_is_rejected(self):
-        source = {"industries": [{"industry_id": "I201"}, {"industry_id": "I201"}]}
-        with self.assertRaises(BusinessLifecycleAgentError):
-            validate_llm_result(source, {"industry_scores": [{"industry_id": "I201"}]})
-
-
 class ShapePairingTests(unittest.TestCase):
+    def test_shape_cache_reuses_parsing_and_refreshes_changed_files(self):
+        module = "app.agents.business_lifecycle.area_resolver"
+        with tempfile.TemporaryDirectory() as directory:
+            shp = Path(directory) / "cache.shp"
+            for suffix in (".shp", ".shx", ".dbf", ".prj"):
+                shp.with_suffix(suffix).write_bytes(b"x")
+            with (
+                patch(module + "._validate_projection"),
+                patch(module + ".read_dbf", return_value=[]) as read,
+                patch(module + ".read_polygon_shapes", return_value=[]),
+            ):
+                self.assertFalse(load_shape_features(shp))
+                self.assertFalse(load_shape_features(shp))
+                self.assertEqual(read.call_count, 1)
+                shp.with_suffix(".dbf").write_bytes(b"changed")
+                load_shape_features(shp)
+                self.assertEqual(read.call_count, 2)
+
     def test_deleted_dbf_and_null_shape_keep_original_positions(self):
         attrs = [{"TRDAR_CD": "A"}, None, {"TRDAR_CD": "C"}]
         polygon = ((0.0, 0.0, 1.0, 1.0), [[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]])
@@ -118,6 +75,11 @@ class ShapePairingTests(unittest.TestCase):
                 ),
             ):
                 features = load_shape_features(shp)
+                self.assertIs(features, load_shape_features(shp))
+                with self.assertRaises(TypeError):
+                    features[0].attributes["TRDAR_CD"] = "변경"
+                with self.assertRaises(TypeError):
+                    features[0].rings[0][0] = (99.0, 99.0)
         self.assertEqual([feature.attributes["TRDAR_CD"] for feature in features], ["A"])
 
     def test_truncated_dbf_record_is_rejected(self):

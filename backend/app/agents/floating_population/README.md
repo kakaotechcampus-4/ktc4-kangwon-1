@@ -21,15 +21,15 @@ AnalysisTask(주소 좌표 + 반경)
   ├─ ③ 유동인구 계산 ─── 합산·분포 → 유형 판정 → 서울 대비 지표 → 추세 → 반경 곡선 → 신뢰도
   ├─ ④ 주거·직장 계산 ── 같은 상권만 합산 → 서울 기준선(파일에서 계산) → 인구 총괄
   ├─ ⑤ 해석 문장 ─────── 위 숫자를 규칙으로 풀어 쓴 5~8줄 + 근거 경로
-  ├─ ⑥ 선별 (LLM) ────── 결정 에이전트 입력에서 뺄 차트용 블록만 고른다 · 실패하면 전부 싣는다
+  ├─ ⑥ 선별 (규칙) ────── 결정 에이전트 입력에서 뺄 차트용 블록만 고른다 · 실패하면 전부 싣는다
   │
   └─ AgentAnalysis(status · scope · data · warnings)
 ```
 
 - **호출 규모.** 분석 한 번에 서울시 API 약 12회(최신 분기 탐침 · 상권영역 · 유동인구 4개
-  분기), 선별 LLM 1회. 실측 약 3초. 주거·직장인구는 패키지에 동봉한 CSV 를 읽는다 — 아래
+  분기). 선별 모델 호출은 없다. 소요 시간은 이번 변경 후 실측하지 않았다. 주거·직장인구는 패키지에 동봉한 CSV 를 읽는다 — 아래
   「주거·직장인구는 CSV 로 동봉한다」.
-- **숫자는 전부 코드가 계산한다.** LLM 은 ⑥에서 블록을 고르기만 한다. 유형 판정(③)·구성
+- **숫자는 전부 코드가 계산한다.** ⑥ 선별도 규칙을 사용한다. 유형 판정(③)·구성
   판정(④)·해석 문장(⑤)도 규칙 기반이라 같은 입력이면 항상 같은 결과가 나온다.
 - **상권 선택은 한 번만 한다.** 세 인구가 같은 상권 집합을 쓰므로 분모가 어긋나지 않는다.
   회의에서 배정된 "상주·직장·총괄 에이전트 3개" 를 별도 에이전트가 아니라 `data` 안 블록
@@ -61,8 +61,7 @@ analysis = await analyze(
 )
 ```
 
-**반경은 `AnalysisTask.radius_m` 이 정한다.** `Settings.analysis_radius_m`·`ANALYSIS_RADIUS_M`
-은 예제 스크립트 호환용으로 남아 있을 뿐 분석에 쓰이지 않는다.
+**반경은 `AnalysisTask.radius_m`이 정한다.** 이전 환경변수·호환 설정은 제거했다.
 
 **비동기다.** 오케스트레이터가 분석 에이전트를 `asyncio.gather` 로 동시에 돌린다
 (`AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]`). `client` 를 주입하지
@@ -107,8 +106,8 @@ analysis = await analyze(
 **⑤ 해석 문장** (`interpret.py`) — 핵심 숫자를 "점심(11~14시) 시간당 통행 비중이 서울 평균의
 1.34배로 가장 두드러진다." 같은 문장으로 풀고, 문장마다 근거 값의 JSON Pointer(`path`)를 단다.
 
-**⑥ 선별** (`llm.py` · `prompt.md`) — 결정 에이전트 프롬프트에서 뺄 수 있는 차트용 블록 넷 중
-무엇을 뺄지 모델이 고른다. 원본 `data` 는 그대로 저장·반환되고, 실패하면 전부 싣는다.
+**⑥ 선별** (`selection.py`) — 결정 에이전트 프롬프트에서 뺄 수 있는 차트용 블록 넷 중
+자료 유무·비교 가능 분기 수로 선별한다. 원본 `data` 는 그대로 저장·반환되고, 실패하면 전부 싣는다.
 
 | 파일 | 역할 |
 | --- | --- |
@@ -122,7 +121,7 @@ analysis = await analyze(
 | `population.py` | 주거·직장인구 스냅샷 읽기·쓰기, 집계, 서울 기준선, 인구 총괄 |
 | `data/resident.csv` · `data/worker.csv` | 주거·직장인구 최신 분기 스냅샷(서울 전체) |
 | `interpret.py` | 해석 문장(규칙 기반) |
-| `llm.py` · `prompt.md` | 넘길 블록 선별(숫자는 만들지 않는다) |
+| `selection.py` | 넘길 블록 선별(숫자는 만들지 않는다) |
 | `schemas.py` | `data` 본문의 자료 구조 — 키 이름이 곧 결정 에이전트와의 인터페이스 |
 | `config.py` | 설정값(`Settings`) |
 
@@ -250,7 +249,7 @@ analysis = await analyze(
 - **`interpretation` — 숫자를 풀어 쓴 문장 5~8줄.** `interpret.py` 가 규칙으로 만든다(LLM
   아님). 유형, 규모 백분위, 서울 대비 가장 두드러진 시간대·연령대, 주말/주중(평균에서 10%
   이상 벗어날 때만), 추세(전년 동기, 없으면 직전 분기 대비 — 기본 4개 분기에선 직전 분기),
-  직장/주거 구성, 가구당 인원, 신뢰도가 낮을 때 그 사실. LLM 선별로 `trend` 가 빠지면 추세
+  직장/주거 구성, 가구당 인원, 신뢰도가 낮을 때 그 사실. 최종판단 입력에서 `trend` 가 빠지면 추세
   문장도 함께 뺀다(뺀 값을 문장으로 되살리지 않도록).
   문장마다 근거 값의 `path` 가 붙어 있어 결정 에이전트가 그대로 `evidence.path` 로 쓸 수
   있다(시험에서 모든 `path` 가 실제 값으로 풀리는지 확인한다). 업종 추천이나 원인 단정은
@@ -330,7 +329,7 @@ analysis = await analyze(
 "파일 분기가 유동인구 분기보다 뒤처졌다" 는 warnings 를 내기 시작하면 돌릴 때다.
 
 ```bash
-python examples/fetch_population_snapshot.py   # 약 20초. 동시 8개 · 페이지별 재시도
+python scripts/fetch_population_snapshot.py   # 약 20초. 동시 8개 · 페이지별 재시도
 ```
 
 두 자료를 **모두 받은 뒤에** 파일을 쓴다 — 하나만 새로 쓰고 실패하면 두 파일의 분기가 어긋난다.
@@ -398,65 +397,17 @@ python examples/fetch_population_snapshot.py   # 약 20초. 동시 8개 · 페�
   것이다. 억지로 채우지 않는다.
 - 지점을 늘리거나 줄여도 **API 호출은 늘지 않는다** — 전부 로컬 계산이다.
 
-## 넘길 자료 선별 (`llm.py` · `prompt.md`)
+## 넘길 자료 선별 (`selection.py`)
 
-`data` 원본은 반환·저장하고, 최종판단의 프롬프트 입력 복사본만 선별한다. 분석 에이전트가 셋이라
-그대로 두면 판단에 쓸 지표가 차트용 시리즈에 묻힌다. 실측(길동, 2026Q2, 전체 8,991자):
+기본 분석은 LLM 없이 규칙으로 선별한다.
 
-| 블록 | 크기 | 비중 | 선별 대상 |
-| --- | --- | --- | --- |
-| `trend` | 1,402자 | 15.6% | ✅ |
-| `trade_areas` | 1,305자 | 14.5% | ✅ |
-| `radius_profile` | 843자 | 9.4% | ✅ |
-| `population` | 817자 | 9.1% | 원값(`by_age`·`by_time`·`by_day`)만 ✅ |
-| `resident` · `worker` · `population_summary` | 1,559자 | 17.3% | — |
-| `sources` | 631자 | 7.0% | — |
-| `interpretation` | 609자 | 6.8% | — |
-| `benchmark` · `type` · `reliability` | 993자 | 11.0% | — |
-| `description` | 324자 | 3.6% | — |
+- 비어 있지 않은 상권 목록과 반경 자료를 유지한다. 실제 0은 결측으로 취급하지 않는다.
+- 추세는 비교할 분기가 2개 이상일 때 유지한다.
+- 연령·시간대·요일 원값은 비중과 중복되므로 최종판단 입력에서만 제외한다.
+- 원본 수치·해석은 저장한다. 최종판단 복사본에서 제외 자료를 참조하는 해석은 `null`로 가려 배열 근거 번호를 보존한다.
+- 명시적인 선별 함수 주입은 지원한다. 선별 불가·RuntimeError·ValueError는 전체 자료 유지로 처리하고, 구현 오류는 전파한다.
 
-판단에 직접 쓰는 블록(`benchmark`·`type`·`reliability`·`interpretation`·인구 블록 셋)은 합쳐
-3,161자, 전체의 35% 다. 선별로 차트용 블록을 모두 빼면 결정 에이전트 입력은 약 5,400자가 된다.
-
-### 무엇을 고르나
-
-모델이 고를 수 있는 블록은 **넷뿐**이다(`llm.SELECTABLE`):
-`trade_areas` · `population_raw`(연령·시간대·요일 원값) · `radius_profile` · `trend`
-
-`description`·`interpretation`·`benchmark`·`type`·`reliability`·`resident`·`worker`·
-`population_summary`·`sources`와 비중 값들은 **선별 대상이 아니다.**
-결정 에이전트가 점수와 근거를 만들 때 반드시 쓰므로 어떤 경우에도 빠지지 않는다.
-
-### 규칙 셋
-
-**① 숫자는 모델이 만들지 않는다.** 이미 코드가 계산한 블록 중 무엇을 실을지만 고른다.
-고른 결과도 허용 목록 안인지 `parse_selection()` 이 다시 확인하고, 하나라도 어긋나면 응답을
-통째로 버린다(`AGENTS.md` 4번).
-
-**② 실패하면 전부 싣는다.** 선별은 최적화지 기능이 아니다. 키가 없거나(`ELICE_*` 미설정)
-모델이 죽어도 분석은 그대로 나간다 — `selection.applied=False` 와 `unavailable_reason` 으로
-사실만 남긴다. 키가 없어서 못 한 경우는 `warnings` 에 띄우지 않는다(로컬 실행마다 시끄럽다).
-
-**③ 원본은 보존하고 최종판단 입력에서만 블록을 제외한다.** `selection` 메타데이터를
-원본에 남기고, `decision/agent.py`가 직렬화한 복사본에서 선택되지 않은 키를 제외한다.
-배열 일부를 압축하지 않으므로 남은 `evidence.path`의 인덱스는 원본과 같다.
-근거는 실제 원본에서 검증하며 `null`·빈 문자열·빈 목록·빈 객체는 거절한다.
-실제 `0`·`false`는 결측값이 아니다. `source_analyses`와 저장 콜백에는 차트 원본이 유지된다.
-
-### 모델에게 보내는 것
-
-`data` 전체가 아니라 **요약(digest)** 을 보낸다(`_selection_digest`). 전체를 보내면 줄이려던
-토큰을 선별하느라 그대로 쓰게 된다. 블록마다 "읽을 게 있는지" 판단할 최소 정보만 넣는다 —
-상권 개수와 이름, 반경 단계별 값과 0 인 단계 수, 분기 수와 방향·변화율 같은 것들.
-
-### 설정
-
-`ELICE_API_KEY`·`ELICE_BASE_URL`·`ELICE_MODEL` 이 있으면 동작하고, 없으면 전부 싣는다.
-`.env.example` 에 이미 있는 팀 공용 변수라 새로 추가할 것은 없다.
-
-`pyproject.toml`의 `[tool.setuptools.package-data]`에
-`"app.agents.floating_population" = ["prompt.md"]`가 등록되어 있다.
-따라서 편집 설치뿐 아니라 배포 wheel에도 `prompt.md`가 포함된다.
+인구 분석용 모델 환경변수·프롬프트는 사용하지 않는다. CSV 패키지 자료는 유지한다.
 
 ## 인원수는 `daily_avg`(명/일) 하나로만 낸다
 
@@ -581,7 +532,6 @@ area = f"{site.input_address} 반경 {radius}m"  # 양쪽 동일
 
 ```
 FLOATING_POPULATION_API_KEY=   # 필수. https://data.seoul.go.kr 에서 무료·즉시 발급
-ANALYSIS_RADIUS_M=500          # 예제 스크립트 호환용. 분석 반경은 AnalysisTask.radius_m 이 정한다
 ```
 
 `config.Settings` 의 나머지 값(환경변수 없음, 코드에서 조정):

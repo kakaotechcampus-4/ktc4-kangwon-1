@@ -14,6 +14,7 @@ dependencies = [
   "python-dotenv>=1,<2",
   "httpx>=0.27,<1",
   "pandas>=2.2,<3",
+  "langgraph>=1.2.12,<1.3",
 ]
 
 [project.optional-dependencies]
@@ -32,10 +33,11 @@ include = ["app*"]
 [tool.setuptools.package-data]
 "app.db" = ["schema.sql"]
 "app.agents.decision" = ["prompt.md"]
-"app.agents.orchestration" = ["prompt.md"]
-"app.agents.commercial_area" = ["prompt.md", "data/*.csv"]
-"app.agents.floating_population" = ["prompt.md"]
-"app.agents.business_lifecycle" = ["prompt.md", "data/trdar_area/*"]
+"app.agents.specialists" = ["prompt.md"]
+"app.agents.map_analysis" = ["prompt.md"]
+"app.agents.commercial_area" = ["data/*.csv"]
+"app.agents.floating_population" = ["data/*.csv"]
+"app.agents.business_lifecycle" = ["data/trdar_area/*"]
 "app.industries" = ["data/*.csv", "data/*.json"]
 
 [tool.pytest.ini_options]

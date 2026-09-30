@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 TIME_BANDS = ("00_06", "06_11", "11_14", "14_17", "17_21", "21_24")
 # 구간 길이가 3~6시간으로 다르다. 총량을 그대로 비교하면 6시간짜리 00~06시가 거의 항상 1위가 되므로
@@ -46,6 +46,15 @@ def _num(row: dict, key: str) -> float:
     return float(v)
 
 
+def _trdar_code(row: dict) -> str:
+    """누락된 코드를 문자열로 바꿔 정상 자료처럼 사용하지 않습니다."""
+    value = row["TRDAR_CD"]
+    code = str(value).strip() if value is not None else ""
+    if not code:
+        raise ValueError("상권코드가 누락되었습니다.")
+    return code
+
+
 def period_ko(stdr_yyqu_cd: str) -> str:
     """'20262' → '2026년 2분기' (계약 scope.period 형식)."""
     return f"{stdr_yyqu_cd[:4]}년 {stdr_yyqu_cd[4]}분기"
@@ -70,6 +79,8 @@ class TrdarArea(BaseModel):
     은 주므로, 상권이 얼마나 큰 구역인지는 `equivalent_radius_m` 로 가늠할 수 있다.
     """
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
     trdar_cd: str
     trdar_cd_nm: str
     x: float
@@ -86,13 +97,13 @@ class TrdarArea(BaseModel):
     @classmethod
     def from_api_row(cls, row: dict) -> TrdarArea:
         return cls(
-            trdar_cd=str(row["TRDAR_CD"]),
-            trdar_cd_nm=str(row.get("TRDAR_CD_NM", "")),
+            trdar_cd=_trdar_code(row),
+            trdar_cd_nm=str(row.get("TRDAR_CD_NM") or "").strip(),
             x=float(row["XCNTS_VALUE"]),
             y=float(row["YDNTS_VALUE"]),
             relm_ar=_num(row, "RELM_AR"),
-            trdar_se_nm=row.get("TRDAR_SE_CD_NM"),
-            adstrd_nm=row.get("ADSTRD_CD_NM"),
+            trdar_se_nm=str(row.get("TRDAR_SE_CD_NM") or "").strip() or None,
+            adstrd_nm=str(row.get("ADSTRD_CD_NM") or "").strip() or None,
         )
 
 
@@ -103,6 +114,8 @@ class PopulationRecord(BaseModel):
     값은 통행량이 아니라 **사람 수**다. 가구 수는 주거인구에만 있다.
     (`APT_HSHLD_CO` 는 22개 분기 전 행이 0 이라 읽지 않는다 — 2026-09-20 전수 확인)
     """
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     trdar_cd: str
     stdr_yyqu_cd: str
@@ -128,7 +141,7 @@ class PopulationRecord(BaseModel):
         API 응답 행과 스냅샷 CSV 행(값이 문자열) 둘 다 받는다.
         """
         return cls(
-            trdar_cd=str(row["TRDAR_CD"]),
+            trdar_cd=_trdar_code(row),
             stdr_yyqu_cd=str(row["STDR_YYQU_CD"]),
             total=_num(row, f"TOT_{kind}_CO"),
             by_age={a: _num(row, cls._age_column(a, kind)) for a in AGE_BANDS},
@@ -138,6 +151,8 @@ class PopulationRecord(BaseModel):
 
 class FlpopRecord(BaseModel):
     """길단위인구(OA-15568) 한 행 = 한 상권 · 한 분기."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     trdar_cd: str
     stdr_yyqu_cd: str
@@ -151,7 +166,7 @@ class FlpopRecord(BaseModel):
     @classmethod
     def from_api_row(cls, row: dict) -> FlpopRecord:
         return cls(
-            trdar_cd=str(row["TRDAR_CD"]),
+            trdar_cd=_trdar_code(row),
             stdr_yyqu_cd=str(row["STDR_YYQU_CD"]),
             total=_num(row, "TOT_FLPOP_CO"),
             male=_num(row, "ML_FLPOP_CO"),

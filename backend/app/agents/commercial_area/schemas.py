@@ -26,12 +26,9 @@ class MiddleCategory(Schema):
     count: int
     share: float
     density_per_km2: float
-    density_sq: float
     lq: float | None = None
     lq_district: float | None = None
-    same_type_count: int
     diff_type_count: int
-    marshallian: float
     jacobian: float
     # 누적 유인(Nelson 2원칙) — 같은 성격의 가게가 얼마나 모였고, 그 안이 얼마나 다양한가.
     # 두 값을 합쳐 점수로 만들지 않는다. 가중치를 정하는 순간 그게 판단이 된다.
@@ -47,11 +44,10 @@ class Diversity(Schema):
 
 class RestaurantDensity(Schema):
     value: float
-    squared: float
     unit: Literal["stores_per_km2"]
     store_count: int
     # 서울 상권 1,650곳 분포에서의 위치(0~100). 논문 임계값을 대신하는 값이라
-    # 추정이 아니라 관측 분포 그 자체다. 서울 밖은 null.
+    # 서울 밖이거나 요청 반경이 표본의 500m와 다르면 비웁니다.
     seoul_percentile: float | None = None
 
 
