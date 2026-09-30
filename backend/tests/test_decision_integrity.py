@@ -174,6 +174,34 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 await analyze(self.request, generate=Mock(return_value=self.response))
 
+    async def test_lifecycle_evidence_must_use_the_actual_input_key(self):
+        """현재·과거 목록명을 서로 바꿔 인용하면 거절합니다."""
+        source = self.request["analyses"][0]
+        source["agent_id"] = "business_lifecycle"
+        evidence = self.response["recommendations"][0]["evidence"][0]
+        evidence["agent_id"] = "business_lifecycle"
+        for actual, wrong in (
+            ("industries", "industry_results"),
+            ("industry_results", "industries"),
+        ):
+            with self.subTest(actual=actual):
+                source["data"] = {
+                    actual: [
+                        {
+                            "industry_id": "I201",
+                            "industry_name": "한식 음식점업",
+                            "metrics": {"latest_store_count": 12},
+                        }
+                    ]
+                }
+                evidence["path"] = f"/{actual}/0/metrics/latest_store_count"
+                result = await analyze(self.request, generate=Mock(return_value=self.response))
+                self.assertEqual(result.source_analyses[0].data, source["data"])
+                self.assertEqual(result.recommendations[0].evidence[0].path, evidence["path"])
+                evidence["path"] = f"/{wrong}/0/metrics/latest_store_count"
+                with self.assertRaisesRegex(ValueError, "입력에 없는 근거"):
+                    await analyze(self.request, generate=Mock(return_value=self.response))
+
     async def test_population_selection_returns_every_chart_for_storage(self):
         site = Site(
             input_address="가상 주소", road_address="가상 주소", latitude=37.5, longitude=127.0
