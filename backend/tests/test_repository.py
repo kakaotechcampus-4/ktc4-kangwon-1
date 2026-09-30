@@ -3,7 +3,9 @@
 import json
 import sqlite3
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +15,28 @@ from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 
 class RepositoryTests(unittest.TestCase):
+    def test_parallel_initialization_preserves_schema_and_existing_data(self):
+        for attempt in range(10):
+            path = self.path.parent / f"parallel-{attempt}.sqlite3"
+            barrier = threading.Barrier(8)
+
+            def start(path=path, barrier=barrier):
+                barrier.wait(timeout=5)
+                return initialize(path)
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(start) for _ in range(8)]
+                self.assertEqual([future.result(timeout=15) for future in futures], [path] * 8)
+            repo.create_request("preserved", "시험 주소", db_path=path)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(start) for _ in range(8)]
+                for future in futures:
+                    future.result(timeout=15)
+            self.assertEqual(repo.get_request("preserved", db_path=path)["status"], "pending")
+            with connect(path) as db:
+                self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "wal")
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
     def test_retry_rejects_changed_or_unknown_catalog_without_claiming(self):
         from app.schemas import AgentError
 

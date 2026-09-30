@@ -6,8 +6,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib.resources import files
 from pathlib import Path
+from threading import Lock
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+# ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
+_INITIALIZE_LOCK = Lock()
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:
@@ -34,6 +37,11 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
 def initialize(db_path: str | Path | None = None) -> Path:
     """처음 실행할 때 파일과 테이블을 생성합니다. 기존 자료는 유지합니다."""
     path = resolve_path(db_path)
+    with _INITIALIZE_LOCK:
+        return _initialize(path)
+
+
+def _initialize(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=5)
     try:
