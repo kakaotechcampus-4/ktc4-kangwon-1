@@ -8,6 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 MAX_CALLS = 24
+EVALUATED_MAX_CALLS = 64
 # 최종판단·교정 몫입니다. 전문가 호출은 이 몫을 쓰지 못합니다.
 FINAL_RESERVE = 2
 
@@ -34,7 +35,7 @@ class LLMBudget:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     def __post_init__(self):
-        if type(self.used) is not int or not 0 <= self.used <= self.limit <= MAX_CALLS:
+        if type(self.used) is not int or not 0 <= self.used <= self.limit <= EVALUATED_MAX_CALLS:
             raise ValueError("모델 호출 예산이 올바르지 않습니다.")
 
     @property

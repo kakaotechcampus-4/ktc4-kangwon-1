@@ -13,10 +13,12 @@ from langsmith import tracing_context
 
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
+from app.agents.evaluators.agent import GenerateEvaluation, decision_evaluation, evaluate_draft
 from app.agents.specialists.agent import GenerateSpecialist, answer_query, write_brief
-from app.llm.budget import LLMBudget, current_scope, llm_scope
+from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS, LLMBudget, current_scope, llm_scope
 from app.schemas import (
     AGENT_IDS,
+    EVALUATOR_IDS,
     QUESTION_FIELDS,
     AgentAnalysis,
     AgentBrief,
@@ -25,6 +27,10 @@ from app.schemas import (
     ConsultPlan,
     DecisionRequest,
     DecisionResult,
+    Evaluation,
+    EvaluationLogEntry,
+    EvaluationRequest,
+    EvaluatorId,
     LandlordAnswer,
     MapLookupPlan,
     MapObservation,
@@ -47,6 +53,7 @@ from .supplement import OnSupplement, execute_supplement, validate_tools
 # 브리핑은 도구 2회 + finish, 되묻기 답변은 도구 최대 4회 + finish입니다.
 BRIEF_STEPS = 3
 CONSULT_STEPS = 5
+EVALUATOR_RESERVE = 4
 
 
 def consult_steps(agent_id: str, share: int) -> int:
@@ -80,6 +87,10 @@ class GraphState(TypedDict, total=False):
     answers: list[SpecialistAnswer]
     consult_round: int
     context: dict
+    draft: DecisionResult
+    evaluations: list[Evaluation]
+    evaluation_start_round: int
+    final_call: bool
 
 
 @dataclass(frozen=True)
@@ -99,6 +110,8 @@ class RunHooks:
     ) = None
     # 진행 화면용 단계 이벤트입니다. detail에는 코드가 정한 요약만 넣습니다.
     on_step: Callable[[str, str, dict], Awaitable[None]] | None = None
+    on_evaluation: Callable[[DecisionResult, list[Evaluation]], Awaitable[None]] | None = None
+    on_evaluation_log: Callable[[list[EvaluationLogEntry]], Awaitable[None]] | None = None
 
 
 def action_of(outcome) -> str:
@@ -131,23 +144,44 @@ async def run_graph(
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     resume_state: GraphState | None = None,
     user_answers: list[LandlordAnswer] | None = None,
+    evaluators_enabled: bool = False,
+    generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
+    retry_only: bool = False,
 ) -> DecisionResult | WaitingForInput:
     """외부 호출 전에 실행 구성을 검증하고 고정 단계와 선택 분기를 실행합니다."""
     hooks = hooks or RunHooks()
+    if evaluators_enabled and (
+        not generate_evaluators
+        or set(generate_evaluators) != set(EVALUATOR_IDS)
+        or not all(callable(fn) for fn in generate_evaluators.values())
+    ):
+        raise ValueError("평가자 네 명의 호출 함수를 등록해 주세요.")
     if mode not in {"single_decision", "multi_agent"}:
         raise ValueError("지원하지 않는 분석 모드입니다.")
-    if mode == "multi_agent" and (
-        not generate_specialists
-        or not set(AGENT_IDS) <= set(generate_specialists)
-        or (map_lookup is not None and "map_analysis" not in generate_specialists)
-        or not all(callable(fn) for fn in generate_specialists.values())
+    if (
+        mode == "multi_agent"
+        and not retry_only
+        and (
+            not generate_specialists
+            or not set(AGENT_IDS) <= set(generate_specialists)
+            or (map_lookup is not None and "map_analysis" not in generate_specialists)
+            or not all(callable(fn) for fn in generate_specialists.values())
+        )
     ):
         raise ValueError("전문가 호출 함수를 등록해 주세요.")
     if resume_state is not None and (
-        mode != "multi_agent" or allow_questions or resume_state["task"].request_id != request_id
+        (mode != "multi_agent" and not retry_only)
+        or allow_questions
+        or resume_state["task"].request_id != request_id
     ):
         raise ValueError("재개 요청의 모드·식별자·질문 설정이 올바르지 않습니다.")
-    budget = current_scope()[0] or (LLMBudget() if mode == "multi_agent" else None)
+    if retry_only and (resume_state is None or allow_questions or supplements or map_lookup):
+        raise ValueError("판정 재시도는 저장된 자료만 사용합니다.")
+    budget = current_scope()[0] or (
+        LLMBudget(limit=EVALUATED_MAX_CALLS if evaluators_enabled else MAX_CALLS)
+        if mode == "multi_agent" or evaluators_enabled
+        else None
+    )
     supplements = list(supplements or [])
     validate_tools(supplements)
     validate_radius(radius_m)
@@ -207,10 +241,57 @@ async def run_graph(
         return {"analyses": analyses}
 
     async def evaluate_decision(state: GraphState) -> GraphState:
-        await step("decision", "started")
+        phase = (
+            {"phase": "final" if "evaluations" in state else "draft"} if evaluators_enabled else {}
+        )
+        await step("decision", "started", **phase)
         result = await _evaluate(state)
-        await step("decision", "completed", action=action_of(result["outcome"]))
+        await step("decision", "completed", action=action_of(result["outcome"]), **phase)
+        if (
+            evaluators_enabled
+            and "evaluations" not in state
+            and isinstance(result["outcome"], DecisionResult)
+        ):
+            reason = (
+                "no_data"
+                if result["outcome"].status == "no_data"
+                else "budget"
+                if budget is not None and budget.open_calls < 4
+                else None
+            )
+            if reason:
+                await step("evaluate", "completed", skipped=reason)
+                result["final_call"] = False
         return result
+
+    def remaining_rounds(state):
+        ceiling = state.get("evaluation_start_round", 0) + 4 if "evaluations" in state else 2
+        return max(0, ceiling - state["consult_round"])
+
+    def expert_calls(state):
+        return (
+            budget.open_calls
+            - (EVALUATOR_RESERVE if evaluators_enabled and "evaluations" not in state else 0)
+            if budget
+            else CONSULT_STEPS
+        )
+
+    async def judge(state, request, **kwargs):
+        entries: list[EvaluationLogEntry] = []
+        extra = {}
+        if "evaluations" in state:
+            extra = {
+                "evaluation": decision_evaluation(state["draft"], state["evaluations"]),
+                "evaluation_log": entries,
+            }
+        outcome = await decision.evaluate(request, **kwargs, **extra)
+        if (
+            "evaluations" in state
+            and isinstance(outcome, DecisionResult)
+            and hooks.on_evaluation_log
+        ):
+            await hooks.on_evaluation_log(entries)
+        return outcome
 
     async def _evaluate(state: GraphState) -> GraphState:
         task = state["task"]
@@ -220,19 +301,26 @@ async def run_graph(
             analyses=state["analyses"],
             map_observation=state.get("map_observation"),
         )
+        questions_allowed = allow_questions and (not evaluators_enabled or "evaluations" in state)
         if mode == "multi_agent":
             context = state["context"]
             request.map_observation = context.get("map_observation")
             specialists = [*AGENT_IDS, *(["map_analysis"] if map_lookup else [])]
-            if state["consult_round"] >= 2 or budget is not None and budget.open_calls < 3:
+            if (
+                retry_only
+                or not remaining_rounds(state)
+                or budget is not None
+                and expert_calls(state) < 3
+            ):
                 specialists = []
-            outcome = await decision.evaluate(
+            outcome = await judge(
+                state,
                 request,
                 generate=generate,
                 site=task.site,
                 user_answers=user_answers,
                 question_fields=list(QUESTION_FIELDS)
-                if allow_questions and (budget is None or budget.open_calls > 0)
+                if questions_allowed and (budget is None or budget.open_calls > 0)
                 else None,
                 feedback=context.get("feedback"),
                 supplement_context=context.get("supplement_context"),
@@ -241,16 +329,23 @@ async def run_graph(
                     "answers": state["answers"],
                     "specialists": specialists,
                     "consult_round": state["consult_round"],
+                    **(
+                        {"remaining_consult_rounds": remaining_rounds(state)}
+                        if evaluators_enabled
+                        else {}
+                    ),
                 },
             )
             return {"outcome": outcome}
         if state["supplement_done"]:
-            outcome = await decision.evaluate(
+            outcome = await judge(
+                state,
                 request,
                 generate=generate,
                 feedback=state["feedback"],
+                user_answers=user_answers,
                 supplement_context=state["supplement_context"],
-                question_fields=list(QUESTION_FIELDS) if allow_questions else None,
+                question_fields=list(QUESTION_FIELDS) if questions_allowed else None,
                 site=task.site if allow_questions else None,
                 allow_map_lookup=map_lookup is not None and not state["map_done"],
             )
@@ -266,11 +361,13 @@ async def run_graph(
                 sources[tool.operation.agent_id].model_copy(deep=True),
             )
         ]
-        outcome = await decision.evaluate(
+        outcome = await judge(
+            state,
             request,
             generate=generate,
             operations=operations,
-            question_fields=list(QUESTION_FIELDS) if allow_questions else None,
+            user_answers=user_answers,
+            question_fields=list(QUESTION_FIELDS) if questions_allowed else None,
             site=task.site if allow_questions else None,
             allow_map_lookup=map_lookup is not None and not state["map_done"],
         )
@@ -409,11 +506,11 @@ async def run_graph(
 
     async def consult(state: GraphState) -> GraphState:
         plan = state["outcome"]
-        if not isinstance(plan, ConsultPlan) or state["consult_round"] >= 2:
+        if not isinstance(plan, ConsultPlan) or not remaining_rounds(state):
             raise ValueError("전문가 되묻기 한도를 초과했습니다.")
         round_number = state["consult_round"] + 1
         # 전문가가 병렬로 예산을 나눠 쓰므로 시작 전에 몫을 정해 finish 차례를 보장합니다.
-        share = budget.open_calls // len(plan.queries) if budget is not None else CONSULT_STEPS
+        share = expert_calls(state) // len(plan.queries) if budget is not None else CONSULT_STEPS
 
         async def one(query):
             assert generate_specialists is not None
@@ -471,6 +568,82 @@ async def run_graph(
             "context": state["context"],
         }
 
+    async def evaluate_draft_node(state: GraphState) -> GraphState:
+        draft = state["outcome"]
+        assert isinstance(draft, DecisionResult)
+        context = state["context"] if mode == "multi_agent" else state
+        request = DecisionRequest(
+            request_id=request_id,
+            address=address,
+            analyses=state["analyses"],
+            map_observation=context.get("map_observation"),
+        )
+        allowed: list[EvaluationRequest] = ["none"]
+        if map_lookup and not (
+            context.get("map_queries") or context.get("map_observation") or state["map_done"]
+        ):
+            allowed.append("map_lookup")
+        if supplements and not (state["supplement_done"] or context.get("supplement_context")):
+            allowed.append("supplement")
+        if mode == "multi_agent" and not retry_only:
+            allowed.append("ask_specialists")
+        if allow_questions:
+            allowed.append("ask_user")
+
+        async def one(role):
+            assert generate_evaluators is not None
+            await step("evaluate." + role, "started")
+            result = await evaluate_draft(
+                role,
+                request,
+                draft,
+                generate=generate_evaluators[role],
+                allowed=allowed,
+                timeout=agent_timeout,
+            )
+            await step(
+                "evaluate." + role,
+                "completed",
+                source=result.source,
+                verdict=result.verdict,
+                comments=len(result.comments),
+            )
+            return result
+
+        evaluations = await collect(one(role) for role in EVALUATOR_IDS)
+        if hooks.on_evaluation:
+            await hooks.on_evaluation(draft, evaluations)
+        successful = [e for e in evaluations if e.source == "model"]
+        reason = (
+            "all_failed"
+            if not successful
+            else "no_comments"
+            if all(e.verdict == "agree" and not e.comments for e in successful)
+            else "comments"
+        )
+        final_call = reason == "comments"
+        await step("evaluate", "completed", final_call=final_call, reason=reason)
+        return {
+            "draft": draft,
+            "evaluations": evaluations,
+            "evaluation_start_round": state["consult_round"],
+            "final_call": final_call,
+        }
+
+    def route(state):
+        outcome = state["outcome"]
+        if isinstance(outcome, ConsultPlan):
+            return "consult"
+        if isinstance(outcome, MapLookupPlan):
+            return "map"
+        if isinstance(outcome, SupplementPlan):
+            return "supplement"
+        if isinstance(outcome, QuestionPlan):
+            return "question"
+        if evaluators_enabled and "evaluations" not in state and state.get("final_call", True):
+            return "evaluate"
+        return "final"
+
     builder = StateGraph(GraphState)
     builder.add_node("prepare_address", prepare_address)
     builder.add_node("run_analyses", run_analyses)
@@ -490,25 +663,23 @@ async def run_graph(
         builder.add_edge("run_analyses", "evaluate_decision")
     builder.add_conditional_edges(
         "evaluate_decision",
-        lambda state: (
-            "consult"
-            if isinstance(state["outcome"], ConsultPlan)
-            else "map"
-            if isinstance(state["outcome"], MapLookupPlan)
-            else "supplement"
-            if isinstance(state["outcome"], SupplementPlan)
-            else "question"
-            if isinstance(state["outcome"], QuestionPlan)
-            else "final"
-        ),
+        route,
         {
             "map": "execute_map",
             "supplement": "execute_supplement",
             "question": "ask_user",
             "final": END,
+            **({"evaluate": "evaluate_draft"} if evaluators_enabled else {}),
             **({"consult": "consult"} if mode == "multi_agent" else {}),
         },
     )
+    if evaluators_enabled:
+        builder.add_node("evaluate_draft", evaluate_draft_node)
+        builder.add_conditional_edges(
+            "evaluate_draft",
+            lambda state: "final" if state["final_call"] else "end",
+            {"final": "evaluate_decision", "end": END},
+        )
     builder.add_edge("execute_supplement", "evaluate_decision")
     builder.add_edge("execute_map", "evaluate_decision")
     builder.add_edge("ask_user", END)

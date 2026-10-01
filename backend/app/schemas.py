@@ -613,7 +613,7 @@ class ConsultPlan(Schema):
 
 class SpecialistAnswer(Schema):
     request_id: Text
-    round: Annotated[int, Field(ge=1, le=2)]
+    round: Annotated[int, Field(ge=1, le=6)]
     query: SpecialistQuery
     status: Literal["answered", "partial", "unavailable"]
     findings: list[Finding] = Field(max_length=5)
@@ -646,13 +646,62 @@ class QuestionSnapshotV2(QuestionSnapshot):
 
     version: Literal[2] = 2  # type: ignore[assignment]
     brief_agents: list[AgentId] = Field(min_length=3, max_length=3)
-    consult_round: Annotated[int, Field(ge=0, le=2)] = 0
+    consult_round: Annotated[int, Field(ge=0, le=6)] = 0
     map_attempt: Annotated[int, Field(gt=0)] | None = None
-    llm_calls: Annotated[int, Field(ge=0, le=24)] = 0
+    llm_calls: Annotated[int, Field(ge=0, le=64)] = 0
     elapsed_seconds: Annotated[float, Field(ge=0)] = 0.0
 
     @model_validator(mode="after")
     def check_briefs(self) -> Self:
         if set(self.brief_agents) != set(AGENT_IDS):
             raise ValueError("세 전문가의 브리핑 참조가 필요합니다.")
+        return self
+
+
+EvaluatorId = Literal["examiner", "founder", "customer", "landlord_advocate"]
+EVALUATOR_IDS = get_args(EvaluatorId)
+EvaluationRequest = Literal["none", "map_lookup", "supplement", "ask_specialists", "ask_user"]
+
+
+class EvaluationComment(Schema):
+    index: Annotated[int, Field(ge=0, le=3)]
+    industry_code: IndustryCode | None = None
+    comment: Annotated[str, Field(min_length=1, max_length=300)]
+    evidence: list[Evidence] = Field(default_factory=list, max_length=3)
+    request: EvaluationRequest = "none"
+
+
+class Evaluation(Schema):
+    request_id: Text
+    evaluator: EvaluatorId
+    source: Literal["model", "failed"]
+    verdict: Literal["agree", "conditional", "oppose"] | None = None
+    comments: list[EvaluationComment] = Field(default_factory=list, max_length=4)
+    notes: list[Text] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_result(self) -> Self:
+        if (self.source == "model") != (self.verdict is not None):
+            raise ValueError("모델 평가에는 판정이 필요하며 실패에는 판정을 넣지 않습니다.")
+        if self.source == "failed" and self.comments:
+            raise ValueError("실패한 평가에는 지적을 넣지 않습니다.")
+        if [c.index for c in self.comments] != list(range(len(self.comments))):
+            raise ValueError("지적 번호는 0부터 연속이어야 합니다.")
+        return self
+
+
+class EvaluationLogEntry(Schema):
+    evaluator: EvaluatorId
+    index: Annotated[int, Field(ge=0, le=3)]
+    decision: Literal["accepted", "partial", "rejected", "unreviewed"]
+    applied: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    dropped: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    reason: Annotated[str, Field(min_length=1, max_length=300)]
+
+    @model_validator(mode="after")
+    def check_parts(self) -> Self:
+        if (self.applied is not None) != (self.decision in {"accepted", "partial"}) or (
+            self.dropped is not None
+        ) != (self.decision in {"partial", "rejected"}):
+            raise ValueError("반영 결정과 반영한 부분·버린 부분이 일치하지 않습니다.")
         return self

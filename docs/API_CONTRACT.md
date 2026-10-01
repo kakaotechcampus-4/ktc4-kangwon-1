@@ -3,6 +3,66 @@
 **살아 있는 문서는 Swagger입니다.** 백엔드를 띄우고 <http://127.0.0.1:8000/docs>를 보세요.
 이 문서는 그 위에서 합의한 약속과 화면이 알아야 할 사정을 적습니다.
 
+## 평가자 의견 조회와 화면 연결
+
+`POST /api/v1/analyses`와 답변 제출의 응답 계약은 그대로입니다. 평가 의견은 완료 후
+`GET /api/v1/analyses/{request_id}`로 읽습니다. 요청에 저장된 평가자 사용 여부가 참일 때만
+다음 `evaluation` 키가 추가됩니다. 현재 서버 설정이 아니라 요청의 저장값을 따릅니다.
+
+```json
+{
+  "evaluation": {
+    "skipped": null,
+    "draft": {"summary": "초안 요약", "recommendations": [], "not_recommended": []},
+    "evaluations": [{
+      "evaluator": "landlord_advocate", "source": "model", "verdict": "conditional",
+      "comments": [{"index": 0, "industry_code": "I201", "comment": "설비 확인 필요",
+                    "evidence": [], "request": "ask_user"}]
+    }],
+    "log": [{"evaluator": "landlord_advocate", "index": 0, "decision": "partial",
+             "applied": "설비 확인을 추가", "dropped": "설비가 부족하다는 단정은 제외",
+             "reason": "공간 조건은 임대인 확인이 필요합니다."}]
+  }
+}
+```
+
+예시는 한 명만 표시했으며, 평가가 완료되면 `evaluations`에 아래 순서대로 네 명이 들어옵니다.
+`notes`·평가의 `request_id`는 공개하지 않습니다. 평가 전에는 `draft=null`, `evaluations=[]`, `log=[]`입니다.
+평가를 생략하면 `skipped`는 `no_data` 또는 `budget`이며 나머지는 같은 빈 값입니다.
+모두 실패하거나 성공한 평가자 전원이 지적 없이 동의하면 초안이 최종 결과가 되고 `log=[]`입니다.
+
+| 식별자 | 표시 이름 | 판정 |
+| --- | --- | --- |
+| `examiner` | 심사자 | `agree` 동의 / `conditional` 조건부 / `oppose` 반대 |
+| `founder` | 예비 창업자 | 같음 |
+| `customer` | 동네 손님 | 같음 |
+| `landlord_advocate` | 임대인 대변인 | 같음 |
+
+결과 화면의 **평가자 의견** 영역 머리말은 다음 문구를 씁니다.
+“평가자는 초안에 의견을 냅니다. 판정관이 원자료로 확인해 반영 여부를 정합니다.”
+판정 배지, 모든 지적 원문, 근거 칸, 요청한 확인 행동을 요약하거나 거르지 않고 보여 줍니다.
+`request`는 `none`(추가 행동 없음), `map_lookup`(지도 확인), `supplement`(자료 보완),
+`ask_specialists`(전문가 확인), `ask_user`(임대인 질문)입니다. 브리핑에서는 지도·보완도 전문가에게 요청합니다.
+지적과 반영 기록은 `(evaluator, index)`로 연결하며 다음 배지와 함께 `applied`·`dropped`·`reason`을 표시합니다.
+`accepted` 반영 / `partial` 일부 반영 / `rejected` 반영 안 함 / `unreviewed` 검토 안 됨.
+`source="failed"`는 판정이 `null`, 지적이 빈 배열이며 “이번에 의견을 내지 못했습니다”로 표시합니다.
+
+### 평가 진행 이벤트
+
+| stage | event | detail | 화면 문구 |
+| --- | --- | --- | --- |
+| `decision` | `started`·`completed` | 평가자 켜짐일 때만 기존 값에 `phase=draft` 또는 `final` 추가 | 판정관이 초안을 쓰고 있어요 / 평가를 보고 최종 보고서를 쓰고 있어요 |
+| `evaluate.{evaluator}` | `started` | 빈 객체 | 평가자 4명이 초안을 보고 있어요 |
+| `evaluate.{evaluator}` | `completed` | `source`, `verdict`, `comments`(개수) | 해당 평가자의 의견을 받았어요 |
+| `evaluate` | `completed` | `skipped=no_data` 또는 `budget` | 평가를 건너뛰었어요 |
+| `evaluate` | `completed` | `final_call`, `reason=comments`·`all_failed`·`no_comments` | 평가를 마쳤어요 |
+
+이벤트에는 지적 원문을 싣지 않습니다. 평가자를 끈 요청에는 평가 이벤트나 `phase`가 추가되지 않습니다.
+평가자 사용 시 질문은 최종 단계에서만 발행합니다. 답변 재개·평가 후 실패 재시도에서는 평가자를 다시 호출하지 않습니다.
+평가 전 실패 재시도는 저장된 분석·브리핑으로 초안 → 평가 → 최종판단을 실행하며 평가자는 이때 처음 수행합니다.
+평가자 사용 요청의 호출·전체 시간 한도는 시작 시의 저장값을 유지합니다.
+`mock=true`도 같은 흐름을 쓰며 임대인 대변인의 설비 확인 지적 한 개와 일부 반영 기록을 생성합니다.
+
 ## 서버 주소
 
 | 환경 | 주소 |
@@ -296,8 +356,8 @@ Content-Type: application/json
 {"failed_at": "조회에서 받은 completed_at"}
 ```
 
-- 저장된 분석·채택된 보완·지도 관측·제출 답변으로 **최종판단만** 실행합니다.
-- 분석 API는 다시 호출하지 않습니다. 실제 모드에서는 최종판단 LLM 비용이 발생합니다.
+- 저장된 분석·채택된 보완·지도 관측·제출 답변으로 재시도합니다. 평가자 꺼짐이나 평가 후 실패는 **최종판단만** 실행합니다. 평가 전 실패는 **초안 → 평가 → 최종판단**을 실행합니다.
+- 분석 API·브리핑·전문가 되묻기는 다시 호출하지 않으며 새 임대인 질문도 발행하지 않습니다. 실제 모드에서는 실행한 판정관·평가자 LLM 비용이 발생합니다.
 - 상태나 실패 시각이 바뀌었거나 저장 입력이 불완전하면 `409`입니다. 중복 실행하지 않습니다.
 - 근거 검증은 동일합니다. 자동 교정은 한 번이며, 다시 실패하면 사용자 재시도가 필요합니다.
 - 조회의 `decision_failures`에 실패 시각·오류·잘못된 경로·실제 경로 후보를 보존합니다.
@@ -328,7 +388,7 @@ POST 주소 분석·답변·최종판단 재시도 경로와 기존 응답 형�
 | `Finding` | `claim`, `signal`, `industry_code`, `evidence[].path` | 공통 75개 코드, 자기 원자료 경로만 인용 |
 | `ConsultPlan` | `action=ask_specialists`, `queries` | 라운드당 서로 다른 전문가 최대 3명 |
 | `SpecialistQuery` | 전문가, 질문, 업종 코드, 필요 이유·판단 영향 | 임의 주소·반경 변경 불가 |
-| `SpecialistAnswer` | 요청·라운드·질문, 상태, 근거, 도구 이력, 선택형 분석·지도 관측 | 최대 2라운드, 근거 최대 5개 |
+| `SpecialistAnswer` | 요청·라운드·질문, 상태, 근거, 도구 이력, 선택형 분석·지도 관측 | 평가자 꺼짐 최대 2라운드, 켜짐 초안 2 + 평가 후 4라운드, 근거 최대 5개 |
 | `QuestionSnapshotV2` | 기존 task·질문·분석 차수 + 브리핑 ID·라운드·지도 차수·소비 예산·활성 시간 | 기존 v1 대기 자료도 재개 가능 |
 
 전문가 문장은 최종 근거가 아닙니다. 원자료 경로·소유 업종·직접 수치를 재검증합니다.

@@ -20,6 +20,7 @@ from app.schemas import (
     DecisionContent,
     DecisionRequest,
     DecisionResult,
+    EvaluationLogEntry,
     LandlordAnswer,
     MapLookupPlan,
     MapObservation,
@@ -31,7 +32,7 @@ from app.schemas import (
     SupplementPlan,
 )
 
-from .llm import InvalidDecisionCategory, generate_decision, validate_content
+from .llm import InvalidDecisionCategory, generate_decision, split_evaluation_log, validate_content
 
 GenerateDecision = Callable[
     [str, str],
@@ -98,9 +99,13 @@ async def evaluate(
     site: Site | None = None,
     allow_map_lookup: bool = False,
     deliberation: dict | None = None,
+    evaluation: dict | None = None,
+    evaluation_log: list[EvaluationLogEntry] | None = None,
 ) -> DecisionResult | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan:
     """보완 가능 작업이 있을 때만 내부 보완 요청을 허용합니다."""
     request = DecisionRequest.model_validate(request)
+    if evaluation_log is not None:
+        evaluation_log.clear()
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
     available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
     observation = request.map_observation
@@ -126,6 +131,7 @@ async def evaluate(
             supplement_context,
             allow_map_lookup,
             deliberation,
+            evaluation,
         )
         failures: list[dict[str, Any]] = []
         for attempt in range(2):
@@ -136,6 +142,9 @@ async def evaluate(
                 )
                 if inspect.isawaitable(produced):
                     produced = await produced
+                entries: list[EvaluationLogEntry] = []
+                if evaluation is not None:
+                    produced, entries = split_evaluation_log(produced, evaluation)
                 outcome = _parse_outcome(
                     produced,
                     final_only=bool(attempt),
@@ -151,6 +160,8 @@ async def evaluate(
                 content = outcome
                 _validate_categories(content)
                 _validate_evidence(content, visible, observation)
+                if evaluation_log is not None:
+                    evaluation_log.extend(entries)
                 break
             except (InvalidDecisionCategory, DecisionContractError) as error:
                 if isinstance(error, InvalidDecisionCategory):
@@ -438,10 +449,18 @@ def _build_prompt(
     supplement_context,
     allow_map_lookup,
     deliberation=None,
+    evaluation=None,
 ):
     """모델에 노출할 자료와 허용 작업만 구성합니다."""
     observation = request.map_observation
     prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
+    if evaluation is not None:
+        prompt += "\n" + files(__package__).joinpath("evaluation_prompt.md").read_text(
+            encoding="utf-8"
+        )
+        prompt += "\nunreviewed는 코드 전용, 쓰지 말 것.\n" + json.dumps(
+            EvaluationLogEntry.model_json_schema(), ensure_ascii=False
+        )
     prompt += "\n\n## 공통 중분류 목록 (코드 | 대분류 공식명 | 중분류 공식명)\n"
     prompt += "\n".join(
         f"{code} | {INDUSTRY_MAJORS[code][1]} | {name}" for code, name in INDUSTRIES.items()
@@ -477,7 +496,9 @@ def _build_prompt(
         payload["consult_round"] = deliberation.get("consult_round", 0)
         budget = current_scope()[0]
         payload["limits"] = {
-            "remaining_consult_rounds": max(0, 2 - payload["consult_round"]),
+            "remaining_consult_rounds": deliberation.get(
+                "remaining_consult_rounds", max(0, 2 - payload["consult_round"])
+            ),
             "remaining_model_calls": budget.limit - budget.used if budget else None,
             "reserved_final_calls": 2,
         }
@@ -519,6 +540,8 @@ def _build_prompt(
         payload["supplement_context"] = [
             item.model_dump(mode="json", exclude={"analysis"}) for item in supplement_context
         ]
+    if evaluation is not None:
+        payload["evaluation"] = evaluation
     return prompt, payload, visible
 
 

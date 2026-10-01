@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from app.industries.catalog import CATALOG_VERSION
-from app.llm.budget import MAX_CALLS
+from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS
 from app.schemas import (
     AGENT_IDS,
+    EVALUATOR_IDS,
     AgentAnalysis,
     AgentBrief,
     AgentError,
@@ -19,6 +20,8 @@ from app.schemas import (
     AnswerSubmission,
     DecisionRequest,
     DecisionResult,
+    Evaluation,
+    EvaluationLogEntry,
     MapLookupPlan,
     MapObservation,
     QuestionSnapshot,
@@ -698,6 +701,8 @@ def update_execution_state(
     budget: dict | None = None,
     elapsed_seconds: float | None = None,
     capabilities: dict | None = None,
+    evaluation_skipped: str | None = None,
+    time_limit: float | None = None,
     db_path=None,
 ) -> None:
     """소비 예산·활성 실행 시간은 되돌리지 않고 저장합니다."""
@@ -713,7 +718,13 @@ def update_execution_state(
             used = budget.get("used")
             if (
                 type(used) is not int
-                or not state.get("budget", {}).get("used", 0) <= used <= MAX_CALLS
+                or not state.get("budget", {}).get("used", 0)
+                <= used
+                <= (
+                    EVALUATED_MAX_CALLS
+                    if state.get("capabilities", {}).get("evaluators")
+                    else MAX_CALLS
+                )
                 or not isinstance(budget.get("calls"), list)
             ):
                 raise ValueError("모델 소비 예산이 올바르지 않습니다.")
@@ -728,10 +739,122 @@ def update_execution_state(
             if "capabilities" in state and state["capabilities"] != capabilities:
                 raise ValueError("등록한 도구 범위를 변경할 수 없습니다.")
             state["capabilities"] = capabilities
+        if evaluation_skipped is not None:
+            if evaluation_skipped not in {"no_data", "budget"}:
+                raise ValueError("알 수 없는 평가 생략 사유입니다.")
+            state["evaluation_skipped"] = evaluation_skipped
+        if time_limit is not None:
+            if (
+                not math.isfinite(time_limit)
+                or time_limit <= 0
+                or state.get("time_limit", time_limit) != time_limit
+            ):
+                raise ValueError("요청의 실행 제한시간은 양수이며 변경할 수 없습니다.")
+            state["time_limit"] = time_limit
         db.execute(
             "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
             (json.dumps(state, ensure_ascii=False, allow_nan=False), request_id),
         )
+
+
+def _require_running(db, request_id):
+    row = db.execute(
+        "SELECT status FROM analysis_requests WHERE request_id=?", (request_id,)
+    ).fetchone()
+    if row is None or row[0] != "running":
+        raise ValueError("실행 중인 요청이 없습니다.")
+
+
+def save_evaluation(draft: DecisionResult, evaluations: list[Evaluation], *, db_path=None) -> None:
+    draft = DecisionResult.model_validate(draft)
+    evaluations = [Evaluation.model_validate(e) for e in evaluations]
+    if (
+        len(evaluations) != 4
+        or {e.evaluator for e in evaluations} != set(EVALUATOR_IDS)
+        or any(e.request_id != draft.request_id for e in evaluations)
+    ):
+        raise ValueError("같은 요청의 평가자 네 명이 필요합니다.")
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        _require_running(db, draft.request_id)
+        db.execute(
+            "INSERT INTO evaluation_drafts VALUES (?,?,?)",
+            (
+                draft.request_id,
+                draft.model_dump_json(
+                    include={"request_id", "summary", "recommendations", "not_recommended"}
+                ),
+                _now(),
+            ),
+        )
+        for evaluation in evaluations:
+            db.execute(
+                "INSERT INTO evaluations VALUES (?,?,?,?,?)",
+                (
+                    draft.request_id,
+                    evaluation.evaluator,
+                    evaluation.source,
+                    evaluation.model_dump_json(),
+                    _now(),
+                ),
+            )
+        row = db.execute(
+            "SELECT execution_json FROM analysis_requests WHERE request_id=?", (draft.request_id,)
+        ).fetchone()
+        state = json.loads(row[0])
+        state["evaluation_start_round"] = db.execute(
+            "SELECT COALESCE(MAX(round),0) FROM specialist_consults WHERE request_id=?",
+            (draft.request_id,),
+        ).fetchone()[0]
+        db.execute(
+            "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
+            (json.dumps(state), draft.request_id),
+        )
+
+
+def save_evaluation_log(
+    request_id: str, entries: list[EvaluationLogEntry], *, db_path=None
+) -> None:
+    payload = [EvaluationLogEntry.model_validate(e).model_dump(mode="json") for e in entries]
+    with connect(db_path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        _require_running(db, request_id)
+        db.execute(
+            "INSERT INTO evaluation_logs VALUES (?,?,?) ON CONFLICT(request_id) DO UPDATE "
+            "SET log_json=excluded.log_json, updated_at=excluded.updated_at",
+            (request_id, json.dumps(payload, ensure_ascii=False), _now()),
+        )
+
+
+def get_evaluation(request_id: str, *, db_path=None) -> dict | None:
+    with connect(db_path) as db:
+        draft = db.execute(
+            "SELECT draft_json FROM evaluation_drafts WHERE request_id=?", (request_id,)
+        ).fetchone()
+        if draft is None:
+            return None
+        evaluations = [
+            Evaluation.model_validate_json(row[0])
+            for row in db.execute(
+                "SELECT evaluation_json FROM evaluations WHERE request_id=?", (request_id,)
+            )
+        ]
+        if (
+            len(evaluations) != 4
+            or {e.evaluator for e in evaluations} != set(EVALUATOR_IDS)
+            or any(e.request_id != request_id for e in evaluations)
+        ):
+            raise ValueError("저장된 평가 기록이 불완전합니다.")
+        log = db.execute(
+            "SELECT log_json FROM evaluation_logs WHERE request_id=?", (request_id,)
+        ).fetchone()
+        return {
+            "draft": json.loads(draft[0]),
+            "evaluations": sorted(evaluations, key=lambda e: EVALUATOR_IDS.index(e.evaluator)),
+            "log": [EvaluationLogEntry.model_validate(e) for e in json.loads(log[0])]
+            if log
+            else [],
+        }
 
 
 def _require_multi_running(db, request_id):

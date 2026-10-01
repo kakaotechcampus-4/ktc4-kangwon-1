@@ -54,9 +54,42 @@ def interactive_decision(*, with_map: bool, allow_questions: bool):
                     }
                 ],
             }
-        return mock_generate(prompt, payload)
+        result = mock_generate(prompt, payload)
+        if "evaluation" in data:
+            result["evaluation_log"] = [
+                {
+                    "evaluator": evaluation["evaluator"],
+                    "index": comment["index"],
+                    "decision": "partial",
+                    "applied": "확인할 점에 설비 확인을 추가",
+                    "dropped": "설비가 없다고 단정한 부분은 근거가 없어 제외",
+                    "reason": "목업",
+                }
+                for evaluation in data["evaluation"]["evaluations"]
+                for comment in evaluation["comments"]
+            ]
+            if result["recommendations"]:
+                result["recommendations"][0]["risks"].append("입점 전 설비를 확인해 주세요.")
+        return result
 
     return generate
+
+
+async def evaluator(prompt, payload):
+    data = json.loads(payload)
+    recommendations = data["draft"]["recommendations"]
+    if data["evaluator"] != "landlord_advocate" or not recommendations:
+        return {"verdict": "agree", "comments": []}
+    return {
+        "verdict": "conditional",
+        "comments": [
+            {
+                "industry_code": recommendations[0]["category"]["code"],
+                "comment": "설비 확인 필요",
+                "request": "ask_user" if "ask_user" in data["allowed_requests"] else "none",
+            }
+        ],
+    }
 
 
 async def specialist(messages, definitions):

@@ -21,6 +21,7 @@ from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import (
     AGENT_IDS,
     DEFAULT_RADIUS_M,
+    EVALUATOR_IDS,
     AnswerSubmission,
     DecisionResult,
     RadiusMeters,
@@ -35,7 +36,7 @@ from app.services.analysis import (
     retry_decision,
 )
 
-from .mock import interactive_decision, map_observation, specialist
+from .mock import evaluator, interactive_decision, map_observation, specialist
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 logger = logging.getLogger(__name__)
@@ -156,11 +157,16 @@ async def create_analysis(
             resolve=mock_resolve,
             agents=mock_agents(),
             generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
+            generate_evaluators=dict.fromkeys(EVALUATOR_IDS, evaluator),
             radius_m=body.radius_m,
             allow_questions=body.allow_questions,
             map_lookup=map_observation if body.with_map else None,
-            generate=interactive_decision(with_map=body.with_map, allow_questions=True)
-            if body.allow_questions or body.with_map
+            generate=interactive_decision(
+                with_map=body.with_map, allow_questions=body.allow_questions
+            )
+            if body.with_map
+            or body.allow_questions
+            or request.app.state.execution_settings.evaluators_enabled
             else mock_generate,
         )
     else:
@@ -243,7 +249,26 @@ async def get_analysis(request_id: str, request: Request) -> dict[str, Any]:
             repository.get_request, request_id, db_path=request.app.state.execution_settings.db_path
         )
         if row is not None:
-            row.pop("execution_json", None)
+            execution = json.loads(row.pop("execution_json", "{}"))
+            if execution.get("capabilities", {}).get("evaluators"):
+                saved = await asyncio.to_thread(
+                    repository.get_evaluation,
+                    request_id,
+                    db_path=request.app.state.execution_settings.db_path,
+                )
+                row["evaluation"] = {
+                    "skipped": execution.get("evaluation_skipped"),
+                    "draft": {k: v for k, v in saved["draft"].items() if k != "request_id"}
+                    if saved
+                    else None,
+                    "evaluations": [
+                        e.model_dump(mode="json", exclude={"notes", "request_id"})
+                        for e in saved["evaluations"]
+                    ]
+                    if saved
+                    else [],
+                    "log": [e.model_dump(mode="json") for e in saved["log"]] if saved else [],
+                }
             if row["analysis_mode"] == "multi_agent":
                 state = await asyncio.to_thread(
                     repository.get_deliberation,
@@ -338,7 +363,9 @@ async def submit_answers(
         work = runner(
             normalized,
             settings=request.app.state.execution_settings,
-            generate=mock_generate if _mock_enabled(mock) else None,
+            generate=interactive_decision(with_map=False, allow_questions=False)
+            if _mock_enabled(mock)
+            else None,
             **(
                 {
                     "generate_specialists": dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
@@ -395,7 +422,14 @@ async def retry_analysis_decision(
             request_id,
             failed_at=body.failed_at,
             settings=request.app.state.execution_settings,
-            generate=mock_generate if _mock_enabled(mock) else None,
+            generate=interactive_decision(with_map=False, allow_questions=False)
+            if _mock_enabled(mock)
+            else None,
+            **(
+                {"generate_evaluators": dict.fromkeys(EVALUATOR_IDS, evaluator)}
+                if _mock_enabled(mock)
+                else {}
+            ),
         )
     except HTTPException:
         raise
