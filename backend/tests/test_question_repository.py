@@ -190,6 +190,36 @@ class QuestionRepositoryTests(unittest.TestCase):
                 db.execute("SELECT name FROM sqlite_master WHERE name='custom_address'").fetchone()
             )
 
+    def test_migration_finds_request_table_after_other_statements_and_comments(self):
+        from unittest.mock import patch
+
+        legacy = self.path.parent / "reordered.sqlite3"
+        schema = (Path(__file__).parents[1] / "app/db/schema.sql").read_text("utf-8")
+        with closing(sqlite3.connect(legacy)) as db, db:
+            db.executescript(schema.replace(", 'waiting_for_input'", ""))
+            db.execute(
+                "INSERT INTO analysis_requests(request_id,input_address,status,created_at) "
+                "VALUES ('old','주소','running','now')"
+            )
+        resource = self.path.parent / "resource"
+        resource.mkdir()
+        (resource / "schema.sql").write_text(
+            "-- 첫 주석에도 세미콜론; 이 있습니다.\n"
+            "CREATE TABLE IF NOT EXISTS unrelated (note TEXT DEFAULT ';');\n" + schema,
+            encoding="utf-8",
+        )
+        with patch("app.db.connection.files", return_value=resource):
+            initialize(legacy)
+            initialize(legacy)
+        with connect(legacy) as db:
+            db.execute(
+                "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id='old'"
+            )
+            self.assertEqual(
+                db.execute("SELECT input_address FROM analysis_requests").fetchone()[0], "주소"
+            )
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_migration_integrity_failure_rolls_back_original_table(self):
         legacy = self.path.parent / "invalid.sqlite3"
         schema = (Path(__file__).parents[1] / "app/db/schema.sql").read_text("utf-8")
