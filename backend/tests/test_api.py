@@ -175,8 +175,8 @@ class ApiTests(unittest.TestCase):
         agents = mock_agents()
         agents["floating_population"] = invalid
         with (
-            patch("app.api.v1.routes.mock_agents", return_value=agents),
-            patch("app.api.v1.routes.mock_generate") as decision,
+            patch("app.services.mocking.mock_agents", return_value=agents),
+            patch("app.services.mocking.mock_generate") as decision,
         ):
             response = self.client.post("/api/v1/analyses?mock=true", json={"address": "시험 주소"})
         self.assertEqual(response.status_code, 500)

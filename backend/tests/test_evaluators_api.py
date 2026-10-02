@@ -3,8 +3,9 @@
 import json
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
@@ -14,6 +15,89 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_mock_retry_before_evaluation_never_builds_real_generators(self):
+        from app.agents.decision.agent import generate_decision
+        from app.agents.evaluators.agent import generate_evaluation
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = ExecutionSettings(
+                db_path=Path(directory) / "retry.sqlite3", evaluators_enabled=True
+            )
+            with (
+                TestClient(create_app(settings=settings, load_env=False)) as client,
+                patch("socket.socket.connect", side_effect=AssertionError("네트워크 금지")),
+            ):
+                with patch(
+                    "app.services.mocking.interactive_decision",
+                    return_value=Mock(side_effect=RuntimeError("초안 실패")),
+                ):
+                    failed = client.post(
+                        "/api/v1/analyses?mock=true", json={"address": "시험 주소"}
+                    )
+                self.assertEqual(failed.status_code, 502)
+                request_id = failed.headers["X-Request-ID"]
+                path = f"/api/v1/analyses/{request_id}"
+                saved = client.get(path).json()
+                self.assertEqual(saved["status"], "failed")
+                self.assertIsNone(saved["evaluation"]["draft"])
+                with (
+                    patch(
+                        "app.services.analysis.build_evaluator_generators",
+                        side_effect=AssertionError("실제 평가자 생성 금지"),
+                    ) as factory,
+                    patch("app.services.analysis.partial", wraps=partial) as construct,
+                ):
+                    response = client.post(
+                        path + "/retry-decision?mock=true",
+                        json={"failed_at": saved["completed_at"]},
+                    )
+                self.assertEqual(response.status_code, 200, response.text)
+                factory.assert_not_called()
+                self.assertFalse(
+                    any(
+                        call.args[0] in (generate_decision, generate_evaluation)
+                        for call in construct.call_args_list
+                    )
+                )
+                completed = client.get(path).json()
+                self.assertEqual(completed["status"], "completed")
+                self.assertEqual(len(completed["evaluation"]["evaluations"]), 4)
+
+    def test_mock_resume_never_builds_real_evaluator_generators(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = ExecutionSettings(
+                db_path=Path(directory) / "resume.sqlite3",
+                analysis_mode="multi_agent",
+                evaluators_enabled=True,
+            )
+            with (
+                TestClient(create_app(settings=settings, load_env=False)) as client,
+                patch("socket.socket.connect", side_effect=AssertionError("네트워크 금지")),
+            ):
+                started = client.post(
+                    "/api/v1/analyses?mock=true",
+                    json={"address": "시험 주소", "allow_questions": True, "with_map": True},
+                )
+                self.assertEqual(started.status_code, 200, started.text)
+                waiting = started.json()
+                path = f"/api/v1/analyses/{waiting['request_id']}"
+                self.assertEqual(len(client.get(path).json()["evaluation"]["evaluations"]), 4)
+                with patch(
+                    "app.services.analysis.build_evaluator_generators",
+                    side_effect=AssertionError("실제 평가자 생성 금지"),
+                ) as factory:
+                    response = client.post(
+                        path + "/answers?mock=true",
+                        json={
+                            "request_id": waiting["request_id"],
+                            "question_set_id": waiting["question_set_id"],
+                            "answers": [],
+                        },
+                    )
+                self.assertEqual(response.status_code, 200, response.text)
+                factory.assert_not_called()
+                self.assertEqual(client.get(path).json()["status"], "completed")
+
     def test_mock_retry_before_and_after_evaluation(self):
         with tempfile.TemporaryDirectory() as directory:
             for phase in ("draft", "final"):
@@ -32,7 +116,7 @@ class ApiTests(unittest.TestCase):
                             prompt, payload
                         )
 
-                    with patch("app.api.v1.routes.interactive_decision", return_value=broken):
+                    with patch("app.services.mocking.interactive_decision", return_value=broken):
                         failed = client.post(
                             "/api/v1/analyses?mock=true", json={"address": "시험 주소"}
                         )

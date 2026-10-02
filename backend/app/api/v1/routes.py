@@ -17,11 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.address import GeocodeError
 from app.agents.orchestration.workflow import build_supplement_tools
 from app.db import repository
-from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import (
-    AGENT_IDS,
     DEFAULT_RADIUS_M,
-    EVALUATOR_IDS,
     AnswerSubmission,
     DecisionResult,
     RadiusMeters,
@@ -35,8 +32,7 @@ from app.services.analysis import (
     resume_analysis,
     retry_decision,
 )
-
-from .mock import evaluator, interactive_decision, map_observation, specialist
+from app.services.mocking import mock_dependencies
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 logger = logging.getLogger(__name__)
@@ -164,20 +160,14 @@ async def create_analysis(
             body.address,
             settings=request.app.state.execution_settings,
             request_id=request_id,
-            resolve=mock_resolve,
-            agents=mock_agents(),
-            generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
-            generate_evaluators=dict.fromkeys(EVALUATOR_IDS, evaluator),
             radius_m=body.radius_m,
             allow_questions=body.allow_questions,
-            map_lookup=map_observation if body.with_map else None,
-            generate=interactive_decision(
-                with_map=body.with_map, allow_questions=body.allow_questions
-            )
-            if body.with_map
-            or body.allow_questions
-            or request.app.state.execution_settings.evaluators_enabled
-            else mock_generate,
+            **mock_dependencies(
+                "analysis",
+                with_map=body.with_map,
+                allow_questions=body.allow_questions,
+                evaluators_enabled=request.app.state.execution_settings.evaluators_enabled,
+            ),
         )
     else:
         from app.agents.map_analysis.agent import observe
@@ -378,18 +368,7 @@ async def submit_answers(
         work = runner(
             normalized,
             settings=request.app.state.execution_settings,
-            generate=interactive_decision(with_map=False, allow_questions=False)
-            if _mock_enabled(mock)
-            else None,
-            **(
-                {
-                    "generate_specialists": dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
-                    "map_lookup": map_observation,
-                    "supplements": [],
-                }
-                if _mock_enabled(mock)
-                else {}
-            ),
+            **(mock_dependencies("resume") if _mock_enabled(mock) else {"generate": None}),
         )
         if not wait:
             return _start_job(request, request_id, work)
@@ -438,14 +417,7 @@ async def retry_analysis_decision(
             request_id,
             failed_at=body.failed_at,
             settings=request.app.state.execution_settings,
-            generate=interactive_decision(with_map=False, allow_questions=False)
-            if _mock_enabled(mock)
-            else None,
-            **(
-                {"generate_evaluators": dict.fromkeys(EVALUATOR_IDS, evaluator)}
-                if _mock_enabled(mock)
-                else {}
-            ),
+            **(mock_dependencies("retry") if _mock_enabled(mock) else {"generate": None}),
         )
     except HTTPException:
         raise

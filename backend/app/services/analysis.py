@@ -94,6 +94,7 @@ async def resume_analysis(
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     supplements: list[SupplementTool] | None = None,
     map_lookup: MapLookup | None = None,
+    generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
 ) -> DecisionResult:
     """답변을 한 번만 수락하고 저장된 분석으로 최종판단을 재개합니다."""
     submission = AnswerSubmission.model_validate(submission)
@@ -162,7 +163,11 @@ async def resume_analysis(
                         mode="multi_agent",
                         generate_specialists=experts,
                         evaluators_enabled=bool(evaluation_state),
-                        generate_evaluators=build_evaluator_generators(settings)
+                        generate_evaluators=(
+                            generate_evaluators
+                            if generate_evaluators is not None
+                            else build_evaluator_generators(settings)
+                        )
                         if evaluation_state
                         else None,
                         user_answers=bundle["answers"],
@@ -477,9 +482,9 @@ async def retry_decision(
                         mode=bundle["analysis_mode"],
                         retry_only=True,
                         evaluators_enabled=True,
-                        generate_evaluators=build_evaluator_generators(
-                            settings, generate_evaluators
-                        ),
+                        generate_evaluators=generate_evaluators
+                        if generate_evaluators is not None
+                        else build_evaluator_generators(settings),
                         agent_timeout=settings.agent_timeout,
                         user_answers=bundle["answers"],
                         hooks=_storage_hooks(path, source_attempts, request_id=request_id),
