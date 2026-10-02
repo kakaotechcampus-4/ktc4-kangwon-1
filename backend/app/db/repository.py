@@ -5,8 +5,9 @@ import math
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+from app.db.types import DeliberationState, ExecutionCapabilities, ExecutionState, ResumeBundle
 from app.industries.catalog import CATALOG_VERSION
 from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS
 from app.schemas import (
@@ -232,7 +233,7 @@ def list_decision_failures(request_id: str, *, db_path=None) -> list[dict[str, A
         ]
 
 
-def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> dict[str, Any]:
+def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> ResumeBundle:
     """검증된 저장 입력을 확보한 한 호출만 실패한 판단을 재시도합니다."""
     request_id = _text(request_id)
     with connect(db_path) as db:
@@ -612,13 +613,13 @@ def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dic
         )
 
 
-def load_resume_context(request_id: str, *, db_path=None) -> dict[str, Any]:
+def load_resume_context(request_id: str, *, db_path=None) -> ResumeBundle:
     """질문 재개와 실패 재시도가 동일한 저장 자료를 복원합니다."""
     with connect(db_path) as db:
         return _load_resume_context(db, request_id)
 
 
-def _load_resume_context(db: sqlite3.Connection, request_id: str) -> dict[str, Any]:
+def _load_resume_context(db: sqlite3.Connection, request_id: str) -> ResumeBundle:
     row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
     if row is None or row["catalog_version"] != CATALOG_VERSION:
         raise ValueError("요청 또는 현재 업종표 버전의 저장 자료가 없습니다.")
@@ -722,7 +723,7 @@ def update_execution_state(
         ).fetchone()
         if row is None or row[1] != "running":
             raise ValueError("실행 중인 요청이 없습니다.")
-        state = json.loads(row[0])
+        state: ExecutionState = json.loads(row[0])
         if budget is not None:
             used = budget.get("used")
             if (
@@ -747,7 +748,7 @@ def update_execution_state(
         if capabilities is not None:
             if "capabilities" in state and state["capabilities"] != capabilities:
                 raise ValueError("등록한 도구 범위를 변경할 수 없습니다.")
-            state["capabilities"] = capabilities
+            state["capabilities"] = cast(ExecutionCapabilities, capabilities)
         if evaluation_skipped is not None:
             if evaluation_skipped not in {"no_data", "budget"}:
                 raise ValueError("알 수 없는 평가 생략 사유입니다.")
@@ -810,7 +811,7 @@ def save_evaluation(draft: DecisionResult, evaluations: list[Evaluation], *, db_
         row = db.execute(
             "SELECT execution_json FROM analysis_requests WHERE request_id=?", (draft.request_id,)
         ).fetchone()
-        state = json.loads(row[0])
+        state: ExecutionState = json.loads(row[0])
         state["evaluation_start_round"] = db.execute(
             "SELECT COALESCE(MAX(round),0) FROM specialist_consults WHERE request_id=?",
             (draft.request_id,),
@@ -935,7 +936,7 @@ def list_specialist_answers(request_id: str, *, db_path=None) -> list[Specialist
         ]
 
 
-def _deliberation(db, request_id):
+def _deliberation(db, request_id) -> DeliberationState:
     row = db.execute(
         "SELECT execution_json FROM analysis_requests WHERE request_id=?", (request_id,)
     ).fetchone()
@@ -973,7 +974,7 @@ def _deliberation(db, request_id):
     }
 
 
-def get_deliberation(request_id: str, *, db_path=None) -> dict[str, Any]:
+def get_deliberation(request_id: str, *, db_path=None) -> DeliberationState:
     with connect(db_path) as db:
         return _deliberation(db, _text(request_id))
 

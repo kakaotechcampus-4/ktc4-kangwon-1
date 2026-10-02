@@ -11,7 +11,7 @@ from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from time import monotonic
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 from app.address import resolve_site
 from app.agents.decision import agent as decision
@@ -19,6 +19,7 @@ from app.agents.decision.agent import GenerateDecision
 from app.agents.evaluators.agent import GenerateEvaluation, generate_evaluation
 from app.agents.orchestration.graph import RunHooks, run_graph
 from app.agents.orchestration.nodes.decision import evaluate_with_log
+from app.agents.orchestration.state import GraphState
 from app.agents.orchestration.supplement import OnSupplement, validate_tools
 from app.agents.orchestration.tools import MapLookup, SupplementTool
 from app.agents.orchestration.validation import (
@@ -38,6 +39,7 @@ from app.agents.orchestration.workflow import (
 from app.agents.specialists.agent import GenerateSpecialist, generate_specialist
 from app.db import repository
 from app.db.connection import initialize
+from app.db.types import ExecutionState, ResumeBundle
 from app.llm.budget import (
     EVALUATED_MAX_CALLS,
     MAX_CALLS,
@@ -52,6 +54,7 @@ from app.schemas import (
     DEFAULT_RADIUS_M,
     EVALUATOR_IDS,
     AgentError,
+    AgentId,
     AnalysisTask,
     AnswerSubmission,
     DecisionResult,
@@ -146,74 +149,20 @@ async def resume_analysis(
             evaluation_state = await _saved_evaluation(bundle, path)
             async with _execution_scope(submission.request_id, path, timeout) as flush:
                 if bundle["analysis_mode"] == "multi_agent":
-                    capabilities = bundle["execution"].get("capabilities", {})
-                    if capabilities.get("map"):
-                        from app.agents.map_analysis.agent import observe
-
-                        map_lookup = map_lookup or observe
-                    else:
-                        map_lookup = None
-                    permitted = {tuple(key) for key in capabilities.get("supplements", [])}
-                    supplements = [
-                        t
-                        for t in (
-                            build_supplement_tools(settings) if supplements is None else supplements
-                        )
-                        if (t.operation.agent_id, t.operation.operation) in permitted
-                    ]
-                    experts = build_specialist_generators(
-                        settings, generate_specialists, with_map=map_lookup is not None
+                    result = await _resume_graph(
+                        bundle,
+                        path,
+                        settings,
+                        generate,
+                        generate_specialists,
+                        generate_evaluators,
+                        supplements,
+                        map_lookup,
+                        evaluation_state,
                     )
-                    result = await run_graph(
-                        bundle["task"].site.input_address,
-                        radius_m=bundle["task"].radius_m,
-                        request_id=submission.request_id,
-                        resolve=partial(resolve_site, settings=settings.address),
-                        agents=build_react_agents(settings),
-                        generate=generate,
-                        mode="multi_agent",
-                        generate_specialists=experts,
-                        evaluators_enabled=bool(evaluation_state),
-                        generate_evaluators=(
-                            generate_evaluators
-                            if generate_evaluators is not None
-                            else build_evaluator_generators(settings)
-                        )
-                        if evaluation_state
-                        else None,
-                        user_answers=bundle["answers"],
-                        supplements=supplements,
-                        map_lookup=map_lookup,
-                        agent_timeout=settings.agent_timeout,
-                        hooks=_storage_hooks(
-                            path, bundle["source_attempts"], request_id=submission.request_id
-                        ),
-                        resume_state={
-                            **evaluation_state,
-                            "task": bundle["task"],
-                            "analyses": bundle["request"].analyses,
-                            "briefs": bundle["briefs"],
-                            "answers": bundle["specialist_answers"],
-                            "consult_round": bundle["consult_round"],
-                            "map_observation": bundle["request"].map_observation,
-                            "map_queries": bundle["map_queries"],
-                            "feedback": bundle["feedback"],
-                            "supplement_context": bundle["supplement_context"],
-                        },
-                    )
-                    if not isinstance(result, DecisionResult):
-                        raise ValueError("재개 후에는 질문을 발행할 수 없습니다.")
                 else:
                     result = await _evaluate_saved(bundle, generate=generate, path=path)
-                await flush()
-                await _settle(
-                    asyncio.to_thread(
-                        repository.complete_request,
-                        result,
-                        source_attempts=bundle["source_attempts"],
-                        db_path=path,
-                    )
-                )
+                await _complete(result, flush, path, bundle["source_attempts"])
             await _emit(path, submission.request_id, "run", "completed", status=result.status)
             return result
     except (Exception, asyncio.CancelledError) as exc:
@@ -321,119 +270,24 @@ async def execute_analysis(
         if settings.evaluators_enabled
         else None
     )
-    owned = False
-    source_attempts = dict.fromkeys(AGENT_IDS, 1)
-
-    async def create() -> None:
-        nonlocal owned
-        await asyncio.to_thread(
-            repository.create_request,
-            request_id,
-            address,
-            radius_m=radius_m,
-            analysis_mode=settings.analysis_mode,
-            db_path=path,
-        )
-        owned = True
-
-    async def save_questions(
-        task: AnalysisTask, waiting: WaitingForInput, done: bool, feedback: list[str]
-    ) -> None:
-        snapshot = QuestionSnapshot(
-            task=task,
-            waiting=waiting,
-            source_attempts=source_attempts,
-            supplement_done=done,
-            feedback=feedback,
-        )
-        await flush()
-        if settings.analysis_mode == "multi_agent":
-            state = await asyncio.to_thread(repository.get_deliberation, request_id, db_path=path)
-            events = await asyncio.to_thread(
-                repository.list_supplement_events, request_id, db_path=path
-            )
-            snapshot = QuestionSnapshotV2(
-                **{
-                    **snapshot.model_dump(mode="json"),
-                    "version": 2,
-                    "supplement_done": bool(events),
-                },
-                brief_agents=[b.agent_id for b in state["briefs"]],
-                consult_round=state["consult_round"],
-                map_attempt=state["map_attempt"],
-                llm_calls=state["execution"].get("budget", {}).get("used", 0),
-                elapsed_seconds=state["execution"].get("elapsed_seconds", 0),
-            )
-
-        async def persist() -> None:
-            nonlocal owned
-            await asyncio.to_thread(repository.save_question_snapshot, snapshot, db_path=path)
-            # 대기 이후 실행은 답변을 선점한 호출이 소유합니다.
-            owned = False
-
-        await _settle(persist())
-
-    try:
-        async with asyncio.timeout(overall_timeout):
-            path = await _settle(asyncio.to_thread(initialize, db_path))
-            # INSERT 성공을 확인한 호출만 이 요청의 실패 상태를 변경할 수 있습니다.
-            await _settle(create())
-            await _settle(asyncio.to_thread(repository.mark_running, request_id, db_path=path))
-            await _settle(
-                asyncio.to_thread(
-                    repository.update_execution_state,
-                    request_id,
-                    db_path=path,
-                    capabilities={
-                        "evaluators": settings.evaluators_enabled,
-                        "map": map_lookup is not None,
-                        "supplements": [
-                            [t.operation.agent_id, t.operation.operation] for t in supplements
-                        ],
-                    },
-                    time_limit=overall_timeout if settings.evaluators_enabled else None,
-                )
-            )
-            async with _execution_scope(
-                request_id, path, overall_timeout, active=lambda: owned
-            ) as flush:
-                result = await run_graph(
-                    address,
-                    radius_m=radius_m,
-                    resolve=resolve,
-                    agents=agents,
-                    request_id=request_id,
-                    generate=generate,
-                    agent_timeout=agent_timeout,
-                    supplements=supplements,
-                    allow_questions=allow_questions,
-                    map_lookup=map_lookup,
-                    mode=settings.analysis_mode,
-                    generate_specialists=experts,
-                    evaluators_enabled=settings.evaluators_enabled,
-                    generate_evaluators=evaluators,
-                    hooks=replace(
-                        _storage_hooks(path, source_attempts, on_supplement, request_id=request_id),
-                        on_questions=save_questions if allow_questions else None,
-                    ),
-                )
-                if isinstance(result, WaitingForInput):
-                    return result
-                await flush()
-                await _settle(
-                    asyncio.to_thread(
-                        repository.complete_request,
-                        result,
-                        source_attempts=source_attempts,
-                        db_path=path,
-                    )
-                )
-            await _emit(path, request_id, "run", "completed", status=result.status)
-            return result
-    except (Exception, asyncio.CancelledError) as exc:
-        if owned:
-            await _record_failure(request_id, exc, path)
-        raise
+    return await _execute_new(
+        address,
+        request_id,
+        settings,
+        db_path,
+        radius_m,
+        resolve,
+        agents,
+        generate,
+        agent_timeout,
+        overall_timeout,
+        supplements,
+        on_supplement,
+        allow_questions,
+        map_lookup,
+        experts,
+        evaluators,
+    )
 
 
 async def retry_decision(
@@ -451,7 +305,7 @@ async def retry_decision(
         generate = partial(decision.generate_decision, settings=settings.decision_llm)
     if not callable(generate):
         raise ValueError("최종판단 호출 함수가 필요합니다.")
-    bundle: dict[str, Any] | None = None
+    bundle: ResumeBundle | None = None
     path = await _settle(asyncio.to_thread(initialize, settings.db_path))
 
     async def claim() -> None:
@@ -467,58 +321,8 @@ async def retry_decision(
             assert bundle is not None
             source_attempts = bundle["source_attempts"]
             async with _execution_scope(request_id, path, time_limit) as flush:
-                execution = bundle["execution"]
-                saved = await asyncio.to_thread(repository.get_evaluation, request_id, db_path=path)
-                if (
-                    execution.get("capabilities", {}).get("evaluators")
-                    and saved is None
-                    and not execution.get("evaluation_skipped")
-                ):
-                    if "evaluation_start_round" in execution:
-                        raise ValueError("이미 수행한 평가 기록이 없습니다.")
-                    result = await run_graph(
-                        bundle["request"].address,
-                        request_id=request_id,
-                        radius_m=bundle["task"].radius_m,
-                        resolve=partial(resolve_site, settings=settings.address),
-                        agents=build_react_agents(settings),
-                        generate=generate,
-                        mode=bundle["analysis_mode"],
-                        retry_only=True,
-                        evaluators_enabled=True,
-                        generate_evaluators=generate_evaluators
-                        if generate_evaluators is not None
-                        else build_evaluator_generators(settings),
-                        agent_timeout=settings.agent_timeout,
-                        user_answers=bundle["answers"],
-                        hooks=_storage_hooks(path, source_attempts, request_id=request_id),
-                        resume_state={
-                            "task": bundle["task"],
-                            "analyses": bundle["request"].analyses,
-                            "map_observation": bundle["request"].map_observation,
-                            "map_done": bundle["request"].map_observation is not None,
-                            "supplement_done": bool(bundle["supplement_context"]),
-                            "feedback": bundle["feedback"],
-                            "supplement_context": bundle["supplement_context"],
-                            "briefs": bundle["briefs"],
-                            "answers": bundle["specialist_answers"],
-                            "consult_round": bundle["consult_round"],
-                            "map_queries": bundle["map_queries"],
-                        },
-                    )
-                    if not isinstance(result, DecisionResult):
-                        raise ValueError("재시도 후에는 최종판단만 허용합니다.")
-                else:
-                    result = await _evaluate_saved(bundle, generate=generate, path=path)
-                await flush()
-                await _settle(
-                    asyncio.to_thread(
-                        repository.complete_request,
-                        result,
-                        source_attempts=source_attempts,
-                        db_path=path,
-                    )
-                )
+                result = await _retry_saved(bundle, path, settings, generate, generate_evaluators)
+                await _complete(result, flush, path, source_attempts)
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if bundle is not None:
@@ -527,7 +331,7 @@ async def retry_decision(
 
 
 async def _evaluate_saved(
-    bundle: dict[str, Any], *, generate: GenerateDecision, path=None
+    bundle: ResumeBundle, *, generate: GenerateDecision, path=None
 ) -> DecisionResult:
     """저장된 입력으로 판단만 실행하며 추가 외부 조회를 허용하지 않습니다."""
     state = await _saved_evaluation(bundle, path) if path is not None else {}
@@ -630,7 +434,7 @@ async def _saved_time_limit(request_id, path, fallback):
 async def _saved_evaluation(bundle, path):
     request = bundle["request"]
     row = await asyncio.to_thread(repository.get_request, request.request_id, db_path=path)
-    execution = json.loads(row["execution_json"])
+    execution: ExecutionState = json.loads(row["execution_json"])
     if not execution.get("capabilities", {}).get("evaluators"):
         return {}
     saved = await asyncio.to_thread(repository.get_evaluation, request.request_id, db_path=path)
@@ -752,7 +556,7 @@ def _storage_hooks(path, source_attempts, on_supplement=None, *, request_id=None
 async def _execution_scope(request_id, path, time_limit, *, active=lambda: True):
     """사람의 대기 시간은 제외하고 요청의 호출·활성 시간 예산을 이어 씁니다."""
     row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
-    saved = json.loads(row["execution_json"])
+    saved: ExecutionState = json.loads(row["execution_json"])
     enabled = saved.get("capabilities", {}).get("evaluators", False)
     if enabled:
         time_limit = saved.get("time_limit", time_limit)
@@ -806,3 +610,276 @@ async def _execution_scope(request_id, path, time_limit, *, active=lambda: True)
         raise
     else:
         await finish()
+
+
+def build_resume_state(bundle: ResumeBundle, *, retry: bool = False) -> GraphState:
+    """저장 자료를 재개 상태로 옮기고 기존 경로별 조회 완료 플래그를 보존합니다."""
+    state: GraphState = {
+        "task": bundle["task"],
+        "analyses": bundle["request"].analyses,
+        "briefs": bundle["briefs"],
+        "answers": bundle["specialist_answers"],
+        "consult_round": bundle["consult_round"],
+        "map_queries": bundle["map_queries"],
+        "feedback": bundle["feedback"],
+        "supplement_context": bundle["supplement_context"],
+    }
+    state["map_observation"] = bundle["request"].map_observation
+    if retry:
+        state["map_done"] = bundle["request"].map_observation is not None
+        state["supplement_done"] = bool(bundle["supplement_context"])
+    return state
+
+
+async def _complete(result, flush, path, source_attempts):
+    """예산 저장을 끝낸 뒤 그 실행이 사용한 분석 차수로 완료합니다."""
+    await flush()
+    await _settle(
+        asyncio.to_thread(
+            repository.complete_request, result, source_attempts=source_attempts, db_path=path
+        )
+    )
+
+
+async def _resume_graph(
+    bundle: ResumeBundle,
+    path,
+    settings,
+    generate,
+    generate_specialists,
+    generate_evaluators,
+    supplements,
+    map_lookup,
+    evaluation_state,
+):
+    capabilities = bundle["execution"].get("capabilities", {})
+    if capabilities.get("map"):
+        from app.agents.map_analysis.agent import observe
+
+        map_lookup = map_lookup or observe
+    else:
+        map_lookup = None
+    permitted = {tuple(key) for key in capabilities.get("supplements", [])}
+    supplements = [
+        t
+        for t in (build_supplement_tools(settings) if supplements is None else supplements)
+        if (t.operation.agent_id, t.operation.operation) in permitted
+    ]
+    experts = build_specialist_generators(
+        settings, generate_specialists, with_map=map_lookup is not None
+    )
+    result = await run_graph(
+        bundle["task"].site.input_address,
+        radius_m=bundle["task"].radius_m,
+        request_id=bundle["request"].request_id,
+        resolve=partial(resolve_site, settings=settings.address),
+        agents=build_react_agents(settings),
+        generate=generate,
+        mode="multi_agent",
+        generate_specialists=experts,
+        evaluators_enabled=bool(evaluation_state),
+        generate_evaluators=(
+            generate_evaluators
+            if generate_evaluators is not None
+            else build_evaluator_generators(settings)
+        )
+        if evaluation_state
+        else None,
+        user_answers=bundle["answers"],
+        supplements=supplements,
+        map_lookup=map_lookup,
+        agent_timeout=settings.agent_timeout,
+        hooks=_storage_hooks(
+            path, bundle["source_attempts"], request_id=bundle["request"].request_id
+        ),
+        resume_state={**evaluation_state, **build_resume_state(bundle)},
+    )
+    if not isinstance(result, DecisionResult):
+        raise ValueError("재개 후에는 질문을 발행할 수 없습니다.")
+    return result
+
+
+async def _retry_saved(bundle: ResumeBundle, path, settings, generate, generate_evaluators):
+    execution = bundle["execution"]
+    saved = await asyncio.to_thread(
+        repository.get_evaluation, bundle["request"].request_id, db_path=path
+    )
+    if (
+        execution.get("capabilities", {}).get("evaluators")
+        and saved is None
+        and not execution.get("evaluation_skipped")
+    ):
+        if "evaluation_start_round" in execution:
+            raise ValueError("이미 수행한 평가 기록이 없습니다.")
+        result = await run_graph(
+            bundle["request"].address,
+            request_id=bundle["request"].request_id,
+            radius_m=bundle["task"].radius_m,
+            resolve=partial(resolve_site, settings=settings.address),
+            agents=build_react_agents(settings),
+            generate=generate,
+            mode=bundle["analysis_mode"],
+            retry_only=True,
+            evaluators_enabled=True,
+            generate_evaluators=generate_evaluators
+            if generate_evaluators is not None
+            else build_evaluator_generators(settings),
+            agent_timeout=settings.agent_timeout,
+            user_answers=bundle["answers"],
+            hooks=_storage_hooks(
+                path, bundle["source_attempts"], request_id=bundle["request"].request_id
+            ),
+            resume_state=build_resume_state(bundle, retry=True),
+        )
+        if not isinstance(result, DecisionResult):
+            raise ValueError("재시도 후에는 최종판단만 허용합니다.")
+    else:
+        result = await _evaluate_saved(bundle, generate=generate, path=path)
+    return result
+
+
+async def _execute_new(
+    address,
+    request_id,
+    settings,
+    db_path,
+    radius_m,
+    resolve,
+    agents,
+    generate,
+    agent_timeout,
+    overall_timeout,
+    supplements,
+    on_supplement,
+    allow_questions,
+    map_lookup,
+    experts,
+    evaluators,
+):
+    owned = False
+    source_attempts = dict.fromkeys(AGENT_IDS, 1)
+
+    async def create() -> None:
+        nonlocal owned
+        await asyncio.to_thread(
+            repository.create_request,
+            request_id,
+            address,
+            radius_m=radius_m,
+            analysis_mode=settings.analysis_mode,
+            db_path=path,
+        )
+        owned = True
+
+    async def save_questions(
+        task: AnalysisTask, waiting: WaitingForInput, done: bool, feedback: list[str]
+    ) -> None:
+        snapshot = await _question_snapshot(
+            task,
+            waiting,
+            done,
+            feedback,
+            source_attempts,
+            settings,
+            request_id,
+            path,
+            flush,
+        )
+
+        async def persist() -> None:
+            nonlocal owned
+            await asyncio.to_thread(repository.save_question_snapshot, snapshot, db_path=path)
+            # 대기 이후 실행은 답변을 선점한 호출이 소유합니다.
+            owned = False
+
+        await _settle(persist())
+
+    try:
+        async with asyncio.timeout(overall_timeout):
+            path = await _settle(asyncio.to_thread(initialize, db_path))
+            # INSERT 성공을 확인한 호출만 이 요청의 실패 상태를 변경할 수 있습니다.
+            await _settle(create())
+            await _start_execution(
+                request_id, path, settings, map_lookup, supplements, overall_timeout
+            )
+            async with _execution_scope(
+                request_id, path, overall_timeout, active=lambda: owned
+            ) as flush:
+                result = await run_graph(
+                    address,
+                    radius_m=radius_m,
+                    resolve=resolve,
+                    agents=agents,
+                    request_id=request_id,
+                    generate=generate,
+                    agent_timeout=agent_timeout,
+                    supplements=supplements,
+                    allow_questions=allow_questions,
+                    map_lookup=map_lookup,
+                    mode=settings.analysis_mode,
+                    generate_specialists=experts,
+                    evaluators_enabled=settings.evaluators_enabled,
+                    generate_evaluators=evaluators,
+                    hooks=replace(
+                        _storage_hooks(path, source_attempts, on_supplement, request_id=request_id),
+                        on_questions=save_questions if allow_questions else None,
+                    ),
+                )
+                if isinstance(result, WaitingForInput):
+                    return result
+                await _complete(result, flush, path, source_attempts)
+            await _emit(path, request_id, "run", "completed", status=result.status)
+            return result
+    except (Exception, asyncio.CancelledError) as exc:
+        if owned:
+            await _record_failure(request_id, exc, path)
+        raise
+
+
+async def _question_snapshot(
+    task, waiting, done, feedback, source_attempts, settings, request_id, path, flush
+):
+    snapshot = QuestionSnapshot(
+        task=task,
+        waiting=waiting,
+        source_attempts=source_attempts,
+        supplement_done=done,
+        feedback=feedback,
+    )
+    await flush()
+    if settings.analysis_mode == "multi_agent":
+        state = await asyncio.to_thread(repository.get_deliberation, request_id, db_path=path)
+        events = await asyncio.to_thread(
+            repository.list_supplement_events, request_id, db_path=path
+        )
+        snapshot = QuestionSnapshotV2(
+            **{
+                **snapshot.model_dump(mode="json"),
+                "version": 2,
+                "supplement_done": bool(events),
+            },
+            brief_agents=[cast(AgentId, b.agent_id) for b in state["briefs"]],
+            consult_round=state["consult_round"],
+            map_attempt=state["map_attempt"],
+            llm_calls=state["execution"].get("budget", {}).get("used", 0),
+            elapsed_seconds=state["execution"].get("elapsed_seconds", 0),
+        )
+
+    return snapshot
+
+
+async def _start_execution(request_id, path, settings, map_lookup, supplements, overall_timeout):
+    await _settle(asyncio.to_thread(repository.mark_running, request_id, db_path=path))
+    await _settle(
+        asyncio.to_thread(
+            repository.update_execution_state,
+            request_id,
+            db_path=path,
+            capabilities={
+                "evaluators": settings.evaluators_enabled,
+                "map": map_lookup is not None,
+                "supplements": [[t.operation.agent_id, t.operation.operation] for t in supplements],
+            },
+            time_limit=overall_timeout if settings.evaluators_enabled else None,
+        )
+    )

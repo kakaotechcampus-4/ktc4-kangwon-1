@@ -43,7 +43,7 @@ class GraphState(TypedDict, total=False):
         | ConsultPlan
     )
     map_done: bool
-    map_observation: MapObservation
+    map_observation: MapObservation | None
     operations: list[SupplementOperation]
     supplement_done: bool
     feedback: list[str]
