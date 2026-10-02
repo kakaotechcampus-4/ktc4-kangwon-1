@@ -33,7 +33,7 @@ export default function SegmentedSelector<T extends string>({
             role="radio"
             aria-checked={isSelected}
             onClick={() => onChange(option.value)}
-            className="min-h-[52px] min-w-[96px] px-6 text-base"
+            className="min-h-[52px] min-w-[96px] px-6 text-base whitespace-nowrap"
             style={{
               borderLeft:
                 index === 0 ? 'none' : `1px solid ${colors.neutral.border}`,
