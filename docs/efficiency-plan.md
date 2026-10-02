@@ -180,7 +180,8 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
 - 실패·미채택이면 `{"query_id", "status", "error", "adopted": false}`만.
 
 ### 5.2 지도 전문가 첫 입력 (`answer_query`, 지도)
-- `data`(이전 라운드 관측 전체)를 빼고, 이전 관측이 있으면 `citations`(질문 업종만)와 `queries` 요약(검색어·업종·건수·match_summary)만 넣습니다. `industry_terms`는 그대로.
+- `data`(이전 라운드 관측 전체)를 빼고 `queries` 요약(검색어·업종·건수·match_summary)을 넣습니다. `industry_terms`는 그대로.
+- 이전 관측이 있으면 citations는 질문 업종 + _facility(시설 근거)를 넣는다. 시설 질문은 industry_codes가 비어 있으므로 시설 근거가 필요하다.
 
 ### 5.3 지시문
 - 지도 전문가 절의 "도구 결과의 citations에 있는 path만 그대로 복사합니다" 줄은 유지.

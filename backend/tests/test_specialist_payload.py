@@ -197,3 +197,47 @@ class MapPayloadTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("data", payload)
         self.assertEqual(set(payload["citations"]), {"I201"})
         self.assertEqual(len(payload["queries"]), 3)
+
+    async def test_facility_question_keeps_previous_facility_without_other_industries(self):
+        from app.api.v1.mock import map_observation
+        from app.schemas import MapLookupPlan, MapQuery
+
+        task = AnalysisTask(request_id="facility-input", site=mock_site(), radius_m=500)
+        observation = await map_observation(
+            task,
+            MapLookupPlan(
+                action="map_lookup",
+                queries=[
+                    MapQuery(
+                        kind="industry",
+                        industry_code="I201",
+                        query="음식점",
+                        why_needed="확인",
+                        expected_impact="검토",
+                    ),
+                    MapQuery(
+                        kind="infrastructure",
+                        facility_code="SW8",
+                        why_needed="확인",
+                        expected_impact="검토",
+                    ),
+                ],
+            ),
+        )
+        query = SpecialistQuery(
+            agent_id="map_analysis",
+            question="시설 확인",
+            industry_codes=[],
+            why_needed="확인",
+            expected_impact="검토",
+        )
+        payload = json.loads(
+            await capture_payload(
+                answer_query, task, query, 1, analysis=None, observation=observation, tools={}
+            )
+        )
+        self.assertEqual(set(payload["citations"]), {"_facility"})
+        self.assertEqual(
+            payload["citations"]["_facility"], [{"path": "/queries/q2/total_count", "value": 0}]
+        )
+        self.assertNotIn("I201", payload["citations"])
