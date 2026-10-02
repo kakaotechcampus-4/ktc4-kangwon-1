@@ -1,15 +1,20 @@
 """요청과 검증된 분석 결과를 짧은 트랜잭션으로 저장합니다."""
 
 import json
-import math
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from app.db.types import DeliberationState, ExecutionCapabilities, ExecutionState, ResumeBundle
+from app.db.types import (
+    AnalysisEvent,
+    DecisionFailure,
+    DeliberationState,
+    ExecutionState,
+    MapLookupState,
+    ResumeBundle,
+)
 from app.industries.catalog import CATALOG_VERSION
-from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS
 from app.schemas import (
     AGENT_IDS,
     EVALUATOR_IDS,
@@ -33,6 +38,7 @@ from app.schemas import (
     normalize_answers,
     validate_radius,
 )
+from app.services import execution_policy as policy
 
 from .connection import connect
 
@@ -90,8 +96,7 @@ def mark_running(request_id: str, *, db_path: str | Path | None = None) -> None:
             "WHERE request_id = ? AND status = 'pending'",
             (_text(request_id),),
         )
-        if changed.rowcount != 1:
-            raise ValueError("대기 중인 요청이 없습니다.")
+        _require_changed(changed, "대기 중인 요청이 없습니다.")
 
 
 def save_site(task: AnalysisTask, *, db_path: str | Path | None = None) -> None:
@@ -102,8 +107,7 @@ def save_site(task: AnalysisTask, *, db_path: str | Path | None = None) -> None:
             "WHERE request_id = ? AND status = 'running'",
             (task.site.model_dump_json(), task.request_id),
         )
-        if changed.rowcount != 1:
-            raise ValueError("실행 중인 요청이 없습니다.")
+        _require_changed(changed, "실행 중인 요청이 없습니다.")
 
 
 def save_agent(
@@ -116,17 +120,7 @@ def save_agent(
     if type(attempt) is not int or attempt < 1:
         raise ValueError("실행 차수는 1 이상의 정수여야 합니다.")
     with connect(db_path) as db:
-        db.execute(
-            "INSERT INTO agent_results VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                analysis.request_id,
-                analysis.agent_id,
-                attempt,
-                analysis.status,
-                analysis.model_dump_json(),
-                _now(),
-            ),
-        )
+        _insert_agent(db, analysis, attempt)
 
 
 def complete_request(
@@ -154,11 +148,7 @@ def complete_request(
         if _get_map_observation(db, result.request_id) != result.map_observation:
             raise ValueError("최종 결과와 저장된 지도 관측이 다릅니다.")
         for agent_id, source_attempt in source_attempts.items():
-            row = db.execute(
-                "SELECT analysis_json FROM agent_results "
-                "WHERE request_id = ? AND agent_id = ? AND attempt = ?",
-                (result.request_id, agent_id, source_attempt),
-            ).fetchone()
+            row = _analysis_row(db, result.request_id, agent_id, source_attempt)
             if row is None or AgentAnalysis.model_validate_json(row[0]) != sources[agent_id]:
                 raise ValueError("판단 원본과 저장된 분석 이력 또는 실행 차수가 일치하지 않습니다.")
         # 이력 추가와 최신 결과 갱신은 함께 성공하거나 함께 취소됩니다.
@@ -166,15 +156,14 @@ def complete_request(
             "INSERT INTO decision_results "
             "(request_id, attempt, result_json, source_attempts_json, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            (result.request_id, attempt, payload, json.dumps(source_attempts), completed_at),
+            (result.request_id, attempt, payload, _dumps(source_attempts), completed_at),
         )
         changed = db.execute(
             "UPDATE analysis_requests SET result_json = ?, status = 'completed', completed_at = ? "
             "WHERE request_id = ? AND status = 'running'",
             (payload, completed_at, result.request_id),
         )
-        if changed.rowcount != 1:
-            raise ValueError("실행 중인 요청이 없습니다.")
+        _require_changed(changed, "실행 중인 요청이 없습니다.")
 
 
 # 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
@@ -215,12 +204,14 @@ def fail_request(
                     request_id,
                     failed_at,
                     error.model_dump_json(),
-                    json.dumps(diagnostics, ensure_ascii=False, allow_nan=False),
+                    _dumps(diagnostics),
                 ),
             )
 
 
-def list_decision_failures(request_id: str, *, db_path=None) -> list[dict[str, Any]]:
+def list_decision_failures(
+    request_id: str, *, db_path: str | Path | None = None
+) -> list[DecisionFailure]:
     """실패한 판단은 성공 결과와 분리해서 보존합니다."""
     with connect(db_path) as db:
         return [
@@ -233,25 +224,21 @@ def list_decision_failures(request_id: str, *, db_path=None) -> list[dict[str, A
         ]
 
 
-def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> ResumeBundle:
+def claim_decision_retry(
+    request_id: str, failed_at: str, *, db_path: str | Path | None = None
+) -> ResumeBundle:
     """검증된 저장 입력을 확보한 한 호출만 실패한 판단을 재시도합니다."""
     request_id = _text(request_id)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute(
-            "SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)
-        ).fetchone()
+        row = _request_row(db, request_id)
         if row is None or row["status"] != "failed" or row["completed_at"] != failed_at:
             raise DecisionRetryConflictError("현재 실패 기록과 재시도 요청이 다릅니다.")
         if row["catalog_version"] != CATALOG_VERSION:
             raise DecisionRetryConflictError(
                 "업종표 버전이 다르거나 확인되지 않아 새 분석이 필요합니다."
             )
-        if json.loads(row["error_json"])["code"] not in {
-            "DECISION_CONTRACT_INVALID",
-            "DECISION_RETRY_FAILED",
-            "ANALYSIS_FAILED",
-        }:
+        if not policy.retry_allowed(json.loads(row["error_json"])["code"]):
             raise DecisionRetryConflictError("이 실패는 최종판단 재시도 대상이 아닙니다.")
         try:
             context = _load_resume_context(db, request_id)
@@ -273,9 +260,7 @@ def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> Re
 
 def get_request(request_id: str, *, db_path: str | Path | None = None) -> dict[str, Any] | None:
     with connect(db_path) as db:
-        row = db.execute(
-            "SELECT * FROM analysis_requests WHERE request_id = ?", (_text(request_id),)
-        ).fetchone()
+        row = _request_row(db, _text(request_id))
         return dict(row) if row else None
 
 
@@ -297,12 +282,7 @@ def save_supplement_event(
     event = SupplementEvent.model_validate(event)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute(
-            "SELECT status FROM analysis_requests WHERE request_id = ?",
-            (event.request_id,),
-        ).fetchone()
-        if row is None or row[0] != "running":
-            raise ValueError("실행 중인 요청이 없습니다.")
+        _require_running(db, event.request_id)
         attempt = None
         if event.analysis is not None:
             analysis = event.analysis
@@ -313,17 +293,7 @@ def save_supplement_event(
             if previous is None:
                 raise ValueError("보완할 원본 분석이 없습니다.")
             attempt = previous + 1
-            db.execute(
-                "INSERT INTO agent_results VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    event.request_id,
-                    analysis.agent_id,
-                    attempt,
-                    analysis.status,
-                    analysis.model_dump_json(),
-                    _now(),
-                ),
-            )
+            _insert_agent(db, analysis, attempt)
         db.execute(
             "INSERT INTO supplement_events "
             "(request_id, agent_id, status, event_json, created_at, analysis_attempt) "
@@ -358,7 +328,7 @@ def _load_question_analyses(
 ) -> list[AgentAnalysis]:
     request_id = snapshot.task.request_id
     _get_map_observation(db, request_id)
-    row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
+    row = _request_row(db, request_id)
     if (
         row is None
         or row["site_json"] is None
@@ -386,11 +356,7 @@ def _load_question_analyses(
         raise ValueError("질문 버전과 실행 모드가 다릅니다.")
     analyses = []
     for agent_id in AGENT_IDS:
-        source = db.execute(
-            "SELECT analysis_json FROM agent_results "
-            "WHERE request_id=? AND agent_id=? AND attempt=?",
-            (request_id, agent_id, snapshot.source_attempts[agent_id]),
-        ).fetchone()
+        source = _analysis_row(db, request_id, agent_id, snapshot.source_attempts[agent_id])
         if source is None:
             raise ValueError("질문이 참조한 분석 이력이 없습니다.")
         analysis = AgentAnalysis.model_validate_json(source[0])
@@ -498,9 +464,7 @@ def start_map_lookup(
     task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute(
-            "SELECT * FROM analysis_requests WHERE request_id=?", (task.request_id,)
-        ).fetchone()
+        row = _request_row(db, task.request_id)
         if (
             row is None
             or row["status"] != "running"
@@ -512,8 +476,7 @@ def start_map_lookup(
         last = db.execute(
             "SELECT MAX(attempt) FROM map_observations WHERE request_id=?", (task.request_id,)
         ).fetchone()[0]
-        if last and row["analysis_mode"] == "single_decision":
-            raise sqlite3.IntegrityError("기존 모드는 지도 조회를 한 번만 저장합니다.")
+        policy.validate_map_attempt(row["analysis_mode"], last)
         attempt = (last or 0) + 1
         db.execute(
             "INSERT INTO map_observations "
@@ -589,7 +552,7 @@ def get_map_observation(
         return _get_map_observation(db, _text(request_id))
 
 
-def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dict[str, Any] | None:
+def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> MapLookupState | None:
     """진행 중인 조회도 상태와 공개 관측만 반환합니다."""
     with connect(db_path) as db:
         row = db.execute(
@@ -613,14 +576,14 @@ def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> dic
         )
 
 
-def load_resume_context(request_id: str, *, db_path=None) -> ResumeBundle:
+def load_resume_context(request_id: str, *, db_path: str | Path | None = None) -> ResumeBundle:
     """질문 재개와 실패 재시도가 동일한 저장 자료를 복원합니다."""
     with connect(db_path) as db:
         return _load_resume_context(db, request_id)
 
 
 def _load_resume_context(db: sqlite3.Connection, request_id: str) -> ResumeBundle:
-    row = db.execute("SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)).fetchone()
+    row = _request_row(db, request_id)
     if row is None or row["catalog_version"] != CATALOG_VERSION:
         raise ValueError("요청 또는 현재 업종표 버전의 저장 자료가 없습니다.")
     task = AnalysisTask(
@@ -631,11 +594,7 @@ def _load_resume_context(db: sqlite3.Connection, request_id: str) -> ResumeBundl
     events, attempts = _supplement_sources(db, request_id)
     analyses = []
     for agent_id, attempt in attempts.items():
-        source = db.execute(
-            "SELECT analysis_json FROM agent_results "
-            "WHERE request_id=? AND agent_id=? AND attempt=?",
-            (request_id, agent_id, attempt),
-        ).fetchone()
+        source = _analysis_row(db, request_id, agent_id, attempt)
         if source is None:
             raise ValueError("분석 이력이 부족합니다.")
         analysis = AgentAnalysis.model_validate_json(source[0])
@@ -713,77 +672,48 @@ def update_execution_state(
     capabilities: dict | None = None,
     evaluation_skipped: str | None = None,
     time_limit: float | None = None,
-    db_path=None,
+    db_path: str | Path | None = None,
 ) -> None:
     """소비 예산·활성 실행 시간은 되돌리지 않고 저장합니다."""
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute(
-            "SELECT execution_json,status FROM analysis_requests WHERE request_id=?", (request_id,)
-        ).fetchone()
-        if row is None or row[1] != "running":
-            raise ValueError("실행 중인 요청이 없습니다.")
-        state: ExecutionState = json.loads(row[0])
-        if budget is not None:
-            used = budget.get("used")
-            if (
-                type(used) is not int
-                or not state.get("budget", {}).get("used", 0)
-                <= used
-                <= (
-                    EVALUATED_MAX_CALLS
-                    if state.get("capabilities", {}).get("evaluators")
-                    else MAX_CALLS
-                )
-                or not isinstance(budget.get("calls"), list)
-            ):
-                raise ValueError("모델 소비 예산이 올바르지 않습니다.")
-            state["budget"] = budget
-        if elapsed_seconds is not None:
-            if not math.isfinite(elapsed_seconds) or elapsed_seconds < state.get(
-                "elapsed_seconds", 0
-            ):
-                raise ValueError("누적 실행 시간은 줄일 수 없습니다.")
-            state["elapsed_seconds"] = elapsed_seconds
-        if capabilities is not None:
-            if "capabilities" in state and state["capabilities"] != capabilities:
-                raise ValueError("등록한 도구 범위를 변경할 수 없습니다.")
-            state["capabilities"] = cast(ExecutionCapabilities, capabilities)
-        if evaluation_skipped is not None:
-            if evaluation_skipped not in {"no_data", "budget"}:
-                raise ValueError("알 수 없는 평가 생략 사유입니다.")
-            state["evaluation_skipped"] = evaluation_skipped
-        if time_limit is not None:
-            if (
-                not math.isfinite(time_limit)
-                or time_limit <= 0
-                or state.get("time_limit", time_limit) != time_limit
-            ):
-                raise ValueError("요청의 실행 제한시간은 양수이며 변경할 수 없습니다.")
-            state["time_limit"] = time_limit
+        row = _require_running(db, request_id)
+        state: ExecutionState = json.loads(row["execution_json"])
+        policy.update_execution(
+            state,
+            budget=budget,
+            elapsed_seconds=elapsed_seconds,
+            capabilities=capabilities,
+            evaluation_skipped=evaluation_skipped,
+            time_limit=time_limit,
+        )
         db.execute(
             "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
             (_dumps(state), request_id),
         )
 
 
-def _require_running(db, request_id):
-    row = db.execute(
-        "SELECT status FROM analysis_requests WHERE request_id=?", (request_id,)
-    ).fetchone()
-    if row is None or row[0] != "running":
-        raise ValueError("실행 중인 요청이 없습니다.")
+def _require_running(db, request_id, *, multi=False):
+    row = _request_row(db, request_id)
+    if (
+        row is None
+        or row["status"] != "running"
+        or (multi and row["analysis_mode"] != "multi_agent")
+    ):
+        raise ValueError(
+            "실행 중인 멀티에이전트 요청이 없습니다." if multi else "실행 중인 요청이 없습니다."
+        )
+    return row
 
 
-def save_evaluation(draft: DecisionResult, evaluations: list[Evaluation], *, db_path=None) -> None:
+def save_evaluation(
+    draft: DecisionResult, evaluations: list[Evaluation], *, db_path: str | Path | None = None
+) -> None:
     draft = DecisionResult.model_validate(draft)
     evaluations = [Evaluation.model_validate(e) for e in evaluations]
-    if (
-        len(evaluations) != 4
-        or {e.evaluator for e in evaluations} != set(EVALUATOR_IDS)
-        or any(e.request_id != draft.request_id for e in evaluations)
-    ):
-        raise ValueError("같은 요청의 평가자 네 명이 필요합니다.")
+    policy.validate_evaluations(
+        evaluations, draft.request_id, "같은 요청의 평가자 네 명이 필요합니다."
+    )
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         _require_running(db, draft.request_id)
@@ -823,7 +753,7 @@ def save_evaluation(draft: DecisionResult, evaluations: list[Evaluation], *, db_
 
 
 def save_evaluation_log(
-    request_id: str, entries: list[EvaluationLogEntry], *, db_path=None
+    request_id: str, entries: list[EvaluationLogEntry], *, db_path: str | Path | None = None
 ) -> None:
     payload = [EvaluationLogEntry.model_validate(e).model_dump(mode="json") for e in entries]
     with connect(db_path) as db:
@@ -832,11 +762,11 @@ def save_evaluation_log(
         db.execute(
             "INSERT INTO evaluation_logs VALUES (?,?,?) ON CONFLICT(request_id) DO UPDATE "
             "SET log_json=excluded.log_json, updated_at=excluded.updated_at",
-            (request_id, json.dumps(payload, ensure_ascii=False), _now()),
+            (request_id, _dumps(payload), _now()),
         )
 
 
-def get_evaluation(request_id: str, *, db_path=None) -> dict | None:
+def get_evaluation(request_id: str, *, db_path: str | Path | None = None) -> dict | None:
     with connect(db_path) as db:
         draft = db.execute(
             "SELECT draft_json FROM evaluation_drafts WHERE request_id=?", (request_id,)
@@ -849,12 +779,7 @@ def get_evaluation(request_id: str, *, db_path=None) -> dict | None:
                 "SELECT evaluation_json FROM evaluations WHERE request_id=?", (request_id,)
             )
         ]
-        if (
-            len(evaluations) != 4
-            or {e.evaluator for e in evaluations} != set(EVALUATOR_IDS)
-            or any(e.request_id != request_id for e in evaluations)
-        ):
-            raise ValueError("저장된 평가 기록이 불완전합니다.")
+        policy.validate_evaluations(evaluations, request_id, "저장된 평가 기록이 불완전합니다.")
         log = db.execute(
             "SELECT log_json FROM evaluation_logs WHERE request_id=?", (request_id,)
         ).fetchone()
@@ -867,18 +792,10 @@ def get_evaluation(request_id: str, *, db_path=None) -> dict | None:
         }
 
 
-def _require_multi_running(db, request_id):
-    row = db.execute(
-        "SELECT analysis_mode,status FROM analysis_requests WHERE request_id=?", (request_id,)
-    ).fetchone()
-    if row is None or tuple(row) != ("multi_agent", "running"):
-        raise ValueError("실행 중인 멀티에이전트 요청이 없습니다.")
-
-
-def save_agent_brief(brief: AgentBrief, *, db_path=None) -> None:
+def save_agent_brief(brief: AgentBrief, *, db_path: str | Path | None = None) -> None:
     brief = AgentBrief.model_validate(brief)
     with connect(db_path) as db:
-        _require_multi_running(db, brief.request_id)
+        _require_running(db, brief.request_id, multi=True)
         db.execute(
             "INSERT INTO agent_briefs VALUES (?,?,?,?)",
             (brief.request_id, brief.agent_id, brief.model_dump_json(), _now()),
@@ -886,7 +803,7 @@ def save_agent_brief(brief: AgentBrief, *, db_path=None) -> None:
 
 
 # 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
-def list_agent_briefs(request_id: str, *, db_path=None) -> list[AgentBrief]:
+def list_agent_briefs(request_id: str, *, db_path: str | Path | None = None) -> list[AgentBrief]:
     with connect(db_path) as db:
         return [
             AgentBrief.model_validate_json(r[0])
@@ -897,19 +814,17 @@ def list_agent_briefs(request_id: str, *, db_path=None) -> list[AgentBrief]:
         ]
 
 
-def save_specialist_answer(answer: SpecialistAnswer, *, db_path=None) -> None:
+def save_specialist_answer(answer: SpecialistAnswer, *, db_path: str | Path | None = None) -> None:
     answer = SpecialistAnswer.model_validate(answer)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
-        _require_multi_running(db, answer.request_id)
-        if (
+        _require_running(db, answer.request_id, multi=True)
+        policy.validate_consult_count(
             db.execute(
                 "SELECT count(*) FROM specialist_consults WHERE request_id=? AND round=?",
                 (answer.request_id, answer.round),
             ).fetchone()[0]
-            >= 3
-        ):
-            raise ValueError("라운드당 전문가 답변은 최대 세 개입니다.")
+        )
         db.execute(
             "INSERT INTO specialist_consults VALUES (?,?,?,?,?,?)",
             (
@@ -924,7 +839,9 @@ def save_specialist_answer(answer: SpecialistAnswer, *, db_path=None) -> None:
 
 
 # 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
-def list_specialist_answers(request_id: str, *, db_path=None) -> list[SpecialistAnswer]:
+def list_specialist_answers(
+    request_id: str, *, db_path: str | Path | None = None
+) -> list[SpecialistAnswer]:
     with connect(db_path) as db:
         return [
             SpecialistAnswer.model_validate_json(r[0])
@@ -974,13 +891,18 @@ def _deliberation(db, request_id) -> DeliberationState:
     }
 
 
-def get_deliberation(request_id: str, *, db_path=None) -> DeliberationState:
+def get_deliberation(request_id: str, *, db_path: str | Path | None = None) -> DeliberationState:
     with connect(db_path) as db:
         return _deliberation(db, _text(request_id))
 
 
 def append_event(
-    request_id: str, stage: str, event: str, detail: dict[str, Any], *, db_path=None
+    request_id: str,
+    stage: str,
+    event: str,
+    detail: dict[str, Any],
+    *,
+    db_path: str | Path | None = None,
 ) -> int:
     """진행 이벤트를 요청별 순번으로 추가합니다."""
     request_id = _text(request_id)
@@ -997,14 +919,16 @@ def append_event(
                 seq,
                 _text(stage),
                 event,
-                json.dumps(detail, ensure_ascii=False, allow_nan=False),
+                _dumps(detail),
                 _now(),
             ),
         )
     return seq
 
 
-def list_events(request_id: str, *, after: int = 0, db_path=None) -> list[dict[str, Any]]:
+def list_events(
+    request_id: str, *, after: int = 0, db_path: str | Path | None = None
+) -> list[AnalysisEvent]:
     """after 다음 순번부터 진행 이벤트를 돌려줍니다."""
     with connect(db_path) as db:
         rows = db.execute(
@@ -1024,7 +948,7 @@ def list_events(request_id: str, *, after: int = 0, db_path=None) -> list[dict[s
     ]
 
 
-def fail_interrupted(*, db_path=None) -> int:
+def fail_interrupted(*, db_path: str | Path | None = None) -> int:
     """서버가 멈춰 끊긴 실행 중 요청을 실패로 닫습니다. 서버 시작 때만 호출합니다."""
     error = AgentError(
         code="INTERRUPTED",
@@ -1037,3 +961,35 @@ def fail_interrupted(*, db_path=None) -> int:
             (error.model_dump_json(), _now()),
         )
     return changed.rowcount
+
+
+def _request_row(db: sqlite3.Connection, request_id: str) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)
+    ).fetchone()
+
+
+def _analysis_row(db: sqlite3.Connection, request_id: str, agent_id: str, attempt: int):
+    return db.execute(
+        "SELECT analysis_json FROM agent_results WHERE request_id=? AND agent_id=? AND attempt=?",
+        (request_id, agent_id, attempt),
+    ).fetchone()
+
+
+def _insert_agent(db: sqlite3.Connection, analysis: AgentAnalysis, attempt: int) -> None:
+    db.execute(
+        "INSERT INTO agent_results VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            analysis.request_id,
+            analysis.agent_id,
+            attempt,
+            analysis.status,
+            analysis.model_dump_json(),
+            _now(),
+        ),
+    )
+
+
+def _require_changed(changed, message="실행 중인 요청이 없습니다.") -> None:
+    if changed.rowcount != 1:
+        raise ValueError(message)

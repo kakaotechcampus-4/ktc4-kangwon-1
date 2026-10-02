@@ -48,3 +48,22 @@ class ResumeBundle(DeliberationState):
     source_attempts: dict[str, int]
     task: AnalysisTask
     analysis_mode: AnalysisMode
+
+
+class DecisionFailure(TypedDict):
+    failed_at: str
+    error: dict[str, Any]
+    diagnostics: list[dict[str, Any]]
+
+
+class AnalysisEvent(TypedDict):
+    seq: int
+    at: str
+    stage: str
+    event: str
+    detail: dict[str, Any]
+
+
+class MapLookupState(TypedDict):
+    status: str
+    observation: dict[str, Any] | None
