@@ -11,7 +11,8 @@
 
 실행 `validation_tool/runs/59205f79d9874292b77c01c9535819a2`(오금로 404, 브리핑 + 평가자 + 지도, LLM 23회, 91.7초):
 
-- **입력 토큰 664,223 / 출력 13,486.** 비용과 대기 시간의 98%가 입력입니다.
+- **입력 토큰 664,223 / 출력 12,486.** 비용과 대기 시간의 98%가 입력입니다.
+- 브리핑 근거 제외 경고는 **2건**입니다(유동인구 1·상권 1·개폐업 0).
 
 | 역할 | 호출 | 입력 토큰 | 비중 | 호출당 입력 |
 | --- | --- | --- | --- | --- |
@@ -103,7 +104,7 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
   "task": "브리핑",
   "source": {"status": "ok", "scope": {...}, "warnings": [...], "description": "..."},
   "facts": {
-    "shared": {"/store_total": 878, "/radius_m": 500, "/by_radius/0": {"radius_m": 50, "store_total": 52}},
+    "shared": {"": {"store_total": 878, "radius_m": 500}, "/by_radius/0": {"radius_m": 50, "store_total": 52}},
     "industries": {
       "I201": {"/by_middle/0": {"count": 82, "share": 0.093394, "lq": 1.0807, "density_per_km2": 104.4056}},
       "S209": {"/by_middle/41": {"count": 11, "lq": 1.4138}}
@@ -115,6 +116,7 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
 - `analysis`(원자료 전체)와 `industry_paths`를 **둘 다 빼고** `facts` 하나로 보냅니다.
 - `facts`는 `SourceIndex.records`를 **부모 경로로 묶은 것**입니다. 값 하나의 인용 경로 = `묶음 키 + "/" + 필드명`. 예: `"/by_middle/0" + "/" + "count"` → `/by_middle/0/count`.
   - 묶음 키 = 레코드 경로에서 마지막 토큰을 뺀 부분, 필드명 = 마지막 토큰(이스케이프된 그대로).
+  - 최상위 필드의 부모 경로는 빈 문자열 `""`입니다. 같은 규칙으로 `"" + "/" + "store_total"` → `/store_total`을 만듭니다.
   - 한 묶음 안에서 같은 필드가 중복되지 않으므로 정보 손실이 없습니다(원자료의 스칼라 전부, 경로 전부 복원 가능).
 - `shared`에는 소유 업종이 없는 레코드(`owner is None`), `industries[코드]`에는 그 업종 레코드.
 - `source`에는 원자료 바깥 봉투(`status`, `scope`, `warnings`)와 원자료의 최상위 문자열 중 설명 성격 필드(`description`, `summary`, `summary_text`, `interpretation`)만 넣습니다. 이 목록은 상수 `BRIEF_CONTEXT_KEYS`로 둡니다.
@@ -128,7 +130,7 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
 넣는 줄(같은 자리):
 ```markdown
 - 지도가 아닌 전문가의 근거 경로는 facts에서 만듭니다. 경로 = 묶음 키 + "/" + 필드명입니다.
-  예: facts.industries["I201"]["/by_middle/0"]["count"] → "/by_middle/0/count". 배열 번호를 직접 세지 않습니다.
+  예: facts.shared[""]["store_total"] → "/store_total", facts.industries["I201"]["/by_middle/0"]["count"] → "/by_middle/0/count". 최상위 부모 경로는 빈 문자열이며 배열 번호를 직접 세지 않습니다.
 - 업종 주장은 facts.industries[그 업종 코드] 안의 경로만, 동네 공통 주장은 facts.shared의 경로만 씁니다.
   facts에 없는 업종은 업종별 주장을 만들지 않습니다.
 ```
@@ -226,7 +228,7 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
 - P3·P4·P5 뒤에는 목업 끝까지 흐름 1회.
 - **유료 비교(사용자 승인 후, P5 뒤 1회)**: 오금로 404, 브리핑 + 평가자 + 지도, `59205f79`와 같은 설정. 확인:
   1. 입력 토큰 합계 400k 이하
-  2. 브리핑 3개 모두 `source=model`, 근거 제외 경고 수가 `59205f79`(3건)보다 많지 않음
+  2. 브리핑 3개 모두 `source=model`, 근거 제외 경고 수가 `59205f79`(2건)보다 많지 않음
   3. 지도 답변 `answered/partial`, 지도 근거 제외 0
   4. 소요 시간
   추천 결과가 달라지는 것 자체는 실패가 아닙니다(실행 간 변동은 B부 안정성 시험에서 따로 다룸, 사용자 결정 2026-10-02).
