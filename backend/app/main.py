@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
+from app.api.v1.routes import health as api_health
 from app.config import load_environment
 from app.db import repository
 from app.db.connection import initialize
@@ -63,6 +64,6 @@ def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = Tr
 
     @app.get("/health", summary="상태 확인")
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return await api_health()
 
     return app

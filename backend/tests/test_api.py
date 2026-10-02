@@ -20,6 +20,24 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_async_answer_change_is_rejected_before_acceptance(self):
+        started = self.client.post(
+            "/api/v1/analyses?mock=true", json={"address": "시험 주소", "allow_questions": True}
+        )
+        self.assertEqual(started.status_code, 200, started.text)
+        waiting = started.json()
+        path = f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true"
+        body = {
+            "request_id": waiting["request_id"],
+            "question_set_id": waiting["question_set_id"],
+            "answers": [],
+        }
+        self.assertEqual(self.client.post(path, json=body).status_code, 200)
+        body["answers"] = [{"field": "floor", "status": "answered", "value": "2층"}]
+        changed = self.client.post(path + "&wait=false", json=body)
+        self.assertEqual(changed.status_code, 409)
+        self.assertEqual(changed.json(), {"detail": "이미 제출한 답변은 변경할 수 없습니다."})
+
     def test_detail_errors_keep_response_and_log_safe_categories(self):
         from pydantic import ValidationError
 

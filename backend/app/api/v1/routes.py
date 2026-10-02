@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import uuid
@@ -34,6 +33,9 @@ from app.services.analysis import (
     retry_decision,
 )
 from app.services.mocking import mock_dependencies
+from app.services.views import analysis_detail
+
+from .responses import AcceptedAnalysis, AnalysisDetail, AnalysisEvents
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 logger = logging.getLogger(__name__)
@@ -78,7 +80,7 @@ def _start_job(request: Request, request_id: str, work: Coroutine) -> JSONRespon
     return JSONResponse(
         {"request_id": request_id, "status": "running"},
         status_code=202,
-        headers={"X-Request-ID": request_id},
+        headers=_request_headers(request_id),
     )
 
 
@@ -127,6 +129,7 @@ async def health() -> dict[str, str]:
 @router.post(
     "/analyses",
     response_model=DecisionResult | WaitingForInput,
+    responses={202: {"model": AcceptedAnalysis}},
     response_model_exclude_none=True,
     summary="주소 하나로 업종 추천 리포트를 만듭니다",
 )
@@ -149,7 +152,7 @@ async def create_analysis(
     if not body.address.strip():
         raise HTTPException(status_code=400, detail="주소를 입력해 주세요.")
     request_id = uuid.uuid4().hex
-    headers = {"X-Request-ID": request_id}
+    headers = _request_headers(request_id)
     response.headers.update(headers)
     if _mock_enabled(mock):
         work = runner(
@@ -179,33 +182,12 @@ async def create_analysis(
         )
     if not wait:
         return _start_job(request, request_id, work)
-    try:
-        return await work
-    except GeocodeError as exc:
-        invalid = exc.code in {
-            "EMPTY_ADDRESS",
-            "NOT_FOUND",
-            "ADDRESS_AMBIGUOUS",
-            "ADDRESS_MISMATCH",
-        }
-        raise HTTPException(
-            status_code=400 if invalid else 502,
-            detail="주소를 확인해 주세요." if invalid else "주소 조회 서비스에 실패했습니다.",
-            headers=headers,
-        ) from exc
-    except (RuntimeError, TimeoutError) as exc:
-        raise HTTPException(
-            status_code=502, detail="외부 분석 서비스에 실패했습니다.", headers=headers
-        ) from exc
-    except Exception as exc:
-        _log_unexpected(request_id, exc)
-        raise HTTPException(
-            status_code=500, detail="분석 결과 처리 또는 저장에 실패했습니다.", headers=headers
-        ) from exc
+    return await _run_or_http(work, request_id, kind="analysis")
 
 
 @router.get(
     "/analyses/{request_id}/events",
+    response_model=AnalysisEvents,
     summary="진행 이벤트를 순번 이후부터 조회합니다 (진행 화면 폴링용)",
 )
 async def list_analysis_events(
@@ -239,59 +221,16 @@ async def list_analysis_events(
     }
 
 
-@router.get("/analyses/{request_id}", summary="저장된 분석 상태와 결과를 조회합니다")
+@router.get(
+    "/analyses/{request_id}",
+    response_model=AnalysisDetail,
+    response_model_exclude_unset=True,
+    summary="저장된 분석 상태와 결과를 조회합니다",
+)
 async def get_analysis(request_id: str, request: Request) -> dict[str, Any]:
     try:
-        row = await asyncio.to_thread(
-            repository.get_request, request_id, db_path=request.app.state.execution_settings.db_path
-        )
+        row = await analysis_detail(request_id, request.app.state.execution_settings.db_path)
         if row is not None:
-            execution = json.loads(row.pop("execution_json", "{}"))
-            if execution.get("capabilities", {}).get("evaluators"):
-                saved = await asyncio.to_thread(
-                    repository.get_evaluation,
-                    request_id,
-                    db_path=request.app.state.execution_settings.db_path,
-                )
-                row["evaluation"] = {
-                    "skipped": execution.get("evaluation_skipped"),
-                    "draft": {k: v for k, v in saved["draft"].items() if k != "request_id"}
-                    if saved
-                    else None,
-                    "evaluations": [
-                        e.model_dump(mode="json", exclude={"notes", "request_id"})
-                        for e in saved["evaluations"]
-                    ]
-                    if saved
-                    else [],
-                    "log": [e.model_dump(mode="json") for e in saved["log"]] if saved else [],
-                }
-            if row["analysis_mode"] == "multi_agent":
-                state = await asyncio.to_thread(
-                    repository.get_deliberation,
-                    request_id,
-                    db_path=request.app.state.execution_settings.db_path,
-                )
-                row["deliberation"] = {
-                    "briefs": [b.model_dump(mode="json") for b in state["briefs"]],
-                    "answers": [
-                        a.model_dump(mode="json", exclude={"analysis", "map_observation"})
-                        for a in state["specialist_answers"]
-                    ],
-                    "consult_round": state["consult_round"],
-                    "map_attempt": state["map_attempt"],
-                    "budget": state["execution"].get("budget", {"used": 0, "calls": []}),
-                    "elapsed_seconds": state["execution"].get("elapsed_seconds", 0),
-                }
-            # 과거 업종명·스키마는 저장 당시 값 그대로 반환합니다.
-            for name in ("site", "result", "error"):
-                value = row.pop(f"{name}_json")
-                row[name] = json.loads(value) if value is not None else None
-            row.update(
-                await asyncio.to_thread(
-                    _details, request_id, request.app.state.execution_settings.db_path
-                )
-            )
             return row
     except ValueError as exc:
         logger.error("저장 자료 손상: request_id=%s", request_id)
@@ -302,28 +241,10 @@ async def get_analysis(request_id: str, request: Request) -> dict[str, Any]:
     raise HTTPException(status_code=404, detail="분석 요청을 찾을 수 없습니다.")
 
 
-def _details(request_id, db_path):
-    snapshot = repository.get_question_snapshot(request_id, db_path=db_path)
-    mapped = repository.get_map_lookup(request_id, db_path=db_path)
-    return {
-        "decision_failures": repository.list_decision_failures(request_id, db_path=db_path),
-        "questions": snapshot.waiting.model_dump(mode="json") if snapshot else None,
-        "analyses": [
-            {"attempt": r["attempt"], "analysis": json.loads(r["analysis_json"])}
-            for r in repository.list_agent_results(request_id, db_path=db_path)
-        ],
-        "supplements": [
-            json.loads(r["event_json"])
-            for r in repository.list_supplement_events(request_id, db_path=db_path)
-        ],
-        "map_status": mapped["status"] if mapped else None,
-        "map_observation": mapped["observation"] if mapped else None,
-    }
-
-
 @router.post(
     "/analyses/{request_id}/answers",
     response_model=DecisionResult,
+    responses={202: {"model": AcceptedAnalysis}},
     response_model_exclude_none=True,
     summary="답변을 제출하고 최종판단을 재개합니다",
 )
@@ -336,12 +257,13 @@ async def submit_answers(
     mock: bool = False,
     wait: bool = WAIT_QUERY,
 ):
-    headers = {"X-Request-ID": request_id}
+    headers = _request_headers(request_id)
     response.headers.update(headers)
     if request_id != body.request_id:
         raise HTTPException(422, "경로와 본문의 요청 ID가 다릅니다.", headers=headers)
     path = request.app.state.execution_settings.db_path
-    try:
+
+    async def work():
         row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
         if row is None:
             raise HTTPException(404, "분석 요청을 찾을 수 없습니다.", headers=headers)
@@ -369,21 +291,8 @@ async def submit_answers(
         if not wait:
             return _start_job(request, request_id, work)
         return await work
-    except HTTPException:
-        raise
-    except (
-        AnalysisAlreadyRunningError,
-        AnalysisAlreadyFailedError,
-        repository.AnswerConflictError,
-    ):
-        raise HTTPException(
-            409, "이미 처리 중이거나 실패한 답변입니다. 상태를 조회하세요.", headers=headers
-        ) from None
-    except (RuntimeError, TimeoutError):
-        raise HTTPException(502, "최종판단 서비스에 실패했습니다.", headers=headers) from None
-    except Exception as exc:
-        _log_unexpected(request_id, exc)
-        raise HTTPException(500, "답변 처리 또는 저장에 실패했습니다.", headers=headers) from None
+
+    return await _run_or_http(work(), request_id, kind="answers")
 
 
 @router.post(
@@ -398,8 +307,9 @@ async def retry_analysis_decision(
     runner: Annotated[Any, Depends(retry_runner)],
     mock: bool = False,
 ):
-    headers = {"X-Request-ID": request_id}
-    try:
+    headers = _request_headers(request_id)
+
+    async def work():
         if (
             await asyncio.to_thread(
                 repository.get_request,
@@ -415,16 +325,64 @@ async def retry_analysis_decision(
             settings=request.app.state.execution_settings,
             **(mock_dependencies("retry") if _mock_enabled(mock) else {"generate": None}),
         )
-    except HTTPException:
-        raise
-    except repository.DecisionRetryConflictError:
-        raise HTTPException(
-            409, "재시도할 실패 상태·저장 자료를 확인하세요.", headers=headers
-        ) from None
-    except (RuntimeError, TimeoutError):
-        raise HTTPException(502, "최종판단 서비스에 실패했습니다.", headers=headers) from None
+
+    return await _run_or_http(work(), request_id, kind="retry")
+
+
+async def _run_or_http(work: Coroutine, request_id: str, *, kind: str):
+    """세 POST 경로의 오류를 기존 상태 코드와 문구로 변환합니다."""
+    headers = _request_headers(request_id)
+    try:
+        return await work
     except Exception as exc:
-        _log_unexpected(request_id, exc)
-        raise HTTPException(
-            500, "최종판단 검증 또는 저장에 실패했습니다.", headers=headers
-        ) from None
+        if isinstance(exc, HTTPException) and kind != "analysis":
+            raise
+        if kind == "analysis" and isinstance(exc, GeocodeError):
+            invalid = exc.code in {
+                "EMPTY_ADDRESS",
+                "NOT_FOUND",
+                "ADDRESS_AMBIGUOUS",
+                "ADDRESS_MISMATCH",
+            }
+            raise HTTPException(
+                400 if invalid else 502,
+                "주소를 확인해 주세요." if invalid else "주소 조회 서비스에 실패했습니다.",
+                headers=headers,
+            ) from exc
+        if kind == "answers" and isinstance(
+            exc,
+            (
+                AnalysisAlreadyRunningError,
+                AnalysisAlreadyFailedError,
+                repository.AnswerConflictError,
+            ),
+        ):
+            raise HTTPException(
+                409, "이미 처리 중이거나 실패한 답변입니다. 상태를 조회하세요.", headers=headers
+            ) from None
+        if kind == "retry" and isinstance(exc, repository.DecisionRetryConflictError):
+            raise HTTPException(
+                409, "재시도할 실패 상태·저장 자료를 확인하세요.", headers=headers
+            ) from None
+        if isinstance(exc, (RuntimeError, TimeoutError)):
+            message = (
+                "외부 분석 서비스에 실패했습니다."
+                if kind == "analysis"
+                else "최종판단 서비스에 실패했습니다."
+            )
+            error = HTTPException(502, message, headers=headers)
+        else:
+            _log_unexpected(request_id, exc)
+            messages = {
+                "analysis": "분석 결과 처리 또는 저장에 실패했습니다.",
+                "answers": "답변 처리 또는 저장에 실패했습니다.",
+                "retry": "최종판단 검증 또는 저장에 실패했습니다.",
+            }
+            error = HTTPException(500, messages[kind], headers=headers)
+        if kind == "analysis":
+            raise error from exc
+        raise error from None
+
+
+def _request_headers(request_id: str) -> dict[str, str]:
+    return {"X-Request-ID": request_id}

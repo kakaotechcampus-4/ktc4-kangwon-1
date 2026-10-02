@@ -98,7 +98,7 @@
 ### R5. API 라우트를 얇게 (`api/v1/routes.py`)
 - `get_analysis`의 화면용 조립(평가·브리핑·JSON 해석, 252-320)을 `services/views.py`로 옮깁니다.
 - 오류 변환을 `_run_or_http(work)` 헬퍼 하나로: `(RuntimeError, TimeoutError) → 502`, 그 외 → 500 + **`logger.exception`**(B4). `X-Request-ID` 헤더 생성도 여기서.
-- `submit_answers`의 답변 정규화·이전 답변 비교(353-362)는 `claim_question_resume`이 이미 하므로 삭제.
+- 답변 사전 검사는 유지: wait=false에서 202 접수 전에 잘못된 답변을 409로 거르는 역할. claim_question_resume 검사와 겹쳐 보이지만 시점이 다름.
 - 응답 모델 추가: events, GET 상세, 202 `{request_id, status}`. OpenAPI 문서가 실제 응답과 맞게 됩니다(프론트 타입 생성에도 도움).
 - `/api/v1/health`와 `/health` 중복은 하나를 다른 하나로 위임.
 
