@@ -22,6 +22,7 @@ import {
 } from '@/components/building-confirm/labels';
 import { colors } from '@/styles/tokens';
 import { createAnalysis } from '@/lib/api/analyses';
+import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   LOOKUP_ORDER,
   SEWAGE_OPTIONS,
@@ -34,6 +35,8 @@ import {
   type SewageTreatment,
 } from '@/lib/api/building';
 import {
+  clearAnalysisResult,
+  clearRequestId,
   loadVacancyInput,
   saveAnalysisResult,
   saveConfirmedBuilding,
@@ -139,6 +142,16 @@ export default function BuildingConfirmPage() {
     }
     // 확인한 건축물 정보는 화면 표시용으로만 남기고 분석 요청에는 싣지 않는다.
     saveConfirmedBuilding(building);
+
+    if (MOCK_MODE) {
+      // mock 모드 — 분석 요청을 보내지 않고 바로 분석 진행 화면으로 간다.
+      // 이전 실제 분석 결과가 남아 있으면 리포트가 그걸 보여주므로 지운다.
+      clearAnalysisResult();
+      clearRequestId();
+      router.push('/analysis-progress');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const fullAddress = input.floorUnit.trim()
