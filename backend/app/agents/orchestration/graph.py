@@ -48,6 +48,7 @@ from app.services.settings import validate_timeout
 
 from . import tools, workflow
 from .consult import build_specialist_tools
+from .map import execute_map_lookup
 from .supplement import OnSupplement, execute_supplement, validate_tools
 
 # 브리핑은 도구 2회 + finish, 되묻기 답변은 도구 최대 4회 + finish입니다.
@@ -374,8 +375,6 @@ async def run_graph(
         return {"outcome": outcome, "operations": operations}
 
     async def execute_map(state: GraphState) -> GraphState:
-        from app.agents.map_analysis.agent import failed_observation
-
         plan = state["outcome"]
         task = state["task"]
         if state["map_done"] or map_lookup is None or not isinstance(plan, MapLookupPlan):
@@ -384,15 +383,7 @@ async def run_graph(
         if hooks.on_map_requested is not None:
             await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
         await step("map", "started", queries=len(plan.unique_queries()))
-        try:
-            async with asyncio.timeout(agent_timeout):
-                raw = await map_lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
-        except TimeoutError:
-            raw = failed_observation(task, plan, "MAP_TIMEOUT")
-        except (ValueError, TypeError):
-            raise
-        except Exception:
-            raw = failed_observation(task, plan, "MAP_FAILED")
+        raw = await execute_map_lookup(task, plan, map_lookup, agent_timeout)
         observed = MapObservation.model_validate(raw)
         if (
             observed.request_id != task.request_id

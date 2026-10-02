@@ -1,14 +1,11 @@
 """전문가 도구를 기존 읽기·보완·지도 실행에 연결합니다."""
 
-import asyncio
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, ValidationError, create_model
 
-from app.agents.map_analysis.agent import failed_observation
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
 from app.evidence import map_citations, scalar_records
-from app.llm.budget import BudgetStorageError
 from app.schemas import (
     FacilityCode,
     IndustryCode,
@@ -21,6 +18,7 @@ from app.schemas import (
     Text,
 )
 
+from .map import execute_map_lookup
 from .supplement import execute_supplement
 
 
@@ -276,13 +274,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
         if hooks.on_map_requested:
             await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
         context["map_queries"] = queries
-        try:
-            async with asyncio.timeout(timeout):
-                raw = await lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
-        except (ValueError, TypeError, BudgetStorageError):
-            raise
-        except Exception:
-            raw = failed_observation(task, plan, "MAP_FAILED")
+        raw = await execute_map_lookup(task, plan, lookup, timeout)
         observed = MapObservation.model_validate(raw)
         if (
             observed.request_id != task.request_id

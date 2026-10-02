@@ -1,15 +1,46 @@
 """전문가 도구가 기존 자료와 외부 조회 경계를 지키는지 확인합니다."""
 
+import asyncio
 import importlib.util
 import unittest
 from types import SimpleNamespace
 
 from app.agents.specialists.tools import ToolArgumentError
+from app.llm.budget import BudgetStorageError
 from app.mocks import mock_agents, mock_site
 from app.schemas import AnalysisTask, MapObservation
 
 
 class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_map_failure_contract(self):
+        for error in (
+            TimeoutError(),
+            RuntimeError("외부 실패"),
+            BudgetStorageError("저장 실패"),
+            ValueError("계약 오류"),
+            TypeError("계약 오류"),
+            asyncio.CancelledError(),
+        ):
+
+            async def lookup(task, request, error=error):
+                raise error
+
+            self.context = {}
+            tool = self.tools("map_analysis", map_lookup=lookup)["search_facility"]
+            with self.subTest(error=type(error).__name__):
+                if isinstance(
+                    error, (BudgetStorageError, ValueError, TypeError, asyncio.CancelledError)
+                ):
+                    with self.assertRaises(type(error)):
+                        await tool.execute({"code": "SW8"})
+                    self.assertNotIn("map_observation", self.context)
+                else:
+                    await tool.execute({"code": "SW8"})
+                    observed = self.context["map_observation"]
+                    code = "MAP_TIMEOUT" if isinstance(error, TimeoutError) else "MAP_FAILED"
+                    self.assertEqual(observed.status, "error")
+                    self.assertEqual({q.error for q in observed.data.queries.values()}, {code})
+
     async def asyncSetUp(self):
         self.assertIsNotNone(importlib.util.find_spec("app.agents.orchestration.consult"))
         from app.agents.orchestration.consult import build_specialist_tools
