@@ -54,6 +54,10 @@ def _text(value: str) -> str:
     return value.strip()
 
 
+def _dumps(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+
+
 def create_request(
     request_id: str,
     address: str,
@@ -192,12 +196,13 @@ def fail_request(
     db_path: str | Path | None = None,
 ) -> None:
     error = AgentError.model_validate(error)
+    request_id = _text(request_id)
     failed_at = _now()
     with connect(db_path) as db:
         changed = db.execute(
             "UPDATE analysis_requests SET error_json = ?, status = 'failed', completed_at = ? "
             "WHERE request_id = ? AND status IN ('pending', 'running')",
-            (error.model_dump_json(), failed_at, _text(request_id)),
+            (error.model_dump_json(), failed_at, request_id),
         )
         if changed.rowcount != 1:
             raise ValueError("종료할 수 있는 요청이 없습니다.")
@@ -228,6 +233,7 @@ def list_decision_failures(request_id: str, *, db_path=None) -> list[dict[str, A
 
 def claim_decision_retry(request_id: str, failed_at: str, *, db_path=None) -> dict[str, Any]:
     """검증된 저장 입력을 확보한 한 호출만 실패한 판단을 재시도합니다."""
+    request_id = _text(request_id)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute(
@@ -753,7 +759,7 @@ def update_execution_state(
             state["time_limit"] = time_limit
         db.execute(
             "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
-            (json.dumps(state, ensure_ascii=False, allow_nan=False), request_id),
+            (_dumps(state), request_id),
         )
 
 
@@ -808,7 +814,7 @@ def save_evaluation(draft: DecisionResult, evaluations: list[Evaluation], *, db_
         ).fetchone()[0]
         db.execute(
             "UPDATE analysis_requests SET execution_json=? WHERE request_id=?",
-            (json.dumps(state), draft.request_id),
+            (_dumps(state), draft.request_id),
         )
 
 
@@ -971,11 +977,12 @@ def append_event(
     request_id: str, stage: str, event: str, detail: dict[str, Any], *, db_path=None
 ) -> int:
     """진행 이벤트를 요청별 순번으로 추가합니다."""
+    request_id = _text(request_id)
     with connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         (seq,) = db.execute(
             "SELECT COALESCE(MAX(seq), 0) + 1 FROM analysis_events WHERE request_id = ?",
-            (_text(request_id),),
+            (request_id,),
         ).fetchone()
         db.execute(
             "INSERT INTO analysis_events VALUES (?, ?, ?, ?, ?, ?)",
