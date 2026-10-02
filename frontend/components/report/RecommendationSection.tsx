@@ -254,24 +254,6 @@ export default function RecommendationSection({
                       <li key={reason}>{reason}</li>
                     ))}
                   </ul>
-
-                  {/*
-                    risks는 목업(RecommendedIndustry)엔 없던 필드라 실제
-                    스키마(IndustryAssessment)를 쓸 때만 채워진다. reasons와
-                    같은 자리(카드 안)에 두되, 점수를 뒷받침하는 근거와
-                    헷갈리지 않도록 앞에 "주의" 라벨을 붙이고 accent 색으로
-                    구분한다.
-                  */}
-                  {item.risks.length > 0 && (
-                    <ul
-                      className="w-full list-none pt-1.5 text-xs"
-                      style={{ color: colors.accent.orange }}
-                    >
-                      {item.risks.slice(0, 2).map((risk) => (
-                        <li key={risk}>주의 · {risk}</li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               );
             })}
