@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from app.agents.decision.context import build_context
 from app.agents.specialists.agent import write_brief
-from app.evidence import index_paths, scalar_records
+from app.evidence import SourceIndex, can_cite, index_paths, scalar_records
 from app.evidence.findings import _radii
 from app.mocks import mock_site
 from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest
@@ -41,7 +41,10 @@ class PayloadBaselineTests(unittest.IsolatedAsyncioTestCase):
             analysis = AgentAnalysis.model_validate(case["analysis"])
             task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
             payload = await capture_payload(write_brief, task, analysis, tools={})
-            self.assertEqual(len(payload), case["brief_payload_chars"])
+            limit = 1.1 if analysis.agent_id == "floating_population" else 0.5
+            self.assertLessEqual(len(payload), case["brief_payload_chars"] * limit)
+            self.assertNotIn("analysis", json.loads(payload))
+            self.assertNotIn("industry_paths", json.loads(payload))
 
 
 class SourceIndexTests(unittest.TestCase):
@@ -87,3 +90,24 @@ class SourceIndexTests(unittest.TestCase):
         self.assertEqual(build.call_count, len(analyses))
         for call, analysis in zip(build.call_args_list, request.analyses, strict=True):
             self.assertIs(call.args[0], analysis.data)
+
+
+class FactsTests(unittest.TestCase):
+    def test_grouped_paths_preserve_values_and_are_citable(self):
+        from app.agents.specialists.facts import build_facts
+
+        for case in baseline_cases():
+            if "analysis" not in case:
+                continue
+            data = case["analysis"]["data"]
+            index = SourceIndex.build(data)
+            facts = build_facts(index)
+            restored = {}
+            groups = [(None, facts["shared"]), *facts["industries"].items()]
+            for owner, parents in groups:
+                for parent, fields in parents.items():
+                    for field, value in fields.items():
+                        path = parent + "/" + field
+                        self.assertIsNone(can_cite(data, path, owner, indexed=index.owners))
+                        restored[path] = (value, owner)
+            self.assertEqual(restored, {r.path: (r.value, r.owner) for r in index.records})

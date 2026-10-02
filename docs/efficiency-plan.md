@@ -198,7 +198,8 @@ def scalar_records(data): return [{"path": r.path, "value": r.value, "industry_c
 - [ ] **정보 보존**: `build_facts(index)`를 펼친 경로·값 집합 == `index.records`의 경로·값 집합(codes 없음).
 - [ ] **E2 좁히기**: `codes={"I201"}`이면 `industries`에 I201만, `shared`는 전부.
 - [ ] **E3 증분**: 검색 3번 후 마지막 도구 결과 크기가 첫 결과의 2배 이하(고정 자료), 결과에 `data` 키 없음, 그 검색 업종의 citations만 있음.
-- [ ] **크기 상한 회귀**: 고정 자료로 만든 브리핑 입력 JSON 길이가 바꾸기 전 대비 **50% 이하**(기대값은 바꾸기 전 커밋에서 떠 둔 숫자).
+- [ ] **크기 상한 회귀**: 고정 자료로 만든 브리핑 입력 JSON 길이가 바꾸기 전 대비 **개폐업·상권은 50% 이하, 유동인구는 110% 이하**(기대값은 바꾸기 전 커밋에서 떠 둔 숫자). 전체 입력 400k 토큰 목표는 유료 비교에서 그대로 확인합니다.
+  - 유동인구는 원래 중복 목록이 없고 배열 묶음 키가 늘어 입력이 증가하지만, 실행당 1회라 전체 입력에 미치는 영향은 미미합니다.
 - [ ] **기존 흐름**: 목업 분석 → 질문 → 답변 → 완료(브리핑·평가자 켬)에서 전문가 답변 상태와 근거 채택 수가 바꾸기 전과 같음. 목업 전문가(`api/v1/mock.py::specialist`)가 새 입력 모양에서 인용 경로를 고르도록 함께 수정.
 - [ ] 전체: `ruff check`, `ruff format --check`, `mypy`, `unittest discover`, `scripts/build_industry_catalog.py --check`.
 

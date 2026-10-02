@@ -115,6 +115,14 @@ async def specialist(messages, definitions):
                 for code, rows in latest.get("citations", {}).items()
                 for r in rows
             ]
+        elif "facts" in payload:
+            facts = payload["facts"]
+            records = [
+                {"path": parent + "/" + field, "value": value, "industry_code": code}
+                for code, groups in [(None, facts["shared"]), *facts["industries"].items()]
+                for parent, fields in groups.items()
+                for field, value in fields.items()
+            ]
         else:
             records = scalar_records(data)
         findings = (

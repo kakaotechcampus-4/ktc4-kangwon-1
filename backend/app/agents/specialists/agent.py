@@ -13,6 +13,7 @@ from pydantic import Field, ValidationError
 from app.evidence import (
     FINDING_WARNING_PREFIX,
     MAP_AGENT_ID,
+    SourceIndex,
     map_citations,
     scalar_records,
     validate_findings,
@@ -35,6 +36,7 @@ from app.schemas import (
     ToolCallRecord,
 )
 
+from .facts import BRIEF_CONTEXT_KEYS, build_facts
 from .tools import ToolArgumentError, fallback_brief
 
 logger = logging.getLogger(__name__)
@@ -168,8 +170,17 @@ async def write_brief(
         {
             "agent_id": analysis.agent_id,
             "task": "브리핑",
-            "analysis": analysis.model_dump(mode="json"),
-            "industry_paths": industry_paths(analysis.data),
+            "source": {
+                "status": analysis.status,
+                "scope": analysis.scope.model_dump(mode="json") if analysis.scope else None,
+                "warnings": analysis.warnings,
+                **{
+                    key: value
+                    for key, value in analysis.data.items()
+                    if key in BRIEF_CONTEXT_KEYS and isinstance(value, str)
+                },
+            },
+            "facts": build_facts(SourceIndex.build(analysis.data)),
         },
         generate=generate,
         tools=tools,
