@@ -20,6 +20,67 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_detail_errors_keep_response_and_log_safe_categories(self):
+        from pydantic import ValidationError
+
+        secret = "SECRET-RAW-INPUT"
+        try:
+            DecisionResult.model_validate({"secret": secret})
+        except ValidationError as invalid:
+            errors = [ValueError(secret), invalid, json.JSONDecodeError(secret, secret, 0)]
+        errors.append(sqlite3.OperationalError(secret))
+        for error in errors:
+            with (
+                self.subTest(error=type(error).__name__),
+                patch("app.api.v1.routes.repository.get_request", side_effect=error),
+                self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
+            ):
+                response = self.client.get("/api/v1/analyses/saved-request")
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.json(), {"detail": "저장된 분석 조회에 실패했습니다."})
+            log = "\n".join(captured.output)
+            self.assertIn(
+                "저장 자료 손상" if isinstance(error, ValueError) else "예상 못 한 오류", log
+            )
+            self.assertIn("saved-request", log)
+            self.assertNotIn(secret, log)
+
+    def test_write_errors_log_without_raw_exception(self):
+        secret = "SECRET-RAW-INPUT"
+        cases = [
+            (
+                "/api/v1/analyses?mock=true",
+                {"address": "시험 주소"},
+                "app.services.analysis.run_graph",
+                "분석 결과 처리 또는 저장에 실패했습니다.",
+            ),
+            (
+                "/api/v1/analyses/saved-request/answers?mock=true",
+                {"request_id": "saved-request", "question_set_id": "q", "answers": []},
+                "app.api.v1.routes.repository.get_request",
+                "답변 처리 또는 저장에 실패했습니다.",
+            ),
+            (
+                "/api/v1/analyses/saved-request/retry-decision?mock=true",
+                {"failed_at": "now"},
+                "app.api.v1.routes.repository.get_request",
+                "최종판단 검증 또는 저장에 실패했습니다.",
+            ),
+        ]
+        for path, body, target, message in cases:
+            with (
+                self.subTest(path=path),
+                patch(target, side_effect=sqlite3.OperationalError(secret)),
+                self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
+            ):
+                response = self.client.post(path, json=body)
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.json(), {"detail": message})
+            log = "\n".join(captured.output)
+            self.assertIn("예상 못 한 오류", log)
+            self.assertIn(response.headers["X-Request-ID"], log)
+            self.assertNotIn(secret, log)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

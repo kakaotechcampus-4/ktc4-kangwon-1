@@ -25,7 +25,7 @@
 | B6 | `orchestration/graph.py:575` | 단독 판정 모드에서 GraphState에 없는 `map_queries`를 조회 | 지금은 빈 값으로 넘어가지만, 의도와 다른 우연한 동작 |
 | B7 | `services/analysis.py:165`, `routes.py:363-378` | 목업 답변 재개에 **실제** 평가자 생성기를 넘김. 재개에서는 평가자를 부르지 않아 지금은 호출 없음(확인함) | 재개 흐름이 바뀌면 목업에서 유료 호출이 나갈 수 있는 잠재 위험 |
 | B8 | `db/connection.py:117` | 마이그레이션이 `schema.sql`을 `;`로 잘라 첫 문장을 `analysis_requests`로 가정 | 파일 순서·주석이 바뀌면 기존 DB 마이그레이션이 깨짐 |
-| B9 | `routes.py:299` | GET 조회가 모든 예외를 500으로 바꿈(자료 불일치 `ValueError` 포함) | 손상 자료와 서버 오류가 구분되지 않음 |
+| B9 | `routes.py:299` | GET 조회가 모든 예외를 500으로 바꿈(자료 불일치 `ValueError` 포함) | 손상 자료와 서버 오류가 구분되지 않음. 결정: HTTP 500·기존 응답 문구 유지, 저장 자료 손상(`ValueError`·검증·JSON 오류)은 `logger.error`, 그 외는 `logger.exception`으로 요청 ID와 함께 구분하며 예외 원문은 기록하지 않음 |
 
 ---
 

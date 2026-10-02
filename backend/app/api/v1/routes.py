@@ -48,6 +48,16 @@ WAIT_QUERY = Query(
 )
 
 
+def _log_unexpected(request_id: str, exc: Exception) -> None:
+    # 예외 원문·연쇄 예외에는 외부 응답이나 사용자 입력이 섞일 수 있습니다.
+    safe = RuntimeError(type(exc).__name__)
+    logger.exception(
+        "예상 못 한 오류: request_id=%s",
+        request_id,
+        exc_info=(RuntimeError, safe, exc.__traceback__),
+    )
+
+
 def _jobs(request: Request) -> dict[str, asyncio.Task]:
     return request.app.state.__dict__.setdefault("jobs", {})
 
@@ -202,6 +212,7 @@ async def create_analysis(
             status_code=502, detail="외부 분석 서비스에 실패했습니다.", headers=headers
         ) from exc
     except Exception as exc:
+        _log_unexpected(request_id, exc)
         raise HTTPException(
             status_code=500, detail="분석 결과 처리 또는 저장에 실패했습니다.", headers=headers
         ) from exc
@@ -296,7 +307,11 @@ async def get_analysis(request_id: str, request: Request) -> dict[str, Any]:
                 )
             )
             return row
+    except ValueError as exc:
+        logger.error("저장 자료 손상: request_id=%s", request_id)
+        raise HTTPException(status_code=500, detail="저장된 분석 조회에 실패했습니다.") from exc
     except Exception as exc:
+        _log_unexpected(request_id, exc)
         raise HTTPException(status_code=500, detail="저장된 분석 조회에 실패했습니다.") from exc
     raise HTTPException(status_code=404, detail="분석 요청을 찾을 수 없습니다.")
 
@@ -391,7 +406,8 @@ async def submit_answers(
         ) from None
     except (RuntimeError, TimeoutError):
         raise HTTPException(502, "최종판단 서비스에 실패했습니다.", headers=headers) from None
-    except Exception:
+    except Exception as exc:
+        _log_unexpected(request_id, exc)
         raise HTTPException(500, "답변 처리 또는 저장에 실패했습니다.", headers=headers) from None
 
 
@@ -439,7 +455,8 @@ async def retry_analysis_decision(
         ) from None
     except (RuntimeError, TimeoutError):
         raise HTTPException(502, "최종판단 서비스에 실패했습니다.", headers=headers) from None
-    except Exception:
+    except Exception as exc:
+        _log_unexpected(request_id, exc)
         raise HTTPException(
             500, "최종판단 검증 또는 저장에 실패했습니다.", headers=headers
         ) from None
