@@ -144,3 +144,56 @@ class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
     def test_prompt_no_longer_mentions_legacy_industry_paths(self):
         prompt = Path("app/agents/specialists/prompt.md").read_text(encoding="utf-8")
         self.assertNotIn("industry_paths", prompt)
+
+
+class MapPayloadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_three_searches_return_only_current_industry_and_bounded_size(self):
+        from types import SimpleNamespace
+
+        from app.agents.orchestration.consult import build_specialist_tools
+        from app.api.v1.mock import map_observation
+        from app.evidence import valid_map_path
+
+        task = AnalysisTask(request_id="map-size", site=mock_site(), radius_m=500)
+        query = SpecialistQuery(
+            agent_id="map_analysis",
+            question="주변 확인",
+            industry_codes=["I201"],
+            why_needed="확인",
+            expected_impact="검토",
+        )
+        tools, changes = build_specialist_tools(
+            task,
+            "map_analysis",
+            analyses=[],
+            supplements=[],
+            map_lookup=map_observation,
+            hooks=SimpleNamespace(on_map_requested=None, on_map_result=None, on_map_completed=None),
+            state={},
+            query=query,
+        )
+        sizes = []
+        for code in ("I201", "I210", "I212"):
+            result = await tools["search_industry"].execute({"code": code, "query": "점포"})
+            self.assertNotIn("data", result)
+            self.assertEqual(set(result["citations"]), {code})
+            self.assertTrue(result["adopted"])
+            self.assertEqual(result["match_summary"], {"same": 1, "different": 0, "unclear": 0})
+            for row in result["citations"][code]:
+                self.assertTrue(valid_map_path(row["path"], code, changes["map_observation"].data))
+            sizes.append(len(json.dumps(result, ensure_ascii=False)))
+        self.assertLessEqual(sizes[-1], 2 * sizes[0])
+        payload = json.loads(
+            await capture_payload(
+                answer_query,
+                task,
+                query,
+                1,
+                analysis=None,
+                observation=changes["map_observation"],
+                tools={},
+            )
+        )
+        self.assertNotIn("data", payload)
+        self.assertEqual(set(payload["citations"]), {"I201"})
+        self.assertEqual(len(payload["queries"]), 3)

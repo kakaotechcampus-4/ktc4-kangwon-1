@@ -200,10 +200,10 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
         first = await tools["search_industry"].execute({"code": "I212", "query": "카페"})
         self.assertIn("I212", first["citations"])
         second = await tools["search_industry"].execute({"code": "I210", "query": "제과점"})
-        self.assertEqual(set(second["citations"]), {"I212", "I210"})
-        self.assertEqual(len(second["match_summary"]), 2)
+        self.assertEqual(set(second["citations"]), {"I210"})
+        self.assertEqual(second["match_summary"], {"same": 1, "different": 0, "unclear": 0})
         cached = await tools["search_industry"].execute({"code": "I212", "query": "카페"})
-        self.assertEqual(cached["citations"], second["citations"])
+        self.assertEqual(cached["citations"], first["citations"])
 
         async def generate(messages, definitions):
             payload = json.loads(messages[1]["content"])

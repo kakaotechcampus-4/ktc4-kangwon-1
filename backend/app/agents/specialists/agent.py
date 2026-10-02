@@ -14,7 +14,6 @@ from app.evidence import (
     FINDING_WARNING_PREFIX,
     MAP_AGENT_ID,
     SourceIndex,
-    map_citations,
     validate_findings,
 )
 from app.industries.lookup import industry_terms
@@ -36,6 +35,7 @@ from app.schemas import (
 )
 
 from .facts import BRIEF_CONTEXT_KEYS, build_facts
+from .map_inputs import query_summary, selected_citations
 from .tools import ToolArgumentError, fallback_brief
 
 logger = logging.getLogger(__name__)
@@ -219,8 +219,15 @@ async def answer_query(
             "question": query.model_dump(mode="json"),
             **(
                 {
-                    "data": data,
-                    "citations": map_citations(observation.data if observation else data),
+                    "citations": selected_citations(
+                        observation.data if observation else data,
+                        {*query.industry_codes, "_facility"},
+                    ),
+                    "queries": {
+                        key: query_summary(value) for key, value in observation.data.queries.items()
+                    }
+                    if observation
+                    else {},
                     "industry_terms": {code: industry_terms(code) for code in query.industry_codes},
                 }
                 if query.agent_id == MAP_AGENT_ID

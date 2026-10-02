@@ -6,8 +6,9 @@ from pydantic import Field, ValidationError, create_model
 
 from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
 from app.agents.specialists.facts import build_facts
+from app.agents.specialists.map_inputs import query_summary, selected_citations
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
-from app.evidence import MAP_AGENT_ID, SourceIndex, map_citations
+from app.evidence import MAP_AGENT_ID, SourceIndex
 from app.schemas import (
     AgentAnalysis,
     FacilityCode,
@@ -257,22 +258,24 @@ def build_specialist_tools(
 
 
 def _map_tools(task, lookup, hooks, context, question, timeout, changes):
-    def result_data():
-        data = context["map_observation"].data.model_dump(mode="json")
+    def result_data(observed, target, adopted):
+        query_id, query = next(
+            (key, value)
+            for key, value in observed.data.queries.items()
+            if query_key(value.request) == query_key(target)
+        )
+        if not adopted or query.status == "error" or observed.status == "error":
+            return {
+                "query_id": query_id,
+                "status": query.status,
+                "error": query.error or "지도 추가 자료를 확보하지 못했습니다.",
+                "adopted": False,
+            }
         return {
-            "data": data,
-            "citations": map_citations(context["map_observation"].data),
-            "match_summary": {
-                key: {
-                    "query": q["request"]["query"],
-                    "industry_code": q["request"]["industry_code"],
-                    **{
-                        status: list(q["matches"].values()).count(status)
-                        for status in ("same", "different", "unclear")
-                    },
-                }
-                for key, q in data["queries"].items()
-            },
+            "query_id": query_id,
+            **query_summary(query),
+            "citations": selected_citations(observed.data, {target.industry_code or "_facility"}),
+            "adopted": True,
         }
 
     async def search(args, *, kind):
@@ -305,7 +308,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout, changes):
             else None
         )
         if existing and existing.status == "ok":
-            return {**result_data(), "cached": True}
+            return {**result_data(previous, target, True), "cached": True}
         if query_key(target) not in {query_key(q) for q in queries}:
             queries.append(target)
         if len(queries) > 8:
@@ -332,15 +335,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout, changes):
         if adopted:
             context["map_observation"] = observed
             changes["map_observation"] = observed
-        return {
-            **result_data(),
-            "adopted": adopted,
-            **(
-                {"error": "지도 추가 자료를 확보하지 못했습니다."}
-                if not adopted or observed.status == "error"
-                else {}
-            ),
-        }
+        return result_data(observed, target, adopted)
 
     async def industry(args):
         return await search(args, kind="industry")

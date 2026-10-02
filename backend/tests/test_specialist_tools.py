@@ -46,7 +46,9 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                         await tool.execute({"code": "SW8"})
                     self.assertNotIn("map_observation", self.context)
                 else:
-                    await tool.execute({"code": "SW8"})
+                    response = await tool.execute({"code": "SW8"})
+                    self.assertEqual(set(response), {"query_id", "status", "error", "adopted"})
+                    self.assertFalse(response["adopted"])
                     observed = self.context["map_observation"]
                     code = "MAP_TIMEOUT" if isinstance(error, TimeoutError) else "MAP_FAILED"
                     self.assertEqual(observed.status, "error")
@@ -281,7 +283,12 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
 
         tools = self.tools("map_analysis", map_lookup=lookup)
         for code in ["SW8", "PK6", "SC4", "HP8", "PM9", "AC5", "CS2", "MT1"]:
-            await tools["search_facility"].execute({"code": code})
+            response = await tools["search_facility"].execute({"code": code})
+            if code == "SW8":
+                self.assertEqual(set(response["citations"]), {"_facility"})
+            else:
+                self.assertEqual(set(response), {"query_id", "status", "error", "adopted"})
+                self.assertFalse(response["adopted"])
         result = await tools["search_facility"].execute({"code": "BK9"})
         self.assertIn("error", result)
         self.assertEqual(len(calls), 8)
