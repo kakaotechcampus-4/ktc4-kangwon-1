@@ -43,9 +43,14 @@ type InfoItem = {
 export default function ReportHeader({
   address,
   floorUnit,
+  parking,
+  exclusiveArea,
 }: {
   address?: string;
   floorUnit?: string;
+  // 상가 정보 확인 화면에서 확인한 값 — 없으면 "미입력"으로 둔다.
+  parking?: string;
+  exclusiveArea?: string;
 } = {}) {
   const displayAddress = address ?? mockReportData.address;
 
@@ -66,14 +71,24 @@ export default function ReportHeader({
     { id: 'deposit', label: '보증금', value: '', filled: false },
     { id: 'maintenance', label: '관리비', value: '', filled: false },
     { id: 'vacancy', label: '공실 기간', value: '', filled: false },
-    { id: 'parking', label: '주차', value: '', filled: false },
+    {
+      id: 'parking',
+      label: '주차',
+      value: parking ?? '',
+      filled: parking !== undefined,
+    },
     {
       id: 'floor',
       label: '층수',
       value: floorValue ?? '',
       filled: floorValue !== undefined,
     },
-    { id: 'area', label: '전용면적', value: '', filled: false },
+    {
+      id: 'area',
+      label: '전용면적',
+      value: exclusiveArea ?? '',
+      filled: exclusiveArea !== undefined,
+    },
   ];
 
   return (

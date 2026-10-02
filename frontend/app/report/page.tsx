@@ -15,7 +15,17 @@ import type {
   CommercialAreaData,
   FloatingPopulationData,
 } from '@/lib/mockData/report';
-import { loadAnalysisResult } from '@/lib/api/resultStore';
+import {
+  loadAnalysisResult,
+  loadConfirmedBuilding,
+  loadVacancyInput,
+  type VacancyInput,
+} from '@/lib/api/resultStore';
+import type { BuildingInfo } from '@/lib/api/building';
+import {
+  PARKING_LABELS,
+  formatArea,
+} from '@/components/building-confirm/labels';
 import type {
   AgentAnalysis,
   AgentId,
@@ -102,6 +112,10 @@ export default function ReportPage() {
   const [analysisResult, setAnalysisResult] = useState<DecisionResult | null>(
     null
   );
+  // 앞 단계(주소 입력·상가 정보 확인)에서 받은 값. mock 모드처럼 분석 결과가
+  // 없을 때도 리포트 머리말이 입력한 상가를 가리키게 한다.
+  const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
+  const [building, setBuilding] = useState<BuildingInfo | null>(null);
 
   useEffect(() => {
     // sessionStorage는 브라우저 전용이라 서버 렌더에서는 접근할 수 없다.
@@ -109,6 +123,8 @@ export default function ReportPage() {
     // 페이지 진입 시 결과를 채워 넣는 데 불가피하다.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalysisResult(loadAnalysisResult());
+    setVacancyInput(loadVacancyInput());
+    setBuilding(loadConfirmedBuilding());
   }, []);
 
   const floatingPopulationData = analysisResult
@@ -130,7 +146,15 @@ export default function ReportPage() {
   const analyzedDate = analysisResult
     ? new Date().toLocaleDateString('ko-KR')
     : mockReportData.analyzedDate;
-  const address = analysisResult?.address ?? '춘천시 후평동 234-5';
+  const inputAddress = vacancyInput
+    ? [vacancyInput.roadAddress, vacancyInput.floorUnit.trim()]
+        .filter(Boolean)
+        .join(' ')
+    : undefined;
+  const headerAddress = analysisResult?.address ?? inputAddress;
+  const address = headerAddress ?? '춘천시 후평동 234-5';
+  const parkingValue = building?.parking.value;
+  const areaValue = building?.exclusiveAreaM2.value;
 
   return (
     <div
@@ -138,7 +162,16 @@ export default function ReportPage() {
       style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
-      <ReportHeader address={analysisResult?.address} />
+      <ReportHeader
+        address={headerAddress}
+        floorUnit={vacancyInput?.floorUnit.trim() || undefined}
+        parking={parkingValue ? PARKING_LABELS[parkingValue] : undefined}
+        exclusiveArea={
+          areaValue !== null && areaValue !== undefined
+            ? formatArea(areaValue)
+            : undefined
+        }
+      />
 
       <RecommendationSection
         recommendations={analysisResult?.recommendations}
