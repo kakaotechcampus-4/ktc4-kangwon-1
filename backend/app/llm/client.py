@@ -4,7 +4,9 @@ import json
 import time
 from typing import Any
 
+import httpx
 import openai
+from openai.lib.streaming.chat import AsyncChatCompletionStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 
@@ -126,17 +128,29 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
             timeout=settings.timeout_seconds,
             max_retries=0 if current_scope()[0] is not None else 1,
         ) as client:
-            response = await client.chat.completions.create(
-                model=settings.model or "", messages=messages, **options
+            raw_stream = await client.chat.completions.create(
+                model=settings.model or "",
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
+                **options,
             )
+            # SDK로 본문·도구 인자를 조립하고 기존 종료·JSON 검증을 그대로 적용합니다.
+            async with AsyncChatCompletionStream(
+                raw_stream=raw_stream, response_format=openai.omit, input_tools=openai.omit
+            ) as stream:
+                await stream.until_done()
+                response = stream.current_completion_snapshot
     except openai.APIStatusError as exc:
         raise LLMHTTPError(exc.status_code, exc.body) from None
-    except openai.APITimeoutError:
+    except (openai.APITimeoutError, httpx.TimeoutException):
         raise LLMResponseError("LLM_TIMEOUT") from None
-    except openai.APIConnectionError:
+    except (openai.APIConnectionError, httpx.TransportError):
         raise LLMResponseError("LLM_CONNECTION_ERROR") from None
     except (openai.APIError, ValueError, TypeError):
         raise LLMResponseError("LLM_REQUEST_ERROR") from None
+    except (AssertionError, AttributeError, IndexError, KeyError):
+        raise LLMResponseError("LLM_INVALID_RESPONSE") from None
     if (
         not isinstance(response, ChatCompletion)
         or not isinstance(response.choices, list)

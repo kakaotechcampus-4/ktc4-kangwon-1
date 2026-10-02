@@ -10,6 +10,7 @@ from unittest.mock import patch
 import httpx
 import openai
 from fastapi.testclient import TestClient
+from llm_stream_fixture import stream_response
 
 from app.db import repository as repo
 from app.evidence import scalar_records
@@ -127,7 +128,7 @@ class MultiTransportTests(unittest.IsolatedAsyncioTestCase):
                 if reject:
                     result["recommendations"][0]["evidence"][0]["path"] = "/missing"
                 message, finish = {"role": "assistant", "content": json.dumps(result)}, "stop"
-            return httpx.Response(
+            return stream_response(
                 200,
                 json={
                     "id": "test",
