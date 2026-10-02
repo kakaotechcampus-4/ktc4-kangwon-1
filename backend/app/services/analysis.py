@@ -16,10 +16,20 @@ from typing import Any, Literal, overload
 from app.address import resolve_site
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
-from app.agents.evaluators.agent import GenerateEvaluation, decision_evaluation, generate_evaluation
+from app.agents.evaluators.agent import GenerateEvaluation, generate_evaluation
 from app.agents.orchestration.graph import RunHooks, run_graph
+from app.agents.orchestration.nodes.decision import evaluate_with_log
 from app.agents.orchestration.supplement import OnSupplement, validate_tools
 from app.agents.orchestration.tools import MapLookup, SupplementTool
+from app.agents.orchestration.validation import (
+    validate_address,
+    validate_agents,
+    validate_allow_questions,
+    validate_evaluators,
+    validate_map_lookup,
+    validate_request_id,
+    validate_specialists,
+)
 from app.agents.orchestration.workflow import (
     AgentRegistry,
     build_react_agents,
@@ -45,7 +55,6 @@ from app.schemas import (
     AnalysisTask,
     AnswerSubmission,
     DecisionResult,
-    EvaluationLogEntry,
     EvaluatorId,
     QuestionSnapshot,
     QuestionSnapshotV2,
@@ -278,18 +287,14 @@ async def execute_analysis(
 ) -> DecisionResult | WaitingForInput:
     """요청·중간 결과·최종 결과를 저장하며 실패는 호출자에게 전달합니다."""
     radius_m = validate_radius(radius_m)
-    if map_lookup is not None and not callable(map_lookup):
-        raise ValueError("지도 조회 함수가 필요합니다.")
-    if type(allow_questions) is not bool:
-        raise ValueError("질문 허용 여부는 참 또는 거짓이어야 합니다.")
+    validate_map_lookup(map_lookup)
+    validate_allow_questions(allow_questions)
     supplements = list(supplements or [])
     validate_tools(supplements)
-    if not isinstance(address, str) or not address.strip():
-        raise ValueError("주소가 비어 있습니다.")
+    validate_address(address)
     if request_id is None:
         request_id = uuid.uuid4().hex
-    if not isinstance(request_id, str) or not request_id.strip():
-        raise ValueError("요청 ID가 비어 있습니다.")
+    validate_request_id(request_id)
     request_id = request_id.strip()
     settings = settings or ExecutionSettings.from_env()
     resolve = resolve if resolve is not None else partial(resolve_site, settings=settings.address)
@@ -298,8 +303,7 @@ async def execute_analysis(
     db_path = db_path if db_path is not None else settings.db_path
     agent_timeout = settings.agent_timeout if agent_timeout is None else agent_timeout
     overall_timeout = settings.overall_timeout if overall_timeout is None else overall_timeout
-    if set(agents) != set(AGENT_IDS) or not all(callable(agent) for agent in agents.values()):
-        raise ValueError("세 분석 에이전트의 호출 함수를 등록해 주세요.")
+    validate_agents(agents)
     if not callable(resolve):
         raise ValueError("주소 변환 함수가 필요합니다.")
 
@@ -527,18 +531,9 @@ async def _evaluate_saved(
 ) -> DecisionResult:
     """저장된 입력으로 판단만 실행하며 추가 외부 조회를 허용하지 않습니다."""
     state = await _saved_evaluation(bundle, path) if path is not None else {}
-    entries: list[EvaluationLogEntry] = []
-    extra: dict[str, Any] = (
-        {
-            "evaluation": decision_evaluation(state["draft"], state["evaluations"]),
-            "evaluation_log": entries,
-        }
-        if state
-        else {}
-    )
-    result = await decision.evaluate(
+    result, entries = await evaluate_with_log(
+        state,
         bundle["request"],
-        **extra,
         site=bundle["site"],
         user_answers=bundle["answers"],
         feedback=bundle["feedback"],
@@ -661,8 +656,7 @@ async def _saved_evaluation(bundle, path):
 
 def build_evaluator_generators(settings, injected=None):
     if injected is not None:
-        if set(injected) != set(EVALUATOR_IDS) or not all(callable(fn) for fn in injected.values()):
-            raise ValueError("평가자 네 명의 호출 함수를 등록해 주세요.")
+        validate_evaluators(injected)
         return injected
     return {
         role: partial(generate_evaluation, settings=settings.evaluator_llm)
@@ -673,8 +667,7 @@ def build_evaluator_generators(settings, injected=None):
 def build_specialist_generators(settings, injected=None, *, with_map=False):
     roles = [*AGENT_IDS, *(["map_analysis"] if with_map else [])]
     if injected is not None:
-        if not set(roles) <= set(injected) or not all(callable(fn) for fn in injected.values()):
-            raise ValueError("전문가 호출 함수를 등록해 주세요.")
+        validate_specialists(injected, with_map=with_map)
         return injected
     return {
         role: partial(

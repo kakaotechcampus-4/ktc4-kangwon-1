@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import Field, ValidationError, create_model
 
+from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
 from app.evidence import MAP_AGENT_ID, map_citations, scalar_records
 from app.schemas import (
@@ -109,7 +110,7 @@ def build_specialist_tools(
     hooks,
     state,
     query=None,
-    operation_timeout=180.0,
+    operation_timeout=DEFAULT_AGENT_TIMEOUT,
 ) -> tuple[dict[str, SpecialistTool], SpecialistChanges]:
     """자료 소유자는 고정하고 모델이 요청·반경을 변경하지 못하게 합니다."""
     changes: SpecialistChanges = {}

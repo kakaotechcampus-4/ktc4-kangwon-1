@@ -62,7 +62,7 @@
 
 **바꿀 것**
 - `GraphDeps`(frozen dataclass): `address, request_id, radius_m, resolve, agents, generate, generate_specialists, generate_evaluators, supplements, map_lookup, hooks, budget, agent_timeout, mode, allow_questions, evaluators_enabled, retry_only, user_answers`.
-  - 인자 검사(152-207)는 `GraphDeps.__post_init__`로. `services/analysis.py`의 같은 검사(276-299, 660-682)는 이것을 쓰게 해서 한 벌로.
+  - 의존성 검사는 `GraphDeps.__post_init__`로 옮기고 재개 상태 검사는 `run_graph`에 둡니다. 서비스와 조건·문구가 같은 검사만 공유합니다. 문구 차이로 유지, 계약 변경 때 통일.
   - `step`, `expert_calls`, `registered`는 GraphDeps 메서드로.
 - 노드는 파일을 나눠 모듈 함수로: `orchestration/nodes/`에 `analysis.py`(prepare_address, run_analyses), `decision.py`(evaluate_decision, judge, _evaluate, route), `tools.py`(execute_map, supplement_node, ask_user), `deliberation.py`(write_briefs, consult), `evaluation.py`(evaluate_draft_node). 형태는 `async def node(state, deps) -> GraphState`.
 - `build_graph(deps)`가 `functools.partial(node, deps=deps)`로 연결합니다. `run_graph`는 예산 준비 → deps 생성 → 실행 → 결과 확인만 남깁니다(목표 60줄 이하). **공개 시그니처는 그대로.**

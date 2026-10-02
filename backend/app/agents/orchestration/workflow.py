@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from app.agents import business_lifecycle, commercial_area, floating_population
 from app.agents.business_lifecycle import supplement as lifecycle_supplement
 from app.agents.commercial_area import supplement as commercial_supplement
+from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
 from app.logging import log_exception
 from app.schemas import (
     DEFAULT_RADIUS_M,
@@ -161,7 +162,7 @@ async def run_agents(
     agents: AgentRegistry,
     *,
     on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None,
-    agent_timeout: float = 180.0,
+    agent_timeout: float = DEFAULT_AGENT_TIMEOUT,
 ) -> list[AgentAnalysis]:
     """등록된 분석 에이전트를 동시에 실행합니다."""
     if not agents:
@@ -189,10 +190,12 @@ async def run_agents(
             await on_analysis_completed(analysis)
         return analysis
 
-    results = await asyncio.gather(*(run_one(key) for key in agents), return_exceptions=True)
-    analyses = []
+    return await collect(run_one(key) for key in agents)
+
+
+async def collect(coroutines):
+    results = await asyncio.gather(*coroutines, return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):
             raise result
-        analyses.append(result)
-    return analyses
+    return results
