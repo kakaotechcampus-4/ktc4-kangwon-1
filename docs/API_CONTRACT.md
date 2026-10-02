@@ -199,6 +199,8 @@ POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
 
 지도 관측은 최종 결과의 `map_observation`에도 포함됩니다. map_analysis 근거 경로는
 이 객체의 data 안에서 해석하며, 기본 세 분석 source_analyses와 구분합니다.
+`data.queries.*.matches`는 장소 ID별로 질문 업종의 동종 여부(`same`·`different`·`unclear`)를 나타냅니다. 시설 검색·옛 기록은 빈 객체입니다.
+지도 검색은 최대 8개이며, `industries.*.sampled_count`는 해당 업종의 동종 표본 수입니다. 한 장소가 여러 질문 업종의 동종 표본일 수 있습니다.
 
 POST는 기본(`wait=true`)으로 실행 완료 또는 질문 대기까지 기다립니다.
 진행 화면이 필요하면 아래 [비동기 실행과 진행 이벤트](#비동기-실행과-진행-이벤트)를 씁니다.

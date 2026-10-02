@@ -302,7 +302,7 @@ class MapQuery(Schema):
 
 class MapLookupPlan(Schema):
     action: Literal["map_lookup"]
-    queries: list[MapQuery] = Field(min_length=1, max_length=5)
+    queries: list[MapQuery] = Field(min_length=1, max_length=8)
 
     def unique_queries(self) -> list[MapQuery]:
         seen = set()
@@ -315,6 +315,9 @@ class MapLookupPlan(Schema):
         return result
 
 
+MatchStatus = Literal["same", "different", "unclear"]
+
+
 class MapQueryResult(Schema):
     request: MapQuery
     status: Literal["ok", "error"]
@@ -324,9 +327,15 @@ class MapQueryResult(Schema):
     place_ids: list[Text] = Field(default_factory=list)
     has_more: bool | None = None
     error: Text | None = None
+    # 질문 업종 기준 장소별 동종 판단. 시설 검색·옛 자료는 비어 있습니다.
+    matches: dict[Text, MatchStatus] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def check_result(self) -> Self:
+        if not self.matches.keys() <= set(self.place_ids) or (
+            self.matches and (self.request.kind == "infrastructure" or self.status == "error")
+        ):
+            raise ValueError("동종 판단은 성공한 업종 검색의 장소만 참조해야 합니다.")
         if self.status == "error":
             if not self.error or self.total_count is not None or self.place_ids:
                 raise ValueError("실패한 검색은 건수·장소 대신 오류를 반환합니다.")
@@ -345,6 +354,7 @@ class MapPlace(Schema):
     category_code: str = ""
     distance_m: Annotated[int, Field(ge=0)] | None = None
     place_url: Text | None = None
+    # mapping_status·industry_code는 2026-10 이전 관측 호환용입니다.
     mapping_status: Literal["mapped", "ambiguous", "unmapped", "not_applicable"] = "not_applicable"
     industry_code: Text | None = None
     mapping_method: Literal["llm"] | None = None
@@ -389,6 +399,10 @@ class MapData(Schema):
         for place_id, place in self.places.items():
             if place.industry_code:
                 expected.setdefault(place.industry_code, set()).add(place_id)
+        for query in self.queries.values():
+            for place_id, match in query.matches.items():
+                if match == "same" and query.request.industry_code:
+                    expected.setdefault(query.request.industry_code, set()).add(place_id)
         if set(expected) != set(self.industries):
             raise ValueError("매핑 장소와 업종 집계가 다릅니다.")
         for code, group in self.industries.items():
@@ -424,7 +438,7 @@ class MapObservation(Schema):
         if stamp.utcoffset() != timedelta(0):
             raise ValueError("지도 조회 시각은 UTC여야 합니다.")
         queries = self.data.queries
-        if not 1 <= len(queries) <= 5 or set(queries) != {
+        if not 1 <= len(queries) <= 8 or set(queries) != {
             f"q{i}" for i in range(1, len(queries) + 1)
         }:
             raise ValueError("지도 검색 식별자가 올바르지 않습니다.")
@@ -441,6 +455,7 @@ class MapObservation(Schema):
             len(success) != len(queries)
             or not any(q.total_count for q in success)
             or any(p.mapping_status in {"unmapped", "ambiguous"} for p in self.data.places.values())
+            or any("unclear" in q.matches.values() for q in queries.values())
         ):
             raise ValueError("불완전한 지도 관측은 partial이어야 합니다.")
         return self

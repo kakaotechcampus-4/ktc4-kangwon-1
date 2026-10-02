@@ -139,44 +139,110 @@ def resolve_pointer(data: Any, path: str) -> Any:
     return data
 
 
-def valid_map_path(path: str, code: str | None, data: dict) -> bool:
-    """지도 표본·시설·정상 0건만 인용하며 검색 총수를 업종 수로 바꾸지 않습니다."""
+def _map_path_reason(path: str, code: str | None, data: dict) -> str | None:
+    """허용 여부와 공개 가능한 실패 원인을 한 곳에서 정합니다."""
     parts = path.split("/")
     if len(parts) != 4 or parts[0] or re.search(r"~(?![01])", path):
-        return False
+        return "형식"
     _, section, key, field = [p.replace("~1", "/").replace("~0", "~") for p in parts]
+    if section not in {"industries", "places", "queries"}:
+        return "구역"
+    if key not in data.get(section, {}):
+        return "없음"
+    item = data[section][key]
     if section == "industries":
-        return code == key and key in data.get("industries", {}) and field == "sampled_count"
+        if field != "sampled_count":
+            return "필드"
+        return None if code == key else "업종"
     if section == "queries":
-        query = data.get("queries", {}).get(key, {})
-        target = query.get("request", {})
-        return bool(
-            query.get("status") == "ok"
-            and field == "total_count"
-            and (
-                target.get("kind") == "infrastructure"
-                or code is not None
-                and target.get("industry_code") == code
-                and query.get("total_count") == 0
-            )
+        target = item.get("request", {})
+        if field != "total_count" or (
+            target.get("kind") == "industry" and item.get("total_count") != 0
+        ):
+            return "필드"
+        if item.get("status") != "ok":
+            return "없음"
+        return (
+            None
+            if target.get("kind") == "infrastructure"
+            or (code is not None and target.get("industry_code") == code)
+            else "업종"
         )
-    if section == "places":
-        place = data.get("places", {}).get(key, {})
-        if field not in {"name", "distance_m"} or place.get(field) is None:
-            return False
-        return bool(
-            code is not None
-            and place.get("mapping_status") == "mapped"
-            and place.get("industry_code") == code
-            or place.get("mapping_status") == "not_applicable"
-            and any(
-                q.get("status") == "ok"
-                and q.get("request", {}).get("kind") == "infrastructure"
-                and key in q.get("place_ids", [])
-                for q in data.get("queries", {}).values()
+    if field not in {"name", "distance_m"}:
+        return "필드"
+    if item.get(field) is None:
+        return "없음"
+    same = code is not None and key in data.get("industries", {}).get(code, {}).get("place_ids", [])
+    facility = item.get("mapping_status") == "not_applicable" and any(
+        q.get("status") == "ok"
+        and q.get("request", {}).get("kind") == "infrastructure"
+        and key in q.get("place_ids", [])
+        for q in data.get("queries", {}).values()
+    )
+    return None if same or facility else "업종"
+
+
+def valid_map_path(path: str, code: str | None, data: dict) -> bool:
+    """지도 표본·시설·정상 0건만 인용하며 검색 총수를 업종 수로 바꾸지 않습니다."""
+    return _map_path_reason(path, code, data) is None
+
+
+def map_citations(data: dict) -> dict[str, list[dict]]:
+    """검증을 통과하는 경로만 업종별로 묶습니다. _facility는 시설 근거입니다."""
+    queries, industries, places = (data.get(key, {}) for key in ("queries", "industries", "places"))
+    codes = dict.fromkeys(
+        [
+            *industries,
+            *(
+                q["request"]["industry_code"]
+                for q in queries.values()
+                if q.get("request", {}).get("industry_code")
+            ),
+        ]
+    )
+    result = {}
+
+    def pointer(section, key, field):
+        return f"/{section}/{key.replace('~', '~0').replace('/', '~1')}/{field}"
+
+    for group in [*codes, "_facility"]:
+        code = None if group == "_facility" else group
+        paths = [pointer("industries", code, "sampled_count")] if code in industries else []
+        relevant = {
+            key: q
+            for key, q in queries.items()
+            if (
+                q.get("request", {}).get("industry_code") == code
+                if code
+                else q.get("request", {}).get("kind") == "infrastructure"
             )
+        }
+        paths.extend(pointer("queries", key, "total_count") for key in relevant)
+        ids = (
+            industries.get(code, {}).get("place_ids", [])
+            if code
+            else {pid for q in relevant.values() for pid in q.get("place_ids", [])}
         )
-    return False
+        nearest = sorted(
+            (pid for pid in ids if pid in places),
+            key=lambda pid: (
+                places[pid].get("distance_m")
+                if places[pid].get("distance_m") is not None
+                else float("inf"),
+                pid,
+            ),
+        )[:10]
+        paths.extend(
+            pointer("places", pid, field) for pid in nearest for field in ("name", "distance_m")
+        )
+        rows = [
+            {"path": path, "value": resolve_pointer(data, path)}
+            for path in paths
+            if valid_map_path(path, code, data)
+        ]
+        if rows:
+            result[group] = rows
+    return result
 
 
 def scalar_records(data: dict) -> list[dict]:
@@ -190,11 +256,11 @@ def scalar_records(data: dict) -> list[dict]:
 
 
 def validate_findings(
-    findings: list[Finding], *, agent_id: SpecialistId, data: dict
+    findings: list[Finding], *, agent_id: SpecialistId, data: dict, radii: set[int] | None = None
 ) -> tuple[list[Finding], list[str]]:
     """문장 의미를 보증하지 않으며 경로·소유 업종·직접 표기 수치만 검증합니다."""
     indexed = index_paths(data)
-    radii = _radii(data)
+    context_radii = _radii(data) | {Decimal(r) for r in radii or ()}
     valid, warnings = [], []
     for i, finding in enumerate(findings):
         paths = [ref.path for ref in finding.evidence]
@@ -205,7 +271,13 @@ def validate_findings(
             for p in paths
         )
         if not allowed:
-            warnings.append(f"전문가 근거 제외: {i + 1}번 경로·업종 불일치")
+            reason = ""
+            if agent_id == "map_analysis":
+                causes = dict.fromkeys(
+                    filter(None, (_map_path_reason(p, finding.industry_code, data) for p in paths))
+                )
+                reason = "(지도: " + "·".join(causes) + ")"
+            warnings.append(f"전문가 근거 제외: {i + 1}번 경로·업종 불일치{reason}")
             continue
         values = [resolve_pointer(data, p) for p in paths]
         # 날짜·코드는 지표 숫자가 아닙니다. 숫자 단위 축약·환산은 지원하지 않습니다.
@@ -220,24 +292,29 @@ def validate_findings(
         )
         claim = re.sub(
             r"(?<![\d.])(\d[\d,]*(?:\.\d+)?)\s*m(?![A-Za-z])",
-            lambda m: "" if Decimal(str(m.group(1)).replace(",", "")) in radii else str(m.group(0)),
+            lambda m: (
+                ""
+                if Decimal(str(m.group(1)).replace(",", "")) in context_radii
+                else str(m.group(0))
+            ),
             claim,
         )
         numbers = re.findall(r"(?<![A-Za-z0-9_.])[-+]?\d[\d,]*(?:\.\d+)?", claim)
         numeric = [Decimal(str(v)) for v in values if type(v) in {int, float}]
-        matched = all(
-            any(
+        mismatched = [
+            n
+            for n in numbers
+            if not any(
                 abs(value - Decimal(n.replace(",", "")))
                 <= (Decimal(0) if "." not in n else Decimal(5).scaleb(-len(n.split(".")[1]) - 1))
                 for value in numeric
             )
-            for n in numbers
-        )
+        ]
         # 같은 숫자라도 점포 수를 인원·금액으로 바꾸면 인용할 수 없습니다.
         for number, unit in re.findall(
             r"([-+]?\d[\d,]*(?:\.\d+)?)\s*(명/일|개소|명|개|원|점|배|미터|m|%)", claim
         ):
-            matched = matched and any(
+            if not any(
                 type(value) in {int, float}
                 and abs(Decimal(str(value)) - Decimal(number.replace(",", "")))
                 <= (
@@ -253,19 +330,28 @@ def validate_findings(
                     and ("일평균" in claim or "일 평균" in claim or "하루" in claim)
                 )
                 for path, value in zip(paths, values, strict=True)
-            )
+            ):
+                mismatched.append(number)
+        matched = not mismatched
         if "%" in claim:
             population = data.get("population")
             unit = rate_basis(data) or (
                 population.get("share_unit") if isinstance(population, dict) else None
             )
-            matched = matched and any(
+            percent_allowed = any(
                 any(token in p for token in ("rate", "share", "percentile", "ratio"))
                 and "%" in str(unit)
                 for p in paths
             )
-        if not matched or re.search(r"\d\s*[만억천]\s*(명|개|원)", claim):
-            warnings.append(f"전문가 근거 제외: {i + 1}번 수치·단위 불일치")
+            matched = matched and percent_allowed
+            if not percent_allowed:
+                mismatched.extend(re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*%", claim))
+        scaled = re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*[만억천]\s*(?:명|개|원)", claim)
+        if not matched or scaled:
+            mismatched.extend(scaled)
+            numbers_only = list(dict.fromkeys(n.replace(",", "") for n in mismatched))[:3]
+            detail = f" (맞지 않는 수: {', '.join(numbers_only)})" if numbers_only else ""
+            warnings.append(f"전문가 근거 제외: {i + 1}번 수치·단위 불일치{detail}")
             continue
         valid.append(finding)
     return valid, warnings

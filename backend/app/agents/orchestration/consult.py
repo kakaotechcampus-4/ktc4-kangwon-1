@@ -7,7 +7,7 @@ from pydantic import Field, ValidationError, create_model
 
 from app.agents.map_analysis.agent import failed_observation
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
-from app.evidence import scalar_records
+from app.evidence import map_citations, scalar_records
 from app.llm.budget import BudgetStorageError
 from app.schemas import (
     FacilityCode,
@@ -48,7 +48,7 @@ def _tool(name, description, parameters, execute):
 
 
 def map_adoptable(previous: MapObservation | None, candidate: MapObservation) -> bool:
-    """기존 정상 검색이나 확정 매핑을 잃는 재조회는 채택하지 않습니다."""
+    """기존 정상 검색이나 업종별 동종 장소를 잃는 재조회는 채택하지 않습니다."""
     if previous is None or previous.status == "error":
         return True
     current = {query_key(q.request): q for q in candidate.data.queries.values()}
@@ -57,10 +57,9 @@ def map_adoptable(previous: MapObservation | None, candidate: MapObservation) ->
         or (query_key(q.request) in current and current[query_key(q.request)].status == "ok")
         for q in previous.data.queries.values()
     ) and all(
-        place_id in candidate.data.places
-        and candidate.data.places[place_id].industry_code == place.industry_code
-        for place_id, place in previous.data.places.items()
-        if place.mapping_status == "mapped"
+        code in candidate.data.industries
+        and set(group.place_ids) <= set(candidate.data.industries[code].place_ids)
+        for code, group in previous.data.industries.items()
     )
 
 
@@ -220,6 +219,24 @@ def build_specialist_tools(
 
 
 def _map_tools(task, lookup, hooks, context, question, timeout):
+    def result_data():
+        data = context["map_observation"].data.model_dump(mode="json")
+        return {
+            "data": data,
+            "citations": map_citations(data),
+            "match_summary": {
+                key: {
+                    "query": q["request"]["query"],
+                    "industry_code": q["request"]["industry_code"],
+                    **{
+                        status: list(q["matches"].values()).count(status)
+                        for status in ("same", "different", "unclear")
+                    },
+                }
+                for key, q in data["queries"].items()
+            },
+        }
+
     async def search(args, *, kind):
         target = MapQuery(
             kind=kind,
@@ -250,11 +267,11 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
             else None
         )
         if existing and existing.status == "ok":
-            return {"data": previous.data.model_dump(mode="json"), "cached": True}
+            return {**result_data(), "cached": True}
         if query_key(target) not in {query_key(q) for q in queries}:
             queries.append(target)
-        if len(queries) > 5:
-            return {"error": "요청당 지도 조회 대상은 최대 5개입니다."}
+        if len(queries) > 8:
+            return {"error": "요청당 지도 조회 대상은 최대 8개입니다."}
         plan = MapLookupPlan(action="map_lookup", queries=queries)
         if hooks.on_map_requested:
             await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
@@ -283,7 +300,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
         if adopted:
             context["map_observation"] = observed
         return {
-            "data": context["map_observation"].data.model_dump(mode="json"),
+            **result_data(),
             "adopted": adopted,
             **(
                 {"error": "지도 추가 자료를 확보하지 못했습니다."}
@@ -301,8 +318,8 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
     return {
         "search_industry": _tool(
             "search_industry",
-            "공통 업종의 실제 주변 점포를 검색합니다. query는 공식 업종명이 아니라 "
-            "간판·지도에 쓰는 짧은 일상어(예: 세탁소, 커피, 편의점)입니다.",
+            "물어본 업종(code)의 주변 동종 점포를 일상어 검색어(query)로 찾습니다. "
+            "같은 업종을 다른 검색어로 여러 번 부를 수 있습니다.",
             {
                 "code": (IndustryCode, ...),
                 "query": (Annotated[str, Field(min_length=1, max_length=50)], ...),

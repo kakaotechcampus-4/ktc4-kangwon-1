@@ -9,7 +9,8 @@ from importlib.resources import files
 from openai.types.chat import ChatCompletionMessage
 from pydantic import Field, ValidationError
 
-from app.evidence import scalar_records, validate_findings
+from app.evidence import map_citations, scalar_records, validate_findings
+from app.industries.lookup import industry_terms
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_tools
 from app.llm.config import LLMSettings
@@ -41,7 +42,7 @@ async def generate_specialist(messages, definitions, *, settings: LLMSettings):
     return await complete_tools(messages, definitions, settings)
 
 
-async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
+async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=None, max_steps=5):
     prompt = await asyncio.to_thread(
         files(__package__).joinpath("prompt.md").read_text, encoding="utf-8"
     )
@@ -86,8 +87,14 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
                             dropped.append(f"전문가 근거 제외: {i + 1}번 형식 오류")
                     content = BriefContent.model_validate({**arguments, "findings": kept[:8]})
                     content.limitations.extend(dropped)
+                    observation = get_observation() if get_observation else None
                     findings, warnings = validate_findings(
-                        content.findings, agent_id=agent_id, data=get_data()
+                        content.findings,
+                        agent_id=agent_id,
+                        data=get_data(),
+                        radii={observation.radius_m}
+                        if agent_id == "map_analysis" and observation
+                        else None,
                     )
                     content.findings = findings
                     content.limitations.extend(warnings)
@@ -180,6 +187,7 @@ async def answer_query(
     generate,
     tools,
     get_data=None,
+    get_observation=None,
     max_steps=5,
 ) -> SpecialistAnswer:
     data = (
@@ -195,11 +203,19 @@ async def answer_query(
             "agent_id": query.agent_id,
             "question": query.model_dump(mode="json"),
             "data": data,
-            "industry_paths": industry_paths(data),
+            **(
+                {
+                    "citations": map_citations(data),
+                    "industry_terms": {code: industry_terms(code) for code in query.industry_codes},
+                }
+                if query.agent_id == "map_analysis"
+                else {"industry_paths": industry_paths(data)}
+            ),
         },
         generate=generate,
         tools=tools,
         get_data=get_data or (lambda: data),
+        get_observation=get_observation or (lambda: observation),
         max_steps=max_steps,
     )
     findings = content.findings[:5] if content else []

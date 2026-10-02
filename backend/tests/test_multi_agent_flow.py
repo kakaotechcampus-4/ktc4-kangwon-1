@@ -55,6 +55,7 @@ class MultiFlowTests(unittest.TestCase):
         self.assertEqual(saved["status"], "waiting_for_input")
         self.assertEqual(saved["map_observation"]["radius_m"], 300)
         self.assertEqual(len(saved["deliberation"]["briefs"]), 3)
+        self.assertEqual(saved["deliberation"]["answers"][0]["status"], "answered")
         self.assertEqual(saved["deliberation"]["answers"][0]["tool_calls"][0]["status"], "ok")
         self.assertNotIn("execution_json", saved)
         answer = {

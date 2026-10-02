@@ -83,7 +83,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                         )
             network.assert_not_called()
 
-    async def test_map_reuses_queries_and_refuses_sixth(self):
+    async def test_map_reuses_queries_and_refuses_ninth(self):
         calls = []
 
         async def lookup(task, plan):
@@ -112,13 +112,13 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         tools = self.tools("map_analysis", map_lookup=lookup)
-        for code in ["SW8", "SW8", "PK6", "SC4", "HP8", "PM9"]:
+        for code in ["SW8", "SW8", "PK6", "SC4", "HP8", "PM9", "AC5", "CS2", "MT1"]:
             await tools["search_facility"].execute({"code": code})
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 8)
         result = await tools["search_facility"].execute({"code": "BK9"})
         self.assertIn("error", result)
-        self.assertEqual(len(calls), 5)
-        self.assertEqual(len(self.context["map_observation"].data.queries), 5)
+        self.assertEqual(len(calls), 8)
+        self.assertEqual(len(self.context["map_observation"].data.queries), 8)
 
     async def test_supplement_does_not_replace_original_values(self):
         from app.agents.orchestration.tools import SupplementTool
@@ -191,11 +191,11 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         tools = self.tools("map_analysis", map_lookup=lookup)
-        for code in ["SW8", "PK6", "SC4", "HP8", "PM9"]:
+        for code in ["SW8", "PK6", "SC4", "HP8", "PM9", "AC5", "CS2", "MT1"]:
             await tools["search_facility"].execute({"code": code})
         result = await tools["search_facility"].execute({"code": "BK9"})
         self.assertIn("error", result)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 8)
         self.assertEqual(len(self.context["map_observation"].data.queries), 1)
 
     async def test_mapped_evidence_cannot_be_replaced_by_unmapped_result(self):

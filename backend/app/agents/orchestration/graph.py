@@ -538,6 +538,7 @@ async def run_graph(
                 generate=generate_specialists[query.agent_id],
                 tools=registered(state, query.agent_id, query),
                 get_data=lambda: current_data(state, query.agent_id),
+                get_observation=lambda: state["context"].get("map_observation"),
                 max_steps=consult_steps(query.agent_id, share),
             )
             current = next((a for a in state["analyses"] if a.agent_id == query.agent_id), None)

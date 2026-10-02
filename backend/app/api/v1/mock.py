@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 
 from app.evidence import scalar_records
 from app.industries.catalog import CATALOG_VERSION
+from app.industries.lookup import get
 from app.mocks import mock_generate
-from app.schemas import MapData, MapObservation, MapQueryResult
+from app.schemas import MapData, MapIndustry, MapObservation, MapPlace, MapQueryResult
 
 
 def interactive_decision(*, with_map: bool, allow_questions: bool):
@@ -96,10 +97,26 @@ async def specialist(messages, definitions):
     """전문가의 도구 호출·근거 제출도 외부 모델 없이 검증합니다."""
     payload = json.loads(messages[1]["content"])
     if payload["agent_id"] == "map_analysis" and len(messages) == 2:
-        name, arguments = "search_facility", {"code": "SW8"}
+        codes = payload.get("question", {}).get("industry_codes", [])
+        name, arguments = (
+            ("search_industry", {"code": codes[0], "query": "카페"})
+            if codes
+            else ("search_facility", {"code": "SW8"})
+        )
     else:
         data = payload.get("analysis", {}).get("data", payload.get("data", {}))
-        records = scalar_records(data)
+        if payload["agent_id"] == "map_analysis":
+            latest = next(
+                (json.loads(m["content"]) for m in reversed(messages) if m["role"] == "tool"),
+                payload,
+            )
+            records = [
+                {**r, "industry_code": None if code == "_facility" else code}
+                for code, rows in latest.get("citations", {}).items()
+                for r in rows
+            ]
+        else:
+            records = scalar_records(data)
         findings = (
             [
                 {
@@ -129,6 +146,25 @@ async def specialist(messages, definitions):
 
 
 async def map_observation(task, plan):
+    queries, places, industries = {}, {}, {}
+    for i, q in enumerate(plan.unique_queries(), 1):
+        code = q.industry_code
+        pid = f"mock-{code}"
+        if code:
+            places[pid] = MapPlace(name="목업 동종 점포", category_name="목업", distance_m=30)
+            industries[code] = MapIndustry(
+                name=get(code).name, major=get(code).major_name, place_ids=[pid], sampled_count=1
+            )
+        queries[f"q{i}"] = MapQueryResult(
+            request=q,
+            status="ok",
+            method="category" if q.facility_code else "keyword",
+            category_code=q.facility_code,
+            total_count=1 if code else 0,
+            has_more=False,
+            place_ids=[pid] if code else [],
+            matches={pid: "same"} if code else {},
+        )
     return MapObservation(
         request_id=task.request_id,
         observation_id=uuid.uuid4().hex,
@@ -136,19 +172,7 @@ async def map_observation(task, plan):
         radius_m=task.radius_m,
         queried_at=datetime.now(UTC).isoformat(),
         master_version=CATALOG_VERSION,
-        status="no_data",
+        status="ok" if places else "no_data",
         warnings=["외부 조회 없는 목업입니다."],
-        data=MapData(
-            queries={
-                f"q{i}": MapQueryResult(
-                    request=q,
-                    status="ok",
-                    method="category" if q.facility_code else "keyword",
-                    category_code=q.facility_code,
-                    total_count=0,
-                    has_more=False,
-                )
-                for i, q in enumerate(plan.unique_queries(), 1)
-            }
-        ),
+        data=MapData(queries=queries, places=places, industries=industries),
     )

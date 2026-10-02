@@ -509,6 +509,9 @@ def _build_prompt(
         else:
             prompt += "\n전문가 추가 질문은 금지됩니다. 현재 자료로 판단하세요."
     if allow_map_lookup and observation is None:
+        from app.industries.lookup import industry_terms
+
+        payload["industry_terms"] = {code: industry_terms(code) for code in INDUSTRIES}
         prompt += (
             "\n위 확인 도구 규칙에 해당하면 다음 JSON으로 지도 조회를 요청합니다:\n"
             + json.dumps(MapLookupPlan.model_json_schema(), ensure_ascii=False)
