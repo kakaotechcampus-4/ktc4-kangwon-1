@@ -5,8 +5,9 @@ from typing import Annotated, Any, Literal, TypedDict
 from pydantic import Field, ValidationError, create_model
 
 from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
+from app.agents.specialists.facts import build_facts
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
-from app.evidence import MAP_AGENT_ID, map_citations, scalar_records
+from app.evidence import MAP_AGENT_ID, SourceIndex, map_citations
 from app.schemas import (
     AgentAnalysis,
     FacilityCode,
@@ -128,17 +129,18 @@ def build_specialist_tools(
 
     async def read(arguments, *, name):
         data = source().data
-        records = scalar_records(data)
+        index = SourceIndex.build(data)
+        records = list(index.records)
         all_records = records
         codes = arguments.get("codes", [arguments["code"]] if "code" in arguments else [])
         if codes:
-            records = [r for r in records if r["industry_code"] in codes]
+            records = [r for r in records if r.owner in codes]
         if name == "get_summary":
             records = [
                 r
                 for r in records
                 if not any(
-                    f"/{key}/" in r["path"]
+                    f"/{key}/" in r.path
                     for key in ("by_age", "by_time", "by_day", "quarters", "trade_areas")
                 )
             ]
@@ -146,35 +148,34 @@ def build_specialist_tools(
             points = data.get("trend", {}).get("quarters", [])
             indices = range(max(0, len(points) - arguments["quarters"]), len(points))
             prefixes = [f"/trend/quarters/{i}/" for i in indices]
-            records = [r for r in records if any(r["path"].startswith(p) for p in prefixes)]
+            records = [r for r in records if any(r.path.startswith(p) for p in prefixes)]
         elif name == "get_time_profile":
             block = "population" if arguments["segment"] == "floating" else arguments["segment"]
             records = [
                 r
                 for r in records
-                if r["path"].startswith(f"/{block}/")
-                and any(s in r["path"] for s in ("time", "peak", "unit"))
+                if r.path.startswith(f"/{block}/")
+                and any(s in r.path for s in ("time", "peak", "unit"))
             ]
         elif name == "compare_seoul":
             records = [
                 r
                 for r in records
-                if "/benchmark/" in r["path"]
-                and r["path"].rsplit("/", 1)[-1] == arguments["metric"]
+                if "/benchmark/" in r.path and r.path.rsplit("/", 1)[-1] == arguments["metric"]
             ]
         elif name == "get_radius_breakdown":
-            records = [r for r in records if r["path"].startswith("/by_radius/")]
-            radius_paths = {"/".join(r["path"].split("/")[:3]) + "/radius_m" for r in records}
-            records.extend(r for r in all_records if r["path"] in radius_paths)
+            records = [r for r in records if r.path.startswith("/by_radius/")]
+            radius_paths = {"/".join(r.path.split("/")[:3]) + "/radius_m" for r in records}
+            records.extend(r for r in all_records if r.path in radius_paths)
         elif name == "get_district_specialization":
             records = [
                 r
                 for r in records
-                if r["path"].startswith(("/district_", "/by_middle/"))
-                and ("district" in r["path"] or r["path"].endswith("/code"))
+                if r.path.startswith(("/district_", "/by_middle/"))
+                and ("district" in r.path or r.path.endswith("/code"))
             ]
         return {
-            "records": records,
+            "facts": build_facts(SourceIndex(index.owners, tuple(records), index.radii)),
             "scope": source().scope.model_dump() if source().scope else None,
             "warnings": source().warnings,
             "available": bool(records),

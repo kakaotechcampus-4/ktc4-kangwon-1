@@ -13,7 +13,7 @@
   예: facts.shared[""]["store_total"] → "/store_total", facts.industries["I201"]["/by_middle/0"]["count"] → "/by_middle/0/count". 최상위 부모 경로는 빈 문자열이며 배열 번호를 직접 세지 않습니다.
 - 업종 주장은 facts.industries[그 업종 코드] 안의 경로만, 동네 공통 주장은 facts.shared의 경로만 씁니다.
   facts에 없는 업종은 업종별 주장을 만들지 않습니다. 문장의 숫자는 그 필드의 값과 같아야 합니다.
-- 되묻기 입력에 industry_paths가 있으면 해당 업종 코드의 path를 그대로 사용합니다.
+- 되묻기 입력의 facts에는 질문한 업종만 있습니다. 다른 업종 비교가 꼭 필요하면 도구(get_industry_metrics·compare_industries 등)로 읽습니다.
 - 한 주장에는 근거 경로를 1~3개만 붙입니다. 여러 업종을 한 주장에 묶지 말고 업종마다 따로 씁니다.
 - citable:false, 자료 없음, 다른 업종 값, 요약 문장은 근거로 쓸 수 없습니다.
 - 숫자를 적을 때 인용할 스칼라 경로를 직접 사용합니다. 숫자 축약·단위 환산·분모 변경은 하지 않습니다.

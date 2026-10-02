@@ -7,11 +7,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.agents.decision.context import build_context
-from app.agents.specialists.agent import write_brief
+from app.agents.specialists.agent import answer_query, write_brief
 from app.evidence import SourceIndex, can_cite, index_paths, scalar_records
 from app.evidence.findings import _radii
 from app.mocks import mock_site
-from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest
+from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest, SpecialistQuery
 from scripts.measure_payloads import capture_payload
 
 
@@ -111,3 +111,36 @@ class FactsTests(unittest.TestCase):
                         self.assertIsNone(can_cite(data, path, owner, indexed=index.owners))
                         restored[path] = (value, owner)
             self.assertEqual(restored, {r.path: (r.value, r.owner) for r in index.records})
+
+
+class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_answer_has_only_question_industries_and_all_shared_facts(self):
+        from app.agents.specialists.facts import build_facts
+
+        case = next(c for c in baseline_cases() if c["name"] == "commercial_area")
+        analysis = AgentAnalysis.model_validate(case["analysis"])
+        task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
+        for codes in (["I201"], []):
+            query = SpecialistQuery(
+                agent_id=analysis.agent_id,
+                question="확인",
+                industry_codes=codes,
+                why_needed="확인",
+                expected_impact="검토",
+            )
+            payload = json.loads(
+                await capture_payload(
+                    answer_query, task, query, 1, analysis=analysis, observation=None, tools={}
+                )
+            )
+            all_facts = build_facts(SourceIndex.build(analysis.data))
+            self.assertEqual(payload["facts"]["shared"], all_facts["shared"])
+            self.assertEqual(
+                payload["facts"]["industries"], {c: all_facts["industries"][c] for c in codes}
+            )
+            self.assertNotIn("data", payload)
+            self.assertNotIn("industry_paths", payload)
+
+    def test_prompt_no_longer_mentions_legacy_industry_paths(self):
+        prompt = Path("app/agents/specialists/prompt.md").read_text(encoding="utf-8")
+        self.assertNotIn("industry_paths", prompt)

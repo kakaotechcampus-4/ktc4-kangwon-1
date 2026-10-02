@@ -93,7 +93,7 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         seen = []
 
         async def generate(messages, definitions):
-            seen.append(json.loads(messages[1]["content"])["data"])
+            seen.append(json.loads(messages[1]["content"])["facts"]["shared"][""])
             return tool_message("finish", {"headline": "확인", "findings": [], "limitations": []})
 
         observation = await map_observation(

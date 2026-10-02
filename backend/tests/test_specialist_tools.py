@@ -11,6 +11,17 @@ from app.mocks import mock_agents, mock_site
 from app.schemas import AnalysisTask, MapObservation
 
 
+def facts_records(result):
+    """도구의 새 포장을 풀어 기존 경로·값 검증을 유지합니다."""
+    facts = result["facts"]
+    return [
+        {"path": parent + "/" + field, "value": value, "industry_code": code}
+        for code, groups in [(None, facts["shared"]), *facts["industries"].items()]
+        for parent, fields in groups.items()
+        for field, value in fields.items()
+    ]
+
+
 class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_map_failure_contract(self):
         for error in (
@@ -69,9 +80,12 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         tools = self.tools("commercial_area")
         result = await tools["get_industry_counts"].execute({"codes": ["I201"]})
         self.assertTrue(
-            any(r["path"] == "/by_middle/0/count" and r["value"] == 96 for r in result["records"])
+            any(
+                r["path"] == "/by_middle/0/count" and r["value"] == 96
+                for r in facts_records(result)
+            )
         )
-        self.assertFalse(any(r["industry_code"] == "I212" for r in result["records"]))
+        self.assertFalse(any(r["industry_code"] == "I212" for r in facts_records(result)))
         with self.assertRaises(ToolArgumentError):
             await tools["get_industry_counts"].execute({"codes": ["I299"]})
         with self.assertRaises(ToolArgumentError):
@@ -82,7 +96,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_read_tools_use_only_their_own_stored_source(self):
         from unittest.mock import patch
 
-        from app.evidence import resolve_pointer
+        from app.evidence import can_cite, resolve_pointer
 
         cases = {
             "floating_population": {
@@ -109,7 +123,10 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                 for name, args in queries.items():
                     result = await self.tools(role)[name].execute(args)
                     self.assertEqual(result["scope"], source.scope.model_dump())
-                    for record in result["records"]:
+                    for record in facts_records(result):
+                        self.assertIsNone(
+                            can_cite(source.data, record["path"], record["industry_code"])
+                        )
                         self.assertEqual(
                             record["value"], resolve_pointer(source.data, record["path"])
                         )
@@ -214,6 +231,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         )
         response = await tools["retry_lq_baseline"].execute({})
         self.assertTrue(response["adopted"])
+        self.assertEqual(response["facts"]["shared"][""]["추가 근거"], 1)
         self.assertEqual(self.analyses, before)
         self.assertEqual(state, {"analyses": before, "feedback": ["기존 안내"]})
         merged = merge_specialist_changes(state, [changes, {"feedback": ["다른 전문가 안내"]}])
@@ -229,7 +247,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         result = await self.tools("commercial_area")["get_radius_breakdown"].execute(
             {"code": "I201"}
         )
-        values = {r["path"]: r["value"] for r in result["records"]}
+        values = {r["path"]: r["value"] for r in facts_records(result)}
         self.assertEqual(values["/by_radius/0/radius_m"], 100)
         self.assertEqual(values["/by_radius/0/top_by_count/0/count"], 7)
 

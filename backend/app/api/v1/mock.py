@@ -4,7 +4,6 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from app.evidence import scalar_records
 from app.industries.catalog import CATALOG_VERSION
 from app.industries.lookup import get
 from app.mocks import mock_generate
@@ -104,7 +103,6 @@ async def specialist(messages, definitions):
             else ("search_facility", {"code": "SW8"})
         )
     else:
-        data = payload.get("analysis", {}).get("data", payload.get("data", {}))
         if payload["agent_id"] == "map_analysis":
             latest = next(
                 (json.loads(m["content"]) for m in reversed(messages) if m["role"] == "tool"),
@@ -115,7 +113,7 @@ async def specialist(messages, definitions):
                 for code, rows in latest.get("citations", {}).items()
                 for r in rows
             ]
-        elif "facts" in payload:
+        else:
             facts = payload["facts"]
             records = [
                 {"path": parent + "/" + field, "value": value, "industry_code": code}
@@ -123,8 +121,6 @@ async def specialist(messages, definitions):
                 for parent, fields in groups.items()
                 for field, value in fields.items()
             ]
-        else:
-            records = scalar_records(data)
         findings = (
             [
                 {

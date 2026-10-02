@@ -15,7 +15,6 @@ from app.evidence import (
     MAP_AGENT_ID,
     SourceIndex,
     map_citations,
-    scalar_records,
     validate_findings,
 )
 from app.industries.lookup import industry_terms
@@ -153,15 +152,6 @@ async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=
     return None, records
 
 
-def industry_paths(data: dict) -> dict[str, list[dict]]:
-    """업종별 인용 경로와 값을 코드로 묶어 줍니다. 모델이 배열 번호를 세지 않게 합니다."""
-    grouped: dict[str, list[dict]] = {}
-    for record in scalar_records(data):
-        if code := record["industry_code"]:
-            grouped.setdefault(code, []).append({"path": record["path"], "value": record["value"]})
-    return grouped
-
-
 async def write_brief(
     task: AnalysisTask, analysis: AgentAnalysis, *, generate, tools, get_data=None, max_steps=5
 ) -> AgentBrief:
@@ -227,14 +217,16 @@ async def answer_query(
         {
             "agent_id": query.agent_id,
             "question": query.model_dump(mode="json"),
-            "data": data,
             **(
                 {
+                    "data": data,
                     "citations": map_citations(observation.data if observation else data),
                     "industry_terms": {code: industry_terms(code) for code in query.industry_codes},
                 }
                 if query.agent_id == MAP_AGENT_ID
-                else {"industry_paths": industry_paths(data)}
+                else {
+                    "facts": build_facts(SourceIndex.build(data), codes=set(query.industry_codes))
+                }
             ),
         },
         generate=generate,
