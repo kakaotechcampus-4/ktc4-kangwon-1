@@ -10,9 +10,11 @@ from importlib.resources import files
 from typing import Any, cast
 
 from app.agents.floating_population.selection import SELECTABLE
-from app.evidence import index_paths, industry_catalog
+from app.evidence import index_paths, industry_catalog, valid_map_path
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
+from app.industries.lookup import industry_terms
+from app.llm.budget import current_scope
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
@@ -32,6 +34,7 @@ from app.schemas import (
     SupplementPlan,
 )
 
+from .context import build_context
 from .llm import InvalidDecisionCategory, generate_decision, split_evaluation_log, validate_content
 
 GenerateDecision = Callable[
@@ -391,8 +394,6 @@ def _validate_evidence(
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
     """지도 근거는 정상 조회의 허용 필드와 일치 업종만 인용합니다."""
-    from app.evidence import valid_map_path
-
     if observation is None or observation.status == "error":
         return False
     industry = lookup.find_by_name(industry_name)
@@ -476,20 +477,7 @@ def _build_prompt(
         )
     else:
         prompt += "\n데이터 보완 요청은 금지됩니다."
-    payload = json.loads(_decision_input(request))
-    visible = {
-        item["agent_id"]: AgentAnalysis.model_validate(item)
-        for item in payload["analyses"]
-        if item["status"] in {"ok", "partial"}
-    }
-    payload["industry_evidence"] = industry_catalog(
-        {key: item.data for key, item in visible.items()}
-    )
     if deliberation is not None:
-        from app.llm.budget import current_scope
-
-        from .context import build_context
-
         payload = build_context(
             request, briefs=deliberation["briefs"], answers=deliberation["answers"]
         )
@@ -510,9 +498,17 @@ def _build_prompt(
             prompt += json.dumps(ConsultPlan.model_json_schema(), ensure_ascii=False)
         else:
             prompt += "\n전문가 추가 질문은 금지됩니다. 현재 자료로 판단하세요."
+    else:
+        payload = json.loads(_decision_input(request))
+        visible = {
+            item["agent_id"]: AgentAnalysis.model_validate(item)
+            for item in payload["analyses"]
+            if item["status"] in {"ok", "partial"}
+        }
+        payload["industry_evidence"] = industry_catalog(
+            {key: item.data for key, item in visible.items()}
+        )
     if allow_map_lookup and observation is None:
-        from app.industries.lookup import industry_terms
-
         payload["industry_terms"] = {code: industry_terms(code) for code in INDUSTRIES}
         prompt += (
             "\n위 확인 도구 규칙에 해당하면 다음 JSON으로 지도 조회를 요청합니다:\n"

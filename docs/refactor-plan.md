@@ -115,7 +115,6 @@
 - 테스트에서만 쓰는 저장소 함수 5개(`list_decision_results` 등)는 테스트 도우미로 옮기거나 유지 사유를 주석으로.
 - 함수 안의 지연 import(`graph.py:377`, `decision/agent.py:394,487,489,512`)는 순환 참조가 아니면 위로.
 - 광범위 `except Exception`(약 12곳): 외부 경계(에이전트 실행·지도·LLM)는 유지하되 `logger.exception` 추가, 내부 로직은 구체 예외로.
-- `business_lifecycle/agent.py:207-212`의 오류 코드를 클래스 이름 대신 대문자 코드로(`SEOUL_API_ERROR`).
 
 ### R8. 폴링 부담 가볍게 — 멘토 ⑦ 참고
 - events 엔드포인트가 연결을 두 번 엶(220, 232) → 한 번으로. GET 상세는 약 8번 → 한 연결에서 읽기.
@@ -134,6 +133,7 @@
 | SSE 푸시 — 멘토 ⑦ | 동시 사용자가 늘 때 |
 | 마이그레이션 버전 관리(`PRAGMA user_version`) | B8 수정 후 다음 스키마 변경 때 |
 | 목업 지도에 장소 추가 | 프론트 지도 섹션 작업 때(작은 일, 언제든) |
+| 분석 에이전트 오류 코드 이름 통일(`SeoulOpenAPIError` 등) | 리포트 개편 때 `API_CONTRACT` 오류 코드 표와 함께 |
 
 ---
 

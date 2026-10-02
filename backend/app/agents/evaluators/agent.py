@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
 
@@ -12,6 +13,7 @@ from app.evidence import index_paths, valid_map_path
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_json
 from app.llm.config import LLMSettings
+from app.logging import log_exception
 from app.schemas import (
     DecisionRequest,
     DecisionResult,
@@ -20,6 +22,9 @@ from app.schemas import (
     EvaluationRequest,
     EvaluatorId,
 )
+
+logger = logging.getLogger(__name__)
+
 
 GenerateEvaluation = Callable[[str, str], Awaitable[dict]]
 
@@ -141,7 +146,8 @@ async def evaluate_draft(
         note = "시간 초과"
     except (BudgetStorageError, OSError, asyncio.CancelledError):
         raise
-    except Exception:
+    except Exception as exc:
+        log_exception(logger, "평가자 모델 응답 실패", exc)
         note = "평가 실패"
     else:
         return check_comments(

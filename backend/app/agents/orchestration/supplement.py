@@ -1,10 +1,12 @@
 """등록된 부분 작업만 한 라운드 실행하고 최종판단으로 돌아갑니다."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 
 from pydantic import ValidationError
 
+from app.logging import log_exception
 from app.schemas import (
     AgentAnalysis,
     AgentError,
@@ -14,6 +16,9 @@ from app.schemas import (
 )
 
 from .tools import SupplementTool
+
+logger = logging.getLogger(__name__)
+
 
 OnSupplement = Callable[[SupplementEvent], Awaitable[None]]
 
@@ -79,6 +84,7 @@ async def execute_supplement(
             await emit("failed", "보완 결과 계약 검증에 실패했습니다.")
             raise
         except Exception as exc:
+            log_exception(logger, "보완 외부 호출 실패", exc)
             produced = AgentAnalysis(
                 request_id=task.request_id,
                 agent_id=asked.agent_id,

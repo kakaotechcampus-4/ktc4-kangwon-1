@@ -176,6 +176,7 @@ def complete_request(
             raise ValueError("실행 중인 요청이 없습니다.")
 
 
+# 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
 def list_decision_results(
     request_id: str, *, db_path: str | Path | None = None
 ) -> list[dict[str, Any]]:
@@ -398,6 +399,7 @@ def _load_question_analyses(
     return analyses
 
 
+# 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
 def load_question_analyses(
     snapshot: QuestionSnapshot, *, db_path: str | Path | None = None
 ) -> list[AgentAnalysis]:
@@ -578,6 +580,7 @@ def _get_map_observation(db: sqlite3.Connection, request_id: str) -> MapObservat
     return observed
 
 
+# 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
 def get_map_observation(
     request_id: str, *, db_path: str | Path | None = None
 ) -> MapObservation | None:
@@ -881,6 +884,7 @@ def save_agent_brief(brief: AgentBrief, *, db_path=None) -> None:
         )
 
 
+# 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
 def list_agent_briefs(request_id: str, *, db_path=None) -> list[AgentBrief]:
     with connect(db_path) as db:
         return [
@@ -918,6 +922,7 @@ def save_specialist_answer(answer: SpecialistAnswer, *, db_path=None) -> None:
         )
 
 
+# 저장 이력·복원 불변식을 직접 검사하는 테스트용 조회 경로를 유지합니다.
 def list_specialist_answers(request_id: str, *, db_path=None) -> list[SpecialistAnswer]:
     with connect(db_path) as db:
         return [

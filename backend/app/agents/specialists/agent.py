@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
@@ -14,6 +15,7 @@ from app.industries.lookup import industry_terms
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_tools
 from app.llm.config import LLMSettings
+from app.logging import log_exception
 from app.schemas import (
     AgentAnalysis,
     AgentBrief,
@@ -28,6 +30,9 @@ from app.schemas import (
 )
 
 from .tools import ToolArgumentError, fallback_brief
+
+logger = logging.getLogger(__name__)
+
 
 GenerateSpecialist = Callable[[list, list], Awaitable[dict | ChatCompletionMessage]]
 
@@ -101,7 +106,8 @@ async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=
                     return content, records
             except (BudgetStorageError, OSError, asyncio.CancelledError):
                 raise
-            except Exception:
+            except Exception as exc:
+                log_exception(logger, "전문가 모델 응답 실패", exc)
                 return None, records
             if last:
                 break

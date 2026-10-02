@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.address import GeocodeError
 from app.agents.orchestration.workflow import build_supplement_tools
 from app.db import repository
+from app.logging import log_exception
 from app.schemas import (
     DEFAULT_RADIUS_M,
     AnswerSubmission,
@@ -46,12 +47,7 @@ WAIT_QUERY = Query(
 
 def _log_unexpected(request_id: str, exc: Exception) -> None:
     # 예외 원문·연쇄 예외에는 외부 응답이나 사용자 입력이 섞일 수 있습니다.
-    safe = RuntimeError(type(exc).__name__)
-    logger.exception(
-        "예상 못 한 오류: request_id=%s",
-        request_id,
-        exc_info=(RuntimeError, safe, exc.__traceback__),
-    )
+    log_exception(logger, "예상 못 한 오류: request_id=%s", exc, request_id)
 
 
 def _jobs(request: Request) -> dict[str, asyncio.Task]:

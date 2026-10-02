@@ -284,9 +284,8 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
         ):
             raise ValueError("지도 요청과 관측이 일치하지 않습니다.")
         adopted = map_adoptable(previous, observed)
-        on_result = getattr(hooks, "on_map_result", None)
-        if on_result:
-            await on_result(observed.model_copy(deep=True), adopted)
+        if hooks.on_map_result:
+            await hooks.on_map_result(observed.model_copy(deep=True), adopted)
         elif hooks.on_map_completed:
             await hooks.on_map_completed(observed.model_copy(deep=True))
         if adopted:

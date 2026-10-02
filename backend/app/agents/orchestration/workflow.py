@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from functools import partial
@@ -17,6 +18,7 @@ from pydantic import ValidationError
 from app.agents import business_lifecycle, commercial_area, floating_population
 from app.agents.business_lifecycle import supplement as lifecycle_supplement
 from app.agents.commercial_area import supplement as commercial_supplement
+from app.logging import log_exception
 from app.schemas import (
     DEFAULT_RADIUS_M,
     AgentAnalysis,
@@ -30,6 +32,8 @@ from app.schemas import (
 from app.services.settings import ExecutionSettings, validate_timeout
 
 from . import tools
+
+logger = logging.getLogger(__name__)
 
 AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]
 AgentRegistry = dict[AgentId, AnalysisAgent]
@@ -140,7 +144,7 @@ def build_supplement_tools(settings: ExecutionSettings) -> list[tools.Supplement
     ]
 
 
-def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId, _exc: BaseException) -> AgentAnalysis:
+def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId) -> AgentAnalysis:
     return AgentAnalysis(
         request_id=task.request_id,
         agent_id=agent_id,
@@ -171,7 +175,8 @@ async def run_agents(
         except ValidationError:
             raise
         except Exception as exc:
-            result = _crash_to_analysis(task, agent_id, exc)
+            log_exception(logger, "분석 에이전트 실행 실패: %s", exc, agent_id)
+            result = _crash_to_analysis(task, agent_id)
             if isinstance(exc, TimeoutError) and deadline.expired():
                 result.error = AgentError(
                     code="AGENT_TIMEOUT", message="분석 제한시간이 초과됐습니다."

@@ -1,11 +1,17 @@
 """요청별 모델 예산을 병렬 작업과 질문 재개에서 공유합니다."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
+
+from app.logging import log_exception
+
+logger = logging.getLogger(__name__)
+
 
 MAX_CALLS = 24
 EVALUATED_MAX_CALLS = 64
@@ -51,6 +57,7 @@ class LLMBudget:
             try:
                 await self.on_change(self.snapshot())
             except Exception as exc:
+                log_exception(logger, "모델 예산 저장 실패", exc)
                 raise BudgetStorageError("모델 호출 이력을 저장하지 못했습니다.") from exc
 
     async def reserve(self, role: str, *, final: bool, input_chars: int | None = None) -> int:

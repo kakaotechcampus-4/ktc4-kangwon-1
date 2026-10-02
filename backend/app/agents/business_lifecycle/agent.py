@@ -1,11 +1,13 @@
 import asyncio
 import inspect
+import logging
 from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Any
 
 from pydantic import ValidationError
 
+from app.logging import log_exception
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope, Site
 
 from .area_resolver import (
@@ -25,6 +27,8 @@ from .config import Settings
 from .formatter import BusinessLifecycleFormatterError, describe_industry, format_for_mediator
 from .input_builder import build_agent_input
 from .preprocess import UpstreamDataError
+
+logger = logging.getLogger(__name__)
 
 
 class BusinessLifecycleAgentError(RuntimeError):
@@ -210,7 +214,8 @@ async def _analyze(
         return _error(task, "BusinessLifecycleAgentError", exc)
     except BusinessLifecycleFormatterError as exc:
         return _error(task, "BusinessLifecycleFormatterError", exc)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        log_exception(logger, "개폐업 분석 실패", exc)
         return _error(task, "AGENT_FAILED", exc)
 
 

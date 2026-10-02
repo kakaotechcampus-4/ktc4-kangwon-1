@@ -36,6 +36,7 @@ from app.llm.budget import (
     LLMBudget,
     llm_scope,
 )
+from app.logging import log_exception
 from app.schemas import (
     AGENT_IDS,
     DEFAULT_RADIUS_M,
@@ -69,7 +70,8 @@ async def _settle[T](operation: Coroutine[Any, Any, T]) -> T:
                 await asyncio.shield(task)
             except asyncio.CancelledError:
                 continue
-            except Exception:
+            except Exception as exc:
+                log_exception(logger, "취소 대기 중 저장 작업 실패", exc)
                 break
         if not task.cancelled():
             task.exception()
@@ -619,7 +621,8 @@ async def _record_failure(
         await _settle(asyncio.to_thread(persist))
     except asyncio.CancelledError:
         raise
-    except Exception:
+    except Exception as exc:
+        log_exception(logger, "실패 상태 저장 실패: %s", exc, request_id)
         error.add_note("DB 실패 상태를 기록하지 못했습니다. 기존 상태를 확인해 주세요.")
         return
     await _emit(path, request_id, "run", "failed", code=_failure_code(error, retry=retry))
@@ -697,8 +700,8 @@ async def _emit(path, request_id: str, stage: str, event: str, **detail) -> None
         )
     except asyncio.CancelledError:
         raise
-    except Exception:
-        logger.warning("진행 이벤트를 저장하지 못했습니다: %s %s", stage, event, exc_info=True)
+    except Exception as exc:
+        log_exception(logger, "진행 이벤트 저장 실패: %s %s", exc, stage, event)
 
 
 def _storage_hooks(path, source_attempts, on_supplement=None, *, request_id=None) -> RunHooks:
@@ -773,7 +776,6 @@ async def _execution_scope(request_id, path, time_limit, *, active=lambda: True)
 
         yield noop
         return
-    saved = json.loads(row["execution_json"])
     elapsed = saved.get("elapsed_seconds", 0)
     started = monotonic()
 
