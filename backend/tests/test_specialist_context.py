@@ -156,6 +156,34 @@ class ContextTests(unittest.TestCase):
         )
         self.assertEqual(len(valid), 1)
 
+    def test_lifecycle_net_change_accepts_store_count_unit(self):
+        # 19d96772 실행에서 12분기 순증감 "-6개소"가 단위 불일치로 버려진 회귀입니다.
+        data = {
+            "industries": [
+                {
+                    "industry_code": "I210",
+                    "metrics": {"period_net_change": -6, "recent_year_net_change": -4},
+                }
+            ]
+        }
+        for leaf, claim in (
+            ("period_net_change", "최근 12개 분기 순증감 -6개소"),
+            ("recent_year_net_change", "최근 4개 분기 순증감 -4개"),
+        ):
+            valid, warnings = self.validate_findings(
+                [self.finding(f"/industries/0/metrics/{leaf}", claim, "I210")],
+                agent_id="business_lifecycle",
+                data=data,
+            )
+            self.assertEqual(len(valid), 1, warnings)
+        # 같은 숫자라도 인원 단위로 바꾸면 여전히 제외합니다.
+        valid, _ = self.validate_findings(
+            [self.finding("/industries/0/metrics/period_net_change", "순증감 -6명", "I210")],
+            agent_id="business_lifecycle",
+            data=data,
+        )
+        self.assertEqual(valid, [])
+
     def test_fallback_includes_both_score_extremes(self):
         from app.agents.specialists.tools import fallback_brief
         from app.industries.catalog import INDUSTRIES

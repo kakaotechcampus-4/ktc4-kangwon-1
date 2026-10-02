@@ -399,12 +399,8 @@ def _allowed_units(agent_id, path, data) -> set[str]:
             if path.startswith(("/resident/", "/worker/")) and leaf == "count"
             else set()
         )
-    if "count" in leaf or leaf in {
-        "store_total",
-        "period_open_count",
-        "period_close_count",
-        "recent_year_net_change",
-    }:
+    # 순증감(period_net_change·recent_year_net_change)도 점포 수 차이라 개수 단위를 씁니다.
+    if "count" in leaf or leaf == "store_total" or leaf.endswith("net_change"):
         return {"개", "개소"}
     return set()
 
