@@ -20,6 +20,35 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_polling_each_uses_one_database_connection(self):
+        from dataclasses import replace
+
+        settings = replace(self.settings, analysis_mode="multi_agent", evaluators_enabled=True)
+        with TestClient(main.create_app(settings=settings, load_env=False)) as client:
+            created = client.post("/api/v1/analyses?mock=true", json={"address": "시험 주소"})
+            self.assertEqual(created.status_code, 200, created.text)
+            request_id = created.headers["X-Request-ID"]
+            for suffix in ("", "/events"):
+                with (
+                    self.subTest(endpoint=suffix),
+                    patch("sqlite3.connect", wraps=sqlite3.connect) as opened,
+                ):
+                    response = client.get(f"/api/v1/analyses/{request_id}{suffix}")
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(opened.call_count, 1)
+                if not suffix:
+                    self.assertEqual(len(response.json()["evaluation"]["evaluations"]), 4)
+                    self.assertEqual(len(response.json()["deliberation"]["briefs"]), 3)
+
+    def test_supplement_index_survives_reinitialization(self):
+        from app.db.connection import initialize
+
+        initialize(self.path)
+        initialize(self.path)
+        with connect(self.path) as db:
+            columns = db.execute("PRAGMA index_info(idx_supplement_events_request_id)").fetchall()
+        self.assertEqual([row["name"] for row in columns], ["request_id"])
+
     def test_async_answer_change_is_rejected_before_acceptance(self):
         started = self.client.post(
             "/api/v1/analyses?mock=true", json={"address": "시험 주소", "allow_questions": True}
@@ -50,7 +79,7 @@ class ApiTests(unittest.TestCase):
         for error in errors:
             with (
                 self.subTest(error=type(error).__name__),
-                patch("app.api.v1.routes.repository.get_request", side_effect=error),
+                patch("app.services.views.repository.get_analysis_view_data", side_effect=error),
                 self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
             ):
                 response = self.client.get("/api/v1/analyses/saved-request")

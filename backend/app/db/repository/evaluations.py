@@ -80,25 +80,27 @@ def save_evaluation_log(
 
 def get_evaluation(request_id: str, *, db_path: str | Path | None = None) -> dict | None:
     with connect(db_path) as db:
-        draft = db.execute(
-            "SELECT draft_json FROM evaluation_drafts WHERE request_id=?", (request_id,)
-        ).fetchone()
-        if draft is None:
-            return None
-        evaluations = [
-            Evaluation.model_validate_json(row[0])
-            for row in db.execute(
-                "SELECT evaluation_json FROM evaluations WHERE request_id=?", (request_id,)
-            )
-        ]
-        policy.validate_evaluations(evaluations, request_id, "저장된 평가 기록이 불완전합니다.")
-        log = db.execute(
-            "SELECT log_json FROM evaluation_logs WHERE request_id=?", (request_id,)
-        ).fetchone()
-        return {
-            "draft": json.loads(draft[0]),
-            "evaluations": sorted(evaluations, key=lambda e: EVALUATOR_IDS.index(e.evaluator)),
-            "log": [EvaluationLogEntry.model_validate(e) for e in json.loads(log[0])]
-            if log
-            else [],
-        }
+        return _get_evaluation(db, request_id)
+
+
+def _get_evaluation(db, request_id):
+    draft = db.execute(
+        "SELECT draft_json FROM evaluation_drafts WHERE request_id=?", (request_id,)
+    ).fetchone()
+    if draft is None:
+        return None
+    evaluations = [
+        Evaluation.model_validate_json(row[0])
+        for row in db.execute(
+            "SELECT evaluation_json FROM evaluations WHERE request_id=?", (request_id,)
+        )
+    ]
+    policy.validate_evaluations(evaluations, request_id, "저장된 평가 기록이 불완전합니다.")
+    log = db.execute(
+        "SELECT log_json FROM evaluation_logs WHERE request_id=?", (request_id,)
+    ).fetchone()
+    return {
+        "draft": json.loads(draft[0]),
+        "evaluations": sorted(evaluations, key=lambda e: EVALUATOR_IDS.index(e.evaluator)),
+        "log": [EvaluationLogEntry.model_validate(e) for e in json.loads(log[0])] if log else [],
+    }

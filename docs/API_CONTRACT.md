@@ -211,13 +211,15 @@ POST는 기본(`wait=true`)으로 실행 완료 또는 질문 대기까지 기�
 
 ```text
 POST /api/v1/analyses?wait=false        → 202 {request_id, status:"running"}
-GET  /api/v1/analyses/{id}/events?after=0 → 1초마다 반복, next_after를 다음 after로
+GET  /api/v1/analyses/{id}/events?after=0 → 처음 1초 간격, 10초 뒤 2초, 1분 뒤 3초; next_after를 다음 after로
      finished=true가 되면 멈춤
 GET  /api/v1/analyses/{id}              → 결과(completed) · 질문(waiting_for_input) · 오류(failed)
 POST /api/v1/analyses/{id}/answers?wait=false → 202, 다시 events 폴링
 ```
 
 `?mock=true`와 함께 쓰면 외부 호출 없이 같은 이벤트가 나옵니다. 중간 페이지는 이것으로 먼저 만듭니다.
+
+권장 폴링 간격은 처음 1초, 10초 뒤부터 2초, 1분 뒤부터 3초입니다. 사용자 증가 시 SSE로 전환하며, 이벤트는 이미 DB에 순번으로 쌓입니다.
 
 ### `GET /api/v1/analyses/{request_id}/events?after=N`
 
@@ -260,12 +262,15 @@ POST /api/v1/analyses/{id}/answers?wait=false → 202, 다시 events 폴링
 ```ts
 async function follow(id: string, onEvent: (e: AnalysisEvent) => void) {
   let after = 0;
+  const started = Date.now();
   for (;;) {
     const page = await fetch(`${API}/api/v1/analyses/${id}/events?after=${after}`).then(r => r.json());
     page.events.forEach(onEvent);
     after = page.next_after;
     if (page.finished) return page.status; // completed | failed | waiting_for_input
-    await new Promise(r => setTimeout(r, 1000));
+    const elapsed = Date.now() - started;
+    const interval = elapsed >= 60000 ? 3000 : elapsed >= 10000 ? 2000 : 1000;
+    await new Promise(r => setTimeout(r, interval));
   }
 }
 ```

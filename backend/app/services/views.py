@@ -7,15 +7,12 @@ from app.db import repository
 
 
 async def analysis_detail(request_id: str, db_path):
-    row = await asyncio.to_thread(repository.get_request, request_id, db_path=db_path)
-    if row is not None:
+    data = await asyncio.to_thread(repository.get_analysis_view_data, request_id, db_path=db_path)
+    if data is not None:
+        row = data["request"]
         execution = json.loads(row.pop("execution_json", "{}"))
         if execution.get("capabilities", {}).get("evaluators"):
-            saved = await asyncio.to_thread(
-                repository.get_evaluation,
-                request_id,
-                db_path=db_path,
-            )
+            saved = data["evaluation"]
             row["evaluation"] = {
                 "skipped": execution.get("evaluation_skipped"),
                 "draft": {k: v for k, v in saved["draft"].items() if k != "request_id"}
@@ -30,11 +27,7 @@ async def analysis_detail(request_id: str, db_path):
                 "log": [e.model_dump(mode="json") for e in saved["log"]] if saved else [],
             }
         if row["analysis_mode"] == "multi_agent":
-            state = await asyncio.to_thread(
-                repository.get_deliberation,
-                request_id,
-                db_path=db_path,
-            )
+            state = data["deliberation"]
             row["deliberation"] = {
                 "briefs": [b.model_dump(mode="json") for b in state["briefs"]],
                 "answers": [
@@ -50,24 +43,21 @@ async def analysis_detail(request_id: str, db_path):
         for name in ("site", "result", "error"):
             value = row.pop(f"{name}_json")
             row[name] = json.loads(value) if value is not None else None
-        row.update(await asyncio.to_thread(_details, request_id, db_path))
+        row.update(_details(data))
         return row
 
 
-def _details(request_id, db_path):
-    snapshot = repository.get_question_snapshot(request_id, db_path=db_path)
-    mapped = repository.get_map_lookup(request_id, db_path=db_path)
+def _details(data):
+    snapshot = data["questions"]
+    mapped = data["map"]
     return {
-        "decision_failures": repository.list_decision_failures(request_id, db_path=db_path),
+        "decision_failures": data["decision_failures"],
         "questions": snapshot.waiting.model_dump(mode="json") if snapshot else None,
         "analyses": [
             {"attempt": r["attempt"], "analysis": json.loads(r["analysis_json"])}
-            for r in repository.list_agent_results(request_id, db_path=db_path)
+            for r in data["analyses"]
         ],
-        "supplements": [
-            json.loads(r["event_json"])
-            for r in repository.list_supplement_events(request_id, db_path=db_path)
-        ],
+        "supplements": [json.loads(r["event_json"]) for r in data["supplements"]],
         "map_status": mapped["status"] if mapped else None,
         "map_observation": mapped["observation"] if mapped else None,
     }

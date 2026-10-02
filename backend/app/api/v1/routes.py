@@ -196,7 +196,9 @@ async def list_analysis_events(
     after: int = Query(default=0, ge=0, description="이미 받은 마지막 seq"),
 ) -> dict[str, Any]:
     path = request.app.state.execution_settings.db_path
-    row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
+    row, events = await asyncio.to_thread(
+        repository.get_request_events, request_id, after=after, db_path=path
+    )
     if row is None:
         # 202 직후에는 백그라운드 작업이 아직 요청을 저장하기 전일 수 있습니다.
         if request_id in _jobs(request):
@@ -208,7 +210,6 @@ async def list_analysis_events(
                 "next_after": after,
             }
         raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-    events = await asyncio.to_thread(repository.list_events, request_id, after=after, db_path=path)
     # 답변 재개 직후처럼 DB 상태가 아직 바뀌기 전이어도 작업이 살아 있으면 진행 중입니다.
     active = request_id in _jobs(request)
     status = "running" if active and row["status"] in FINISHED else row["status"]

@@ -169,3 +169,6 @@ CREATE TABLE IF NOT EXISTS analysis_events (
     created_at TEXT NOT NULL,
     PRIMARY KEY (request_id, seq)
 );
+
+-- 요청별 보완 이력을 반복 조회하는 상세 화면을 위한 인덱스입니다.
+CREATE INDEX IF NOT EXISTS idx_supplement_events_request_id ON supplement_events(request_id);

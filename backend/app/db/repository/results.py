@@ -97,11 +97,7 @@ def list_agent_results(
     request_id: str, *, db_path: str | Path | None = None
 ) -> list[dict[str, Any]]:
     with connect(db_path) as db:
-        rows = db.execute(
-            "SELECT * FROM agent_results WHERE request_id = ? ORDER BY attempt, agent_id",
-            (_text(request_id),),
-        ).fetchall()
-        return [dict(row) for row in rows]
+        return _list_agent_results(db, request_id)
 
 
 def save_supplement_event(
@@ -143,13 +139,7 @@ def list_supplement_events(
     request_id: str, *, db_path: str | Path | None = None
 ) -> list[dict[str, Any]]:
     with connect(db_path) as db:
-        return [
-            dict(row)
-            for row in db.execute(
-                "SELECT * FROM supplement_events WHERE request_id = ? ORDER BY id",
-                (_text(request_id),),
-            ).fetchall()
-        ]
+        return _list_supplement_events(db, request_id)
 
 
 def _supplement_sources(db, request_id):
@@ -167,3 +157,21 @@ def _supplement_sources(db, request_id):
             attempts[event.request.agent_id] = row[1]
         events.append(event)
     return events, attempts
+
+
+def _list_agent_results(db, request_id):
+    rows = db.execute(
+        "SELECT * FROM agent_results WHERE request_id = ? ORDER BY attempt, agent_id",
+        (_text(request_id),),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _list_supplement_events(db, request_id):
+    return [
+        dict(row)
+        for row in db.execute(
+            "SELECT * FROM supplement_events WHERE request_id = ? ORDER BY id",
+            (_text(request_id),),
+        ).fetchall()
+    ]

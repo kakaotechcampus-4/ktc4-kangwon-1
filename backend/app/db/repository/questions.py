@@ -105,10 +105,7 @@ def get_question_snapshot(
     request_id: str, *, db_path: str | Path | None = None
 ) -> QuestionSnapshot | None:
     with connect(db_path) as db:
-        row = db.execute(
-            "SELECT snapshot_json FROM question_sessions WHERE request_id=?", (_text(request_id),)
-        ).fetchone()
-        return parse_snapshot(row[0]) if row else None
+        return _get_question_snapshot(db, request_id)
 
 
 def get_question_answers(
@@ -231,3 +228,10 @@ def parse_snapshot(value: QuestionSnapshot | dict | str) -> QuestionSnapshot | Q
     )
     model = QuestionSnapshotV2 if data.get("version") == 2 else QuestionSnapshot
     return model.model_validate(data)
+
+
+def _get_question_snapshot(db, request_id):
+    row = db.execute(
+        "SELECT snapshot_json FROM question_sessions WHERE request_id=?", (_text(request_id),)
+    ).fetchone()
+    return parse_snapshot(row[0]) if row else None

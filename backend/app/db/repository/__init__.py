@@ -12,6 +12,7 @@ from .evaluations import get_evaluation as get_evaluation
 from .evaluations import save_evaluation as save_evaluation
 from .evaluations import save_evaluation_log as save_evaluation_log
 from .events import append_event as append_event
+from .events import get_request_events as get_request_events
 from .events import list_events as list_events
 from .map import complete_map_lookup as complete_map_lookup
 from .map import get_map_lookup as get_map_lookup
@@ -28,6 +29,7 @@ from .requests import claim_decision_retry as claim_decision_retry
 from .requests import create_request as create_request
 from .requests import fail_interrupted as fail_interrupted
 from .requests import fail_request as fail_request
+from .requests import get_analysis_view_data as get_analysis_view_data
 from .requests import get_request as get_request
 from .requests import list_decision_failures as list_decision_failures
 from .requests import mark_running as mark_running

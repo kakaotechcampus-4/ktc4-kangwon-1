@@ -115,22 +115,26 @@ def get_map_observation(
 def get_map_lookup(request_id: str, *, db_path: str | Path | None = None) -> MapLookupState | None:
     """진행 중인 조회도 상태와 공개 관측만 반환합니다."""
     with connect(db_path) as db:
-        row = db.execute(
-            "SELECT status, observation_json FROM map_observations WHERE request_id=? "
-            "ORDER BY attempt DESC LIMIT 1",
-            (_text(request_id),),
-        ).fetchone()
-        return (
-            {
-                "status": row[0],
-                "observation": (
-                    latest.model_dump(mode="json")
-                    if (latest := _get_map_observation(db, request_id))
-                    else None
-                )
-                if row[0] == "completed"
-                else None,
-            }
-            if row
-            else None
-        )
+        return _get_map_lookup(db, request_id)
+
+
+def _get_map_lookup(db, request_id):
+    row = db.execute(
+        "SELECT status, observation_json FROM map_observations WHERE request_id=? "
+        "ORDER BY attempt DESC LIMIT 1",
+        (_text(request_id),),
+    ).fetchone()
+    return (
+        {
+            "status": row[0],
+            "observation": (
+                latest.model_dump(mode="json")
+                if (latest := _get_map_observation(db, request_id))
+                else None
+            )
+            if row[0] == "completed"
+            else None,
+        }
+        if row
+        else None
+    )

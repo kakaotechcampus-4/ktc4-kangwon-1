@@ -19,7 +19,11 @@ from app.schemas import (
 from app.services import execution_policy as policy
 
 from .common import DecisionRetryConflictError, _dumps, _now, _request_row, _require_changed, _text
-from .questions import _load_resume_context
+from .deliberation import _deliberation
+from .evaluations import _get_evaluation
+from .map import _get_map_lookup
+from .questions import _get_question_snapshot, _load_resume_context
+from .results import _list_agent_results, _list_supplement_events
 
 
 def create_request(
@@ -102,14 +106,7 @@ def list_decision_failures(
 ) -> list[DecisionFailure]:
     """실패한 판단은 성공 결과와 분리해서 보존합니다."""
     with connect(db_path) as db:
-        return [
-            {"failed_at": row[0], "error": json.loads(row[1]), "diagnostics": json.loads(row[2])}
-            for row in db.execute(
-                "SELECT failed_at,error_json,diagnostics_json FROM decision_failures "
-                "WHERE request_id=? ORDER BY failed_at",
-                (_text(request_id),),
-            )
-        ]
+        return _list_decision_failures(db, request_id)
 
 
 def claim_decision_retry(
@@ -165,3 +162,38 @@ def fail_interrupted(*, db_path: str | Path | None = None) -> int:
             (error.model_dump_json(), _now()),
         )
     return changed.rowcount
+
+
+def _list_decision_failures(db, request_id):
+    return [
+        {"failed_at": row[0], "error": json.loads(row[1]), "diagnostics": json.loads(row[2])}
+        for row in db.execute(
+            "SELECT failed_at,error_json,diagnostics_json FROM decision_failures "
+            "WHERE request_id=? ORDER BY failed_at",
+            (_text(request_id),),
+        )
+    ]
+
+
+def get_analysis_view_data(request_id: str, *, db_path: str | Path | None = None):
+    """상세 화면에 필요한 저장 자료를 하나의 연결에서 읽습니다."""
+    with connect(db_path) as db:
+        row = _request_row(db, _text(request_id))
+        if row is None:
+            return None
+        request = dict(row)
+        execution = json.loads(request["execution_json"])
+        return {
+            "request": request,
+            "evaluation": _get_evaluation(db, request_id)
+            if execution.get("capabilities", {}).get("evaluators")
+            else None,
+            "deliberation": _deliberation(db, request_id)
+            if request["analysis_mode"] == "multi_agent"
+            else None,
+            "questions": _get_question_snapshot(db, request_id),
+            "map": _get_map_lookup(db, request_id),
+            "decision_failures": _list_decision_failures(db, request_id),
+            "analyses": _list_agent_results(db, request_id),
+            "supplements": _list_supplement_events(db, request_id),
+        }

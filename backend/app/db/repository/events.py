@@ -9,7 +9,7 @@ from app.db.types import (
     AnalysisEvent,
 )
 
-from .common import _dumps, _now, _text
+from .common import _dumps, _now, _request_row, _text
 
 
 def append_event(
@@ -47,11 +47,15 @@ def list_events(
 ) -> list[AnalysisEvent]:
     """after 다음 순번부터 진행 이벤트를 돌려줍니다."""
     with connect(db_path) as db:
-        rows = db.execute(
-            "SELECT seq, created_at, stage, event, detail_json FROM analysis_events "
-            "WHERE request_id = ? AND seq > ? ORDER BY seq",
-            (_text(request_id), after),
-        ).fetchall()
+        return _list_events(db, request_id, after=after)
+
+
+def _list_events(db, request_id, *, after=0):
+    rows = db.execute(
+        "SELECT seq, created_at, stage, event, detail_json FROM analysis_events "
+        "WHERE request_id = ? AND seq > ? ORDER BY seq",
+        (_text(request_id), after),
+    ).fetchall()
     return [
         {
             "seq": row["seq"],
@@ -62,3 +66,10 @@ def list_events(
         }
         for row in rows
     ]
+
+
+def get_request_events(request_id: str, *, after: int = 0, db_path: str | Path | None = None):
+    """요청 상태와 이벤트를 같은 연결에서 읽습니다."""
+    with connect(db_path) as db:
+        row = _request_row(db, _text(request_id))
+        return (dict(row), _list_events(db, request_id, after=after)) if row else (None, [])
