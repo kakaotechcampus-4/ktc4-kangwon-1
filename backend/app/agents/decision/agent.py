@@ -396,7 +396,9 @@ def _valid_map_evidence(path: str, industry_name: str, observation: MapObservati
     if observation is None or observation.status == "error":
         return False
     industry = lookup.find_by_name(industry_name)
-    return bool(industry and valid_map_path(path, industry.code, observation.data.model_dump()))
+    return bool(
+        industry and valid_map_path(path, industry.code, observation.data.model_dump(mode="json"))
+    )
 
 
 def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:

@@ -27,6 +27,24 @@ async def opinion(prompt, payload):
 
 
 class FlowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_single_decision_map_permission_tracks_observation(self):
+        from test_map_mapping import plan
+
+        from app.api.v1.mock import map_observation
+
+        for queried in (False, True):
+            with self.subTest(queried=queried):
+                self.path = self.path.with_name(f"map-{queried}.sqlite3")
+                generated = iter([plan(), mock_generate("", ""), mock_generate("", "")])
+                await self.start(
+                    "single_decision",
+                    (lambda *_, generated=generated: next(generated)) if queried else mock_generate,
+                    map_lookup=map_observation,
+                )
+                for evaluator in self.evaluators.values():
+                    payload = json.loads(evaluator.call_args.args[1])
+                    self.assertEqual("map_lookup" in payload["allowed_requests"], not queried)
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

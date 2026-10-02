@@ -571,9 +571,8 @@ async def run_graph(
             map_observation=context.get("map_observation"),
         )
         allowed: list[EvaluationRequest] = ["none"]
-        if map_lookup and not (
-            context.get("map_queries") or context.get("map_observation") or state["map_done"]
-        ):
+        map_queries = state["context"].get("map_queries") if mode == "multi_agent" else None
+        if map_lookup and not (map_queries or context.get("map_observation") or state["map_done"]):
             allowed.append("map_lookup")
         if supplements and not (state["supplement_done"] or context.get("supplement_context")):
             allowed.append("supplement")
