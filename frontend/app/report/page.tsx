@@ -140,21 +140,6 @@ export default function ReportPage() {
       <Header />
       <ReportHeader address={analysisResult?.address} />
 
-      {analysisResult?.status === 'partial' &&
-        analysisResult.limitations.length > 0 && (
-          <div
-            className="mx-8 mt-4 flex flex-col gap-1 rounded-lg px-4 py-3 text-xs"
-            style={{
-              backgroundColor: colors.neutral.background,
-              color: 'var(--color-gray-500)',
-            }}
-          >
-            {analysisResult.limitations.map((note) => (
-              <p key={note}>※ {note}</p>
-            ))}
-          </div>
-        )}
-
       <RecommendationSection
         recommendations={analysisResult?.recommendations}
         notRecommended={analysisResult?.not_recommended}
