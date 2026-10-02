@@ -160,3 +160,28 @@ export async function fetchBuildingInfo(
     sewage: registryField(results.sewage ? MOCK_REGISTRY.sewage.sewage : null),
   };
 }
+
+/**
+ * 사용자가 고친 값을 반영한다. 건축물대장 값과 같아지면 다시 registry로,
+ * 건축물대장에 없던 칸을 비우면 다시 missing으로 돌린다.
+ */
+export function editField<T>(
+  field: BuildingField<T>,
+  value: T | null
+): BuildingField<T> {
+  if (value === null) {
+    return {
+      ...field,
+      value: null,
+      source: field.registryValue === null ? 'missing' : 'user',
+    };
+  }
+  return {
+    ...field,
+    value,
+    source:
+      field.registryValue !== null && value === field.registryValue
+        ? 'registry'
+        : 'user',
+  };
+}
