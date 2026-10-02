@@ -15,6 +15,52 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_legacy_nested_resume_state_completes_saved_question_session(self):
+        from app.agents.orchestration.graph import run_graph
+
+        async def legacy_graph(*args, **kwargs):
+            state = kwargs["resume_state"]
+            self.assertIsNotNone(state)
+            state["context"] = {
+                key: state.pop(key)
+                for key in ("map_observation", "map_queries", "feedback", "supplement_context")
+            }
+            return await run_graph(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = ExecutionSettings(
+                db_path=Path(directory) / "legacy.sqlite3",
+                analysis_mode="multi_agent",
+                evaluators_enabled=True,
+            )
+            with (
+                TestClient(create_app(settings=settings, load_env=False)) as client,
+                patch("socket.socket.connect", side_effect=AssertionError("네트워크 금지")),
+            ):
+                started = client.post(
+                    "/api/v1/analyses?mock=true",
+                    json={"address": "시험 주소", "allow_questions": True, "with_map": True},
+                )
+                self.assertEqual(started.status_code, 200, started.text)
+                waiting = started.json()
+                path = f"/api/v1/analyses/{waiting['request_id']}"
+                before = client.get(path).json()
+                self.assertEqual(before["status"], "waiting_for_input")
+                with patch("app.services.analysis.run_graph", side_effect=legacy_graph):
+                    resumed = client.post(
+                        path + "/answers?mock=true",
+                        json={
+                            "request_id": waiting["request_id"],
+                            "question_set_id": waiting["question_set_id"],
+                            "answers": [],
+                        },
+                    )
+                self.assertEqual(resumed.status_code, 200, resumed.text)
+                saved = client.get(path).json()
+                self.assertEqual(saved["status"], "completed")
+                self.assertEqual(saved["map_observation"], before["map_observation"])
+                self.assertEqual(len(saved["evaluation"]["evaluations"]), 4)
+
     def test_mock_retry_before_evaluation_never_builds_real_generators(self):
         from app.agents.decision.agent import generate_decision
         from app.agents.evaluators.agent import generate_evaluation

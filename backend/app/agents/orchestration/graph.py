@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, fields
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
@@ -34,6 +34,7 @@ from app.schemas import (
     LandlordAnswer,
     MapLookupPlan,
     MapObservation,
+    MapQuery,
     QuestionPlan,
     Site,
     SpecialistAnswer,
@@ -47,7 +48,7 @@ from app.schemas import (
 from app.services.settings import validate_timeout
 
 from . import tools, workflow
-from .consult import build_specialist_tools
+from .consult import build_specialist_tools, merge_specialist_changes
 from .map import execute_map_lookup
 from .supplement import OnSupplement, execute_supplement, validate_tools
 
@@ -87,11 +88,21 @@ class GraphState(TypedDict, total=False):
     briefs: list[AgentBrief]
     answers: list[SpecialistAnswer]
     consult_round: int
-    context: dict
+    map_queries: list[MapQuery]
     draft: DecisionResult
     evaluations: list[Evaluation]
     evaluation_start_round: int
     final_call: bool
+
+
+def normalize_resume_state(state: Mapping[str, Any], *, mode: AnalysisMode) -> GraphState:
+    """옛 중첩 상태를 읽되 이전 모드의 읽기 우선순위를 유지합니다."""
+    restored = dict(state)
+    legacy = restored.pop("context", {})
+    for key in ("map_observation", "map_queries", "feedback", "supplement_context"):
+        if key in legacy and (mode == "multi_agent" or key not in restored):
+            restored[key] = legacy[key]
+    return cast(GraphState, restored)
 
 
 @dataclass(frozen=True)
@@ -304,8 +315,6 @@ async def run_graph(
         )
         questions_allowed = allow_questions and (not evaluators_enabled or "evaluations" in state)
         if mode == "multi_agent":
-            context = state["context"]
-            request.map_observation = context.get("map_observation")
             specialists = [*AGENT_IDS, *(["map_analysis"] if map_lookup else [])]
             if (
                 retry_only
@@ -323,8 +332,8 @@ async def run_graph(
                 question_fields=list(QUESTION_FIELDS)
                 if questions_allowed and (budget is None or budget.open_calls > 0)
                 else None,
-                feedback=context.get("feedback"),
-                supplement_context=context.get("supplement_context"),
+                feedback=state.get("feedback"),
+                supplement_context=state.get("supplement_context"),
                 deliberation={
                     "briefs": state["briefs"],
                     "answers": state["answers"],
@@ -411,9 +420,7 @@ async def run_graph(
             state["task"],
             waiting,
             state["supplement_done"],
-            state["context"].get("feedback", [])
-            if mode == "multi_agent"
-            else state.get("feedback", []),
+            state.get("feedback", []),
         )
         return {"outcome": waiting}
 
@@ -459,27 +466,33 @@ async def run_graph(
             supplements=supplements,
             map_lookup=map_lookup,
             hooks=hooks,
-            context=state["context"],
+            state=state,
             query=query,
             operation_timeout=agent_timeout,
         )
 
-    def current_data(state, agent_id):
+    def current_data(state, agent_id, changes):
         if agent_id == "map_analysis":
-            observation = state["context"].get("map_observation")
+            observation = changes.get("map_observation", state.get("map_observation"))
             return observation.data.model_dump(mode="json") if observation else {}
-        return next(a.data for a in state["analyses"] if a.agent_id == agent_id)
+        changed = changes.get("analysis")
+        return (
+            changed.data
+            if changed is not None
+            else next(a.data for a in state["analyses"] if a.agent_id == agent_id)
+        )
 
     async def write_briefs(state: GraphState) -> GraphState:
         async def one(source):
             assert generate_specialists is not None
             await step("brief." + source.agent_id, "started")
+            tools, changes = registered(state, source.agent_id)
             brief = await write_brief(
                 state["task"],
                 source,
                 generate=generate_specialists[source.agent_id],
-                tools=registered(state, source.agent_id),
-                get_data=lambda: current_data(state, source.agent_id),
+                tools=tools,
+                get_data=lambda: current_data(state, source.agent_id, changes),
                 max_steps=BRIEF_STEPS,
             )
             if hooks.on_brief:
@@ -490,10 +503,13 @@ async def run_graph(
                 source=brief.source,
                 findings=len(brief.findings),
             )
-            return brief
+            return brief, changes
 
-        briefs = await collect(one(source) for source in list(state["analyses"]))
-        return {"briefs": briefs, "analyses": state["analyses"], "context": state["context"]}
+        results = await collect(one(source) for source in state["analyses"])
+        return {
+            "briefs": [brief for brief, _ in results],
+            **merge_specialist_changes(state, [changes for _, changes in results]),
+        }
 
     async def consult(state: GraphState) -> GraphState:
         plan = state["outcome"]
@@ -513,7 +529,8 @@ async def run_graph(
                 ),
                 None,
             )
-            old_map = state["context"].get("map_observation")
+            old_map = state.get("map_observation")
+            tools, changes = registered(state, query.agent_id, query)
             await step(
                 "consult." + query.agent_id,
                 "started",
@@ -527,19 +544,19 @@ async def run_graph(
                 analysis=previous,
                 observation=old_map,
                 generate=generate_specialists[query.agent_id],
-                tools=registered(state, query.agent_id, query),
-                get_data=lambda: current_data(state, query.agent_id),
-                get_observation=lambda: state["context"].get("map_observation"),
+                tools=tools,
+                get_data=lambda: current_data(state, query.agent_id, changes),
+                get_observation=lambda: changes.get("map_observation", old_map),
                 max_steps=consult_steps(query.agent_id, share),
             )
-            current = next((a for a in state["analyses"] if a.agent_id == query.agent_id), None)
+            current = changes.get("analysis", previous)
             if current is not None and current != previous:
                 answer.analysis = current.model_copy(deep=True)
             if (
                 query.agent_id == "map_analysis"
-                and state["context"].get("map_observation") != old_map
+                and changes.get("map_observation", old_map) != old_map
             ):
-                answer.map_observation = state["context"]["map_observation"].model_copy(deep=True)
+                answer.map_observation = changes["map_observation"].model_copy(deep=True)
             answer = SpecialistAnswer.model_validate(answer)
             if hooks.on_consult:
                 await hooks.on_consult(answer.model_copy(deep=True))
@@ -550,31 +567,30 @@ async def run_graph(
                 status=answer.status,
                 tools=[call.tool for call in answer.tool_calls],
             )
-            return answer
+            return answer, changes
 
-        answers = await collect(one(query) for query in plan.queries)
+        results = await collect(one(query) for query in plan.queries)
         return {
-            "answers": [*state["answers"], *answers],
+            "answers": [*state["answers"], *(answer for answer, _ in results)],
             "consult_round": round_number,
-            "analyses": state["analyses"],
-            "context": state["context"],
+            **merge_specialist_changes(state, [changes for _, changes in results]),
         }
 
     async def evaluate_draft_node(state: GraphState) -> GraphState:
         draft = state["outcome"]
         assert isinstance(draft, DecisionResult)
-        context = state["context"] if mode == "multi_agent" else state
         request = DecisionRequest(
             request_id=request_id,
             address=address,
             analyses=state["analyses"],
-            map_observation=context.get("map_observation"),
+            map_observation=state.get("map_observation"),
         )
         allowed: list[EvaluationRequest] = ["none"]
-        map_queries = state["context"].get("map_queries") if mode == "multi_agent" else None
-        if map_lookup and not (map_queries or context.get("map_observation") or state["map_done"]):
+        if map_lookup and not (
+            state.get("map_queries") or state.get("map_observation") or state["map_done"]
+        ):
             allowed.append("map_lookup")
-        if supplements and not (state["supplement_done"] or context.get("supplement_context")):
+        if supplements and not (state["supplement_done"] or state.get("supplement_context")):
             allowed.append("supplement")
         if mode == "multi_agent" and not retry_only:
             allowed.append("ask_specialists")
@@ -681,10 +697,12 @@ async def run_graph(
         "briefs": [],
         "answers": [],
         "consult_round": 0,
-        "context": {},
+        "map_queries": [],
+        "feedback": [],
+        "supplement_context": [],
     }
     if resume_state is not None:
-        initial.update(resume_state)
+        initial.update(normalize_resume_state(resume_state, mode=mode))
     # 주소·분석 자료는 기존 로컬 trace에만 남기고 외부 자동 추적은 사용하지 않습니다.
     with tracing_context(enabled=False), llm_scope(budget, "decision", final=True):
         final = await graph.ainvoke(initial, config={"recursion_limit": 32})

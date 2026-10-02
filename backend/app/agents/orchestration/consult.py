@@ -1,18 +1,20 @@
 """전문가 도구를 기존 읽기·보완·지도 실행에 연결합니다."""
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import Field, ValidationError, create_model
 
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
 from app.evidence import MAP_AGENT_ID, map_citations, scalar_records
 from app.schemas import (
+    AgentAnalysis,
     FacilityCode,
     IndustryCode,
     MapLookupPlan,
     MapObservation,
     MapQuery,
     Schema,
+    SupplementEvent,
     SupplementPlan,
     SupplementRequest,
     Text,
@@ -20,6 +22,38 @@ from app.schemas import (
 
 from .map import execute_map_lookup
 from .supplement import execute_supplement
+
+
+class SpecialistChanges(TypedDict, total=False):
+    analysis: AgentAnalysis
+    feedback: list[str]
+    supplement_context: list[SupplementEvent]
+    map_observation: MapObservation
+    map_queries: list[MapQuery]
+
+
+def merge_specialist_changes(state, changes: list[SpecialistChanges]) -> dict:
+    """병렬 전문가가 갱신한 자기 자료만 합치고 공통 피드백은 모두 보존합니다."""
+    result: dict[str, Any] = {}
+    replaced = {
+        change["analysis"].agent_id: change["analysis"]
+        for change in changes
+        if "analysis" in change
+    }
+    if replaced:
+        result["analyses"] = [replaced.get(item.agent_id, item) for item in state["analyses"]]
+    feedback = [item for change in changes for item in change.get("feedback", [])]
+    if feedback:
+        result["feedback"] = [*state.get("feedback", []), *feedback]
+    events = [item for change in changes for item in change.get("supplement_context", [])]
+    if events:
+        result["supplement_context"] = [*state.get("supplement_context", []), *events]
+    for change in changes:
+        if "map_observation" in change:
+            result["map_observation"] = change["map_observation"]
+        if "map_queries" in change:
+            result["map_queries"] = change["map_queries"]
+    return result
 
 
 def _tool(name, description, parameters, execute):
@@ -73,17 +107,20 @@ def build_specialist_tools(
     supplements,
     map_lookup,
     hooks,
-    context,
+    state,
     query=None,
     operation_timeout=180.0,
-) -> dict[str, SpecialistTool]:
+) -> tuple[dict[str, SpecialistTool], SpecialistChanges]:
     """자료 소유자는 고정하고 모델이 요청·반경을 변경하지 못하게 합니다."""
+    changes: SpecialistChanges = {}
+    analyses = list(analyses)
     if agent_id == MAP_AGENT_ID:
-        return (
-            _map_tools(task, map_lookup, hooks, context, query, operation_timeout)
+        tools = (
+            _map_tools(task, map_lookup, hooks, dict(state), query, operation_timeout, changes)
             if map_lookup
             else {}
         )
+        return tools, changes
 
     def source():
         return next(a for a in analyses if a.agent_id == agent_id)
@@ -205,18 +242,19 @@ def build_specialist_tools(
             # 병렬 작업이 다른 전문가의 갱신을 덮어쓰지 않도록 자기 결과만 교체합니다.
             index = next(i for i, a in enumerate(analyses) if a.agent_id == agent_id)
             analyses[index] = next(a for a in updated if a.agent_id == agent_id)
-            context.setdefault("supplement_context", []).extend(events)
-            context.setdefault("feedback", []).extend(feedback)
+            changes["analysis"] = analyses[index]
+            changes.setdefault("supplement_context", []).extend(events)
+            changes.setdefault("feedback", []).extend(feedback)
             payload = await read(args, name="get_industry_metrics")
             payload["adopted"] = any(e.adopted for e in events)
             return payload
 
         args = {"codes": codes_field} if name == "fetch_quarter_details" else {}
         result[name] = _tool(name, tool.operation.description, args, refresh)
-    return result
+    return result, changes
 
 
-def _map_tools(task, lookup, hooks, context, question, timeout):
+def _map_tools(task, lookup, hooks, context, question, timeout, changes):
     def result_data():
         data = context["map_observation"].data.model_dump(mode="json")
         return {
@@ -274,6 +312,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
         if hooks.on_map_requested:
             await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
         context["map_queries"] = queries
+        changes["map_queries"] = queries
         raw = await execute_map_lookup(task, plan, lookup, timeout)
         observed = MapObservation.model_validate(raw)
         if (
@@ -290,6 +329,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
             await hooks.on_map_completed(observed.model_copy(deep=True))
         if adopted:
             context["map_observation"] = observed
+            changes["map_observation"] = observed
         return {
             **result_data(),
             "adopted": adopted,

@@ -186,12 +186,10 @@ async def resume_analysis(
                             "briefs": bundle["briefs"],
                             "answers": bundle["specialist_answers"],
                             "consult_round": bundle["consult_round"],
-                            "context": {
-                                "map_observation": bundle["request"].map_observation,
-                                "map_queries": bundle["map_queries"],
-                                "feedback": bundle["feedback"],
-                                "supplement_context": bundle["supplement_context"],
-                            },
+                            "map_observation": bundle["request"].map_observation,
+                            "map_queries": bundle["map_queries"],
+                            "feedback": bundle["feedback"],
+                            "supplement_context": bundle["supplement_context"],
                         },
                     )
                     if not isinstance(result, DecisionResult):
@@ -501,11 +499,7 @@ async def retry_decision(
                             "briefs": bundle["briefs"],
                             "answers": bundle["specialist_answers"],
                             "consult_round": bundle["consult_round"],
-                            "context": {
-                                "map_observation": bundle["request"].map_observation,
-                                "feedback": bundle["feedback"],
-                                "supplement_context": bundle["supplement_context"],
-                            },
+                            "map_queries": bundle["map_queries"],
                         },
                     )
                     if not isinstance(result, DecisionResult):

@@ -54,15 +54,16 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         self.context = {}
 
     def tools(self, role, **kwargs):
-        return self.build(
+        tools, self.context = self.build(
             self.task,
             role,
             analyses=self.analyses,
             supplements=[],
             map_lookup=kwargs.get("map_lookup"),
             hooks=self.hooks,
-            context=self.context,
+            state=self.context,
         )
+        return tools
 
     async def test_read_only_tool_preserves_paths_and_rejects_bad_codes(self):
         tools = self.tools("commercial_area")
@@ -169,18 +170,57 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             lambda *_: True,
             lambda *_: True,
         )
-        tools = self.build(
+        tools, changes = self.build(
             self.task,
             "commercial_area",
             analyses=self.analyses,
             supplements=[tool],
             map_lookup=None,
             hooks=self.hooks,
-            context=self.context,
+            state=self.context,
         )
         result = await tools["retry_lq_baseline"].execute({})
         self.assertFalse(result["adopted"])
         self.assertEqual(self.analyses[2], previous)
+
+    async def test_accepted_supplement_returns_changes_without_mutating_input(self):
+        from app.agents.orchestration.consult import merge_specialist_changes
+        from app.agents.orchestration.tools import SupplementTool
+        from app.schemas import SupplementOperation
+
+        before = [item.model_copy(deep=True) for item in self.analyses]
+        state = {"analyses": self.analyses, "feedback": ["기존 안내"]}
+
+        async def execute(task, analysis):
+            analysis.data["추가 근거"] = 1
+            return analysis
+
+        tool = SupplementTool(
+            SupplementOperation(
+                agent_id="commercial_area", operation="retry_lq_baseline", description="재조회"
+            ),
+            execute,
+            lambda *_: True,
+            lambda *_: True,
+        )
+        tools, changes = self.build(
+            self.task,
+            "commercial_area",
+            analyses=self.analyses,
+            supplements=[tool],
+            map_lookup=None,
+            hooks=self.hooks,
+            state=state,
+        )
+        response = await tools["retry_lq_baseline"].execute({})
+        self.assertTrue(response["adopted"])
+        self.assertEqual(self.analyses, before)
+        self.assertEqual(state, {"analyses": before, "feedback": ["기존 안내"]})
+        merged = merge_specialist_changes(state, [changes, {"feedback": ["다른 전문가 안내"]}])
+        self.assertEqual(merged["analyses"][2].data["추가 근거"], 1)
+        self.assertEqual(merged["analyses"][:2], before[:2])
+        self.assertEqual(merged["feedback"], ["기존 안내", "다른 전문가 안내"])
+        self.assertEqual(len(merged["supplement_context"]), 1)
 
     async def test_radius_tool_keeps_slice_radius(self):
         self.analyses[2].data["by_radius"] = [

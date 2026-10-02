@@ -187,14 +187,14 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
             why_needed="경쟁",
             expected_impact="추천",
         )
-        tools = build_specialist_tools(
+        tools, context = build_specialist_tools(
             task(),
             "map_analysis",
             analyses=[],
             supplements=[],
             map_lookup=mock.map_observation,
             hooks=SimpleNamespace(on_map_requested=None, on_map_completed=None, on_map_result=None),
-            context=context,
+            state=context,
             query=query,
         )
         first = await tools["search_industry"].execute({"code": "I212", "query": "카페"})
