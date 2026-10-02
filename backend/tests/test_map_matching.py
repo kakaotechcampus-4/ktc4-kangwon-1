@@ -96,7 +96,7 @@ class MatchingContractTests(unittest.TestCase):
                 [finding], agent_id="map_analysis", data=observation()["data"]
             )
             self.assertEqual(kept, [])
-            self.assertIn(f"지도: {reason}", warnings[0])
+            self.assertEqual(warnings, [f"전문가 근거 제외: 1번 경로·업종 불일치(지도: {reason})"])
             self.assertNotIn(path, warnings[0])
 
     def test_generated_terms_preserve_csv_order_and_unlinked_industries(self):

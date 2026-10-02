@@ -53,6 +53,35 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(valid, [])
         self.assertEqual(len(warnings), 4)
 
+    def test_non_map_path_warnings_explain_safe_causes(self):
+        for path, code, reason in (
+            ("model-private-path", "I202", "형식"),
+            ("/missing-private-field", "I202", "없음"),
+            ("/by_middle/0/lq", "I201", "없음"),
+            ("/by_middle/1/count", None, "업종: 인용 없음 · 경로 I202"),
+            ("/by_middle/1/count", "I201", "업종: 인용 I201 · 경로 I202"),
+        ):
+            with self.subTest(path=path, code=code):
+                finding = self.finding("/by_middle/1/count", code=code)
+                finding.evidence[0] = finding.evidence[0].model_copy(update={"path": path})
+                valid, warnings = self.validate_findings(
+                    [finding], agent_id="commercial_area", data=self.data
+                )
+                self.assertEqual(valid, [])
+                self.assertEqual(warnings, [f"전문가 근거 제외: 1번 경로·업종 불일치({reason})"])
+
+    def test_path_warning_never_echoes_unrecognized_model_code(self):
+        finding = self.finding("/by_middle/1/count").model_copy(
+            update={"industry_code": "MODEL-PRIVATE-TEXT"}
+        )
+        valid, warnings = self.validate_findings(
+            [finding], agent_id="commercial_area", data=self.data
+        )
+        self.assertEqual(valid, [])
+        self.assertEqual(
+            warnings, ["전문가 근거 제외: 1번 경로·업종 불일치(업종: 인용 없음 · 경로 I202)"]
+        )
+
     def test_radius_metrics_keep_their_own_scope(self):
         source = self.source.model_copy(
             update={

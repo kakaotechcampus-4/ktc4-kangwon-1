@@ -11,6 +11,7 @@
 - 업종별 주장은 공통 업종 코드를 industry_code로 적습니다. 공통 동네 정보는 null입니다.
 - 지도가 아닌 전문가의 근거 경로는 facts에서 만듭니다. 경로 = 묶음 키 + "/" + 필드명입니다.
   예: facts.shared[""]["store_total"] → "/store_total", facts.industries["I201"]["/by_middle/0"]["count"] → "/by_middle/0/count". 최상위 부모 경로는 빈 문자열이며 배열 번호를 직접 세지 않습니다.
+  facts.industries의 키(I202)는 업종 코드이고, 경로는 묶음 키의 배열 번호를 그대로 씁니다. 예: "/industries/24/metrics" + "/recent_year_close_rate" → "/industries/24/metrics/recent_year_close_rate" (✕ "/industries/I202/..."). 업종 주장에는 industry_code를 그 업종 코드로, 동네 공통 주장은 null로 씁니다.
 - 업종 주장은 facts.industries[그 업종 코드] 안의 경로만, 동네 공통 주장은 facts.shared의 경로만 씁니다.
   facts에 없는 업종은 업종별 주장을 만들지 않습니다. 문장의 숫자는 그 필드의 값과 같아야 합니다.
 - 되묻기 입력의 facts에는 질문한 업종만 있습니다. 다른 업종 비교가 꼭 필요하면 도구(get_industry_metrics·compare_industries 등)로 읽습니다.

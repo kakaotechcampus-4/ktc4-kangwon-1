@@ -3,6 +3,7 @@
 import re
 from decimal import Decimal
 
+from app.industries import lookup
 from app.schemas import Finding, MapData, SpecialistId
 
 from .index import SourceIndex, can_cite
@@ -39,6 +40,22 @@ def validate_findings(
             if agent_id == MAP_AGENT_ID:
                 causes = dict.fromkeys(filter(None, reasons))
                 reason = "(지도: " + "·".join(causes) + ")"
+            else:
+                details = []
+                for path, cause in zip(paths, reasons, strict=True):
+                    if cause == "evidence_industry_mismatch":
+                        claimed = (
+                            lookup.find(finding.industry_code) if finding.industry_code else None
+                        )
+                        owner_code = indexed.get(path) if indexed is not None else None
+                        owner = lookup.find(owner_code) if owner_code else None
+                        details.append(
+                            f"업종: 인용 {claimed.code if claimed else '없음'}"
+                            f" · 경로 {owner.code if owner else '없음'}"
+                        )
+                    elif cause:
+                        details.append("형식" if cause == "evidence_path_invalid" else "없음")
+                reason = "(" + "·".join(dict.fromkeys(details)) + ")"
             warnings.append(f"{FINDING_WARNING_PREFIX}: {i + 1}번 경로·업종 불일치{reason}")
             continue
         values = [resolve_pointer(data, p) for p in paths]
