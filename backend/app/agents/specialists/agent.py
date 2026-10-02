@@ -10,7 +10,13 @@ from importlib.resources import files
 from openai.types.chat import ChatCompletionMessage
 from pydantic import Field, ValidationError
 
-from app.evidence import map_citations, scalar_records, validate_findings
+from app.evidence import (
+    FINDING_WARNING_PREFIX,
+    MAP_AGENT_ID,
+    map_citations,
+    scalar_records,
+    validate_findings,
+)
 from app.industries.lookup import industry_terms
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_tools
@@ -89,16 +95,18 @@ async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=
                         try:
                             kept.append(Finding.model_validate(item))
                         except ValidationError:
-                            dropped.append(f"전문가 근거 제외: {i + 1}번 형식 오류")
+                            dropped.append(f"{FINDING_WARNING_PREFIX}: {i + 1}번 형식 오류")
                     content = BriefContent.model_validate({**arguments, "findings": kept[:8]})
                     content.limitations.extend(dropped)
                     observation = get_observation() if get_observation else None
                     findings, warnings = validate_findings(
                         content.findings,
                         agent_id=agent_id,
-                        data=get_data(),
+                        data=observation.data
+                        if agent_id == MAP_AGENT_ID and observation
+                        else get_data(),
                         radii={observation.radius_m}
-                        if agent_id == "map_analysis" and observation
+                        if agent_id == MAP_AGENT_ID and observation
                         else None,
                     )
                     content.findings = findings
@@ -198,7 +206,7 @@ async def answer_query(
 ) -> SpecialistAnswer:
     data = (
         observation.data.model_dump(mode="json")
-        if query.agent_id == "map_analysis" and observation
+        if query.agent_id == MAP_AGENT_ID and observation
         else analysis.data
         if analysis
         else {}
@@ -211,10 +219,10 @@ async def answer_query(
             "data": data,
             **(
                 {
-                    "citations": map_citations(data),
+                    "citations": map_citations(observation.data if observation else data),
                     "industry_terms": {code: industry_terms(code) for code in query.industry_codes},
                 }
-                if query.agent_id == "map_analysis"
+                if query.agent_id == MAP_AGENT_ID
                 else {"industry_paths": industry_paths(data)}
             ),
         },

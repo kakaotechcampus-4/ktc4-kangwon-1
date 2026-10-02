@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, ValidationError, create_model
 
 from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
-from app.evidence import map_citations, scalar_records
+from app.evidence import MAP_AGENT_ID, map_citations, scalar_records
 from app.schemas import (
     FacilityCode,
     IndustryCode,
@@ -78,7 +78,7 @@ def build_specialist_tools(
     operation_timeout=180.0,
 ) -> dict[str, SpecialistTool]:
     """자료 소유자는 고정하고 모델이 요청·반경을 변경하지 못하게 합니다."""
-    if agent_id == "map_analysis":
+    if agent_id == MAP_AGENT_ID:
         return (
             _map_tools(task, map_lookup, hooks, context, query, operation_timeout)
             if map_lookup
@@ -221,7 +221,7 @@ def _map_tools(task, lookup, hooks, context, question, timeout):
         data = context["map_observation"].data.model_dump(mode="json")
         return {
             "data": data,
-            "citations": map_citations(data),
+            "citations": map_citations(context["map_observation"].data),
             "match_summary": {
                 key: {
                     "query": q["request"]["query"],

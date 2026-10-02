@@ -3,14 +3,20 @@
 import asyncio
 import inspect
 import json
-import re
 from collections.abc import Awaitable, Callable
 from difflib import get_close_matches
 from importlib.resources import files
 from typing import Any, cast
 
 from app.agents.floating_population.selection import SELECTABLE
-from app.evidence import index_paths, industry_catalog, valid_map_path
+from app.evidence import (
+    MAP_AGENT_ID,
+    can_cite,
+    escape_pointer,
+    index_paths,
+    industry_catalog,
+    usable_analyses,
+)
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.industries.lookup import industry_terms
@@ -110,7 +116,7 @@ async def evaluate(
     if evaluation_log is not None:
         evaluation_log.clear()
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
-    available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
+    available = {item.agent_id: item for item in usable_analyses(list(sources.values()))}
     observation = request.map_observation
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
@@ -249,26 +255,28 @@ def _correction_detail(
         return detail
     evidence = item.evidence[int(parts[3])]
     detail.update(agent_id=evidence.agent_id, invalid_path=evidence.path[:1000])
-    payload = json.loads(_decision_input(request))
-    data: Any = next(
-        (
-            s["data"]
-            for s in payload["analyses"]
-            if s["agent_id"] == evidence.agent_id and s["status"] in {"ok", "partial"}
-        ),
-        {},
-    )
-    if evidence.agent_id == "map_analysis" and request.map_observation:
-        data = request.map_observation.data.model_dump(mode="json")
     industry = lookup.find_by_name(item.category.middle)
-    indexed = index_paths(data)
-    if evidence.agent_id == "map_analysis":
-        paths = [
-            p
-            for p in indexed
-            if _valid_map_evidence(p, item.category.middle, request.map_observation)
-        ]
+    if evidence.agent_id == MAP_AGENT_ID:
+        observation = request.map_observation
+        paths = []
+        if observation:
+            for section, fields in (
+                ("queries", ("total_count",)),
+                ("places", ("name", "distance_m")),
+                ("industries", ("sampled_count",)),
+            ):
+                for key in getattr(observation.data, section):
+                    for field in fields:
+                        path = f"/{section}/{escape_pointer(key)}/{field}"
+                        if _valid_map_evidence(path, item.category.middle, observation):
+                            paths.append(path)
     else:
+        payload = json.loads(_decision_input(request))
+        sources = usable_analyses(
+            [AgentAnalysis.model_validate(item) for item in payload["analyses"]]
+        )
+        data = next((source.data for source in sources if source.agent_id == evidence.agent_id), {})
+        indexed = index_paths(data)
         # 업종 자료가 있으면 공통 메타데이터보다 해당 업종을 우선합니다.
         paths = [p for p, code in indexed.items() if industry and code == industry.code]
         if not paths:
@@ -345,7 +353,7 @@ def _validate_evidence(
     observation: MapObservation | None = None,
 ) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
-    indexes = {agent_id: index_paths(source.data) for agent_id, source in sources.items()}
+    indexes = {key: index_paths(source.data) for key, source in sources.items()}
     for index, item in enumerate(content.recommendations + content.not_recommended):
         field = (
             f"recommendations.{index}"
@@ -354,42 +362,21 @@ def _validate_evidence(
         )
         for evidence_index, evidence in enumerate(item.evidence):
             location = f"{field}.evidence.{evidence_index}"
-            if evidence.agent_id == "map_analysis":
+            if evidence.agent_id == MAP_AGENT_ID:
                 if not _valid_map_evidence(evidence.path, item.category.middle, observation):
                     raise DecisionContractError(location + ".path", "source_unavailable")
                 continue
             if evidence.agent_id not in sources:
                 raise DecisionContractError(location + ".agent_id", "source_unavailable")
-            path = evidence.path
-            if not path.startswith("/") or re.search(r"~(?![01])", path):
-                raise DecisionContractError(location + ".path", "evidence_path_invalid")
-            value: Any = sources[evidence.agent_id].data
-            try:
-                for part in path[1:].split("/"):
-                    key = part.replace("~1", "/").replace("~0", "~")
-                    if isinstance(value, list) and re.fullmatch(r"0|[1-9][0-9]*", key):
-                        value = value[int(key)]
-                    elif isinstance(value, dict):
-                        value = value[key]
-                    else:
-                        raise KeyError(key)
-            except (KeyError, IndexError, ValueError):
-                raise DecisionContractError(location + ".path", "evidence_not_found") from None
-            if (
-                value is None
-                or isinstance(value, str)
-                and not value.strip()
-                or isinstance(value, (list, dict))
-                and not value
-            ):
-                raise DecisionContractError(location + ".path", "evidence_empty")
-            indexed = indexes[evidence.agent_id]
-            if path not in indexed:
-                raise DecisionContractError(location + ".path", "evidence_unavailable")
-            owner = indexed[path]
             industry = lookup.find_by_name(item.category.middle)
-            if owner is not None and (industry is None or owner != industry.code):
-                raise DecisionContractError(location + ".path", "evidence_industry_mismatch")
+            reason = can_cite(
+                sources[evidence.agent_id].data,
+                evidence.path,
+                industry.code if industry else None,
+                indexed=indexes[evidence.agent_id],
+            )
+            if reason:
+                raise DecisionContractError(location + ".path", reason)
 
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
@@ -397,9 +384,7 @@ def _valid_map_evidence(path: str, industry_name: str, observation: MapObservati
     if observation is None or observation.status == "error":
         return False
     industry = lookup.find_by_name(industry_name)
-    return bool(
-        industry and valid_map_path(path, industry.code, observation.data.model_dump(mode="json"))
-    )
+    return bool(industry and can_cite(observation.data, path, industry.code) is None)
 
 
 def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:
@@ -492,7 +477,7 @@ def _build_prompt(
             "remaining_model_calls": budget.limit - budget.used if budget else None,
             "reserved_final_calls": 2,
         }
-        visible = {a.agent_id: a for a in request.analyses if a.status in {"ok", "partial"}}
+        visible = {a.agent_id: a for a in usable_analyses(request.analyses)}
         if payload["specialists"]:
             prompt += "\n멀티에이전트 모드: 부족한 정보는 ask_specialists로 전문가에게 묻습니다.\n"
             prompt += json.dumps(ConsultPlan.model_json_schema(), ensure_ascii=False)
@@ -501,9 +486,10 @@ def _build_prompt(
     else:
         payload = json.loads(_decision_input(request))
         visible = {
-            item["agent_id"]: AgentAnalysis.model_validate(item)
-            for item in payload["analyses"]
-            if item["status"] in {"ok", "partial"}
+            item.agent_id: item
+            for item in usable_analyses(
+                [AgentAnalysis.model_validate(item) for item in payload["analyses"]]
+            )
         }
         payload["industry_evidence"] = industry_catalog(
             {key: item.data for key, item in visible.items()}

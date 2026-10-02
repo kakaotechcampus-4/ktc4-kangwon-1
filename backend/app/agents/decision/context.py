@@ -1,15 +1,17 @@
 """원자료에서 계산 없이 판정용 값·경로만 추립니다."""
 
 from app.evidence import (
+    MAP_AGENT_ID,
     industry_catalog,
     map_citations,
     rate_basis,
     resolve_pointer,
     scalar_records,
+    usable_analyses,
     validate_findings,
 )
 from app.industries.catalog import INDUSTRIES
-from app.schemas import AgentBrief, DecisionRequest, SpecialistAnswer
+from app.schemas import AgentBrief, DecisionRequest, MapData, SpecialistAnswer
 
 _METRICS = {
     "count",
@@ -48,17 +50,17 @@ _NEIGHBORHOOD = {
 def build_context(
     request: DecisionRequest, *, briefs: list[AgentBrief], answers: list[SpecialistAnswer]
 ) -> dict:
-    sources: dict[str, dict] = {
-        a.agent_id: a.data for a in request.analyses if a.status in {"ok", "partial"}
+    sources: dict[str, dict | MapData] = {
+        a.agent_id: a.data for a in usable_analyses(request.analyses)
     }
     if request.map_observation and request.map_observation.status != "error":
-        sources["map_analysis"] = request.map_observation.data.model_dump(mode="json")
+        sources[MAP_AGENT_ID] = request.map_observation.data
     digest: dict[str, dict] = {
         code: {"code": code, "name": name, "metrics": []} for code, name in INDUSTRIES.items()
     }
     neighborhood: list[dict] = []
     for agent_id, data in sources.items():
-        if agent_id == "map_analysis":
+        if isinstance(data, MapData):
             rows = {r["path"]: r for group in map_citations(data).values() for r in group}
             neighborhood.extend({"agent_id": agent_id, **r} for r in rows.values())
             continue
@@ -93,7 +95,7 @@ def build_context(
                 agent_id=agent_id,
                 data=sources.get(agent_id, {}),
                 radii={request.map_observation.radius_m}
-                if agent_id == "map_analysis" and request.map_observation
+                if agent_id == MAP_AGENT_ID and request.map_observation
                 else None,
             )
             payload = item.model_dump(
@@ -142,17 +144,17 @@ def build_context(
         "answers": safe_answers,
         "industry_evidence": [
             row
-            for row in industry_catalog({k: v for k, v in sources.items() if k != "map_analysis"})
+            for row in industry_catalog({k: v for k, v in sources.items() if isinstance(v, dict)})
             if row["industry_code"] in candidates
         ]
         + [
             {
-                "agent_id": "map_analysis",
+                "agent_id": MAP_AGENT_ID,
                 "industry_code": code,
                 "industry_name": INDUSTRIES[code],
                 "paths": [r["path"] for r in rows],
             }
-            for code, rows in map_citations(sources.get("map_analysis", {})).items()
+            for code, rows in map_citations(sources.get(MAP_AGENT_ID, {})).items()
             if code in candidates
         ],
     }

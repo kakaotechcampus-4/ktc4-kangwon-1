@@ -9,7 +9,7 @@ from importlib.resources import files
 from pydantic import ValidationError
 
 from app.agents.decision.context import build_context
-from app.evidence import index_paths, valid_map_path
+from app.evidence import MAP_AGENT_ID, can_cite, index_paths, usable_analyses
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_json
 from app.llm.config import LLMSettings
@@ -21,6 +21,7 @@ from app.schemas import (
     EvaluationComment,
     EvaluationRequest,
     EvaluatorId,
+    MapData,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,15 +77,13 @@ def check_comments(
         return Evaluation(
             request_id=request_id, evaluator=evaluator, source="failed", notes=["형식 오류"]
         )
-    paths = {
-        a.agent_id: index_paths(a.data) for a in request.analyses if a.status in {"ok", "partial"}
+    sources: dict[str, dict | MapData] = {
+        a.agent_id: a.data for a in usable_analyses(request.analyses)
     }
     observation = request.map_observation
-    map_data = (
-        observation.data.model_dump(mode="json")
-        if observation and observation.status != "error"
-        else None
-    )
+    if observation and observation.status != "error":
+        sources[MAP_AGENT_ID] = observation.data
+    indexes = {key: index_paths(data) for key, data in sources.items() if isinstance(data, dict)}
     comments: list[EvaluationComment] = []
     invalid = 0
     for item in raw["comments"][:4] if isinstance(raw.get("comments"), list) else []:
@@ -101,14 +100,11 @@ def check_comments(
         comment.evidence = [
             e
             for e in comment.evidence
-            if (
-                bool(
-                    map_data is not None and valid_map_path(e.path, comment.industry_code, map_data)
-                )
-                if e.agent_id == "map_analysis"
-                else e.path in paths.get(e.agent_id, {})
-                and paths[e.agent_id][e.path] in (None, comment.industry_code)
+            if e.agent_id in sources
+            and can_cite(
+                sources[e.agent_id], e.path, comment.industry_code, indexed=indexes.get(e.agent_id)
             )
+            is None
         ]
         comments.append(comment)
     return Evaluation(
