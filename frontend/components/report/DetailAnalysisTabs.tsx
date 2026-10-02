@@ -94,7 +94,7 @@ export default function DetailAnalysisTabs({
     <div className="flex w-full flex-col items-start pt-8">
       <div className="flex w-full flex-col items-start px-8">
         <h2
-          className={`${outfit.className} text-[25px] font-bold`}
+          className={`${outfit.className} text-25 font-bold`}
           style={{ color: colors.neutral.black }}
         >
           상세 분석

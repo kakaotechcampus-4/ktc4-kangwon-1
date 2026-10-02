@@ -72,7 +72,7 @@ export default function Header() {
                 className="group relative flex flex-col items-center justify-center px-4 py-1.5"
               >
                 <p
-                  className={`text-[15px] leading-[22.5px] whitespace-nowrap transition-colors ${
+                  className={`text-15 whitespace-nowrap transition-colors ${
                     active
                       ? 'font-semibold'
                       : 'font-normal text-gray-500 group-hover:text-[var(--nav-accent)]'

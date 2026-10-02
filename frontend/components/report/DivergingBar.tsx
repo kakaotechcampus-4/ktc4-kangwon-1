@@ -95,11 +95,17 @@ export default function DivergingBar({
           width: 100%;
         }
         .divbar-eyebrow {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
         }
         .divbar-unavailable {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
           font-style: italic;
         }
@@ -152,13 +158,16 @@ export default function DivergingBar({
           top: 16px;
           left: 50%;
           transform: translateX(-50%);
-          font-size: 9px;
+          font-size: var(--text-9);
           color: var(--color-gray-400);
           white-space: nowrap;
         }
         .divbar-value {
           flex: 0 0 auto;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
           width: 44px;
           text-align: right;

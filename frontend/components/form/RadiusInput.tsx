@@ -33,7 +33,7 @@ export default function RadiusInput({ value, onChange }: RadiusInputProps) {
       <div className="flex flex-col items-start gap-2">
         <label
           htmlFor="analysis-radius"
-          className="text-[15px] font-medium text-gray-500"
+          className="text-15 font-medium text-gray-500"
         >
           분석 반경
         </label>

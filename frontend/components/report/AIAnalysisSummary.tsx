@@ -104,14 +104,12 @@ export default function AIAnalysisSummary({
         >
           AI 분석 요약
         </p>
-        <p
-          className={`${outfit.className} pt-3 text-[27px] font-bold text-white`}
-        >
+        <p className={`${outfit.className} pt-3 text-27 font-bold text-white`}>
           {headline}
         </p>
 
         {summaryText && (
-          <p className="pt-3 text-sm leading-[24px] text-white/70">
+          <p className="pt-3 text-sm leading-[1.714] text-white/70">
             {summaryText}
           </p>
         )}
@@ -131,14 +129,14 @@ export default function AIAnalysisSummary({
                     {block.body.map((line, i) => (
                       <li
                         key={i}
-                        className="text-sm leading-[24px] text-white/70"
+                        className="text-sm leading-[1.714] text-white/70"
                       >
                         {line}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="pt-2 text-sm leading-[24px] text-white/70">
+                  <p className="pt-2 text-sm leading-[1.714] text-white/70">
                     {block.body}
                   </p>
                 )}

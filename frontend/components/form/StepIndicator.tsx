@@ -37,7 +37,7 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
           <div key={step.id} className="flex items-center">
             <div className="flex items-center gap-2">
               <div
-                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-[15px] ${
+                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-15 ${
                   isEmphasized ? '' : 'text-gray-500'
                 }`}
                 style={{

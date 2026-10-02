@@ -95,7 +95,7 @@ export default function ReportHeader({
             분석 기준일 {mockReportData.analyzedDate}
           </p>
           <h1
-            className={`${outfit.className} pt-2 text-[34px] font-bold`}
+            className={`${outfit.className} pt-2 text-34 font-bold`}
             style={{ color: colors.neutral.black }}
           >
             {displayAddress}
@@ -159,7 +159,7 @@ export default function ReportHeader({
             }
           >
             <p
-              className={`${dmMono.className} text-[13px] tracking-[2.1px] text-gray-400 uppercase`}
+              className={`${dmMono.className} text-13 tracking-[2.1px] text-gray-400 uppercase`}
             >
               {label}
             </p>

@@ -211,7 +211,7 @@ export default function ReportPage() {
             type="button"
             variant="outline"
             className="text-gray-600"
-            style={{ padding: '10px 16px', fontSize: '12px' }}
+            style={{ padding: '10px 16px', fontSize: 'var(--text-xs)' }}
           >
             리포트 다운로드 (PDF)
           </Button>
@@ -219,7 +219,7 @@ export default function ReportPage() {
             type="button"
             variant="outline"
             className="text-gray-600"
-            style={{ padding: '10px 16px', fontSize: '12px' }}
+            style={{ padding: '10px 16px', fontSize: 'var(--text-xs)' }}
           >
             공유 링크 복사
           </Button>

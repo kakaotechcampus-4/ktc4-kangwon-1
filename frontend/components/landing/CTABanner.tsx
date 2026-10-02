@@ -28,12 +28,12 @@ export default function CTABanner() {
       <div className="cta-row flex w-full max-w-[1440px] items-center justify-between px-[100px]">
         <div className="flex flex-col items-start">
           <h2
-            className={`cta-title ${outfit.className} text-[44px] leading-[50px] font-bold`}
+            className={`cta-title ${outfit.className} text-44 font-bold`}
             style={{ color: colors.neutral.black }}
           >
             지금 바로 공실을 분석해보세요.
           </h2>
-          <p className="cta-subtitle pt-1 text-[15px] text-gray-600">
+          <p className="cta-subtitle pt-1 text-15 text-gray-600">
             도면과 임대 조건만 입력하면 AI가 업종 적합도를 분석합니다.
           </p>
         </div>
@@ -76,31 +76,24 @@ export default function CTABanner() {
           }
 
           .cta-title {
-            font-size: clamp(
-              26px,
-              calc(26px + (100vw - 900px) * 0.14516),
-              44px
+            font-size: calc(
+              clamp(26px, calc(26px + (100vw - 900px) * 0.14516), 44px) *
+                var(--font-scale)
             ) !important;
-            line-height: clamp(
-              32px,
-              calc(32px + (100vw - 900px) * 0.14516),
-              50px
-            ) !important;
+            line-height: 1.18 !important;
           }
 
           .cta-subtitle {
-            font-size: clamp(
-              12px,
-              calc(12px + (100vw - 900px) * 0.02419),
-              15px
+            font-size: calc(
+              clamp(12px, calc(12px + (100vw - 900px) * 0.02419), 15px) *
+                var(--font-scale)
             ) !important;
           }
 
           .cta-button {
-            font-size: clamp(
-              12px,
-              calc(12px + (100vw - 900px) * 0.01613),
-              14px
+            font-size: calc(
+              clamp(12px, calc(12px + (100vw - 900px) * 0.01613), 14px) *
+                var(--font-scale)
             ) !important;
             padding: clamp(10px, calc(10px + (100vw - 900px) * 0.04839), 16px)
               clamp(18px, calc(18px + (100vw - 900px) * 0.1129), 32px) !important;

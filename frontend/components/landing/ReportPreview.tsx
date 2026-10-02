@@ -165,16 +165,18 @@ export default function ReportPreview({
           );
         }
         .report-preview-headline {
-          --headline-fs: clamp(
-            26px,
-            calc(26px + (100vw - 375px) * 0.018711),
-            44px
+          --headline-fs: calc(
+            clamp(26px, calc(26px + (100vw - 375px) * 0.018711), 44px) *
+              var(--font-scale)
           );
           font-size: var(--headline-fs);
           line-height: calc(var(--headline-fs) * 1.13636);
         }
         .rp-cta {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
+              var(--font-scale)
+          );
         }
         .rp-header {
           padding-inline: clamp(
@@ -189,13 +191,22 @@ export default function ReportPreview({
           );
         }
         .rp-address {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.004158), 16px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.004158), 16px) *
+              var(--font-scale)
+          );
         }
         .rp-address-sub {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
+              var(--font-scale)
+          );
         }
         .rp-badge {
-          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px);
+          font-size: calc(
+            clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px) *
+              var(--font-scale)
+          );
         }
         .rp-section {
           padding-inline: clamp(
@@ -211,19 +222,24 @@ export default function ReportPreview({
         }
 
         .rp-section-label {
-          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px);
+          font-size: calc(
+            clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px) *
+              var(--font-scale)
+          );
         }
         .rp-conclusion {
-          --rp-conclusion-fs: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.007276),
-            23px
+          --rp-conclusion-fs: calc(
+            clamp(16px, calc(16px + (100vw - 375px) * 0.007276), 23px) *
+              var(--font-scale)
           );
           font-size: var(--rp-conclusion-fs);
           line-height: calc(var(--rp-conclusion-fs) * 1.19565);
         }
         .rp-desc {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.004158), 15px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.004158), 15px) *
+              var(--font-scale)
+          );
         }
         .rp-ranks {
           gap: clamp(16px, calc(16px + (100vw - 375px) * 0.010395), 24px);
@@ -239,13 +255,22 @@ export default function ReportPreview({
           );
         }
         .rp-rank-label {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
+              var(--font-scale)
+          );
         }
         .rp-rank-score {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
+              var(--font-scale)
+          );
         }
         .rp-rank-number {
-          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.005199), 18px);
+          font-size: calc(
+            clamp(13px, calc(13px + (100vw - 375px) * 0.005199), 18px) *
+              var(--font-scale)
+          );
         }
       `}</style>
     </div>

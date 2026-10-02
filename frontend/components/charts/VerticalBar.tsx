@@ -47,7 +47,10 @@ export default function VerticalBar({
             dataKey="label"
             axisLine={{ stroke: colors.neutral.border }}
             tickLine={false}
-            tick={{ fill: AXIS_TEXT_COLOR, fontSize: 13 }}
+            tick={{
+              fill: AXIS_TEXT_COLOR,
+              style: { fontSize: 'var(--text-13)' },
+            }}
             interval={0}
           />
           <Bar
@@ -65,7 +68,7 @@ export default function VerticalBar({
               formatter={(value) => `${value ?? ''}${valueSuffix}`}
               style={{
                 fill: colors.neutral.black,
-                fontSize: 15,
+                fontSize: 'var(--text-15)',
                 fontWeight: 700,
               }}
             />

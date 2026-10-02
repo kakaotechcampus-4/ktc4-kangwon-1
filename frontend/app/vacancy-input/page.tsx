@@ -80,7 +80,7 @@ export default function VacancyInputPage() {
 
         <div className="flex flex-col items-start gap-3">
           <h1
-            className="text-[32px] font-bold"
+            className="text-32 font-bold"
             style={{ color: colors.neutral.black }}
           >
             분석할 공실 정보를 입력해 주세요

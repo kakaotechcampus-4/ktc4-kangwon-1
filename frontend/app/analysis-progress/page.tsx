@@ -118,7 +118,7 @@ export default function AnalysisProgressPage() {
         <div className="flex w-full items-start justify-between gap-6">
           <div className="flex flex-col items-start gap-3">
             <h1
-              className="text-[32px] leading-tight font-bold"
+              className="text-32 leading-tight font-bold"
               style={{ color: colors.text.primary }}
             >
               {copy.title}
@@ -143,7 +143,7 @@ export default function AnalysisProgressPage() {
             />
             <div className="flex flex-col gap-0.5">
               <p
-                className="text-[15px] font-semibold"
+                className="text-15 font-semibold"
                 style={{
                   color:
                     copy.tone === 'waiting'
@@ -153,10 +153,7 @@ export default function AnalysisProgressPage() {
               >
                 {copy.statusLabel}
               </p>
-              <p
-                className="text-[13px]"
-                style={{ color: colors.text.secondary }}
-              >
+              <p className="text-13" style={{ color: colors.text.secondary }}>
                 {copy.statusHint}
               </p>
             </div>

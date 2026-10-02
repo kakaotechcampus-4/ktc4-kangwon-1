@@ -39,7 +39,10 @@ export default function GroupedBar({
             dataKey="label"
             axisLine={{ stroke: colors.neutral.border }}
             tickLine={false}
-            tick={{ fill: AXIS_TEXT_COLOR, fontSize: 12 }}
+            tick={{
+              fill: AXIS_TEXT_COLOR,
+              style: { fontSize: 'var(--text-xs)' },
+            }}
             interval={0}
           />
           {series.map((item) => (

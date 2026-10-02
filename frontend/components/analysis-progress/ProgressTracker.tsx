@@ -132,7 +132,7 @@ function StepRow({
         >
           <p
             className={`leading-snug ${
-              isCurrent ? 'text-base font-bold' : 'text-[15px] font-medium'
+              isCurrent ? 'text-base font-bold' : 'text-15 font-medium'
             }`}
             style={{
               color: isWaiting
@@ -158,7 +158,7 @@ function StepRow({
             </p>
           ) : (
             <p
-              className="text-[13px] leading-relaxed"
+              className="text-13 leading-relaxed"
               style={{
                 color:
                   isDone || isPending

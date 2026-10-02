@@ -78,13 +78,13 @@ export default function ClarifyingPanel({
       <div className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-4">
           <h2
-            className="text-[22px] leading-snug font-bold"
+            className="text-22 leading-snug font-bold"
             style={{ color: colors.text.primary }}
           >
             분석을 위해 {questions.length}가지 확인이 필요해요
           </h2>
           <p
-            className="shrink-0 text-[15px] font-semibold"
+            className="shrink-0 text-15 font-semibold"
             style={{ color: colors.brand.dark }}
           >
             <span className={dmMono.className}>
@@ -125,7 +125,7 @@ export default function ClarifyingPanel({
           onChange={(event) => setNote(event.target.value)}
           rows={2}
           placeholder="예: 2층까지 함께 임대 가능해요"
-          className="w-full resize-none rounded-lg border px-4 py-3 text-[15px] leading-relaxed placeholder:text-gray-400"
+          className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
           style={{
             borderColor: colors.neutral.border,
             backgroundColor: colors.neutral.white,
@@ -140,14 +140,14 @@ export default function ClarifyingPanel({
           variant="primary"
           className="min-h-[52px] w-full justify-center disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:opacity-40"
           // Button 기본 text-sm이 클래스보다 우선 적용돼 글자 크기는 style로 준다.
-          style={{ fontSize: '16px' }}
+          style={{ fontSize: 'var(--text-base)' }}
           disabled={!canSubmit}
           onClick={handleSubmit}
         >
           답변하고 분석 이어가기 →
         </Button>
         <p
-          className="text-center text-[13px] leading-relaxed"
+          className="text-center text-13 leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
           {canSubmit
@@ -186,7 +186,7 @@ function QuestionCard({
     >
       <div className="flex items-start gap-3">
         <div
-          className={`${dmMono.className} flex size-8 shrink-0 items-center justify-center rounded-full text-[13px] font-medium`}
+          className={`${dmMono.className} flex size-8 shrink-0 items-center justify-center rounded-full text-13 font-medium`}
           style={
             isAnswered
               ? {
@@ -226,7 +226,7 @@ function QuestionCard({
               type="button"
               aria-pressed={isSelected}
               onClick={() => onSelect(option)}
-              className="min-h-[44px] rounded-lg border px-5 py-2.5 text-[15px]"
+              className="min-h-[44px] rounded-lg border px-5 py-2.5 text-15"
               style={{
                 borderColor: isSelected
                   ? colors.brand.dark
@@ -309,7 +309,7 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
           자료를 모아 분석하고 있어요
         </p>
-        <p className="text-[15px]" style={{ color: colors.text.secondary }}>
+        <p className="text-15" style={{ color: colors.text.secondary }}>
           {runningCount > 0
             ? `현재 ${runningCount}개의 분석이 진행 중이에요`
             : '주변 자료를 모은 뒤 3가지 분석을 동시에 시작해요'}
@@ -326,7 +326,7 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         ))}
       </ul>
 
-      <p className="text-[13px]" style={{ color: colors.text.tertiary }}>
+      <p className="text-13" style={{ color: colors.text.tertiary }}>
         판단에 필요한 정보가 부족하면 이 자리에서 여쭤볼게요.
       </p>
     </Card>
@@ -424,7 +424,7 @@ function ResumingPanel({
         </div>
         <div className="flex flex-col gap-1">
           <h2
-            className="text-[22px] leading-snug font-bold"
+            className="text-22 leading-snug font-bold"
             style={{ color: colors.text.primary }}
           >
             {isCompleted
@@ -432,7 +432,7 @@ function ResumingPanel({
               : '답변을 반영해 분석을 이어가고 있어요'}
           </h2>
           <p
-            className="text-[15px] leading-relaxed"
+            className="text-15 leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
             {isCompleted
@@ -455,7 +455,7 @@ function ResumingPanel({
         </p>
         <dl className="flex flex-col gap-2">
           {summaryRows.map((row) => (
-            <div key={row.label} className="flex items-start gap-4 text-[15px]">
+            <div key={row.label} className="flex items-start gap-4 text-15">
               <dt
                 className="w-[104px] shrink-0"
                 style={{ color: colors.text.tertiary }}
@@ -479,7 +479,7 @@ function ResumingPanel({
           variant="primary"
           // 이 화면의 마지막이자 가장 중요한 액션 — 다른 버튼보다 한 단계 크게.
           className="min-h-[56px] w-full justify-center"
-          style={{ fontSize: '16px' }}
+          style={{ fontSize: 'var(--text-base)' }}
           onClick={onViewReport}
         >
           리포트 보기 →
@@ -487,7 +487,7 @@ function ResumingPanel({
       ) : (
         <div className="flex flex-col gap-2.5">
           <p
-            className="text-[15px] font-semibold"
+            className="text-15 font-semibold"
             style={{ color: colors.brand.dark }}
           >
             최종 업종 적합도를 계산하고 있어요...

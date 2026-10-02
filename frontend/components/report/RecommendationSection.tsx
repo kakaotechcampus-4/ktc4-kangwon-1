@@ -162,7 +162,7 @@ export default function RecommendationSection({
               style={{
                 backgroundColor: column.accent,
                 color: colors.neutral.white,
-                fontSize: '12px',
+                fontSize: 'var(--text-xs)',
                 letterSpacing: '1.26px',
               }}
             >
