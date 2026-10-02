@@ -2,11 +2,11 @@
 
 from app.evidence import (
     MAP_AGENT_ID,
+    SourceIndex,
     industry_catalog,
     map_citations,
     rate_basis,
     resolve_pointer,
-    scalar_records,
     usable_analyses,
     validate_findings,
 )
@@ -55,6 +55,9 @@ def build_context(
     }
     if request.map_observation and request.map_observation.status != "error":
         sources[MAP_AGENT_ID] = request.map_observation.data
+    indexes = {
+        key: SourceIndex.build(data) for key, data in sources.items() if isinstance(data, dict)
+    }
     digest: dict[str, dict] = {
         code: {"code": code, "name": name, "metrics": []} for code, name in INDUSTRIES.items()
     }
@@ -64,10 +67,9 @@ def build_context(
             rows = {r["path"]: r for group in map_citations(data).values() for r in group}
             neighborhood.extend({"agent_id": agent_id, **r} for r in rows.values())
             continue
-        for record in scalar_records(data):
-            owner = record.pop("industry_code")
-            path = record["path"]
-            entry = {"agent_id": agent_id, **record}
+        for record in indexes[agent_id].records:
+            owner, path = record.owner, record.path
+            entry: dict = {"agent_id": agent_id, "path": path, "value": record.value}
             if owner in digest and path.rsplit("/", 1)[-1] in _METRICS and "/quarters/" not in path:
                 if path.startswith("/by_radius/"):
                     radius_path = "/".join(path.split("/")[:3]) + "/radius_m"
@@ -94,6 +96,7 @@ def build_context(
                 item.findings,
                 agent_id=agent_id,
                 data=sources.get(agent_id, {}),
+                index=indexes.get(agent_id),
                 radii={request.map_observation.radius_m}
                 if agent_id == MAP_AGENT_ID and request.map_observation
                 else None,
@@ -144,7 +147,9 @@ def build_context(
         "answers": safe_answers,
         "industry_evidence": [
             row
-            for row in industry_catalog({k: v for k, v in sources.items() if isinstance(v, dict)})
+            for row in industry_catalog(
+                {k: v for k, v in sources.items() if isinstance(v, dict)}, indexes=indexes
+            )
             if row["industry_code"] in candidates
         ]
         + [

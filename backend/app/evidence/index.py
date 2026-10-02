@@ -1,5 +1,7 @@
 """원자료의 인용 가능 경로·업종과 값을 연결합니다."""
 
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from app.industries import lookup
@@ -42,83 +44,136 @@ def _industry(row: dict, path: str) -> str | None:
     return named.code if named else ""
 
 
+@dataclass(frozen=True)
+class SourceRecord:
+    """원자료에서 한 번 읽은 인용 가능한 스칼라 값입니다."""
+
+    path: str
+    value: str | int | float
+    owner: str | None
+
+
+@dataclass(frozen=True)
+class SourceIndex:
+    """한 번의 원자료 순회로 경로·값·문맥 반경을 함께 모읍니다."""
+
+    owners: dict[str, str | None]
+    records: tuple[SourceRecord, ...]
+    radii: frozenset[Decimal]
+
+    @classmethod
+    def build(cls, data: dict[str, Any]) -> "SourceIndex":
+        paths: dict[str, str | None] = {}
+        records: list[SourceRecord] = []
+        radii: set[Decimal] = set()
+
+        def visit(
+            value: Any,
+            path: str,
+            owner: str | None = None,
+            blocked: bool = False,
+            radii_only: bool = False,
+        ) -> tuple[bool, bool]:
+            if radii_only:
+                children = (
+                    value.items()
+                    if isinstance(value, dict)
+                    else enumerate(value)
+                    if isinstance(value, list)
+                    else ()
+                )
+                for key, child in children:
+                    collect_radius(key, child)
+                    visit(child, "", radii_only=True)
+                return False, False
+            scoped = owner is not None
+            policy = value.get("citable") if isinstance(value, dict) else None
+            if isinstance(value, dict):
+                identified = _industry(value, path)
+                if identified is not None:
+                    blocked = blocked or owner is not None and owner != identified
+                    owner, scoped = identified, True
+                blocked = (
+                    blocked
+                    or policy is False
+                    or value.get("data_available") is False
+                    or value.get("confidence") == "none"
+                )
+            blocked = blocked or owner == ""
+            children = (
+                value.items()
+                if isinstance(value, dict)
+                else enumerate(value)
+                if isinstance(value, list)
+                else ()
+            )
+            descendant_scoped = False
+            descendant_blocked = False
+            for key, child in children:
+                collect_radius(key, child)
+                if key == "citable":
+                    visit(child, "", radii_only=True)
+                    continue
+                child_owner = owner
+                if path.endswith("/" + INDUSTRY_COUNTS):
+                    industry = lookup.find_by_name(str(key))
+                    child_owner = industry.code if industry else ""
+                escaped = escape_pointer(str(key))
+                unavailable_score = (
+                    isinstance(value, dict)
+                    and key == "score"
+                    and value.get("score_available") is False
+                )
+                field_blocked = isinstance(policy, dict) and policy.get(key) is False
+                child_scoped, child_blocked = visit(
+                    child,
+                    f"{path}/{escaped}",
+                    child_owner,
+                    blocked or unavailable_score or field_blocked,
+                )
+                descendant_scoped |= child_scoped
+                descendant_blocked |= child_blocked
+            present = (
+                value is not None
+                and not (isinstance(value, str) and not value.strip())
+                and value != []
+                and value != {}
+            )
+            # 금지된 하위 자료·다른 업종을 상위 객체 인용으로 우회하지 못합니다.
+            if (
+                path
+                and present
+                and not blocked
+                and not descendant_blocked
+                and not (owner is None and descendant_scoped)
+            ):
+                paths[path] = owner
+                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    records.append(SourceRecord(path, value, owner))
+            return scoped or descendant_scoped, blocked or descendant_blocked
+
+        def collect_radius(key: Any, value: Any) -> None:
+            if isinstance(key, str) and key.endswith("radius_m") and type(value) in {int, float}:
+                radii.add(Decimal(str(value)))
+
+        visit(data, "")
+        return cls(paths, tuple(records), frozenset(radii))
+
+
 def index_paths(data: dict[str, Any]) -> dict[str, str | None]:
-    """인용 경로와 소유 업종을 반환합니다. citable은 전체·필드별 차단을 지원합니다."""
-    paths: dict[str, str | None] = {}
-
-    def visit(
-        value: Any, path: str, owner: str | None = None, blocked: bool = False
-    ) -> tuple[bool, bool]:
-        scoped = owner is not None
-        policy = value.get("citable") if isinstance(value, dict) else None
-        if isinstance(value, dict):
-            identified = _industry(value, path)
-            if identified is not None:
-                blocked = blocked or owner is not None and owner != identified
-                owner, scoped = identified, True
-            blocked = (
-                blocked
-                or policy is False
-                or value.get("data_available") is False
-                or value.get("confidence") == "none"
-            )
-        blocked = blocked or owner == ""
-        children = (
-            value.items()
-            if isinstance(value, dict)
-            else enumerate(value)
-            if isinstance(value, list)
-            else ()
-        )
-        descendant_scoped = False
-        descendant_blocked = False
-        for key, child in children:
-            if key == "citable":
-                continue
-            child_owner = owner
-            if path.endswith("/" + INDUSTRY_COUNTS):
-                industry = lookup.find_by_name(str(key))
-                child_owner = industry.code if industry else ""
-            escaped = escape_pointer(str(key))
-            unavailable_score = (
-                isinstance(value, dict) and key == "score" and value.get("score_available") is False
-            )
-            field_blocked = isinstance(policy, dict) and policy.get(key) is False
-            child_scoped, child_blocked = visit(
-                child,
-                f"{path}/{escaped}",
-                child_owner,
-                blocked or unavailable_score or field_blocked,
-            )
-            descendant_scoped |= child_scoped
-            descendant_blocked |= child_blocked
-        present = (
-            value is not None
-            and not (isinstance(value, str) and not value.strip())
-            and value != []
-            and value != {}
-        )
-        # 금지된 하위 자료·다른 업종을 상위 객체 인용으로 우회하지 못합니다.
-        if (
-            path
-            and present
-            and not blocked
-            and not descendant_blocked
-            and not (owner is None and descendant_scoped)
-        ):
-            paths[path] = owner
-        return scoped or descendant_scoped, blocked or descendant_blocked
-
-    visit(data, "")
-    return paths
+    """인용 경로와 소유 업종을 반환하는 호환 헬퍼입니다."""
+    return SourceIndex.build(data).owners
 
 
-def industry_catalog(sources: dict[str, dict]) -> list[dict]:
+def industry_catalog(
+    sources: dict[str, dict], *, indexes: dict[str, SourceIndex] | None = None
+) -> list[dict]:
     """원본 값을 복제하지 않고 업종별 인용 경로를 묶어 제공합니다."""
     entries = []
     for agent_id, data in sources.items():
         groups: dict[str, list[str]] = {}
-        for path, code in index_paths(data).items():
+        index = indexes[agent_id] if indexes is not None else SourceIndex.build(data)
+        for path, code in index.owners.items():
             if code:
                 groups.setdefault(code, []).append(path)
         for code, paths in groups.items():
@@ -136,10 +191,8 @@ def industry_catalog(sources: dict[str, dict]) -> list[dict]:
 def scalar_records(data: dict) -> list[dict]:
     """숫자·문자열 값만 원본 경로와 묶습니다. 객체 전체를 요약에 복제하지 않습니다."""
     return [
-        {"path": path, "value": value, "industry_code": owner}
-        for path, owner in index_paths(data).items()
-        if isinstance(value := resolve_pointer(data, path), (str, int, float))
-        and not isinstance(value, bool)
+        {"path": r.path, "value": r.value, "industry_code": r.owner}
+        for r in SourceIndex.build(data).records
     ]
 
 

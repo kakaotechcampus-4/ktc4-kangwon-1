@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from app.schemas import Finding, MapData, SpecialistId
 
-from .index import can_cite, index_paths
+from .index import SourceIndex, can_cite
 from .map import MAP_AGENT_ID
 from .pointer import resolve_pointer
 
@@ -18,12 +18,17 @@ def validate_findings(
     agent_id: SpecialistId,
     data: dict | MapData,
     radii: set[int] | None = None,
+    index: SourceIndex | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """문장 의미를 보증하지 않으며 경로·소유 업종·직접 표기 수치만 검증합니다."""
     if agent_id == MAP_AGENT_ID and not isinstance(data, MapData):
         data = MapData.model_validate(data or {"queries": {}})
-    indexed = index_paths(data) if isinstance(data, dict) else None
-    context_radii = _radii(data) | {Decimal(r) for r in radii or ()}
+    if isinstance(data, dict) and index is None:
+        index = SourceIndex.build(data)
+    indexed = index.owners if index is not None else None
+    context_radii = (index.radii if index is not None else frozenset()) | {
+        Decimal(r) for r in radii or ()
+    }
     valid, warnings = [], []
     for i, finding in enumerate(findings):
         paths = [ref.path for ref in finding.evidence]
