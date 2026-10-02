@@ -8,12 +8,12 @@ import { colors } from '@/styles/tokens';
 
 const navLinks = [
   { label: '홈', href: '/', matchPaths: ['/'] },
-  // "공실 분석" 탭은 공실 입력 → 분석 진행 두 화면 모두에서 활성 상태를
-  // 유지해야 한다(같은 흐름의 1·2단계이기 때문). 3단계인 리포트는 별도 탭.
+  // "공실 분석" 탭은 주소 입력 → 상가 정보 확인 → 분석 진행 세 화면 모두에서
+  // 활성 상태를 유지해야 한다(같은 흐름의 1~3단계이기 때문). 4단계인 리포트는 별도 탭.
   {
     label: '공실 분석',
     href: '/vacancy-input',
-    matchPaths: ['/vacancy-input', '/analysis-progress'],
+    matchPaths: ['/vacancy-input', '/building-confirm', '/analysis-progress'],
   },
   { label: '리포트', href: '/report', matchPaths: ['/report'] },
 ];

@@ -113,7 +113,7 @@ export default function AnalysisProgressPage() {
       <Header />
 
       <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
-        <StepIndicator currentStep={2} />
+        <StepIndicator currentStep={3} />
 
         <div className="flex w-full items-start justify-between gap-6">
           <div className="flex flex-col items-start gap-3">
