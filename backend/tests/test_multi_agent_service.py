@@ -5,6 +5,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -39,6 +40,30 @@ class MultiServiceTests(unittest.IsolatedAsyncioTestCase):
             settings=self.settings,
             **kwargs,
         )
+
+    async def test_corrupt_saved_calls_never_reach_model(self):
+        waiting = await self.start(
+            lambda *_: {"action": "ask_user", "questions": [question()]}, allow_questions=True
+        )
+        execution = json.loads(repo.get_request("r", db_path=self.path)["execution_json"])
+        execution["budget"] = {"used": 1, "calls": ["corrupt"]}
+        # 저장 계층의 정상 쓰기 검증을 우회해 손상된 옛 자료를 재현합니다.
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "UPDATE analysis_requests SET execution_json=? WHERE request_id='r'",
+                (json.dumps(execution),),
+            )
+        generate = AsyncMock(return_value=mock_generate("", ""))
+        with self.assertRaisesRegex(ValueError, "모델 호출 예산이 올바르지 않습니다."):
+            await service.resume_analysis(
+                AnswerSubmission(
+                    request_id="r", question_set_id=waiting.question_set_id, answers=[]
+                ),
+                settings=self.settings,
+                generate=generate,
+                generate_specialists=self.experts,
+            )
+        generate.assert_not_called()
 
     async def test_question_resume_restores_mode_without_repeating_sources(self):
         calls = []

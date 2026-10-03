@@ -12,6 +12,7 @@ from openai.types.chat.chat_completion import Choice
 
 from .budget import current_scope
 from .config import LLMSettings
+from .session import acquire_client
 
 
 class LLMResponseError(RuntimeError):
@@ -122,10 +123,8 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
     else:
         options.update(tools=tools, tool_choice="required", parallel_tool_calls=False)
     try:
-        async with openai.AsyncOpenAI(
-            api_key=settings.api_key,
-            base_url=settings.base_url,
-            timeout=settings.timeout_seconds,
+        async with acquire_client(
+            settings,
             max_retries=0 if current_scope()[0] is not None else 1,
         ) as client:
             raw_stream = await client.chat.completions.create(

@@ -9,6 +9,7 @@ from app.db.types import (
     DecisionFailure,
     ResumeBundle,
 )
+from app.execution import policy
 from app.industries.catalog import CATALOG_VERSION
 from app.schemas import (
     AgentError,
@@ -16,7 +17,6 @@ from app.schemas import (
     AnalysisTask,
     validate_radius,
 )
-from app.services import execution_policy as policy
 
 from .common import DecisionRetryConflictError, _dumps, _now, _request_row, _require_changed, _text
 from .deliberation import _deliberation

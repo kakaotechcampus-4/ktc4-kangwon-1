@@ -3,8 +3,10 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.evidence import scalar_records, validate_findings
-from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, EvidenceRef, Finding
+from pydantic import ValidationError, create_model
+
+from app.evidence import SourceIndex, validate_findings
+from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, EvidenceRef, Finding, Schema
 
 
 class ToolArgumentError(ValueError):
@@ -19,23 +21,26 @@ class SpecialistTool:
 
 def fallback_brief(task: AnalysisTask, analysis: AgentAnalysis) -> AgentBrief:
     findings: list[Finding] = []
-    records = scalar_records(analysis.data)
+    index = SourceIndex.build(analysis.data)
+    records = index.records
     scores = sorted(
-        (r for r in records if r["path"].endswith("/score") and type(r["value"]) in {int, float}),
-        key=lambda r: r["value"],
+        (r for r in records if r.path.endswith("/score") and type(r.value) in {int, float}),
+        key=lambda r: r.value if isinstance(r.value, (int, float)) else 0,
     )
-    selected = {r["path"]: r for r in [*scores[:4], *scores[-4:], *records]}
+    selected = {r.path: r for r in [*scores[:4], *scores[-4:], *records]}
     for item in selected.values():
-        if type(item["value"]) not in {int, float} or len(findings) >= 8:
+        if type(item.value) not in {int, float} or len(findings) >= 8:
             continue
         finding = Finding(
-            claim=f"원자료 값 {item['value']}",
+            claim=f"원자료 값 {item.value}",
             signal="context",
-            industry_code=item["industry_code"],
-            evidence=[EvidenceRef(path=item["path"])],
+            industry_code=item.owner,
+            evidence=[EvidenceRef(path=item.path)],
         )
         findings.extend(
-            validate_findings([finding], agent_id=analysis.agent_id, data=analysis.data)[0]
+            validate_findings(
+                [finding], agent_id=analysis.agent_id, data=analysis.data, index=index
+            )[0]
         )
     return AgentBrief(
         request_id=task.request_id,
@@ -44,4 +49,27 @@ def fallback_brief(task: AnalysisTask, analysis: AgentAnalysis) -> AgentBrief:
         headline="검증된 원자료 요약",
         findings=findings,
         limitations=["전문가 브리핑 없이 요약표로 판단합니다.", *analysis.warnings],
+    )
+
+
+def _tool(name, description, parameters, execute):
+    arguments = create_model(name + "Arguments", __base__=Schema, **parameters)
+
+    async def validated(raw):
+        try:
+            parsed = arguments.model_validate(raw).model_dump()
+        except ValidationError:
+            raise ToolArgumentError("도구 인자가 올바르지 않습니다.") from None
+        return await execute(parsed)
+
+    return SpecialistTool(
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": arguments.model_json_schema(),
+            },
+        },
+        validated,
     )

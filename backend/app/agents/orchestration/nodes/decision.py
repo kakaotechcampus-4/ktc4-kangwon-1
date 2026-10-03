@@ -13,7 +13,7 @@ from app.agents.orchestration.constants import (
     MIN_EXPERT_CALLS,
 )
 from app.agents.orchestration.deps import GraphDeps
-from app.agents.orchestration.state import GraphState
+from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.schemas import (
     AGENT_IDS,
     QUESTION_FIELDS,
@@ -40,7 +40,7 @@ def action_of(outcome) -> str:
     return "final"
 
 
-async def evaluate_decision(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def evaluate_decision(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     phase = (
         {"phase": "final" if "evaluations" in state else "draft"} if deps.evaluators_enabled else {}
     )
@@ -97,7 +97,7 @@ async def judge(state, request, *, deps: GraphDeps, **kwargs):
     return outcome
 
 
-async def _evaluate(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def _evaluate(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     task = state["task"]
     request = DecisionRequest(
         request_id=task.request_id,

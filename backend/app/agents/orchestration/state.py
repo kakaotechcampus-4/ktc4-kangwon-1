@@ -6,14 +6,18 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
+from pydantic import TypeAdapter
+
 from app.agents.orchestration import tools
 from app.agents.orchestration.supplement import OnSupplement
 from app.schemas import (
+    EVALUATOR_IDS,
     AgentAnalysis,
     AgentBrief,
     AnalysisMode,
     AnalysisTask,
     ConsultPlan,
+    DecisionRequest,
     DecisionResult,
     Evaluation,
     EvaluationLogEntry,
@@ -27,6 +31,8 @@ from app.schemas import (
     SupplementPlan,
     WaitingForInput,
 )
+
+from .constants import EVALUATION_CONSULT_ROUNDS, INITIAL_CONSULT_ROUNDS
 
 
 class GraphState(TypedDict, total=False):
@@ -56,6 +62,50 @@ class GraphState(TypedDict, total=False):
     evaluations: list[Evaluation]
     evaluation_start_round: int
     final_call: bool
+
+
+class GraphUpdate(GraphState, total=False):
+    """노드가 반환하는 명시적인 부분 변경 계약입니다."""
+
+
+_STATE_ADAPTER = TypeAdapter(GraphState)
+
+
+def validate_resume_state(state: GraphState, *, mode: AnalysisMode, retry_only: bool) -> None:
+    """호환 변환된 상태의 자료와 단계 불변식을 실행 전에 확인합니다."""
+    _STATE_ADAPTER.validate_python(state, strict=True)
+    if "task" not in state or "analyses" not in state:
+        raise ValueError("재개 요청의 분석 자료가 없습니다.")
+    task = state["task"]
+    DecisionRequest(
+        request_id=task.request_id,
+        address=task.site.input_address,
+        analyses=state["analyses"],
+        map_observation=state.get("map_observation"),
+    )
+    ceiling = INITIAL_CONSULT_ROUNDS + EVALUATION_CONSULT_ROUNDS
+    round_number = state.get("consult_round", 0)
+    if type(round_number) is not int or not 0 <= round_number <= ceiling:
+        raise ValueError("재개 요청의 전문가 라운드가 올바르지 않습니다.")
+    if "evaluations" in state:
+        evaluations = state["evaluations"]
+        if (
+            "draft" not in state
+            or state["draft"].request_id != task.request_id
+            or len(evaluations) != len(EVALUATOR_IDS)
+            or {item.evaluator for item in evaluations} != set(EVALUATOR_IDS)
+            or any(item.request_id != task.request_id for item in evaluations)
+        ):
+            raise ValueError("재개 요청의 저장 평가가 올바르지 않습니다.")
+    for items in (
+        state.get("briefs", []),
+        state.get("answers", []),
+        state.get("supplement_context", []),
+    ):
+        if any(item.request_id != task.request_id for item in items):
+            raise ValueError("재개 요청의 근거 식별자가 다릅니다.")
+    if mode == "single_decision" and not retry_only:
+        raise ValueError("재개 요청의 모드·식별자·질문 설정이 올바르지 않습니다.")
 
 
 def normalize_resume_state(state: Mapping[str, Any], *, mode: AnalysisMode) -> GraphState:

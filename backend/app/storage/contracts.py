@@ -1,0 +1,49 @@
+"""서비스가 요구하는 동기 업무 저장 계약입니다."""
+
+from typing import Protocol, runtime_checkable
+
+from app.schemas import (
+    AgentAnalysis,
+    AgentBrief,
+    AnalysisTask,
+    AnswerSubmission,
+    DecisionResult,
+    Evaluation,
+    EvaluationLogEntry,
+    MapLookupPlan,
+    MapObservation,
+    SpecialistAnswer,
+    SupplementEvent,
+)
+
+from .models import ResumeBundle, StoredAnalysisDetail
+
+
+@runtime_checkable
+class AnalysisRepositoryProtocol(Protocol):
+    def get_detail(self, request_id: str) -> StoredAnalysisDetail | None: ...
+
+    def complete(
+        self, result: DecisionResult, *, attempt: int, source_attempts: dict[str, int]
+    ) -> None: ...
+
+    def claim_answers(self, submission: AnswerSubmission) -> bool: ...
+
+    def load_resume(self, request_id: str) -> ResumeBundle: ...
+
+    def claim_retry(self, request_id: str, failed_at: str) -> ResumeBundle: ...
+
+
+class AnalysisPersistenceProtocol(Protocol):
+    """그래프가 검증한 변경분을 저장하는 업무만 요구합니다."""
+
+    def save_site(self, task: AnalysisTask) -> None: ...
+    def save_agent(self, analysis: AgentAnalysis) -> None: ...
+    def start_map_lookup(self, task: AnalysisTask, plan: MapLookupPlan) -> int: ...
+    def complete_map_lookup(self, observation: MapObservation, *, adopted: bool = True) -> None: ...
+    def save_supplement_event(self, event: SupplementEvent) -> int | None: ...
+    def save_agent_brief(self, brief: AgentBrief) -> None: ...
+    def save_specialist_answer(self, answer: SpecialistAnswer) -> None: ...
+    def save_evaluation(self, draft: DecisionResult, evaluations: list[Evaluation]) -> None: ...
+    def save_evaluation_log(self, request_id: str, entries: list[EvaluationLogEntry]) -> None: ...
+    def update_execution_state(self, request_id: str, *, evaluation_skipped: str) -> None: ...

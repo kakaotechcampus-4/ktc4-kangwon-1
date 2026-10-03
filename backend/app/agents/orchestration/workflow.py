@@ -19,6 +19,8 @@ from app.agents import business_lifecycle, commercial_area, floating_population
 from app.agents.business_lifecycle import supplement as lifecycle_supplement
 from app.agents.commercial_area import supplement as commercial_supplement
 from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
+from app.execution.settings import ExecutionSettings
+from app.execution.validation import validate_timeout
 from app.logging import log_exception
 from app.schemas import (
     DEFAULT_RADIUS_M,
@@ -30,7 +32,6 @@ from app.schemas import (
     SupplementOperation,
     validate_radius,
 )
-from app.services.settings import ExecutionSettings, validate_timeout
 
 from . import tools
 

@@ -7,13 +7,13 @@ from app.db.connection import connect
 from app.db.types import (
     MapLookupState,
 )
+from app.execution import policy
 from app.schemas import (
     AnalysisTask,
     MapLookupPlan,
     MapObservation,
     Site,
 )
-from app.services import execution_policy as policy
 
 from .common import _now, _request_row, _text
 
@@ -36,7 +36,10 @@ def start_map_lookup(
         last = db.execute(
             "SELECT MAX(attempt) FROM map_observations WHERE request_id=?", (task.request_id,)
         ).fetchone()[0]
-        policy.validate_map_attempt(row["analysis_mode"], last)
+        try:
+            policy.validate_map_attempt(row["analysis_mode"], last)
+        except policy.MapAttemptConflict as exc:
+            raise sqlite3.IntegrityError(str(exc)) from None
         attempt = (last or 0) + 1
         db.execute(
             "INSERT INTO map_observations "

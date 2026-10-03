@@ -9,7 +9,6 @@ from unittest.mock import patch
 from app.agents.decision.context import build_context
 from app.agents.specialists.agent import answer_query, write_brief
 from app.evidence import SourceIndex, can_cite, index_paths, scalar_records
-from app.evidence.findings import _radii
 from app.mocks import mock_site
 from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest, SpecialistQuery
 from scripts.measure_payloads import capture_payload
@@ -30,7 +29,7 @@ class IndexBaselineTests(unittest.TestCase):
                 data = case["analysis"]["data"] if "analysis" in case else case["data"]
                 self.assertEqual(index_paths(data), case["owners"])
                 self.assertEqual(scalar_records(data), case["records"])
-                self.assertEqual(_radii(data), {Decimal(r) for r in case["radii"]})
+                self.assertEqual(SourceIndex.build(data).radii, {Decimal(r) for r in case["radii"]})
 
 
 class PayloadBaselineTests(unittest.IsolatedAsyncioTestCase):

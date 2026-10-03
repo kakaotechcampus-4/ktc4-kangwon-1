@@ -11,6 +11,7 @@ from app.agents.orchestration import tools, workflow
 from app.agents.orchestration.consult import build_specialist_tools
 from app.agents.orchestration.supplement import validate_tools
 from app.agents.specialists.agent import GenerateSpecialist
+from app.execution.validation import validate_timeout
 from app.llm.budget import LLMBudget
 from app.schemas import (
     AnalysisMode,
@@ -20,7 +21,6 @@ from app.schemas import (
     SpecialistId,
     validate_radius,
 )
-from app.services.settings import validate_timeout
 
 from .constants import (
     CONSULT_STEPS,

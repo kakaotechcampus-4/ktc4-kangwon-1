@@ -6,7 +6,7 @@ import uuid
 
 from app.agents.orchestration.deps import GraphDeps
 from app.agents.orchestration.map import execute_map_lookup
-from app.agents.orchestration.state import GraphState
+from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.agents.orchestration.supplement import execute_supplement
 from app.schemas import (
     MapLookupPlan,
@@ -17,7 +17,7 @@ from app.schemas import (
 )
 
 
-async def execute_map(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def execute_map(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     plan = state["outcome"]
     task = state["task"]
     if state["map_done"] or deps.map_lookup is None or not isinstance(plan, MapLookupPlan):
@@ -41,7 +41,7 @@ async def execute_map(state: GraphState, *, deps: GraphDeps) -> GraphState:
     return {"map_done": True, "map_observation": observed}
 
 
-async def ask_user(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def ask_user(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     plan = state["outcome"]
     if (
         not deps.allow_questions
@@ -64,7 +64,7 @@ async def ask_user(state: GraphState, *, deps: GraphDeps) -> GraphState:
     return {"outcome": waiting}
 
 
-async def supplement_node(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def supplement_node(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     plan = state["outcome"]
     if state["supplement_done"] or not isinstance(plan, SupplementPlan):
         raise ValueError("현재 단계에서는 보완을 실행할 수 없습니다.")

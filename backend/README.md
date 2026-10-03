@@ -454,6 +454,23 @@ python scripts/build_industry_catalog.py --check
 자동 테스트는 외부 API·LLM을 대역으로 검증합니다. 통과해도 실제 공급자 연결이나 추천 품질까지 검증된 것은 아닙니다.
 multi_agent만 확인하려면 `python -m unittest discover -s tests -p "test_multi_agent*.py" -v`를 씁니다.
 
+## 실행 제약과 오프라인 측정
+
+현재 접수 제한과 실행 작업 목록은 프로세스 메모리에 있습니다. `ANALYSIS_MAX_CONCURRENCY`는
+응답 대기 여부와 관계없이 한 프로세스의 분석 실행 수를 제한합니다. 여러 워커를 띄우면 전역
+제한이 되지 않으며, SQLite 초기화·작업 복구도 워커 간 조율을 대신하지 않습니다.
+대규모 운영은 영속 큐·워커·공유 저장소를 별도 설계해야 합니다.
+
+외부 호출 없는 부하 측정은 새 임시 DB 경로로 실행합니다. 기존 DB 파일은 거절합니다.
+
+```powershell
+python scripts/measure_backend_load.py --scenario execution --concurrency 10 --db-path "$env:TEMP/chaeum-load-new.sqlite3"
+python scripts/measure_backend_load.py --scenario events --concurrency 100 --db-path "$env:TEMP/chaeum-events-new.sqlite3"
+```
+
+이 도구는 ASGI·목업·SQL 지연 대역을 사용합니다. 실제 서버의 네트워크 처리량·LLM 공급자
+한도·비용·추천 품질은 측정하지 않습니다. 전후 3회 중간값은 `docs/backend-design.md`에 기록합니다.
+
 ## 참고 문서
 
 | 문서 | 내용 |

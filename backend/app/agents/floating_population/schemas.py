@@ -51,25 +51,25 @@ class Population(Schema):
     unit: Text
     share_unit: Text
 
-    daily_avg: float  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
-    female_ratio: float
+    daily_avg: float | None  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
+    female_ratio: float | None
 
     # 원본은 선별과 무관하게 보존합니다. 최종판단 입력 복사본에서만 이 셋을 제외할 수 있습니다.
     # 기존 저장 자료를 읽을 수 있도록 nullable 계약은 유지합니다.
-    by_age: dict[str, float] | None
-    age_share: dict[str, float]
+    by_age: dict[str, float | None] | None
+    age_share: dict[str, float | None]
 
-    by_time: dict[str, float] | None
+    by_time: dict[str, float | None] | None
     # 시간대 비교는 반드시 이 값으로 한다 — 구간 길이가 3~6시간으로 달라서 총량으로 비교하면
     # 6시간짜리 00~06시가 거의 항상 1위가 된다(실데이터에서 확인된 왜곡).
-    time_per_hour_share: dict[str, float]
-    peak_time_band: Text
+    time_per_hour_share: dict[str, float | None]
+    peak_time_band: Text | None
 
-    by_day: dict[str, float] | None
+    by_day: dict[str, float | None] | None
     # 주중·주말 평균 인원수는 내보내지 않는다. 한때 `weekday_daily_avg` 로 두었더니 "하루
     # 평균" 으로 읽혔는데 실제로는 분기 중 해당 요일 합계들의 평균이라 하루 평균의 13배였다.
     # 쓸 곳은 이 비율뿐이라 비율만 낸다.
-    weekend_to_weekday_ratio: float
+    weekend_to_weekday_ratio: float | None
 
 
 class Benchmark(Schema):
@@ -81,17 +81,17 @@ class Benchmark(Schema):
 
     unit: Text
     baseline: Text
-    age_index: dict[str, float]
-    time_per_hour_index: dict[str, float]
+    age_index: dict[str, float | None]
+    time_per_hour_index: dict[str, float | None]
 
-    lunch_index: float  # 11~14시
-    evening_index: float  # 17~21시
-    night_index: float  # 21~24시
-    weekend_index: float
+    lunch_index: float | None  # 11~14시
+    evening_index: float | None  # 17~21시
+    night_index: float | None  # 21~24시
+    weekend_index: float | None
 
     # 상권 1곳당 일평균. 분기 합계로 두면 블록 unit("배수")과 어긋나고 오독 위험도 남는다.
-    mean_daily_per_trade_area: float
-    scale_percentile: int  # 서울 상권 중 규모 백분위(상권 1곳당 기준)
+    mean_daily_per_trade_area: float | None
+    scale_percentile: int | None  # 서울 상권 중 규모 백분위(상권 1곳당 기준)
 
 
 class TypeJudgement(Schema):
@@ -102,7 +102,7 @@ class TypeJudgement(Schema):
     signals_unit: Text
     reasons: list[Text]
     # 판정에 쓴 숫자를 그대로 남긴다. 결정 에이전트가 문장이 아니라 값을 인용할 수 있도록.
-    signals: dict[str, float]
+    signals: dict[str, float | None]
     thresholds: dict[str, float]
     rules_version: Text
 
@@ -130,10 +130,10 @@ class QuarterPoint(Schema):
     period: Text  # "2026년 2분기"
     # 분기 합계는 싣지 않는다 — 분기 일수(90~92일)가 달라 그대로 비교하면 가짜 증감이 섞이고,
     # 비교에 쓸 수 있는 형태는 일평균뿐이다.
-    daily_avg: float
+    daily_avg: float | None
     trade_area_count: int
-    age_share: dict[str, float]
-    time_per_hour_share: dict[str, float]
+    age_share: dict[str, float | None]
+    time_per_hour_share: dict[str, float | None]
 
 
 class Trend(Schema):
@@ -160,8 +160,8 @@ class RadiusPoint(Schema):
     """
 
     radius_m: int
-    total: float
-    daily_avg: float
+    total: float | None
+    daily_avg: float | None
     # 조금이라도 걸친 상권 수(안분 가중치 > 0). 반경 안에 통째로 든 상권 수가 아니다.
     trade_area_count: int
     # 안분 가중치의 합. 상권 "몇 곳분" 인지를 뜻한다(예: 2.4 = 상권 2.4곳분).
@@ -187,9 +187,9 @@ class PopulationBenchmark(Schema):
 
     unit: Text
     baseline: Text
-    age_index: dict[str, float]
+    age_index: dict[str, float | None]
     # 상권 1곳당 인구의 서울 상권 중 백분위(0~100). 합계로 재면 상권이 많은 지역이 무조건 높다.
-    scale_percentile: int
+    scale_percentile: int | None
     # 주거인구만. 가구당 인원의 서울 대비 배수 — 1 미만이면 1인가구가 많은 동네다.
     persons_per_household_index: float | None = None
 
@@ -206,10 +206,10 @@ class ResidentPopulation(Schema):
     share_unit: Text
     period_code: Text
     period: Text
-    count: float
-    households: float
+    count: float | None
+    households: float | None
     persons_per_household: float | None
-    age_share: dict[str, float]
+    age_share: dict[str, float | None]
     # 반경과 겹친 상권 수 / 그중 이 자료가 있는 상권 수. 시장·역 상권은 주거인구가 없다.
     trade_area_count: int
     covered_trade_areas: int
@@ -223,8 +223,8 @@ class WorkerPopulation(Schema):
     share_unit: Text
     period_code: Text
     period: Text
-    count: float
-    age_share: dict[str, float]
+    count: float | None
+    age_share: dict[str, float | None]
     trade_area_count: int
     covered_trade_areas: int
     benchmark: PopulationBenchmark

@@ -58,6 +58,10 @@ def build_context(
     indexes = {
         key: SourceIndex.build(data) for key, data in sources.items() if isinstance(data, dict)
     }
+    return _build_context(request, briefs=briefs, answers=answers, sources=sources, indexes=indexes)
+
+
+def _build_context(request, *, briefs, answers, sources, indexes) -> dict:
     digest: dict[str, dict] = {
         code: {"code": code, "name": name, "metrics": []} for code, name in INDUSTRIES.items()
     }

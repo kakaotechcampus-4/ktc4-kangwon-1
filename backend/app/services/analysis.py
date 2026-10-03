@@ -5,19 +5,19 @@ import json
 import logging
 import sqlite3
 import uuid
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from time import monotonic
-from typing import Any, Literal, cast, overload
+from typing import Literal, cast, overload
 
 from app.address import resolve_site
 from app.agents.decision import agent as decision
 from app.agents.decision.agent import GenerateDecision
-from app.agents.evaluators.agent import GenerateEvaluation, generate_evaluation
-from app.agents.orchestration.graph import RunHooks, run_graph
+from app.agents.evaluators.agent import GenerateEvaluation
+from app.agents.orchestration.graph import run_graph
 from app.agents.orchestration.nodes.decision import evaluate_with_log
 from app.agents.orchestration.state import GraphState
 from app.agents.orchestration.supplement import OnSupplement, validate_tools
@@ -26,20 +26,25 @@ from app.agents.orchestration.validation import (
     validate_address,
     validate_agents,
     validate_allow_questions,
-    validate_evaluators,
     validate_map_lookup,
     validate_request_id,
-    validate_specialists,
 )
 from app.agents.orchestration.workflow import (
     AgentRegistry,
     build_react_agents,
     build_supplement_tools,
 )
-from app.agents.specialists.agent import GenerateSpecialist, generate_specialist
+from app.agents.specialists.agent import GenerateSpecialist
 from app.db import repository
+from app.db.analysis_repository import SqliteAnalysisRepository
 from app.db.connection import initialize
 from app.db.types import ExecutionState, ResumeBundle
+from app.execution.errors import (
+    DecisionExecutionError,
+    capture_decision_failures,
+    failure_diagnostics,
+)
+from app.execution.validation import validate_execution_state
 from app.llm.budget import (
     EVALUATED_MAX_CALLS,
     MAX_CALLS,
@@ -48,11 +53,11 @@ from app.llm.budget import (
     LLMBudget,
     llm_scope,
 )
+from app.llm.session import with_client_session
 from app.logging import log_exception
 from app.schemas import (
     AGENT_IDS,
     DEFAULT_RADIUS_M,
-    EVALUATOR_IDS,
     AgentError,
     AgentId,
     AnalysisTask,
@@ -66,28 +71,12 @@ from app.schemas import (
     WaitingForInput,
     validate_radius,
 )
+from app.services.generators import build_evaluator_generators, build_specialist_generators
+from app.services.persistence import _emit, _settle, _storage_hooks
 from app.services.settings import ExecutionSettings, validate_timeout
+from app.storage.contracts import AnalysisRepositoryProtocol
 
 logger = logging.getLogger(__name__)
-
-
-async def _settle[T](operation: Coroutine[Any, Any, T]) -> T:
-    """DB 스레드는 강제 중단할 수 없어 쓰기 결말 확인 후 취소를 전달합니다."""
-    task = asyncio.create_task(operation)
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        while not task.done():
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError:
-                continue
-            except Exception as exc:
-                log_exception(logger, "취소 대기 중 저장 작업 실패", exc)
-                break
-        if not task.cancelled():
-            task.exception()
-        raise
 
 
 class AnalysisAlreadyRunningError(RuntimeError):
@@ -98,6 +87,8 @@ class AnalysisAlreadyFailedError(RuntimeError):
     """이미 실패한 답변 실행은 자동 재시도하지 않습니다."""
 
 
+@capture_decision_failures
+@with_client_session
 async def resume_analysis(
     submission: AnswerSubmission,
     *,
@@ -125,10 +116,11 @@ async def resume_analysis(
 
     async def claim() -> None:
         nonlocal owned
-        owned = await asyncio.to_thread(repository.claim_question_resume, submission, db_path=path)
+        owned = await asyncio.to_thread(storage.claim_answers, submission)
 
     try:
         path = await _settle(asyncio.to_thread(initialize, db_path))
+        storage: AnalysisRepositoryProtocol = SqliteAnalysisRepository(path)
         timeout = await _saved_time_limit(submission.request_id, path, timeout)
         async with asyncio.timeout(timeout):
             await _settle(claim())
@@ -143,9 +135,7 @@ async def resume_analysis(
                         "이미 실패한 재개 요청입니다. 이력을 확인하세요."
                     )
                 raise AnalysisAlreadyRunningError("동일 답변으로 최종판단을 실행 중입니다.")
-            bundle = await asyncio.to_thread(
-                repository.load_resume_context, submission.request_id, db_path=path
-            )
+            bundle = await asyncio.to_thread(storage.load_resume, submission.request_id)
             evaluation_state = await _saved_evaluation(bundle, path)
             async with _execution_scope(submission.request_id, path, timeout) as flush:
                 if bundle["analysis_mode"] == "multi_agent":
@@ -162,7 +152,7 @@ async def resume_analysis(
                     )
                 else:
                     result = await _evaluate_saved(bundle, generate=generate, path=path)
-                await _complete(result, flush, path, bundle["source_attempts"])
+                await _complete(result, flush, path, bundle["source_attempts"], storage=storage)
             await _emit(path, submission.request_id, "run", "completed", status=result.status)
             return result
     except (Exception, asyncio.CancelledError) as exc:
@@ -215,6 +205,8 @@ async def execute_analysis(
 ) -> DecisionResult | WaitingForInput: ...
 
 
+@capture_decision_failures
+@with_client_session
 async def execute_analysis(
     address: str,
     *,
@@ -290,6 +282,8 @@ async def execute_analysis(
     )
 
 
+@capture_decision_failures
+@with_client_session
 async def retry_decision(
     request_id: str,
     *,
@@ -307,12 +301,11 @@ async def retry_decision(
         raise ValueError("최종판단 호출 함수가 필요합니다.")
     bundle: ResumeBundle | None = None
     path = await _settle(asyncio.to_thread(initialize, settings.db_path))
+    storage: AnalysisRepositoryProtocol = SqliteAnalysisRepository(path)
 
     async def claim() -> None:
         nonlocal bundle
-        bundle = await asyncio.to_thread(
-            repository.claim_decision_retry, request_id, failed_at, db_path=path
-        )
+        bundle = await asyncio.to_thread(storage.claim_retry, request_id, failed_at)
 
     try:
         time_limit = await _saved_time_limit(request_id, path, settings.overall_timeout)
@@ -322,7 +315,7 @@ async def retry_decision(
             source_attempts = bundle["source_attempts"]
             async with _execution_scope(request_id, path, time_limit) as flush:
                 result = await _retry_saved(bundle, path, settings, generate, generate_evaluators)
-                await _complete(result, flush, path, source_attempts)
+                await _complete(result, flush, path, source_attempts, storage=storage)
             return result
     except (Exception, asyncio.CancelledError) as exc:
         if bundle is not None:
@@ -364,6 +357,8 @@ async def _evaluate_saved(
 
 
 def _failure_code(error: BaseException, *, retry: bool = False) -> str:
+    if isinstance(error, DecisionExecutionError):
+        error = error.error
     if isinstance(error, decision.DecisionContractError):
         return error.code
     if isinstance(error, BudgetStorageError):
@@ -406,7 +401,7 @@ async def _record_failure(
                         "최종판단 재시도에 실패했습니다." if retry else "분석 실행에 실패했습니다.",
                     ),
                 ),
-                diagnostics=getattr(error, "failures", None),
+                diagnostics=failure_diagnostics(error),
                 db_path=path,
             )
 
@@ -458,105 +453,12 @@ async def _saved_evaluation(bundle, path):
     }
 
 
-def build_evaluator_generators(settings, injected=None):
-    if injected is not None:
-        validate_evaluators(injected)
-        return injected
-    return {
-        role: partial(generate_evaluation, settings=settings.evaluator_llm)
-        for role in EVALUATOR_IDS
-    }
-
-
-def build_specialist_generators(settings, injected=None, *, with_map=False):
-    roles = [*AGENT_IDS, *(["map_analysis"] if with_map else [])]
-    if injected is not None:
-        validate_specialists(injected, with_map=with_map)
-        return injected
-    return {
-        role: partial(
-            generate_specialist, settings=settings.specialist_llms.get(role, settings.decision_llm)
-        )
-        for role in roles
-    }
-
-
-async def _emit(path, request_id: str, stage: str, event: str, **detail) -> None:
-    """진행 이벤트는 화면 표시용이라 저장 실패가 분석을 멈추지 않게 기록만 남깁니다."""
-    try:
-        await _settle(
-            asyncio.to_thread(
-                repository.append_event, request_id, stage, event, detail, db_path=path
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log_exception(logger, "진행 이벤트 저장 실패: %s %s", exc, stage, event)
-
-
-def _storage_hooks(path, source_attempts, on_supplement=None, *, request_id=None) -> RunHooks:
-    async def write(fn, *args, **kwargs):
-        return await _settle(asyncio.to_thread(fn, *args, db_path=path, **kwargs))
-
-    async def save_task(task):
-        await write(repository.save_site, task)
-
-    async def save_analysis(analysis):
-        await write(repository.save_agent, analysis)
-
-    async def start_map(task, plan):
-        await write(repository.start_map_lookup, task, plan)
-
-    async def save_map(observation, adopted=True):
-        await write(repository.complete_map_lookup, observation, adopted=adopted)
-
-    async def save_supplement(event):
-        attempt = await write(repository.save_supplement_event, event)
-        if event.adopted:
-            source_attempts[event.request.agent_id] = attempt
-        if on_supplement is not None:
-            await on_supplement(event.model_copy(deep=True))
-
-    async def save_brief(brief):
-        await write(repository.save_agent_brief, brief)
-
-    async def save_answer(answer):
-        await write(repository.save_specialist_answer, answer)
-
-    async def save_evaluation(draft, evaluations):
-        await write(repository.save_evaluation, draft, evaluations)
-
-    async def save_log(entries):
-        await write(repository.save_evaluation_log, request_id, entries)
-
-    async def on_step(stage, event, detail):
-        if stage == "evaluate" and "skipped" in detail:
-            await write(
-                repository.update_execution_state, request_id, evaluation_skipped=detail["skipped"]
-            )
-        await _emit(path, request_id, stage, event, **detail)
-
-    return RunHooks(
-        on_evaluation=save_evaluation,
-        on_evaluation_log=save_log,
-        on_task_prepared=save_task,
-        on_analysis_completed=save_analysis,
-        on_supplement=save_supplement,
-        on_map_requested=start_map,
-        on_map_completed=save_map,
-        on_map_result=save_map,
-        on_brief=save_brief,
-        on_consult=save_answer,
-        on_step=on_step if request_id else None,
-    )
-
-
 @asynccontextmanager
 async def _execution_scope(request_id, path, time_limit, *, active=lambda: True):
     """사람의 대기 시간은 제외하고 요청의 호출·활성 시간 예산을 이어 씁니다."""
     row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
     saved: ExecutionState = json.loads(row["execution_json"])
+    validate_execution_state(saved)
     enabled = saved.get("capabilities", {}).get("evaluators", False)
     if enabled:
         time_limit = saved.get("time_limit", time_limit)
@@ -631,12 +533,18 @@ def build_resume_state(bundle: ResumeBundle, *, retry: bool = False) -> GraphSta
     return state
 
 
-async def _complete(result, flush, path, source_attempts):
+async def _complete(
+    result, flush, path, source_attempts, *, storage: AnalysisRepositoryProtocol | None = None
+):
     """예산 저장을 끝낸 뒤 그 실행이 사용한 분석 차수로 완료합니다."""
     await flush()
+    storage = storage if storage is not None else SqliteAnalysisRepository(path)
     await _settle(
         asyncio.to_thread(
-            repository.complete_request, result, source_attempts=source_attempts, db_path=path
+            storage.complete,
+            result,
+            attempt=1,
+            source_attempts=source_attempts,
         )
     )
 

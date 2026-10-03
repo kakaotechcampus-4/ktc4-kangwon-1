@@ -79,7 +79,10 @@ class ApiTests(unittest.TestCase):
         for error in errors:
             with (
                 self.subTest(error=type(error).__name__),
-                patch("app.services.views.repository.get_analysis_view_data", side_effect=error),
+                patch(
+                    "app.db.analysis_repository.repository.get_analysis_view_data",
+                    side_effect=error,
+                ),
                 self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
             ):
                 response = self.client.get("/api/v1/analyses/saved-request")

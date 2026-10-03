@@ -130,6 +130,27 @@ class ContextTests(unittest.TestCase):
         )
         self.assertEqual(len(valid), 1)
 
+    def test_equipment_counts_are_not_age_band_labels(self):
+        for claim in ("시설999대", "시설 30대"):
+            with self.subTest(claim=claim):
+                valid, warnings = self.validate_findings(
+                    [self.finding("/by_middle/1/count", claim)],
+                    agent_id="commercial_area",
+                    data=self.data,
+                )
+                self.assertEqual(valid, [])
+                self.assertIn("맞지 않는 수", warnings[0])
+
+    def test_real_age_label_is_context_not_a_claimed_quantity(self):
+        finding = self.finding("/population/age_share/30", "30대 비중은 0.3", code=None)
+        valid, warnings = self.validate_findings(
+            [finding],
+            agent_id="floating_population",
+            data={"population": {"age_share": {"30": 0.3}}},
+        )
+        self.assertEqual(valid, [finding])
+        self.assertEqual(warnings, [])
+
     def test_context_preserves_population_types_and_units(self):
         source = self.source.model_copy(
             update={

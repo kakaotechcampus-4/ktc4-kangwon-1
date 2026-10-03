@@ -26,6 +26,7 @@ from pathlib import Path
 
 from .baseline import index
 from .models import AGE_BANDS, FlpopRecord, PopulationRecord, period_ko
+from .numeric import complete_sum, ratio, rounded
 from .schemas import PopulationBenchmark, PopulationSummary, ResidentPopulation, WorkerPopulation
 
 RESIDENT_KIND = "REPOP"
@@ -85,19 +86,27 @@ def _read(kind: str, path: Path) -> list[PopulationRecord]:
         return [PopulationRecord.from_api_row(row, kind) for row in csv.DictReader(f)]
 
 
-def _age_share(records: list[PopulationRecord]) -> dict[str, float]:
-    total = sum(r.total for r in records) or 1.0
-    return {a: round(sum(r.by_age[a] for r in records) / total, 4) for a in AGE_BANDS}
+def _age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
+    total = complete_sum(r.total for r in records)
+    return {
+        a: rounded(ratio(complete_sum(r.by_age[a] for r in records), total), 4) for a in AGE_BANDS
+    }
 
 
 def _persons_per_household(records: list[PopulationRecord]) -> float | None:
-    households = sum(r.households or 0.0 for r in records)
-    return round(sum(r.total for r in records) / households, 3) if households else None
+    households = complete_sum(r.households for r in records)
+    return (
+        rounded(ratio(complete_sum(r.total for r in records), households), 3)
+        if households
+        else None
+    )
 
 
-def _percentile(value: float, seoul: list[PopulationRecord]) -> int:
+def _percentile(value: float | None, seoul: list[PopulationRecord]) -> int | None:
     """상권 1곳당 인구가 서울 상권 중 몇 백분위인지. `seoul` 은 비지 않는다(local ⊆ seoul)."""
-    below = sum(1 for r in seoul if r.total <= value)
+    if value is None or any(r.total is None for r in seoul):
+        return None
+    below = sum(1 for r in seoul if r.total is not None and r.total <= value)
     return round(100 * below / len(seoul))
 
 
@@ -119,7 +128,9 @@ def _benchmark(
             f"서울 전체 상권 {label} ({period_ko(quarter)} · {len(seoul):,}곳, 가중 합계 기준)"
         ),
         age_index={a: index(local_share[a], seoul_share[a]) for a in AGE_BANDS},
-        scale_percentile=_percentile(sum(r.total for r in local) / len(local), seoul),
+        scale_percentile=_percentile(
+            ratio(complete_sum(r.total for r in local), len(local)), seoul
+        ),
         persons_per_household_index=household_index,
     )
 
@@ -135,8 +146,8 @@ def resident_block(
         share_unit="비율 (0~1)",
         period_code=quarter,
         period=period_ko(quarter),
-        count=sum(r.total for r in local),
-        households=sum(r.households or 0.0 for r in local),
+        count=complete_sum(r.total for r in local),
+        households=complete_sum(r.households for r in local),
         persons_per_household=_persons_per_household(local),
         age_share=_age_share(local),
         trade_area_count=len(main_codes),
@@ -156,7 +167,7 @@ def worker_block(
         share_unit="비율 (0~1)",
         period_code=quarter,
         period=period_ko(quarter),
-        count=sum(r.total for r in local),
+        count=complete_sum(r.total for r in local),
         age_share=_age_share(local),
         trade_area_count=len(main_codes),
         covered_trade_areas=len(local),
@@ -177,17 +188,17 @@ def summary_block(
     flp = {r.trdar_cd: r.total for r in flpop}
     basis = main_codes & res.keys() & wrk.keys() & flp.keys()
 
-    residents = sum(res[c] for c in basis)
-    workers = sum(wrk[c] for c in basis)
-    visitors_daily = sum(flp[c] for c in basis) / days
+    residents = complete_sum(res[c] for c in basis)
+    workers = complete_sum(wrk[c] for c in basis)
+    visitors_daily = ratio(complete_sum(flp[c] for c in basis), days)
 
-    ratio = workers / residents if residents else None
+    local_ratio = ratio(workers, residents) if residents else None
     both = res.keys() & wrk.keys()
-    seoul_res = sum(res[c] for c in both)
-    seoul_ratio = sum(wrk[c] for c in both) / seoul_res if seoul_res else 0.0
+    seoul_res = complete_sum(res[c] for c in both)
+    seoul_ratio = ratio(complete_sum(wrk[c] for c in both), seoul_res) if seoul_res else None
     # 판정은 반올림 전 값으로 한다 — 반올림한 배수(0.667)로 비교하면 정확히 1/1.5(0.6667)인
     # 경계가 주거 중심에서 빠진다.
-    raw_index = ratio / seoul_ratio if ratio is not None and seoul_ratio else None
+    raw_index = ratio(local_ratio, seoul_ratio) if seoul_ratio else None
 
     if raw_index is None:
         composition = "판단 불가"
@@ -204,8 +215,8 @@ def summary_block(
             "worker_to_resident_index = 직장/주거 비 ÷ 서울 비"
         ),
         basis_trade_areas=len(basis),
-        visitor_multiple=round(visitors_daily / residents, 3) if residents else None,
-        worker_to_resident_ratio=round(ratio, 3) if ratio is not None else None,
+        visitor_multiple=rounded(ratio(visitors_daily, residents), 3) if residents else None,
+        worker_to_resident_ratio=rounded(local_ratio, 3),
         seoul_worker_to_resident_ratio=round(seoul_ratio, 3) if seoul_ratio else None,
         worker_to_resident_index=round(raw_index, 3) if raw_index is not None else None,
         composition=composition,

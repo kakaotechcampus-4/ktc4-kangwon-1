@@ -6,7 +6,7 @@ import json
 from collections.abc import Awaitable, Callable
 from difflib import get_close_matches
 from importlib.resources import files
-from typing import Any, cast
+from typing import Any
 
 from app.agents.floating_population.selection import SELECTABLE
 from app.evidence import (
@@ -16,6 +16,13 @@ from app.evidence import (
     index_paths,
     industry_catalog,
     usable_analyses,
+)
+from app.execution.errors import (
+    DecisionExecutionError,
+    DecisionTimeoutError,
+    DecisionValidationExecutionError,
+    FailureDiagnostics,
+    remember_failure,
 )
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
@@ -57,7 +64,7 @@ GenerateDecision = Callable[
 ]
 
 
-class DecisionContractError(ValueError):
+class DecisionContractError(FailureDiagnostics, ValueError):
     """모델이 만든 값 대신 코드가 정한 검증 위치와 사유만 공개합니다."""
 
     code = "DECISION_CONTRACT_INVALID"
@@ -207,9 +214,20 @@ async def evaluate(
                     "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
                     "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
                 )
-            except (Exception, asyncio.CancelledError) as exc:
+            except asyncio.CancelledError as exc:
                 if failures:
-                    cast(Any, exc).failures = failures
+                    remember_failure(exc, failures)
+                raise
+            except Exception as exc:
+                if failures:
+                    error_type = (
+                        DecisionTimeoutError
+                        if isinstance(exc, TimeoutError)
+                        else DecisionValidationExecutionError
+                        if isinstance(exc, ValueError)
+                        else DecisionExecutionError
+                    )
+                    raise error_type(exc, failures) from exc
                 raise
     else:
         limitations.extend(

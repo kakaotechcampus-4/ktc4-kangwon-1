@@ -7,13 +7,13 @@ from app.db.connection import connect
 from app.db.types import (
     ExecutionState,
 )
+from app.execution import policy
 from app.schemas import (
     EVALUATOR_IDS,
     DecisionResult,
     Evaluation,
     EvaluationLogEntry,
 )
-from app.services import execution_policy as policy
 
 from .common import _dumps, _now, _require_running
 

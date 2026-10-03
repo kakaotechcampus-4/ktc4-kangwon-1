@@ -32,6 +32,7 @@ from app.services.analysis import (
     resume_analysis,
     retry_decision,
 )
+from app.services.jobs import AnalysisJobRegistry, JobClosedError, JobConflictError, JobLimitError
 from app.services.mocking import mock_dependencies
 from app.services.views import analysis_detail
 
@@ -52,31 +53,39 @@ def _log_unexpected(request_id: str, exc: Exception) -> None:
     log_exception(logger, "예상 못 한 오류: request_id=%s", exc, request_id)
 
 
+def _job_registry(request: Request) -> AnalysisJobRegistry:
+    return request.app.state.job_registry
+
+
 def _jobs(request: Request) -> dict[str, asyncio.Task]:
-    return request.app.state.__dict__.setdefault("jobs", {})
+    return _job_registry(request).tasks
 
 
-def _start_job(request: Request, request_id: str, work: Coroutine) -> JSONResponse:
-    """분석을 백그라운드 작업으로 등록하고 바로 202를 돌려줍니다."""
-    # ponytail: 프로세스 안 작업표입니다. 서버를 여러 대 띄우면 외부 큐가 필요합니다.
-    jobs = _jobs(request)
-    if len(jobs) >= request.app.state.execution_settings.max_concurrency:
-        work.close()
+def _start_task(request: Request, request_id: str, work: Coroutine) -> asyncio.Task:
+    """응답 대기 방식과 무관하게 실행 전에 공통 슬롯을 확보합니다."""
+    try:
+        return _job_registry(request).start(request_id, work)
+    except JobConflictError:
+        raise HTTPException(
+            409,
+            "이미 처리 중이거나 실패한 답변입니다. 상태를 조회하세요.",
+            headers=_request_headers(request_id),
+        ) from None
+    except (JobLimitError, JobClosedError):
         raise HTTPException(
             429,
             "동시에 실행할 수 있는 분석 수를 넘었습니다. 잠시 뒤 다시 요청해 주세요.",
             headers={"X-Request-ID": request_id, "Retry-After": "30"},
-        )
-    task = asyncio.create_task(work, name="analysis-" + request_id)
-    jobs[request_id] = task
+        ) from None
 
-    def finished(done: asyncio.Task) -> None:
-        jobs.pop(request_id, None)
-        if not done.cancelled() and done.exception() is not None:
-            # 실패 상태와 이벤트는 서비스 계층이 DB에 남깁니다. 여기서는 로그만 씁니다.
-            logger.warning("백그라운드 분석 실패: %s", request_id, exc_info=done.exception())
 
-    task.add_done_callback(finished)
+async def _await_task(task: asyncio.Task):
+    return await task
+
+
+def _start_job(request: Request, request_id: str, work: Coroutine) -> JSONResponse:
+    """등록한 분석을 기다리지 않고 기존 202 응답을 돌려줍니다."""
+    _start_task(request, request_id, work)
     return JSONResponse(
         {"request_id": request_id, "status": "running"},
         status_code=202,
@@ -182,7 +191,8 @@ async def create_analysis(
         )
     if not wait:
         return _start_job(request, request_id, work)
-    return await _run_or_http(work, request_id, kind="analysis")
+    task = _start_task(request, request_id, work)
+    return await _run_or_http(_await_task(task), request_id, kind="analysis")
 
 
 @router.get(
@@ -291,7 +301,7 @@ async def submit_answers(
         )
         if not wait:
             return _start_job(request, request_id, work)
-        return await work
+        return await _start_task(request, request_id, work)
 
     return await _run_or_http(work(), request_id, kind="answers")
 
@@ -320,11 +330,15 @@ async def retry_analysis_decision(
             is None
         ):
             raise HTTPException(404, "분석 요청을 찾을 수 없습니다.", headers=headers)
-        return await runner(
+        return await _start_task(
+            request,
             request_id,
-            failed_at=body.failed_at,
-            settings=request.app.state.execution_settings,
-            **(mock_dependencies("retry") if _mock_enabled(mock) else {"generate": None}),
+            runner(
+                request_id,
+                failed_at=body.failed_at,
+                settings=request.app.state.execution_settings,
+                **(mock_dependencies("retry") if _mock_enabled(mock) else {"generate": None}),
+            ),
         )
 
     return await _run_or_http(work(), request_id, kind="retry")

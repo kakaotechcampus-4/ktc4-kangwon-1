@@ -33,7 +33,7 @@ from .nodes.evaluation import evaluate_draft_node
 from .nodes.tools import ask_user, execute_map, supplement_node
 from .state import GraphState as GraphState
 from .state import RunHooks as RunHooks
-from .state import initial_state
+from .state import initial_state, validate_resume_state
 from .state import normalize_resume_state as normalize_resume_state
 
 
@@ -127,6 +127,9 @@ async def run_graph(
         retry_only=retry_only,
         user_answers=user_answers,
     )
+    if resume_state is not None:
+        resume_state = normalize_resume_state(resume_state, mode=mode)
+        validate_resume_state(resume_state, mode=mode, retry_only=retry_only)
     if resume_state is not None and (
         (mode != "multi_agent" and not retry_only)
         or allow_questions

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from app.agents.orchestration import workflow
 from app.agents.orchestration.deps import GraphDeps
-from app.agents.orchestration.state import GraphState
+from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.schemas import (
     AgentAnalysis,
 )
 
 
-async def prepare_address(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def prepare_address(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     await deps.step("address", "started")
     task = await workflow.prepare_task(
         deps.address,
@@ -24,7 +24,7 @@ async def prepare_address(state: GraphState, *, deps: GraphDeps) -> GraphState:
     return {"task": task}
 
 
-async def run_analyses(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def run_analyses(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     for agent_id in deps.agents:
         await deps.step(agent_id, "started")
 

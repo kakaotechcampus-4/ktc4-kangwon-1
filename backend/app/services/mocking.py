@@ -2,8 +2,15 @@
 
 from typing import Any, Literal
 
-from app.api.v1.mock import evaluator, interactive_decision, map_observation, specialist
-from app.mocks import mock_agents, mock_generate, mock_resolve
+from app.mocks import (
+    evaluator,
+    interactive_decision,
+    map_observation,
+    mock_agents,
+    mock_generate,
+    mock_resolve,
+    specialist,
+)
 from app.schemas import AGENT_IDS, EVALUATOR_IDS
 
 

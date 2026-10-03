@@ -15,6 +15,7 @@ from app.api.v1.routes import health as api_health
 from app.config import load_environment
 from app.db import repository
 from app.db.connection import initialize
+from app.services.jobs import AnalysisJobRegistry
 from app.services.settings import ExecutionSettings
 
 DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
@@ -35,10 +36,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await asyncio.to_thread(initialize, path)
     # 이전 프로세스가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
     await asyncio.to_thread(repository.fail_interrupted, db_path=path)
-    app.state.jobs = {}
-    yield
-    for task in list(app.state.jobs.values()):
-        task.cancel()
+    registry = app.state.job_registry
+    try:
+        yield
+    finally:
+        await registry.shutdown()
 
 
 def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = True) -> FastAPI:
@@ -52,6 +54,7 @@ def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = Tr
         description="공실 주소를 받아 업종 추천 리포트를 돌려주는 API입니다.",
     )
     app.state.execution_settings = settings or ExecutionSettings.from_env()
+    app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins(),

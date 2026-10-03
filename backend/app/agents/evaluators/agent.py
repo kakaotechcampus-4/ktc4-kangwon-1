@@ -4,12 +4,13 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from importlib.resources import files
 
 from pydantic import ValidationError
 
-from app.agents.decision.context import build_context
-from app.evidence import MAP_AGENT_ID, can_cite, index_paths, usable_analyses
+from app.agents.decision.context import _build_context
+from app.evidence import MAP_AGENT_ID, SourceIndex, can_cite, index_paths, usable_analyses
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_json
 from app.llm.config import LLMSettings
@@ -50,10 +51,43 @@ async def generate_evaluation(
     return await complete_json(system_prompt, input_json, settings)
 
 
+@dataclass(frozen=True)
+class PreparedEvaluationInputs:
+    request_id: str
+    payload: dict
+    sources: dict[str, dict | MapData]
+    indexes: dict[str, SourceIndex]
+
+
+def prepare_evaluation_inputs(request, draft, allowed) -> PreparedEvaluationInputs:
+    request = DecisionRequest.model_validate(request)
+    draft = DecisionResult.model_validate(draft)
+    if draft.request_id != request.request_id:
+        raise ValueError("초안과 원자료의 요청 식별자가 다릅니다.")
+    sources: dict[str, dict | MapData] = {
+        a.agent_id: a.data for a in usable_analyses(request.analyses)
+    }
+    if request.map_observation and request.map_observation.status != "error":
+        sources[MAP_AGENT_ID] = request.map_observation.data
+    indexes = {
+        key: SourceIndex.build(data) for key, data in sources.items() if isinstance(data, dict)
+    }
+    return PreparedEvaluationInputs(
+        request.request_id,
+        _evaluation_payload(request, draft, allowed, sources, indexes),
+        sources,
+        indexes,
+    )
+
+
 def evaluation_input(
     request: DecisionRequest, draft: DecisionResult, allowed: list[EvaluationRequest]
 ) -> dict:
-    context = build_context(request, briefs=[], answers=[])
+    return prepare_evaluation_inputs(request, draft, allowed).payload
+
+
+def _evaluation_payload(request, draft, allowed, sources, indexes) -> dict:
+    context = _build_context(request, briefs=[], answers=[], sources=sources, indexes=indexes)
     codes = {item.category.code for item in [*draft.recommendations, *draft.not_recommended]}
     return {
         "draft": draft.model_dump(
@@ -73,10 +107,6 @@ def check_comments(
     request_id: str,
     evaluator: EvaluatorId,
 ) -> Evaluation:
-    if not isinstance(raw, dict) or raw.get("verdict") not in ("agree", "conditional", "oppose"):
-        return Evaluation(
-            request_id=request_id, evaluator=evaluator, source="failed", notes=["형식 오류"]
-        )
     sources: dict[str, dict | MapData] = {
         a.agent_id: a.data for a in usable_analyses(request.analyses)
     }
@@ -84,6 +114,16 @@ def check_comments(
     if observation and observation.status != "error":
         sources[MAP_AGENT_ID] = observation.data
     indexes = {key: index_paths(data) for key, data in sources.items() if isinstance(data, dict)}
+    return _check_comments(
+        raw, sources, indexes, allowed, request_id=request_id, evaluator=evaluator
+    )
+
+
+def _check_comments(raw, sources, indexes, allowed, *, request_id, evaluator) -> Evaluation:
+    if not isinstance(raw, dict) or raw.get("verdict") not in ("agree", "conditional", "oppose"):
+        return Evaluation(
+            request_id=request_id, evaluator=evaluator, source="failed", notes=["형식 오류"]
+        )
     comments: list[EvaluationComment] = []
     invalid = 0
     for item in raw["comments"][:4] if isinstance(raw.get("comments"), list) else []:
@@ -126,13 +166,16 @@ async def evaluate_draft(
     allowed: list[EvaluationRequest],
     timeout: float,  # noqa: ASYNC109 -- 평가자 공개 계약의 호출별 제한시간입니다.
 ) -> Evaluation:
-    request = DecisionRequest.model_validate(request)
-    draft = DecisionResult.model_validate(draft)
-    if draft.request_id != request.request_id:
-        raise ValueError("초안과 원자료의 요청 식별자가 다릅니다.")
-    payload = {"evaluator": evaluator, **evaluation_input(request, draft, allowed)}
+    prepared = prepare_evaluation_inputs(request, draft, allowed)
+    return await _evaluate_prepared(evaluator, prepared, generate=generate, timeout_seconds=timeout)
+
+
+async def _evaluate_prepared(
+    evaluator, prepared: PreparedEvaluationInputs, *, generate, timeout_seconds
+) -> Evaluation:
+    payload = {"evaluator": evaluator, **prepared.payload}
     try:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(timeout_seconds):
             prompt = await asyncio.to_thread(
                 files(__package__).joinpath("prompt.md").read_text, encoding="utf-8"
             )
@@ -146,9 +189,14 @@ async def evaluate_draft(
         log_exception(logger, "평가자 모델 응답 실패", exc)
         note = "평가 실패"
     else:
-        return check_comments(
-            raw, request, allowed, request_id=request.request_id, evaluator=evaluator
+        return _check_comments(
+            raw,
+            prepared.sources,
+            {key: index.owners for key, index in prepared.indexes.items()},
+            prepared.payload["allowed_requests"],
+            request_id=prepared.request_id,
+            evaluator=evaluator,
         )
     return Evaluation(
-        request_id=request.request_id, evaluator=evaluator, source="failed", notes=[note]
+        request_id=prepared.request_id, evaluator=evaluator, source="failed", notes=[note]
     )
