@@ -1,0 +1,222 @@
+"""도메인별 계산을 재사용하며 제한 횟수만 도구를 선택하는 전문가입니다."""
+
+import asyncio
+import json
+import time
+from collections.abc import Awaitable, Callable
+from importlib.resources import files
+
+from openai.types.chat import ChatCompletionMessage
+from pydantic import Field, ValidationError
+
+from app.evidence import CitationError, render_cited, scalar_records, validate_findings
+from app.llm.budget import BudgetStorageError, current_scope, llm_scope
+from app.llm.client import complete_tools
+from app.llm.config import LLMSettings
+from app.schemas import (
+    AgentAnalysis,
+    AgentBrief,
+    AnalysisTask,
+    Finding,
+    MapObservation,
+    Schema,
+    SpecialistAnswer,
+    SpecialistQuery,
+    Text,
+    ToolCallRecord,
+)
+
+from .tools import ToolArgumentError, fallback_brief
+
+GenerateSpecialist = Callable[[list, list], Awaitable[dict | ChatCompletionMessage]]
+
+
+class BriefContent(Schema):
+    headline: str = Field(min_length=1, max_length=200)
+    findings: list[Finding] = Field(max_length=8)
+    limitations: list[Text] = Field(default_factory=list)
+
+
+async def generate_specialist(messages, definitions, *, settings: LLMSettings):
+    return await complete_tools(messages, definitions, settings)
+
+
+async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
+    prompt = await asyncio.to_thread(
+        files(__package__).joinpath("prompt.md").read_text, encoding="utf-8"
+    )
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    finish = {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": "확인한 근거로 브리핑 또는 답변을 제출합니다.",
+            "parameters": BriefContent.model_json_schema(),
+        },
+    }
+    records = []
+    with llm_scope(current_scope()[0], agent_id):
+        for step in range(max_steps):
+            # 마지막 차례에는 finish만 제공해 도구를 쓴 뒤에도 답변을 정리하게 합니다.
+            last = step == max_steps - 1 or len(records) >= 4
+            definitions = [finish, *([] if last else [t.definition for t in tools.values()])]
+            try:
+                produced = await generate(messages, definitions)
+                message = ChatCompletionMessage.model_validate(produced)
+                if not message.tool_calls or len(message.tool_calls) != 1:
+                    raise ValueError("도구는 한 번에 하나만 선택합니다.")
+                call = message.tool_calls[0]
+                if call.type != "function":
+                    raise ValueError("지원하지 않는 도구 종류입니다.")
+                name = call.function.name
+                arguments = json.loads(call.function.arguments)
+                if not isinstance(arguments, dict):
+                    raise ValueError("도구 인자는 객체여야 합니다.")
+                if name == "finish":
+                    # 형식이 틀린 주장 하나 때문에 브리핑 전체를 버리지 않고 그 주장만 제외합니다.
+                    raw = arguments.get("findings")
+                    kept, dropped = [], []
+                    for i, item in enumerate(raw if isinstance(raw, list) else []):
+                        try:
+                            kept.append(Finding.model_validate(item))
+                        except ValidationError:
+                            dropped.append(f"전문가 근거 제외: {i + 1}번 형식 오류")
+                    content = BriefContent.model_validate({**arguments, "findings": kept[:8]})
+                    content.limitations.extend(dropped)
+                    findings, warnings = validate_findings(
+                        content.findings, agent_id=agent_id, data=get_data()
+                    )
+                    content.findings = findings
+                    content.limitations.extend(warnings)
+                    try:
+                        render_cited(content.headline, [], {})
+                    except CitationError:
+                        content.headline = "근거로 확인한 전문가 요약"
+                        content.limitations.append(
+                            "전문가 헤드라인의 숫자는 근거가 없어 제외했습니다."
+                        )
+                    return content, records
+            except (BudgetStorageError, OSError, asyncio.CancelledError):
+                raise
+            except Exception:
+                return None, records
+            if last:
+                break
+            started = time.monotonic()
+            if name not in tools:
+                result = {"error": "등록되지 않은 도구입니다."}
+                status = "rejected"
+            else:
+                # 저장·취소·원자료 계약 오류는 대체 브리핑으로 숨기지 않습니다.
+                try:
+                    result = await tools[name].execute(arguments)
+                    status = "error" if "error" in result else "ok"
+                except ToolArgumentError:
+                    result, status = {"error": "도구 인자가 올바르지 않습니다."}, "rejected"
+            records.append(
+                ToolCallRecord(
+                    tool=name,
+                    arguments=arguments,
+                    status=status,
+                    elapsed_ms=int((time.monotonic() - started) * 1000),
+                )
+            )
+            messages.extend(
+                [
+                    message.model_dump(mode="json", exclude_none=True),
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": json.dumps(result, ensure_ascii=False),
+                    },
+                ]
+            )
+    return None, records
+
+
+def industry_paths(data: dict, agent_id: str) -> dict[str, list[dict]]:
+    """업종별 인용 경로와 값을 코드로 묶어 줍니다. 모델이 배열 번호를 세지 않게 합니다."""
+    grouped: dict[str, list[dict]] = {}
+    for record in scalar_records(data, agent_id):
+        if code := record["industry_code"]:
+            grouped.setdefault(code, []).append({"path": record["path"], "value": record["value"]})
+    return grouped
+
+
+async def write_brief(
+    task: AnalysisTask, analysis: AgentAnalysis, *, generate, tools, get_data=None, max_steps=5
+) -> AgentBrief:
+    content, records = await _run(
+        analysis.agent_id,
+        {
+            "agent_id": analysis.agent_id,
+            "task": "브리핑",
+            "analysis": analysis.model_dump(mode="json"),
+            "industry_paths": industry_paths(analysis.data, analysis.agent_id),
+        },
+        generate=generate,
+        tools=tools,
+        get_data=get_data or (lambda: analysis.data),
+        max_steps=max_steps,
+    )
+    if content is None or not content.findings:
+        fallback = fallback_brief(
+            task, analysis.model_copy(update={"data": get_data()}) if get_data else analysis
+        )
+        fallback.tool_calls = records
+        return fallback
+    return AgentBrief(
+        request_id=task.request_id,
+        agent_id=analysis.agent_id,
+        source="model",
+        **content.model_dump(),
+        tool_calls=records,
+    )
+
+
+async def answer_query(
+    task: AnalysisTask,
+    query: SpecialistQuery,
+    round_number: int,
+    *,
+    analysis: AgentAnalysis | None,
+    observation: MapObservation | None,
+    generate,
+    tools,
+    get_data=None,
+    max_steps=5,
+) -> SpecialistAnswer:
+    data = (
+        observation.data.model_dump(mode="json")
+        if query.agent_id == "map_analysis" and observation
+        else analysis.data
+        if analysis
+        else {}
+    )
+    content, records = await _run(
+        query.agent_id,
+        {
+            "agent_id": query.agent_id,
+            "question": query.model_dump(mode="json"),
+            "data": data,
+            "industry_paths": industry_paths(data, query.agent_id),
+        },
+        generate=generate,
+        tools=tools,
+        get_data=get_data or (lambda: data),
+        max_steps=max_steps,
+    )
+    findings = content.findings[:5] if content else []
+    limitations = content.limitations if content else ["전문가 답변을 완료하지 못했습니다."]
+    return SpecialistAnswer(
+        request_id=task.request_id,
+        round=round_number,
+        query=query,
+        status="partial" if findings and limitations else "answered" if findings else "unavailable",
+        findings=findings,
+        limitations=limitations,
+        tool_calls=records,
+    )

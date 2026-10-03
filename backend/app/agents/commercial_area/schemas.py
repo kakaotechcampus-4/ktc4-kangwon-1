@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
-from pydantic import Field
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
 
-from app.schemas import Schema, Text
+from app.schemas import IndustryRow, Schema, Text
 
 
 class MajorCategory(Schema):
@@ -18,7 +18,10 @@ class MajorCategory(Schema):
     density_per_km2: float
 
 
-class MiddleCategory(Schema):
+class MiddleCategory(IndustryRow):
+    industry_key: ClassVar[str] = "code"
+    name_key: ClassVar[str | None] = "name"
+
     code: Text
     name: Text
     major_code: Text
@@ -26,17 +29,27 @@ class MiddleCategory(Schema):
     count: int
     share: float
     density_per_km2: float
-    density_sq: float
     lq: float | None = None
     lq_district: float | None = None
-    same_type_count: int
     diff_type_count: int
-    marshallian: float
     jacobian: float
     # 누적 유인(Nelson 2원칙) — 같은 성격의 가게가 얼마나 모였고, 그 안이 얼마나 다양한가.
     # 두 값을 합쳐 점수로 만들지 않는다. 가중치를 정하는 순간 그게 판단이 된다.
     major_cluster_count: int
     major_cluster_diversity: float
+    citable: dict[str, bool] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_open_policy(self, handler: SerializerFunctionWrapHandler) -> dict:
+        data = handler(self)
+        if self.citable is None:
+            data.pop("citable", None)
+        return data
+
+
+class StoreCoverage(Schema):
+    mapped_store_count: int
+    unmapped_store_count: int
 
 
 class Diversity(Schema):
@@ -47,15 +60,17 @@ class Diversity(Schema):
 
 class RestaurantDensity(Schema):
     value: float
-    squared: float
     unit: Literal["stores_per_km2"]
     store_count: int
     # 서울 상권 1,650곳 분포에서의 위치(0~100). 논문 임계값을 대신하는 값이라
-    # 추정이 아니라 관측 분포 그 자체다. 서울 밖은 null.
+    # 서울 밖이거나 요청 반경이 표본의 500m와 다르면 비웁니다.
     seoul_percentile: float | None = None
 
 
-class CategoryRank(Schema):
+class CategoryRank(IndustryRow):
+    industry_key: ClassVar[str] = "code"
+    name_key: ClassVar[str | None] = "name"
+
     rank: int
     code: Text
     name: Text
@@ -64,7 +79,10 @@ class CategoryRank(Schema):
     note: Text
 
 
-class SpecializationRank(Schema):
+class SpecializationRank(IndustryRow):
+    industry_key: ClassVar[str] = "code"
+    name_key: ClassVar[str | None] = "name"
+
     rank: int
     code: Text
     name: Text
@@ -118,7 +136,10 @@ class Summary(Schema):
     index_notes: list[IndexNote] = Field(default_factory=list)
 
 
-class FranchiseByMiddle(Schema):
+class FranchiseByMiddle(IndustryRow):
+    industry_key: ClassVar[str] = "code"
+    name_key: ClassVar[str | None] = "name"
+
     code: Text
     name: Text
     count: int
@@ -173,6 +194,25 @@ class Source(Schema):
     period: Text
 
 
+class LqSupplementRow(IndustryRow):
+    industry_key: ClassVar[str] = "industry_id"
+
+    industry_id: Text
+    citable: dict[str, bool]
+    lq: float | None = None
+
+
+class LqSupplement(Schema):
+    analysis_radius_m: int
+    baseline_radius_m: int
+    baseline_store_total: int
+    checked_at: Text
+    baseline_reference_date: Text | None = None
+    from_cache: bool | None = None
+    industries: list[LqSupplementRow]
+    note: Text
+
+
 class CommercialAreaData(Schema):
     # 맨 앞에 둔다 — 결정 에이전트 프롬프트가 "필드 이름, 설명, 단위와 실제 값을 함께 읽는다"고
     # 명시하고 있어서, 숫자의 기준을 글로도 밝혀 두지 않으면 오독된다.
@@ -195,6 +235,18 @@ class CommercialAreaData(Schema):
     summary_text: Text | None = None
     # 공공누리 자료라 출처 표기가 의무다. 리포트가 하드코딩하지 않도록 함께 싣는다.
     sources: list[Source] = Field(default_factory=list)
+    citable: dict[str, bool] | None = None
+    lq_retryable: bool = False
+    taxonomy: dict[str, str | int] = Field(default_factory=dict)
+    coverage: StoreCoverage | None = None
+    supplement_lq: LqSupplement | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_missing_supplement(self, handler: SerializerFunctionWrapHandler) -> dict:
+        data = handler(self)
+        if self.supplement_lq is None:
+            data.pop("supplement_lq", None)
+        return data
 
 
 @dataclass(frozen=True)

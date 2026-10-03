@@ -4,7 +4,7 @@
 생존 위험을 높인다"). 유형을 모르면 LQ 를 단독 근거로 쓸 수 없다.
 
 자료는 `data/seoul_trade_areas.csv` 1,650행이다. 분기마다
-`examples/fetch_seoul_trade_areas.py` 로 갱신한다. **런타임에 서울시 API 를 부르지 않는다.**
+`scripts/fetch_seoul_trade_areas.py` 로 갱신한다. **런타임에 서울시 API 를 부르지 않는다.**
 
 ⚠️ **서울시 자료라 서울 밖에서는 빈 목록이다.** 우리 에이전트는 전국을 받는다.
 

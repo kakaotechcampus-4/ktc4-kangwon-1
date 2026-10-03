@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from dataclasses import replace
 
-from app.industries import MASTER_PATH, TAXONOMY
+from app.industries import TAXONOMY
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 
 from .client import SbizApiError, StoreClient
 from .config import Settings
 from .franchise import build_franchise, load_brands
 from .industries import load_middle_master
-from .llm import render_summary_text, summarize
 from .metrics import (
     build_district_specialization,
     build_diversity,
@@ -23,7 +23,15 @@ from .metrics import (
     count_by_middle,
     haversine_m,
 )
-from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Source, Summary
+from .schemas import (
+    CommercialAreaData,
+    DistrictBaseline,
+    LqBaseline,
+    RadiusNote,
+    Source,
+    StoreCoverage,
+    Summary,
+)
 from .sources import (
     SBIZ_PERIOD,
     SBIZ_REFERENCE_DATE,
@@ -31,6 +39,7 @@ from .sources import (
     build_sources,
     franchise_base_year,
 )
+from .summary import render_summary_text
 from .trade_areas import build_trade_areas
 
 AGENT_ID: AgentId = "commercial_area"
@@ -41,7 +50,6 @@ PUBLIC_ERROR_CODES = {
     "NO_KEY",
     "NO_RADIUS",
     "UPSTREAM_FAILED",
-    "UPSTREAM_TIMEOUT",
 }
 
 
@@ -51,7 +59,7 @@ async def analyze(
     store_client: StoreClient | None = None,
 ) -> AgentAnalysis:
     task = AnalysisTask.model_validate(task)
-    settings = settings or Settings.from_env()
+    settings = replace(settings or Settings.from_env(), analysis_radius_m=task.radius_m)
     radius = settings.analysis_radius_m
     site = task.site
     scope_area = f"{site.input_address} 반경 {radius}m"
@@ -119,24 +127,31 @@ async def analyze(
             )
 
         baseline_counts = None
-        baseline = LqBaseline(requested_radius_m=settings.lq_radius_candidates[0])
+        lq_retryable = False
+        candidates = tuple(r for r in settings.lq_radius_candidates if r > radius)
+        requested_baseline = next(
+            iter(candidates), next(iter(settings.lq_radius_candidates), radius)
+        )
+        baseline = LqBaseline(requested_radius_m=requested_baseline)
         try:
+            if not candidates:
+                raise SbizApiError("NO_RADIUS", "요청 반경보다 큰 비교 반경이 없습니다.")
             baseline_stores, baseline_meta = await client.stores_in_radius_with_fallback(
                 site.latitude,
                 site.longitude,
-                settings.lq_radius_candidates,
+                candidates,
                 grid_m=settings.lq_cache_grid_m,
             )
             baseline_counts = dict(count_by_middle(baseline_stores))
             baseline = LqBaseline(
-                requested_radius_m=settings.lq_radius_candidates[0],
+                requested_radius_m=requested_baseline,
                 applied_radius_m=baseline_meta.get("radius_m"),
                 store_total=len(baseline_stores),
             )
-            if baseline_meta.get("radius_m") != settings.lq_radius_candidates[0]:
+            if baseline_meta.get("radius_m") != requested_baseline:
                 warnings.append(
-                    f"LQ 기준 반경이 {settings.lq_radius_candidates[0]}m에서 "
-                    f"{baseline_meta.get('radius_m')}m로 축소됐습니다."
+                    f"LQ 기준 반경이 {requested_baseline}m에서 "
+                    f"{baseline_meta.get('radius_m')}m로 변경됐습니다."
                 )
             if baseline_meta.get("truncated"):
                 degraded = True
@@ -144,8 +159,13 @@ async def analyze(
                     "LQ 기준 반경 조회가 페이지 상한에 걸려 LQ가 과대추정될 수 있습니다."
                 )
         except SbizApiError:
+            lq_retryable = bool(candidates)
             degraded = True
-            warnings.append("LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다.")
+            warnings.append(
+                "요청 반경보다 큰 비교 반경이 없어 주변 LQ를 계산하지 않았습니다."
+                if not candidates
+                else "LQ 기준 반경 조회 실패로 LQ를 계산하지 못했습니다."
+            )
 
         district_counts = None
         district_baseline = None
@@ -198,6 +218,10 @@ async def analyze(
             )
 
         trade_areas = build_trade_areas(site.latitude, site.longitude, radius)
+        if radius != 500:
+            warnings.append(
+                "서울 음식점 백분위는 500m 표본이므로 이번 반경에는 적용하지 않았습니다."
+            )
 
         radius_slices = build_radius_slices(
             stores,
@@ -209,6 +233,19 @@ async def analyze(
             baseline.applied_radius_m,
         )
 
+        middle_rows = [
+            row.model_copy(update={"citable": {"lq": False, "lq_district": False}})
+            if row.count < settings.min_count_for_specialization
+            else row
+            for row in middle_rows
+        ]
+        summary = Summary(
+            overall=f"반경 {radius}m에서 조회한 점포는 {len(stores)}개입니다.",
+            radius_notes=[
+                RadiusNote(radius_m=row.radius_m, text=f"조회 점포 {row.store_total}개입니다.")
+                for row in radius_slices
+            ],
+        )
         payload = CommercialAreaData(
             description=build_description(
                 settings,
@@ -241,24 +278,18 @@ async def analyze(
                 Source(name=s.name, url=s.url, license=s.license, period=s.period)
                 for s in build_sources(settings, with_franchise=franchise is not None)
             ],
+            summary=summary,
+            summary_text=render_summary_text(summary.model_dump()),
+            # 생성 문장과 음식점 전체 밀도는 개별 업종 추천의 직접 근거가 아닙니다.
+            citable={"summary": False, "summary_text": False, "restaurant_density": False},
+            lq_retryable=lq_retryable,
+            taxonomy=dict(TAXONOMY),
+            coverage=StoreCoverage(
+                mapped_store_count=mapped_count, unmapped_store_count=unmapped_count
+            ),
         )
 
         data = payload.model_dump()
-        data["taxonomy"] = (
-            dict(TAXONOMY)
-            if settings.upjong_master_path.resolve() == MASTER_PATH.resolve()
-            else {"id": "custom-middle", "industry_count": len(master)}
-        )
-        data["coverage"] = {
-            "mapped_store_count": mapped_count,
-            "unmapped_store_count": unmapped_count,
-        }
-        summary, summary_warning = await summarize(data, settings)
-        if summary_warning:
-            warnings.append(summary_warning)
-        if summary:
-            data["summary"] = Summary.model_validate(summary).model_dump()
-            data["summary_text"] = render_summary_text(summary)
 
         return AgentAnalysis(
             request_id=task.request_id,

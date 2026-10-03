@@ -1,6 +1,6 @@
 """서울시 API 응답 한 행 → 파이썬 객체.
 
-영문 컬럼명을 다루는 곳은 `from_api_row` 두 개뿐이다. 데이터셋이 개편되면 여기만 고친다.
+영문 컬럼명을 다루는 곳은 `from_api_row` 세 개뿐이다. 데이터셋이 개편되면 여기만 고친다.
 (2026-09-07 실호출로 컬럼 일치 확인)
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 TIME_BANDS = ("00_06", "06_11", "11_14", "14_17", "17_21", "21_24")
 # 구간 길이가 3~6시간으로 다르다. 총량을 그대로 비교하면 6시간짜리 00~06시가 거의 항상 1위가 되므로
@@ -46,6 +46,15 @@ def _num(row: dict, key: str) -> float:
     return float(v)
 
 
+def _trdar_code(row: dict) -> str:
+    """누락된 코드를 문자열로 바꿔 정상 자료처럼 사용하지 않습니다."""
+    value = row["TRDAR_CD"]
+    code = str(value).strip() if value is not None else ""
+    if not code:
+        raise ValueError("상권코드가 누락되었습니다.")
+    return code
+
+
 def period_ko(stdr_yyqu_cd: str) -> str:
     """'20262' → '2026년 2분기' (계약 scope.period 형식)."""
     return f"{stdr_yyqu_cd[:4]}년 {stdr_yyqu_cd[4]}분기"
@@ -70,13 +79,14 @@ class TrdarArea(BaseModel):
     은 주므로, 상권이 얼마나 큰 구역인지는 `equivalent_radius_m` 로 가늠할 수 있다.
     """
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
     trdar_cd: str
     trdar_cd_nm: str
     x: float
     y: float
     relm_ar: float = 0.0
     trdar_se_nm: str | None = None
-    signgu_nm: str | None = None
     adstrd_nm: str | None = None
 
     @property
@@ -87,19 +97,62 @@ class TrdarArea(BaseModel):
     @classmethod
     def from_api_row(cls, row: dict) -> TrdarArea:
         return cls(
-            trdar_cd=str(row["TRDAR_CD"]),
-            trdar_cd_nm=str(row.get("TRDAR_CD_NM", "")),
+            trdar_cd=_trdar_code(row),
+            trdar_cd_nm=str(row.get("TRDAR_CD_NM") or "").strip(),
             x=float(row["XCNTS_VALUE"]),
             y=float(row["YDNTS_VALUE"]),
             relm_ar=_num(row, "RELM_AR"),
-            trdar_se_nm=row.get("TRDAR_SE_CD_NM"),
-            signgu_nm=row.get("SIGNGU_CD_NM"),
-            adstrd_nm=row.get("ADSTRD_CD_NM"),
+            trdar_se_nm=str(row.get("TRDAR_SE_CD_NM") or "").strip() or None,
+            adstrd_nm=str(row.get("ADSTRD_CD_NM") or "").strip() or None,
+        )
+
+
+class PopulationRecord(BaseModel):
+    """주거인구(OA-15584)·직장인구(OA-15569) 한 행 = 한 상권 · 한 분기.
+
+    두 데이터셋은 컬럼 이름의 가운데 토막만 다르다(`TOT_REPOP_CO` / `TOT_WRC_POPLTN_CO`).
+    값은 통행량이 아니라 **사람 수**다. 가구 수는 주거인구에만 있다.
+    (`APT_HSHLD_CO` 는 22개 분기 전 행이 0 이라 읽지 않는다 — 2026-09-20 전수 확인)
+    """
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    trdar_cd: str
+    stdr_yyqu_cd: str
+    total: float
+    by_age: dict[str, float]
+    households: float | None = None
+
+    @staticmethod
+    def _age_column(age: str, kind: str) -> str:
+        return f"AGRDE_{age}_ABOVE_{kind}_CO" if age == "60" else f"AGRDE_{age}_{kind}_CO"
+
+    @classmethod
+    def columns(cls, kind: str) -> list[str]:
+        """이 모델이 읽는 원자료 컬럼. 스냅샷 CSV 는 이 컬럼만 남긴다(`write_snapshot`)."""
+        names = ["STDR_YYQU_CD", "TRDAR_CD", "TRDAR_CD_NM", f"TOT_{kind}_CO"]
+        names += [cls._age_column(a, kind) for a in AGE_BANDS]
+        return names + (["TOT_HSHLD_CO"] if kind == "REPOP" else [])
+
+    @classmethod
+    def from_api_row(cls, row: dict, kind: str) -> PopulationRecord:
+        """`kind` 는 컬럼 가운데 토막 — 주거 `"REPOP"`, 직장 `"WRC_POPLTN"`.
+
+        API 응답 행과 스냅샷 CSV 행(값이 문자열) 둘 다 받는다.
+        """
+        return cls(
+            trdar_cd=_trdar_code(row),
+            stdr_yyqu_cd=str(row["STDR_YYQU_CD"]),
+            total=_num(row, f"TOT_{kind}_CO"),
+            by_age={a: _num(row, cls._age_column(a, kind)) for a in AGE_BANDS},
+            households=_num(row, "TOT_HSHLD_CO") if "TOT_HSHLD_CO" in row else None,
         )
 
 
 class FlpopRecord(BaseModel):
     """길단위인구(OA-15568) 한 행 = 한 상권 · 한 분기."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     trdar_cd: str
     stdr_yyqu_cd: str
@@ -113,7 +166,7 @@ class FlpopRecord(BaseModel):
     @classmethod
     def from_api_row(cls, row: dict) -> FlpopRecord:
         return cls(
-            trdar_cd=str(row["TRDAR_CD"]),
+            trdar_cd=_trdar_code(row),
             stdr_yyqu_cd=str(row["STDR_YYQU_CD"]),
             total=_num(row, "TOT_FLPOP_CO"),
             male=_num(row, "ML_FLPOP_CO"),

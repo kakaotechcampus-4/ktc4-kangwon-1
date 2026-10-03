@@ -7,18 +7,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from orchestration_support import run_service
+
 from app.agents.commercial_area import analyze as commercial_area_analyze
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.industries import write_master
 from app.agents.commercial_area.schemas import MiddleCode, Store
+from app.agents.orchestration.workflow import run_agents
 from app.mocks import mock_agents, mock_generate, mock_site
-from app.orchestrator import run_agents, run_analysis
-from app.schemas import AnalysisTask, DecisionResult
+from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope
 
 MASTER = [
-    MiddleCode(code="I201", name="한식", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I212", name="커피/음료", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I201", name="한식 음식점업", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I212", name="비알코올 음료점업", major_code="I2", major_name="음식점업"),
 ]
 
 
@@ -97,7 +98,7 @@ def generate_from_commercial_area(system_prompt, input_json):
 
 class MockPipelineTests(unittest.IsolatedAsyncioTestCase):
     async def test_mock_pipeline_produces_valid_decision(self):
-        result = await run_analysis(
+        result = await run_service(
             "서울특별시 송파구 위례광장로 120 155호",
             site=mock_site(),
             agents=mock_agents(),
@@ -123,7 +124,7 @@ class MockPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         agents = mock_agents()
         agents["floating_population"] = broken
-        result = await run_analysis(
+        result = await run_service(
             "서울특별시 송파구 위례광장로 120 155호",
             site=mock_site(),
             agents=agents,
@@ -179,11 +180,8 @@ class RealAgentPipelineTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
-        master_path = root / "upjong_codes.csv"
-        write_master(master_path, MASTER)
         self.settings = Settings(
             cache_dir=root / "cache",
-            upjong_master_path=master_path,
             sbiz_service_key="test-key",
         )
 
@@ -191,26 +189,41 @@ class RealAgentPipelineTests(unittest.IsolatedAsyncioTestCase):
         self._tmp.cleanup()
 
     async def test_commercial_area_output_reaches_decision(self):
+        from functools import partial
+
+        async def unavailable(task, agent_id):
+            return AgentAnalysis(
+                request_id=task.request_id,
+                agent_id=agent_id,
+                status="no_data",
+                scope=Scope(area="시험 범위", period="시험 기간"),
+                warnings=["시험 자료 없음"],
+            )
+
         client = FakeStoreClient(self.settings, sample_stores())
 
         async def commercial_area(task):
             return await commercial_area_analyze(task, settings=self.settings, store_client=client)
 
-        result = await run_analysis(
+        result = await run_service(
             "서울특별시 송파구 위례광장로 120 155호",
             site=mock_site(),
             settings=self.settings,
-            agents={"commercial_area": commercial_area},
+            agents={
+                "commercial_area": commercial_area,
+                "floating_population": partial(unavailable, agent_id="floating_population"),
+                "business_lifecycle": partial(unavailable, agent_id="business_lifecycle"),
+            },
             generate=generate_from_commercial_area,
         )
 
         DecisionResult.model_validate(result.model_dump())
         self.assertEqual(result.status, "partial")
-        self.assertEqual(len(result.source_analyses), 1)
+        self.assertEqual(len(result.source_analyses), 3)
         self.assertEqual(result.source_analyses[0].agent_id, "commercial_area")
         self.assertEqual(result.source_analyses[0].data["store_total"], 8)
-        self.assertTrue(any("분석 누락: floating_population" in i for i in result.limitations))
-        self.assertTrue(any("분석 누락: business_lifecycle" in i for i in result.limitations))
+        self.assertTrue(any("floating_population" in i for i in result.limitations))
+        self.assertTrue(any("business_lifecycle" in i for i in result.limitations))
 
 
 if __name__ == "__main__":

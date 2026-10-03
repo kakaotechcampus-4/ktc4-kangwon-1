@@ -10,28 +10,37 @@ type PreviewItem = {
   description: string;
 };
 
-const previewItems: PreviewItem[] = [
-  {
-    id: 'competitors',
-    dotColor: colors.status.recommend,
-    title: '경쟁업체 개수',
-    description: '반경 500m 내 동일 업종 수 자동 계산',
-  },
-  {
-    id: 'foot-traffic',
-    dotColor: colors.brand.dark,
-    title: '유동인구 분포',
-    description: '시간대·연령대별 유동인구 데이터 연동',
-  },
-  {
-    id: 'open-close',
-    dotColor: colors.status.notRecommend,
-    title: '개폐업 현황',
-    description: '유사 업종 최근 개업·폐업 추이 확인',
-  },
-];
+type AnalysisPreviewPanelProps = {
+  radius?: string;
+};
 
-export default function AnalysisPreviewPanel() {
+export default function AnalysisPreviewPanel({
+  radius,
+}: AnalysisPreviewPanelProps) {
+  // 반경 입력이 비어 있으면 기존 문구 그대로 500m를 예시로 보여준다.
+  const displayRadius = radius?.trim() ? radius : '500';
+
+  const previewItems: PreviewItem[] = [
+    {
+      id: 'competitors',
+      dotColor: colors.status.recommend,
+      title: '경쟁업체 개수',
+      description: `반경 ${displayRadius}m 내 동일 업종 수 자동 계산`,
+    },
+    {
+      id: 'foot-traffic',
+      dotColor: colors.brand.dark,
+      title: '유동인구 분포',
+      description: '시간대·연령대별 유동인구 데이터 연동',
+    },
+    {
+      id: 'open-close',
+      dotColor: colors.status.notRecommend,
+      title: '개폐업 현황',
+      description: '유사 업종 최근 개업·폐업 추이 확인',
+    },
+  ];
+
   return (
     <Card
       className="analysis-preview-card shrink-0 gap-4"

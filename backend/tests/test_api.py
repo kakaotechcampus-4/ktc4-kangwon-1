@@ -74,7 +74,7 @@ class ApiTests(unittest.TestCase):
                 (sqlite3.OperationalError(secret), 500),
             ]
         for error, status in errors:
-            with patch("app.services.analysis.run_react", new=AsyncMock(side_effect=error)):
+            with patch("app.services.analysis.run_graph", new=AsyncMock(side_effect=error)):
                 response = self.client.post(
                     "/api/v1/analyses?mock=true", json={"address": "시험 주소"}
                 )
