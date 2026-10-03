@@ -93,7 +93,7 @@ def build_specialist_tools(
 
     async def read(arguments, *, name):
         data = source().data
-        records = scalar_records(data)
+        records = scalar_records(data, agent_id)
         all_records = records
         codes = arguments.get("codes", [arguments["code"]] if "code" in arguments else [])
         if codes:

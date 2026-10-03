@@ -19,9 +19,20 @@ from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.agents.decision.agent import DecisionContractError
 from app.db import repository as repo
 from app.db.connection import initialize
+from app.mocks import (
+    mock_business_lifecycle_data,
+    mock_commercial_area_data,
+    mock_floating_population_data,
+)
 from app.schemas import AGENT_IDS, AgentAnalysis, Scope, Site
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
+
+SAMPLES = {
+    "floating_population": mock_floating_population_data,
+    "business_lifecycle": mock_business_lifecycle_data,
+    "commercial_area": mock_commercial_area_data,
+}
 
 
 class ServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -100,7 +111,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                         "score": 60,
                         "reasons": ["시험 자료"],
                         "risks": [],
-                        "evidence": [{"agent_id": "commercial_area", "path": "/count"}],
+                        "evidence": [{"agent_id": "commercial_area", "path": "/store_total"}],
                     }
                 ],
                 "not_recommended": [],
@@ -116,7 +127,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                     agent_id=agent_id,
                     status=status,
                     scope=Scope(area="시험 지역", period="시험 기간"),
-                    data={} if status == "no_data" else {"count": 1},
+                    data={} if status == "no_data" else SAMPLES[agent_id](),
                 )
 
             return analyze
@@ -414,7 +425,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         for row in rows:
             analysis = json.loads(row["analysis_json"])
             self.assertEqual(analysis["status"], "ok")
-            self.assertEqual(analysis["data"], {"count": 1})
+            self.assertEqual(analysis["data"], SAMPLES[row["agent_id"]]())
 
     async def test_storage_failure_is_not_agent_failure(self):
         original = repo.save_agent

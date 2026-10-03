@@ -16,7 +16,7 @@ from app.schemas import AGENT_IDS
 async def expert(messages, definitions):
     payload = json.loads(messages[1]["content"])
     data = payload.get("analysis", {}).get("data", payload.get("data", {}))
-    records = scalar_records(data)
+    records = scalar_records(data, payload["agent_id"])
     findings = (
         [
             {

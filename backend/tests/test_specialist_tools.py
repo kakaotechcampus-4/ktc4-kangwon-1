@@ -4,6 +4,8 @@ import importlib.util
 import unittest
 from types import SimpleNamespace
 
+from orchestration_support import radius_slice
+
 from app.agents.specialists.tools import ToolArgumentError
 from app.mocks import mock_agents, mock_site
 from app.schemas import AnalysisTask, MapObservation
@@ -152,9 +154,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.analyses[2], previous)
 
     async def test_radius_tool_keeps_slice_radius(self):
-        self.analyses[2].data["by_radius"] = [
-            {"radius_m": 100, "top_by_count": [{"code": "I201", "count": 7}]}
-        ]
+        self.analyses[2].data["by_radius"] = [radius_slice("I201", 7, 100)]
         result = await self.tools("commercial_area")["get_radius_breakdown"].execute(
             {"code": "I201"}
         )

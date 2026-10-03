@@ -1,5 +1,6 @@
 from typing import Any
 
+from app.agents.business_lifecycle.schemas import BusinessLifecycleData
 from app.industries import MAPPING_REVIEW_WARNING, TAXONOMY
 from app.industries.catalog import EXPECTED_INDUSTRY_COUNT, INDUSTRIES
 from app.schemas import AgentAnalysis, Scope
@@ -335,6 +336,7 @@ def format_for_mediator(
             ),
             "industries": industries,
         }
+        BusinessLifecycleData.model_validate(data)
 
     formatted_result: dict[
         str,

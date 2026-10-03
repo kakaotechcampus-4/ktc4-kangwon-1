@@ -1,34 +1,57 @@
 {
   "status": "ok",
-  "summary": "가상 사례에서는 직장인 점심 수요를 검토할 수 있으며, 카페는 경쟁과 폐업 현황의 추가 확인이 필요합니다.",
+  "summary": "점심 수요가 기대되는 한식은 추천하고 이미 몰린 음료점은 피합니다.",
   "recommendations": [
     {
-      "category": {"major": "음식점업", "middle": "중식 음식점업"},
+      "category": {
+        "major": "음식점업",
+        "middle": "한식 음식점업"
+      },
       "score": 72,
-      "reasons": ["직장인 비중과 점심 시간대 유동을 바탕으로 점심 식사 수요를 검토할 수 있습니다."],
-      "evidence": [
-        {"agent_id": "floating_population", "path": "/office_worker_share"},
-        {"agent_id": "floating_population", "path": "/peak_hours"},
-        {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점업"}
+      "reasons": [
+        "반경 안 한식 점포가 {0}개이고 주변보다 {1}배 몰려 있습니다."
       ],
-      "risks": ["점포 수가 적다는 사실만으로 수요가 충분하다고 판단할 수 없습니다."]
+      "evidence": [
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/0/count"
+        },
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/0/lq"
+        }
+      ],
+      "risks": [
+        "경쟁 점포가 {0}개라 가격 경쟁이 있습니다."
+      ]
     }
   ],
   "not_recommended": [
     {
-      "category": {"major": "음식점업", "middle": "비알코올 음료점업"},
+      "category": {
+        "major": "음식점업",
+        "middle": "비알코올 음료점업"
+      },
       "score": 28,
-      "reasons": ["같은 기간의 폐업 수와 기존 점포 수를 함께 보면 경쟁 부담을 우선 확인해야 합니다."],
-      "evidence": [
-        {"agent_id": "business_lifecycle", "path": "/industries/5"},
-        {"agent_id": "commercial_area", "path": "/industry_counts/비알코올 음료점업"}
+      "reasons": [
+        "주변보다 {0}배 몰려 있고 개폐업 점수는 {1}점입니다."
       ],
-      "risks": ["점포별 매출과 폐업 원인은 확인되지 않았습니다."]
+      "evidence": [
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/1/lq"
+        },
+        {
+          "agent_id": "business_lifecycle",
+          "path": "/industries/1/score"
+        }
+      ],
+      "risks": [
+        "신규 진입 시 가격 경쟁에 노출됩니다."
+      ]
     }
   ],
   "limitations": [
-    "샘플 모드의 고정 응답입니다. 실제 분석이나 실제 주소의 추천 결과가 아닙니다.",
-    "점수는 연결 시험용 예시이며 성공 확률이 아닙니다.",
-    "임대료, 점포별 매출, 실제 구매 전환율은 입력에 없습니다."
+    "목업 자료로 만든 결과입니다. 실제 판단에 쓰지 마세요."
   ]
 }

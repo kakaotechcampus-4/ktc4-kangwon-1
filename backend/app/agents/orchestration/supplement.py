@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import ValidationError
 
+from app.agents.data_models import parse_data
 from app.schemas import (
     AgentAnalysis,
     AgentError,
@@ -94,6 +95,8 @@ async def execute_supplement(
             candidate = AgentAnalysis.model_validate(produced)
             if candidate.request_id != task.request_id or candidate.agent_id != asked.agent_id:
                 raise ValueError("보완 결과의 요청 ID 또는 에이전트 ID가 다릅니다.")
+            if candidate.data:
+                parse_data(candidate.agent_id, candidate.data)
         except (ValidationError, ValueError):
             await emit("failed", "보완 결과 계약 검증에 실패했습니다.")
             raise

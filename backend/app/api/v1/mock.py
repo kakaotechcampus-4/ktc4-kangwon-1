@@ -66,7 +66,7 @@ async def specialist(messages, definitions):
         name, arguments = "search_facility", {"code": "SW8"}
     else:
         data = payload.get("analysis", {}).get("data", payload.get("data", {}))
-        records = scalar_records(data)
+        records = scalar_records(data, payload["agent_id"])
         findings = (
             [
                 {

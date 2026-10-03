@@ -1,6 +1,6 @@
 """팀 간 연결에 필요한 입력과 출력을 정의합니다."""
 
-from typing import Annotated, Any, Literal, Self, get_args
+from typing import Annotated, Any, ClassVar, Literal, Self, get_args
 
 from pydantic import (
     AfterValidator,
@@ -33,6 +33,27 @@ class Schema(BaseModel):
         allow_inf_nan=False,
         revalidate_instances="always",
     )
+
+
+class IndustryRow(Schema):
+    industry_key: ClassVar[str] = "industry_code"
+    name_key: ClassVar[str | None] = None
+
+    @model_validator(mode="after")
+    def check_industry(self) -> Self:
+        code = getattr(self, self.industry_key)
+        industry = lookup.find(code) if isinstance(code, str) else None
+        if industry is None:
+            raise ValueError("공통 업종표에 없는 업종 코드입니다.")
+        name = getattr(self, self.name_key) if self.name_key else None
+        named = lookup.find_by_name(name) if isinstance(name, str) else None
+        if name is not None and (named is None or named.code != industry.code):
+            raise ValueError("업종 코드와 명칭이 일치하지 않습니다.")
+        return self
+
+    @property
+    def owner_code(self) -> str:
+        return str(getattr(self, self.industry_key))
 
 
 # 유동인구·개폐업·상권 에이전트 공통 입력

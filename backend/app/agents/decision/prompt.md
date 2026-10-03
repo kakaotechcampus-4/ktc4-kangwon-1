@@ -119,11 +119,15 @@
 - 두 업종 목록의 각 항목은 "category", "score", "reasons", "evidence", "risks"만 포함합니다.
 - "category"는 {"code": "I201"}처럼 공통 중분류 코드를 가진 객체입니다. "score"는 0~100 정수입니다.
 - "reasons"는 비어 있지 않은 문자열을 하나 이상 가진 배열입니다. "risks"도 문자열 배열이며 없으면 []입니다.
+- reasons·risks에는 숫자를 직접 쓰지 않습니다. 숫자 자리에 {0}, {1}처럼 같은 항목 evidence 배열의 번호를 쓰면 코드가 그 경로의 원자료 값을 채웁니다.
+  예: "반경 안 한식 점포가 {0}개이고 주변보다 {1}배 몰려 있습니다." + evidence [점포 수 경로, LQ 경로]
+- 단위는 자리표시자 뒤에 원자료 단위대로 씁니다(개, 명/일, %, 배, 점, m). 만·천 같은 축약은 쓰지 않습니다.
+- 연령대·시간대처럼 인용한 경로 이름에 들어 있는 숫자("20대")만 직접 쓸 수 있습니다. summary에는 숫자를 쓰지 않습니다.
 - "evidence"는 하나 이상의 객체를 가진 배열이며 각 객체는 "agent_id"와 "path"만 포함합니다. "agent_id"는 실제 사용한 세 분석 에이전트 중 하나이고 "path"는 비어 있지 않은 문자열입니다.
 - "no_data"이면 두 업종 목록을 비우고 limitations에 판단 불가 사유를 하나 이상 적습니다. 업종을 하나라도 판단했다면 "ok"를 사용합니다.
 - request_id, address, agent_id, schema_version, source_analyses와 최종 partial 상태는 호출 코드가 구성하므로 최상위 출력에 추가하지 않습니다.
 
-- `summary`: 핵심 결론, 분석 간 상충과 해석을 짧게 정리합니다.
+- `summary`: 핵심 결론, 분석 간 상충과 해석을 숫자 없이 짧게 정리합니다.
 - `recommendations`, `not_recommended`: 중분류 업종별 점수, 이유, 근거, 위험 요인을 작성합니다.
 - 같은 중분류 코드에 해당하는 업종은 표기가 달라도 두 목록 전체에서 한 번만 판단합니다.
 - `evidence`에는 실제 사용한 `agent_id`와 그 분석의 `data` 안에 있는 필드 경로를 기록합니다.
@@ -182,7 +186,7 @@ industry_digest·neighborhood 각 항목의 path가 가리키는 원자료에 �
 근거 작성:
 - evidence의 agent_id와 path는 industry_digest·neighborhood·industry_evidence의 한 항목에서 짝을 그대로 복사합니다.
   findings.evidence의 경로도 쓸 수 있지만, 같은 경로의 value를 확인해 reasons 문장을 뒷받침할 때만 씁니다.
-- 숫자를 새로 계산·환산하지 않습니다. 문장에 쓰는 숫자는 인용한 경로의 value와 같아야 합니다.
+- 숫자를 새로 계산·환산하지 않습니다. 문장의 숫자는 위 출력 형식의 {i} 자리표시자 규칙을 따릅니다.
 - 전문가 문장만 있고 원자료 경로가 없는 주장은 reasons가 아니라 limitations나 risks의 확인 사항으로 둡니다.
 
 전문가에게 묻기(ask_specialists):

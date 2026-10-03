@@ -93,8 +93,8 @@ class MultiTransportTests(unittest.IsolatedAsyncioTestCase):
             payload = json.loads(request.content)
             requests.append(payload)
             if payload.get("tools"):
-                data = json.loads(payload["messages"][1]["content"])["analysis"]["data"]
-                record = scalar_records(data)[0]
+                brief = json.loads(payload["messages"][1]["content"])
+                record = scalar_records(brief["analysis"]["data"], brief["agent_id"])[0]
                 message = {
                     "role": "assistant",
                     "tool_calls": [

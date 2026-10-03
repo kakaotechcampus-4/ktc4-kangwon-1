@@ -9,7 +9,7 @@ from importlib.resources import files
 from openai.types.chat import ChatCompletionMessage
 from pydantic import Field, ValidationError
 
-from app.evidence import scalar_records, validate_findings
+from app.evidence import CitationError, render_cited, scalar_records, validate_findings
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_tools
 from app.llm.config import LLMSettings
@@ -91,6 +91,13 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
                     )
                     content.findings = findings
                     content.limitations.extend(warnings)
+                    try:
+                        render_cited(content.headline, [], {})
+                    except CitationError:
+                        content.headline = "근거로 확인한 전문가 요약"
+                        content.limitations.append(
+                            "전문가 헤드라인의 숫자는 근거가 없어 제외했습니다."
+                        )
                     return content, records
             except (BudgetStorageError, OSError, asyncio.CancelledError):
                 raise
@@ -130,10 +137,10 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
     return None, records
 
 
-def industry_paths(data: dict) -> dict[str, list[dict]]:
+def industry_paths(data: dict, agent_id: str) -> dict[str, list[dict]]:
     """업종별 인용 경로와 값을 코드로 묶어 줍니다. 모델이 배열 번호를 세지 않게 합니다."""
     grouped: dict[str, list[dict]] = {}
-    for record in scalar_records(data):
+    for record in scalar_records(data, agent_id):
         if code := record["industry_code"]:
             grouped.setdefault(code, []).append({"path": record["path"], "value": record["value"]})
     return grouped
@@ -148,7 +155,7 @@ async def write_brief(
             "agent_id": analysis.agent_id,
             "task": "브리핑",
             "analysis": analysis.model_dump(mode="json"),
-            "industry_paths": industry_paths(analysis.data),
+            "industry_paths": industry_paths(analysis.data, analysis.agent_id),
         },
         generate=generate,
         tools=tools,
@@ -195,7 +202,7 @@ async def answer_query(
             "agent_id": query.agent_id,
             "question": query.model_dump(mode="json"),
             "data": data,
-            "industry_paths": industry_paths(data),
+            "industry_paths": industry_paths(data, query.agent_id),
         },
         generate=generate,
         tools=tools,

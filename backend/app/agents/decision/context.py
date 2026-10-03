@@ -58,7 +58,7 @@ def build_context(
     }
     neighborhood = []
     for agent_id, data in sources.items():
-        for record in scalar_records(data):
+        for record in scalar_records(data, agent_id):
             owner = record.pop("industry_code")
             path = record["path"]
             entry = {"agent_id": agent_id, **record}
@@ -87,7 +87,7 @@ def build_context(
         for item in items:
             agent_id = item.agent_id if isinstance(item, AgentBrief) else item.query.agent_id
             findings, warnings = validate_findings(
-                item.findings, agent_id=agent_id, data=sources.get(agent_id, {})
+                item.findings, agent_id=agent_id, data=sources.get(agent_id, {}), render=False
             )
             payload = item.model_dump(
                 mode="json", exclude={"analysis", "map_observation", "tool_calls"}
