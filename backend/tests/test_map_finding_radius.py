@@ -27,13 +27,15 @@ class MapFindingRadiusTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_observed_radius_passes_but_page_count_and_unknown_radius_fail(self):
-        good = self.finding("반경 500m 안에 뉴멘토보습학원이 232m 거리에 있습니다.")
-        page = self.finding("첫 페이지 15곳 중 뉴멘토보습학원이 232m 거리에 있습니다.")
-        wrong = self.finding("반경 600m 안에 뉴멘토보습학원이 232m 거리에 있습니다.")
+        good = self.finding("반경 500m 안에 뉴멘토보습학원이 {0}m 거리에 있습니다.")
+        page = self.finding("첫 페이지 15곳 중 뉴멘토보습학원이 {0}m 거리에 있습니다.")
+        wrong = self.finding("반경 600m 안에 뉴멘토보습학원이 {0}m 거리에 있습니다.")
         kept, warnings = validate_findings(
             [good, page, wrong], agent_id="map_analysis", data=self.data, radii={500}
         )
-        self.assertEqual(kept, [good])
+        self.assertEqual(
+            kept, [good.model_copy(update={"claim": good.claim.replace("{0}", "232")})]
+        )
         self.assertIn("(맞지 않는 수: 15)", warnings[0])
         self.assertIn("(맞지 않는 수: 600)", warnings[1])
         kept, warnings = validate_findings([good], agent_id="map_analysis", data=self.data)
@@ -58,7 +60,7 @@ class MapFindingRadiusTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_expert_and_context_use_latest_observation_radius(self):
-        finding = self.finding("반경 500m 안에 뉴멘토보습학원이 232m 거리에 있습니다.")
+        finding = self.finding("반경 500m 안에 뉴멘토보습학원이 {0}m 거리에 있습니다.")
         query = SpecialistQuery(
             agent_id="map_analysis",
             question="거리 확인",
@@ -108,4 +110,10 @@ class MapFindingRadiusTests(unittest.IsolatedAsyncioTestCase):
             map_observation=self.observation,
         )
         context = build_context(request, briefs=[], answers=[answer])
-        self.assertEqual(context["answers"][0]["findings"], [finding.model_dump(mode="json")])
+        rendered = finding.model_copy(update={"claim": finding.claim.replace("{0}", "232")})
+        self.assertEqual(context["answers"][0]["findings"], [rendered.model_dump(mode="json")])
+
+    def test_observed_radius_does_not_allow_bare_distance(self):
+        finding = self.finding("반경 500m 안에 학원이 232m 거리에 있습니다.")
+        kept, _ = validate_findings([finding], agent_id="map_analysis", data=self.data, radii={500})
+        self.assertEqual(kept, [])

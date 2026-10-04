@@ -1,6 +1,7 @@
 """상권 경쟁 분석 에이전트가 팀 전달 규약을 지키는지 검사합니다."""
 
 import asyncio
+import json
 import math
 import tempfile
 import unittest
@@ -14,11 +15,12 @@ import httpx
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.schemas import MiddleCode, Store
+from app.agents.commercial_area.schemas import CommercialAreaData, MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
 from app.agents.orchestration.workflow import run_agents
 from app.evidence import index_paths
 from app.industries.catalog import INDUSTRIES
+from app.mocks import mock_commercial_area_data
 from app.schemas import AgentAnalysis, AnalysisTask
 
 MASTER = [
@@ -131,6 +133,29 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         self._tmp.cleanup()
+
+    async def test_output_round_trips_through_data_model(self):
+        result = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+        restored = json.loads(json.dumps(result.data, ensure_ascii=False))
+        self.assertEqual(CommercialAreaData.model_validate(restored).model_dump(), result.data)
+
+    async def test_output_leaves_supplement_block_for_the_supplement(self):
+        from app.agents.commercial_area import supplement
+
+        result = await analyze(
+            self.task,
+            settings=self.settings,
+            store_client=FakeClient(self.settings, sample_stores()),
+        )
+        self.assertNotIn("supplement_lq", result.data)
+        self.assertNotIn("supplement_lq", mock_commercial_area_data())
+        ok = result.model_copy(update={"status": "ok"}, deep=True)
+        ok.data["lq_retryable"] = True
+        self.assertTrue(supplement.eligible(self.task, ok, settings=self.settings))
 
     async def test_request_radius_controls_queries_metrics_and_scope(self):
         async def check(radius):
@@ -371,7 +396,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                 settings=self.settings,
                 store_client=FakeClient(self.settings, sample_stores()),
             )
-        paths = index_paths(result.data)
+        paths = index_paths(result.data, "commercial_area")
         self.assertIn("10", result.data["summary"]["overall"])
         self.assertIn("10", result.data["summary_text"])
         self.assertIn("/store_total", paths)
@@ -405,7 +430,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
             result = await analyze(
                 self.task, settings=self.settings, store_client=FakeClient(self.settings, stores)
             )
-        paths = index_paths(result.data)
+        paths = index_paths(result.data, "commercial_area")
         index = next(i for i, row in enumerate(result.data["by_middle"]) if row["code"] == "I212")
         self.assertEqual(result.data["by_middle"][index]["count"], 3)
         self.assertIn(f"/by_middle/{index}/count", paths)
@@ -430,7 +455,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                 store_client=FakeClient(self.settings, boundary_stores),
             )
         self.assertEqual(boundary.data["by_middle"][0]["count"], 5)
-        self.assertIn("/by_middle/0/lq", index_paths(boundary.data))
+        self.assertIn("/by_middle/0/lq", index_paths(boundary.data, "commercial_area"))
 
     async def test_calculated_data_is_preserved_without_model_through_run_agents(self):
         baseline = await analyze(

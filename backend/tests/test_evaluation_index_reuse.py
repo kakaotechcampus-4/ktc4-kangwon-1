@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, patch
 
 from test_evaluators_agent import sample
 
-from app.agents.evaluators.agent import prepare_evaluation_inputs
+from app.agents.evaluators.agent import _evaluation_payload, prepare_evaluation_inputs
 from app.agents.orchestration.nodes.evaluation import evaluate_draft_node
 from app.agents.specialists.tools import fallback_brief
 from app.evidence import SourceIndex
 from app.mocks import mock_site
-from app.schemas import EVALUATOR_IDS, AnalysisTask
+from app.schemas import EVALUATOR_IDS, AnalysisTask, DecisionRequest, DecisionResult
 
 
 class EvaluationIndexReuseTests(unittest.IsolatedAsyncioTestCase):
@@ -26,8 +26,25 @@ class EvaluationIndexReuseTests(unittest.IsolatedAsyncioTestCase):
                 encoding="utf-8"
             )
         )
-        prepared = prepare_evaluation_inputs(self.request, self.draft, ["none", "ask_specialists"])
-        self.assertEqual(prepared.payload, expected)
+        # develop의 목업 교체와 무관하게 당시 고정한 원자료로 입력 조립의 보존을 검사합니다.
+        captured = json.loads(
+            (Path(__file__).parent / "fixtures/evaluation_sources_baseline.json").read_text("utf-8")
+        )
+        request = DecisionRequest.model_validate(captured)
+        draft = DecisionResult(
+            schema_version="1.0",
+            agent_id="decision",
+            request_id=request.request_id,
+            address=request.address,
+            source_analyses=request.analyses,
+            status="ok",
+            limitations=[],
+            **expected["draft"],
+        )
+        sources = {a.agent_id: a.data for a in request.analyses}
+        indexes = {key: SourceIndex.build(data) for key, data in sources.items()}
+        payload = _evaluation_payload(request, draft, ["none", "ask_specialists"], sources, indexes)
+        self.assertEqual(payload, expected)
 
     async def test_four_evaluators_build_each_source_once(self):
         deps = SimpleNamespace(

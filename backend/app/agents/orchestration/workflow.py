@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from app.agents import business_lifecycle, commercial_area, floating_population
 from app.agents.business_lifecycle import supplement as lifecycle_supplement
 from app.agents.commercial_area import supplement as commercial_supplement
+from app.agents.data_models import parse_data
 from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
 from app.execution.settings import ExecutionSettings
 from app.execution.validation import validate_timeout
@@ -187,6 +188,8 @@ async def run_agents(
         analysis = AgentAnalysis.model_validate(result)
         if analysis.agent_id != agent_id or analysis.request_id != task.request_id:
             raise ValueError("분석 결과의 요청 ID 또는 에이전트 ID가 일치하지 않습니다.")
+        if analysis.data:
+            parse_data(analysis.agent_id, analysis.data)
         if on_analysis_completed is not None:
             await on_analysis_completed(analysis)
         return analysis

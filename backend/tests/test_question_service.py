@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
+from orchestration_support import lq_supplement
 from test_questions import question
 
 from app.agents.orchestration.tools import SupplementTool
@@ -165,7 +166,7 @@ class QuestionServiceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         async def details(task, previous):
-            previous.data["detail"] = 17
+            previous.data["supplement_lq"] = lq_supplement(17)
             return previous
 
         tool = SupplementTool(
@@ -184,7 +185,9 @@ class QuestionServiceTests(unittest.IsolatedAsyncioTestCase):
         final = await service.resume_analysis(submission, db_path=self.path, generate=mock_generate)
         self.assertEqual(
             next(
-                a.data["detail"] for a in final.source_analyses if a.agent_id == "commercial_area"
+                a.data["supplement_lq"]["baseline_store_total"]
+                for a in final.source_analyses
+                if a.agent_id == "commercial_area"
             ),
             17,
         )

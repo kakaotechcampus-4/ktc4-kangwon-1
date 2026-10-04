@@ -330,13 +330,14 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         finding = Finding(
-            claim="동종 표본 2개",
+            claim="동종 표본 {0}개",
             signal="context",
             industry_code="P105",
             evidence=[{"path": citations["P105"][0]["path"]}],
         )
         self.assertEqual(
-            validate_findings([finding], agent_id="map_analysis", data=data), ([finding], [])
+            validate_findings([finding], agent_id="map_analysis", data=data),
+            ([finding.model_copy(update={"claim": "동종 표본 2개"})], []),
         )
 
     async def test_named_pairs_are_not_cached_and_different_is_cached(self):

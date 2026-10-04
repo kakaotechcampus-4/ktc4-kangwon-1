@@ -21,7 +21,7 @@ class SpecialistTool:
 
 def fallback_brief(task: AnalysisTask, analysis: AgentAnalysis) -> AgentBrief:
     findings: list[Finding] = []
-    index = SourceIndex.build(analysis.data)
+    index = SourceIndex.build(analysis.data, analysis.agent_id)
     records = index.records
     scores = sorted(
         (r for r in records if r.path.endswith("/score") and type(r.value) in {int, float}),
@@ -32,7 +32,7 @@ def fallback_brief(task: AnalysisTask, analysis: AgentAnalysis) -> AgentBrief:
         if type(item.value) not in {int, float} or len(findings) >= 8:
             continue
         finding = Finding(
-            claim=f"원자료 값 {item.value}",
+            claim="원자료 값 {0}",
             signal="context",
             industry_code=item.owner,
             evidence=[EvidenceRef(path=item.path)],

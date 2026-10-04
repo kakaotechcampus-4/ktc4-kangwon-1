@@ -70,7 +70,7 @@ def prepare_evaluation_inputs(request, draft, allowed) -> PreparedEvaluationInpu
     if request.map_observation and request.map_observation.status != "error":
         sources[MAP_AGENT_ID] = request.map_observation.data
     indexes = {
-        key: SourceIndex.build(data) for key, data in sources.items() if isinstance(data, dict)
+        key: SourceIndex.build(data, key) for key, data in sources.items() if isinstance(data, dict)
     }
     return PreparedEvaluationInputs(
         request.request_id,
@@ -113,7 +113,9 @@ def check_comments(
     observation = request.map_observation
     if observation and observation.status != "error":
         sources[MAP_AGENT_ID] = observation.data
-    indexes = {key: index_paths(data) for key, data in sources.items() if isinstance(data, dict)}
+    indexes = {
+        key: index_paths(data, key) for key, data in sources.items() if isinstance(data, dict)
+    }
     return _check_comments(
         raw, sources, indexes, allowed, request_id=request_id, evaluator=evaluator
     )

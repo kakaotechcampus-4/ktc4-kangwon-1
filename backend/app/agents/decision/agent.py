@@ -11,10 +11,12 @@ from typing import Any
 from app.agents.floating_population.selection import SELECTABLE
 from app.evidence import (
     MAP_AGENT_ID,
+    CitationError,
     can_cite,
     escape_pointer,
     index_paths,
     industry_catalog,
+    render_cited,
     usable_analyses,
 )
 from app.execution.errors import (
@@ -81,6 +83,10 @@ class DecisionContractError(FailureDiagnostics, ValueError):
             "evidence_empty": "빈 자료는 근거로 사용할 수 없습니다.",
             "evidence_industry_mismatch": "판단 업종과 근거 업종이 다릅니다.",
             "evidence_unavailable": "제외되거나 사용 불가능한 자료는 근거로 사용할 수 없습니다.",
+            "number_uncited": "근거로 인용하지 않은 숫자를 문장에 썼습니다.",
+            "placeholder_out_of_range": "문장의 근거 번호가 근거 목록 범위를 벗어났습니다.",
+            "placeholder_value_invalid": "숫자나 문자가 아닌 자료는 문장에 넣을 수 없습니다.",
+            "unit_mismatch": "근거 값의 단위와 문장의 단위가 다릅니다.",
         }
         super().__init__(messages[reason])
         self.diagnostics = {
@@ -176,6 +182,7 @@ async def evaluate(
                 content = outcome
                 _validate_categories(content)
                 _validate_evidence(content, visible, observation)
+                _render_numbers(content, request)
                 if evaluation_log is not None:
                     evaluation_log.extend(entries)
                 break
@@ -209,6 +216,7 @@ async def evaluate(
                     "현재 제공된 원자료 값으로 전체 최종판단을 다시 작성하세요. "
                     "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
                     "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
+                    "문장의 숫자는 {i} 자리표시자로 evidence[i]를 가리키세요. "
                     "industry_evidence에서 판단 업종에 연결된 경로를 그대로 사용하세요. "
                     "candidates는 같은 업종 또는 공통 자료의 경로이며 의미까지 보장하지 않습니다. "
                     "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
@@ -267,6 +275,8 @@ def _correction_detail(
     """실패 경로와 실제 입력에서 찾은 후보만 전달하며 자동 치환하지 않습니다."""
     detail: dict[str, Any] = dict(error.diagnostics)
     parts = error.diagnostics["field"].split(".")
+    if parts[0] not in {"recommendations", "not_recommended"}:
+        return detail
     item = getattr(content, parts[0])[int(parts[1])]
     detail["category"] = item.category.model_dump()
     if parts[2] != "evidence":
@@ -294,7 +304,7 @@ def _correction_detail(
             [AgentAnalysis.model_validate(item) for item in payload["analyses"]]
         )
         data = next((source.data for source in sources if source.agent_id == evidence.agent_id), {})
-        indexed = index_paths(data)
+        indexed = index_paths(data, evidence.agent_id)
         # 업종 자료가 있으면 공통 메타데이터보다 해당 업종을 우선합니다.
         paths = [p for p, code in indexed.items() if industry and code == industry.code]
         if not paths:
@@ -371,7 +381,7 @@ def _validate_evidence(
     observation: MapObservation | None = None,
 ) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
-    indexes = {key: index_paths(source.data) for key, source in sources.items()}
+    indexes = {key: index_paths(source.data, key) for key, source in sources.items()}
     for index, item in enumerate(content.recommendations + content.not_recommended):
         field = (
             f"recommendations.{index}"
@@ -395,6 +405,32 @@ def _validate_evidence(
             )
             if reason:
                 raise DecisionContractError(location + ".path", reason)
+
+
+def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
+    sources: dict[str, Any] = {a.agent_id: a.data for a in request.analyses}
+    if request.map_observation is not None:
+        sources["map_analysis"] = request.map_observation.data.model_dump(mode="json")
+    try:
+        render_cited(content.summary, [], sources)
+    except CitationError as error:
+        raise DecisionContractError("summary", error.reason) from None
+    updates = []
+    for field in ("recommendations", "not_recommended"):
+        for index, item in enumerate(getattr(content, field)):
+            refs = [(evidence.agent_id, evidence.path) for evidence in item.evidence]
+            for kind in ("reasons", "risks"):
+                rendered = []
+                for position, text in enumerate(getattr(item, kind)):
+                    try:
+                        rendered.append(render_cited(text, refs, sources))
+                    except CitationError as error:
+                        raise DecisionContractError(
+                            f"{field}.{index}.{kind}.{position}", error.reason
+                        ) from None
+                updates.append((item, kind, rendered))
+    for item, kind, rendered in updates:
+        setattr(item, kind, rendered)
 
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:

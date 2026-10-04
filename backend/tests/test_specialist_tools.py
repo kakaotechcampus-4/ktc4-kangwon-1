@@ -5,6 +5,8 @@ import importlib.util
 import unittest
 from types import SimpleNamespace
 
+from orchestration_support import radius_slice
+
 from app.agents.specialists.tools import ToolArgumentError
 from app.llm.budget import BudgetStorageError
 from app.mocks import mock_agents, mock_site
@@ -207,11 +209,12 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.orchestration.tools import SupplementTool
         from app.schemas import SupplementOperation
 
+        self.analyses[2].data.pop("data_reference_date", None)
         before = [item.model_copy(deep=True) for item in self.analyses]
         state = {"analyses": self.analyses, "feedback": ["기존 안내"]}
 
         async def execute(task, analysis):
-            analysis.data["추가 근거"] = 1
+            analysis.data["data_reference_date"] = "2026-10-04"
             return analysis
 
         tool = SupplementTool(
@@ -233,19 +236,17 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         )
         response = await tools["retry_lq_baseline"].execute({})
         self.assertTrue(response["adopted"])
-        self.assertEqual(response["facts"]["shared"][""]["추가 근거"], 1)
+        self.assertEqual(response["facts"]["shared"][""]["data_reference_date"], "2026-10-04")
         self.assertEqual(self.analyses, before)
         self.assertEqual(state, {"analyses": before, "feedback": ["기존 안내"]})
         merged = merge_specialist_changes(state, [changes, {"feedback": ["다른 전문가 안내"]}])
-        self.assertEqual(merged["analyses"][2].data["추가 근거"], 1)
+        self.assertEqual(merged["analyses"][2].data["data_reference_date"], "2026-10-04")
         self.assertEqual(merged["analyses"][:2], before[:2])
         self.assertEqual(merged["feedback"], ["기존 안내", "다른 전문가 안내"])
         self.assertEqual(len(merged["supplement_context"]), 1)
 
     async def test_radius_tool_keeps_slice_radius(self):
-        self.analyses[2].data["by_radius"] = [
-            {"radius_m": 100, "top_by_count": [{"code": "I201", "count": 7}]}
-        ]
+        self.analyses[2].data["by_radius"] = [radius_slice("I201", 7, 100)]
         result = await self.tools("commercial_area")["get_radius_breakdown"].execute(
             {"code": "I201"}
         )

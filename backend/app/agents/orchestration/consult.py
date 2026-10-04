@@ -85,7 +85,7 @@ def build_specialist_tools(
 
     async def read(arguments, *, name):
         data = source().data
-        index = SourceIndex.build(data)
+        index = SourceIndex.build(data, agent_id)
         records = list(index.records)
         all_records = records
         codes = arguments.get("codes", [arguments["code"]] if "code" in arguments else [])

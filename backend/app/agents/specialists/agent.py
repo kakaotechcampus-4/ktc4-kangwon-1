@@ -12,7 +12,9 @@ from openai.types.chat import ChatCompletionMessage
 from app.evidence import (
     FINDING_WARNING_PREFIX,
     MAP_AGENT_ID,
+    CitationError,
     SourceIndex,
+    render_cited,
     validate_findings,
 )
 from app.industries.lookup import industry_terms
@@ -86,6 +88,13 @@ async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=
                     )
                     content.findings = findings
                     content.limitations.extend(warnings)
+                    try:
+                        render_cited(content.headline, [], {})
+                    except CitationError:
+                        content.headline = "근거로 확인한 전문가 요약"
+                        content.limitations.append(
+                            "전문가 헤드라인의 숫자는 근거가 없어 제외했습니다."
+                        )
                     return content, records
             except (BudgetStorageError, OSError, asyncio.CancelledError):
                 raise
@@ -144,7 +153,7 @@ async def write_brief(
                     if key in BRIEF_CONTEXT_KEYS and isinstance(value, str)
                 },
             },
-            "facts": build_facts(SourceIndex.build(analysis.data)),
+            "facts": build_facts(SourceIndex.build(analysis.data, analysis.agent_id)),
         },
         generate=generate,
         tools=tools,
@@ -213,7 +222,9 @@ async def answer_query(
                 }
                 if query.agent_id == MAP_AGENT_ID
                 else {
-                    "facts": build_facts(SourceIndex.build(data), codes=set(query.industry_codes))
+                    "facts": build_facts(
+                        SourceIndex.build(data, query.agent_id), codes=set(query.industry_codes)
+                    )
                 }
             ),
         },

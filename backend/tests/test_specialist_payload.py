@@ -22,6 +22,13 @@ def baseline_cases():
     )["cases"]
 
 
+def typed_analysis(case):
+    """색인 전용 가상 필드는 그대로 보존하되 실제 모델 입력에는 넣지 않습니다."""
+    analysis = AgentAnalysis.model_validate(case["analysis"])
+    analysis.data.pop("index_rule_cases", None)
+    return analysis
+
+
 class IndexBaselineTests(unittest.TestCase):
     def test_four_sources_match_fixed_index_baselines(self):
         for case in baseline_cases():
@@ -37,7 +44,7 @@ class PayloadBaselineTests(unittest.IsolatedAsyncioTestCase):
         for case in baseline_cases():
             if "analysis" not in case:
                 continue
-            analysis = AgentAnalysis.model_validate(case["analysis"])
+            analysis = typed_analysis(case)
             task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
             payload = await capture_payload(write_brief, task, analysis, tools={})
             limit = 1.1 if analysis.agent_id == "floating_population" else 0.5
@@ -68,9 +75,7 @@ class SourceIndexTests(unittest.TestCase):
     def test_context_builds_each_source_once_even_with_briefs(self):
         from app.evidence import SourceIndex
 
-        analyses = [
-            AgentAnalysis.model_validate(c["analysis"]) for c in baseline_cases() if "analysis" in c
-        ]
+        analyses = [typed_analysis(c) for c in baseline_cases() if "analysis" in c]
         request = DecisionRequest(
             request_id=analyses[0].request_id, address="검증 주소", analyses=analyses
         )
@@ -117,7 +122,7 @@ class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.specialists.facts import build_facts
 
         case = next(c for c in baseline_cases() if c["name"] == "commercial_area")
-        analysis = AgentAnalysis.model_validate(case["analysis"])
+        analysis = typed_analysis(case)
         task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
         for codes in (["I201"], []):
             query = SpecialistQuery(
@@ -132,7 +137,7 @@ class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
                     answer_query, task, query, 1, analysis=analysis, observation=None, tools={}
                 )
             )
-            all_facts = build_facts(SourceIndex.build(analysis.data))
+            all_facts = build_facts(SourceIndex.build(analysis.data, analysis.agent_id))
             self.assertEqual(payload["facts"]["shared"], all_facts["shared"])
             self.assertEqual(
                 payload["facts"]["industries"], {c: all_facts["industries"][c] for c in codes}

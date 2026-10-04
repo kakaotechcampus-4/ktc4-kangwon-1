@@ -77,7 +77,8 @@
 **맥락.** 최종판단은 추천마다 근거 `evidence.path`(분석 결과 안의 위치)를 붙입니다. 업종 **코드는 고정**이지만 결과 **배열 위치는 실행마다 달라집니다**(들어온 업종 수·순서에 따라). 모델이 배열 번호를 직접 쓰게 하면 없는 경로나 **다른 업종의 자료**를 인용할 수 있습니다. 임대인은 이를 검증할 수단이 없습니다.
 
 **결정 — "생성" 대신 "선택"으로 문제를 바꾼다.**
-1. `index_paths(data)` — 분석 데이터를 깊이 우선 탐색해 **값이 있는 모든 JSON Pointer 경로**(RFC 6901, `~0`/`~1` 이스케이프)를 만들고, 각 경로의 **소유 업종**을 가장 가까운 업종 식별 조상에서 전파합니다.
+1. `index_paths(data, agent_id)` — 분석 데이터를 깊이 우선 탐색해 **값이 있는 모든 JSON Pointer 경로**(RFC 6901, `~0`/`~1` 이스케이프)를 만들고, 각 경로의 **소유 업종**을 업종 행에서 하위로 전파합니다.
+   - 업종 행은 키 이름으로 추측하지 않습니다. 에이전트별 자료 모델(`app/agents/data_models.py`)로 파싱한 뒤 `IndustryRow`를 상속한 행만 업종 행으로 봅니다. 모르는 코드·코드와 명칭 불일치·모델에 없는 필드는 분석 경계(`run_agents`·보완 채택)에서 `ValidationError`로 요청을 실패시킵니다. (2026-10-03, PR #32 리뷰 반영)
    - 서로 다른 업종이 섞인 상위 객체, `data_available=False`, `confidence="none"`, `score_available=False`, `citable=false` 하위 트리는 **인용 불가**.
    - 차단된 자식을 포함한 **부모 경로로 우회 인용하는 것도 차단**, 반면 실제 값 `0`은 유지(0은 "없음"이 아니라 관측값).
 2. `industry_catalog()` — 위 결과를 `{agent_id, industry_code, industry_name, paths}`로 묶어 **첫 모델 입력부터** 제공합니다. 모델은 경로를 만들지 않고 목록에서 고릅니다.
@@ -89,7 +90,9 @@
 
 **왜 이 방식인가.** 모델의 자유도를 "해석과 선택"으로 좁히면 환각이 들어갈 공간 자체가 줄고, 남은 오류는 결정론적 검증으로 잡힙니다. 규칙(`citable`)은 **인덱서 한 곳**에서만 강제하므로 에이전트가 늘어도 정책이 하나입니다.
 
-**코드.** `backend/app/evidence.py`, `decision/agent.py` (`_validate_evidence`, `_correction_detail`)
+**문장 속 숫자.** 모델은 reasons·risks·전문가 claim에 숫자를 직접 쓰지 않고 `{i}`로 같은 항목의 `evidence[i]`를 가리킵니다. `render_cited()`가 번호 범위·값 형태·단위·맨 숫자를 검사한 뒤 원자료 값으로 채웁니다. 연령대·시간대처럼 인용한 경로의 dict 키에 든 숫자만 직접 쓸 수 있고, summary에는 숫자를 쓰지 않습니다. 위반은 최종판단이면 교정 1회, 전문가면 해당 주장 제외입니다. (2026-10-03, PR #32 리뷰 반영)
+
+**코드.** `backend/app/evidence.py`, `backend/app/agents/data_models.py`, `decision/agent.py` (`_validate_evidence`, `_render_numbers`, `_correction_detail`)
 
 ---
 

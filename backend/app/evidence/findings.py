@@ -1,14 +1,12 @@
 """전문가 문장의 경로·수치·단위를 검증합니다."""
 
 import re
-from decimal import Decimal
 
 from app.industries import lookup
 from app.schemas import Finding, MapData, SpecialistId
 
 from .index import SourceIndex, can_cite
 from .map import MAP_AGENT_ID
-from .pointer import resolve_pointer
 
 FINDING_WARNING_PREFIX = "전문가 근거 제외"
 
@@ -20,16 +18,14 @@ def validate_findings(
     data: dict | MapData,
     radii: set[int] | None = None,
     index: SourceIndex | None = None,
+    render: bool = True,
 ) -> tuple[list[Finding], list[str]]:
     """문장 의미를 보증하지 않으며 경로·소유 업종·직접 표기 수치만 검증합니다."""
     if agent_id == MAP_AGENT_ID and not isinstance(data, MapData):
         data = MapData.model_validate(data or {"queries": {}})
     if isinstance(data, dict) and index is None:
-        index = SourceIndex.build(data)
+        index = SourceIndex.build(data, agent_id)
     indexed = index.owners if index is not None else None
-    context_radii = (index.radii if index is not None else frozenset()) | {
-        Decimal(r) for r in radii or ()
-    }
     valid, warnings = [], []
     for i, finding in enumerate(findings):
         paths = [ref.path for ref in finding.evidence]
@@ -39,67 +35,31 @@ def validate_findings(
             reason = _path_reason(agent_id, finding, paths, reasons, indexed)
             warnings.append(f"{FINDING_WARNING_PREFIX}: {i + 1}번 경로·업종 불일치{reason}")
             continue
-        values = [resolve_pointer(data, p) for p in paths]
-        claim = _claim_without_context(finding.claim, paths, context_radii)
-        rejected, mismatched = _mismatched_numbers(claim, values, paths, agent_id, data)
-        if rejected:
-            warnings.append(_number_warning(i + 1, mismatched))
+        if not render:
+            valid.append(finding)
             continue
-        valid.append(finding)
+        from .citations import CitationError, render_cited
+
+        source = data.model_dump(mode="json") if isinstance(data, MapData) else data
+        try:
+            claim = render_cited(
+                finding.claim,
+                [(agent_id, p) for p in paths],
+                {agent_id: source},
+                map_radii=radii if agent_id == MAP_AGENT_ID else None,
+            )
+        except CitationError:
+            numbers = re.findall(
+                r"(?<![A-Za-z0-9_.])[-+]?\d[\d,]*(?:\.\d+)?",
+                re.sub(r"\{\d+\}", "", finding.claim),
+            )
+            warnings.append(_number_warning(i + 1, numbers))
+            continue
+        if len(claim) > 200:
+            warnings.append(f"{FINDING_WARNING_PREFIX}: {i + 1}번 문장 길이 초과")
+            continue
+        valid.append(finding.model_copy(update={"claim": claim}))
     return valid, warnings
-
-
-def _mismatched_numbers(claim, values, paths, agent_id, data):
-    numbers = re.findall(r"(?<![A-Za-z0-9_.])[-+]?\d[\d,]*(?:\.\d+)?", claim)
-    numeric = [Decimal(str(v)) for v in values if type(v) in {int, float}]
-    mismatched = [
-        n
-        for n in numbers
-        if not any(
-            abs(value - Decimal(n.replace(",", "")))
-            <= (Decimal(0) if "." not in n else Decimal(5).scaleb(-len(n.split(".")[1]) - 1))
-            for value in numeric
-        )
-    ]
-    # 같은 숫자라도 점포 수를 인원·금액으로 바꾸면 인용할 수 없습니다.
-    for number, unit in re.findall(
-        r"([-+]?\d[\d,]*(?:\.\d+)?)\s*(명/일|개소|명|개|원|점|배|미터|m|%)", claim
-    ):
-        if not any(
-            type(value) in {int, float}
-            and abs(Decimal(str(value)) - Decimal(number.replace(",", "")))
-            <= (
-                Decimal(0)
-                if "." not in number
-                else Decimal(5).scaleb(-len(number.split(".")[1]) - 1)
-            )
-            and (
-                unit in _allowed_units(agent_id, path, data)
-                # "일평균 …명"은 명/일 값을 풀어 쓴 표현입니다.
-                or unit == "명"
-                and "명/일" in _allowed_units(agent_id, path, data)
-                and ("일평균" in claim or "일 평균" in claim or "하루" in claim)
-            )
-            for path, value in zip(paths, values, strict=True)
-        ):
-            mismatched.append(number)
-    matched = not mismatched
-    if "%" in claim:
-        population = data.get("population") if isinstance(data, dict) else None
-        unit = rate_basis(data) or (
-            population.get("share_unit") if isinstance(population, dict) else None
-        )
-        percent_allowed = any(
-            any(token in p for token in ("rate", "share", "percentile", "ratio"))
-            and "%" in str(unit)
-            for p in paths
-        )
-        matched = matched and percent_allowed
-        if not percent_allowed:
-            mismatched.extend(re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*%", claim))
-    scaled = re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*[만억천]\s*(?:명|개|원)", claim)
-    mismatched.extend(scaled)
-    return not matched or bool(scaled), mismatched
 
 
 def _number_warning(position, mismatched):
@@ -130,31 +90,6 @@ def _path_reason(agent_id, finding, paths, reasons, indexed):
     return reason
 
 
-def _claim_without_context(claim, paths, context_radii):
-    # 날짜·코드는 지표 숫자가 아닙니다. 숫자 단위 축약·환산은 지원하지 않습니다.
-    claim = re.sub(r"\b[A-Z]\d{3}\b|\b\d{4}-\d{2}-\d{2}\b", "", claim)
-    # 기간 표현과 원자료에 있는 반경은 지표가 아닌 문맥이라 인용 경로 없이 허용합니다.
-    claim = re.sub(
-        r"\d{4}\s*년\s*\d\s*분기|\d+\s*개?\s*분기|\d+\s*년|(?<!\d)20\d{2}[1-4](?!\d)"
-        # 연령대·시간대·면적 단위도 구간 이름입니다.
-        r"|\d{1,2}\s*[~-]\s*\d{1,2}\s*시|\d{1,2}\s*시|1\s*(?:km²|km2|㎢)",
-        "",
-        claim,
-    )
-    claim = re.sub(
-        r"(?<![\d.])(\d[\d,]*(?:\.\d+)?)\s*m(?![A-Za-z])",
-        lambda m: (
-            "" if Decimal(str(m.group(1)).replace(",", "")) in context_radii else str(m.group(0))
-        ),
-        claim,
-    )
-    if any(
-        part == "by_age" or part.startswith("age_") for path in paths for part in path.split("/")
-    ):
-        claim = re.sub(r"(?<!\d)(?:10|20|30|40|50|60|70|80|90)\s*대(?![\d가-힣])", "", claim)
-    return claim
-
-
 def _allowed_units(agent_id, path, data) -> set[str]:
     """원자료 단위 또는 지표의 고정 단위만 허용합니다. 환산하지 않습니다."""
     leaf = path.rsplit("/", 1)[-1]
@@ -176,7 +111,13 @@ def _allowed_units(agent_id, path, data) -> set[str]:
             {"명/일"}
             if leaf in {"daily_avg", "mean_daily_per_trade_area"}
             else {"명"}
-            if path.startswith(("/resident/", "/worker/")) and leaf == "count"
+            if (path.startswith(("/resident/", "/worker/")) and leaf == "count")
+            or path.startswith(
+                ("/population/by_age/", "/population/by_time/", "/population/by_day/")
+            )
+            or (path.startswith("/radius_profile/") and leaf == "total")
+            else {"개"}
+            if leaf == "trade_area_count"
             else set()
         )
     # 순증감(period_net_change·recent_year_net_change)도 점포 수 차이라 개수 단위를 씁니다.
