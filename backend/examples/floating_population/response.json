@@ -7,7 +7,41 @@
     "period": "2026년 2분기"
   },
   "data": {
-    "description": "서울시 상권분석서비스 길단위인구(통신사 기반) 자료입니다. 입력 좌표 반경 500m 와 겹치는 상권 8곳의 2026년 2분기 값을 합산했습니다(구역이 반경에 걸친 상권은 전체를 포함해 실제 바깥 경계는 약 871m 입니다). 여기서 '상권' 은 서울시가 정의한 분석 구역(골목상권·발달상권·전통시장·관광특구)이고 지하철 출구·시장·아파트 단위로 잘려 있어 서로 경쟁하는 별개 상권이 아닙니다 — 상권 8곳은 같은 지역을 나눈 조각 8개라는 뜻이며 인접 동네 8개가 아닙니다. 인원수는 population.daily_avg(명/일) 하나로만 냅니다 — 분기 합계는 다른 에이전트의 '명/일' 과 나란히 놓였을 때 오독되므로 싣지 않습니다. 같은 사람의 반복 통행이 중복 집계된 통행량이며 사람 수가 아닙니다. 분기 합계 원값은 population 의 by_age·by_time·by_day 에만 남아 있습니다. benchmark 는 서울 전체 상권 평균 대비 배수(1.0 = 평균)입니다. trend 는 같은 상권들을 분기마다 다시 합산한 추세로 quarters 가 오래된 순이며, 변화율(qoq_change·yoy_change)은 분기 일수 차이를 없앤 daily_avg 기준입니다. radius_profile 은 반경별 인구인데 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 없어 겹친 면적 비율로 안분한 추정값입니다 — 실측값이 아닙니다. 시간대는 원자료가 6구간(00-06·06-11·11-14·14-17·17-21·21-24)뿐이라 더 잘게 나눌 수 없고, 구간 길이가 3~6시간으로 달라 비교는 반드시 time_per_hour_share 로 해야 합니다 — by_time 총량으로 비교하면 6시간짜리 00-06 구간이 거의 항상 1위가 됩니다. 업종별 점포수·매출·임대료는 이 자료에 없습니다.",
+    "description": "서울시 상권분석서비스 자료입니다. 반경 500m 와 겹치는 상권 8곳의 2026년 2분기 값을 합산했고, 반경에 걸친 상권은 구역 전체를 넣어 실제 바깥 경계는 약 870m 입니다. 상권은 서울시가 그은 분석 구역 조각이라 8곳이 동네 8개라는 뜻이 아닙니다. population·trend·radius_profile 은 통행량(명/일, 중복 집계), resident·worker 는 사람 수(명)라 서로 더하지 않습니다. interpretation 은 코드가 이 자료의 숫자로 만든 요약 문장이며 path 가 근거 값입니다. 업종별 점포수·매출·임대료는 이 자료에 없습니다.",
+    "interpretation": [
+      {
+        "text": "유동인구 연령·요일 분포로 보면 직장인형이다(직업 자료가 아닌 추정).",
+        "path": "/type/label"
+      },
+      {
+        "text": "상권 1곳당 하루 유동인구는 16,945명으로 서울 상권 중 상위 14% 규모다.",
+        "path": "/benchmark/scale_percentile"
+      },
+      {
+        "text": "점심(11~14시) 시간당 통행 비중이 서울 평균의 1.34배로 가장 두드러진다.",
+        "path": "/benchmark/time_per_hour_index/11_14"
+      },
+      {
+        "text": "30대 유동인구 비중이 서울 평균의 1.59배로 가장 두드러진다.",
+        "path": "/benchmark/age_index/30"
+      },
+      {
+        "text": "주말/주중 통행 비가 서울 평균의 0.64배로 주중 중심이다.",
+        "path": "/benchmark/weekend_index"
+      },
+      {
+        "text": "하루 유동인구는 직전 분기보다 -1.8% (보합).",
+        "path": "/trend/qoq_change"
+      },
+      {
+        "text": "직장인구가 주거인구의 6.91배로 서울 평균(1.26배)의 5.46배다 — 직장 중심.",
+        "path": "/population_summary/worker_to_resident_index"
+      },
+      {
+        "text": "주거인구는 가구당 1.41명으로 서울 평균의 0.80배 — 1인 가구가 많은 편이다.",
+        "path": "/resident/benchmark/persons_per_household_index"
+      }
+    ],
     "period_code": "20262",
     "radius_m": 500,
     "trade_areas": [
@@ -16,7 +50,7 @@
         "name": "역삼역",
         "kind": "발달상권",
         "adstrd": "역삼1동",
-        "distance_m": 60.1,
+        "distance_m": 53.4,
         "area_m2": 562807.0,
         "equivalent_radius_m": 423.3
       },
@@ -25,7 +59,7 @@
         "name": "베르사이유1아파트",
         "kind": "골목상권",
         "adstrd": "역삼2동",
-        "distance_m": 380.2,
+        "distance_m": 385.6,
         "area_m2": 55302.0,
         "equivalent_radius_m": 132.7
       },
@@ -34,7 +68,7 @@
         "name": "역삼역 4번",
         "kind": "골목상권",
         "adstrd": "역삼1동",
-        "distance_m": 442.1,
+        "distance_m": 437.5,
         "area_m2": 73119.0,
         "equivalent_radius_m": 152.6
       },
@@ -43,7 +77,7 @@
         "name": "역삼역 8번",
         "kind": "골목상권",
         "adstrd": "역삼1동",
-        "distance_m": 460.2,
+        "distance_m": 463.4,
         "area_m2": 68672.0,
         "equivalent_radius_m": 147.8
       },
@@ -52,7 +86,7 @@
         "name": "구역삼세무서",
         "kind": "발달상권",
         "adstrd": "역삼1동",
-        "distance_m": 566.2,
+        "distance_m": 565.8,
         "area_m2": 291470.0,
         "equivalent_radius_m": 304.6
       },
@@ -61,7 +95,7 @@
         "name": "르네상스호텔사거리",
         "kind": "발달상권",
         "adstrd": "역삼1동",
-        "distance_m": 616.6,
+        "distance_m": 623.3,
         "area_m2": 160960.0,
         "equivalent_radius_m": 226.4
       },
@@ -70,7 +104,7 @@
         "name": "언주역 6번",
         "kind": "골목상권",
         "adstrd": "역삼1동",
-        "distance_m": 630.5,
+        "distance_m": 632.9,
         "area_m2": 65108.0,
         "equivalent_radius_m": 144.0
       },
@@ -79,13 +113,13 @@
         "name": "언주역 8번",
         "kind": "골목상권",
         "adstrd": "역삼1동",
-        "distance_m": 648.6,
+        "distance_m": 644.4,
         "area_m2": 71587.0,
         "equivalent_radius_m": 151.0
       }
     ],
     "population": {
-      "unit": "daily_avg 는 명/일 (2026년 2분기 합계 ÷ 91일). 같은 사람의 반복 통행이 중복 집계된 통행량이며 사람 수가 아님. by_age·by_time·by_day 는 분기 합계 원값",
+      "unit": "daily_avg 는 명/일(분기 합계 ÷ 91일), by_age·by_time·by_day 는 분기 합계",
       "share_unit": "비율 (0~1)",
       "daily_avg": 135560.8,
       "female_ratio": 0.4762,
@@ -134,7 +168,7 @@
       "weekend_to_weekday_ratio": 0.6216
     },
     "benchmark": {
-      "unit": "배수 (1.0 = 서울 전체 상권 평균). 단 mean_daily_per_trade_area 는 명/일",
+      "unit": "배수(1.0 = 서울 평균), mean_daily_per_trade_area 는 명/일",
       "baseline": "서울 전체 상권 평균 (2026년 2분기 · 1,648곳)",
       "age_index": {
         "10": 0.393,
@@ -160,7 +194,7 @@
       "scale_percentile": 86
     },
     "trend": {
-      "unit": "명 (분기 합계) · daily_avg 는 명/일 · 변화율은 비율(0.05 = +5%)",
+      "unit": "daily_avg 는 명/일, 변화율은 비율(0.05 = +5%)",
       "quarters": [
         {
           "period_code": "20253",
@@ -256,8 +290,8 @@
       "direction": "보합"
     },
     "radius_profile": {
-      "unit": "명 (분기 합계) · daily_avg 는 명/일",
-      "method": "면적 안분 — 상권 구역을 면적 등가원으로 근사하고, 반경 원과 겹친 면적 비율만큼 인구를 나눠 셌습니다. 상권 안에서 인구가 고르게 분포한다고 가정한 값이므로 실측값이 아니라 추정값입니다. 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 없어 쓰는 방법입니다. ⚠️ 그래서 같은 반경이라도 population 의 값보다 작습니다 — population 은 반경에 걸친 상권을 구역째 합산하고(바깥 경계가 반경을 넘습니다), 이 곡선은 겹친 만큼만 셉니다. 서로 다른 질문의 답이지 모순이 아닙니다. 지역의 대표 수치로는 population 을, 반경에 따른 증가 추이로는 이 곡선을 쓰십시오.",
+      "unit": "total 은 분기 합계, daily_avg 는 명/일",
+      "method": "반경과 겹친 상권 면적만큼 인구를 나눠 센 추정값입니다(상권 안 인구가 고르게 분포한다고 가정). 반경에 걸친 상권 전체를 더하는 대표 수치보다 작게 나옵니다.",
       "points": [
         {
           "radius_m": 50,
@@ -282,24 +316,24 @@
         },
         {
           "radius_m": 300,
-          "total": 2502106.0,
-          "daily_avg": 27495.7,
+          "total": 2490447.0,
+          "daily_avg": 27367.5,
           "trade_area_count": 4,
-          "effective_trade_areas": 0.65
+          "effective_trade_areas": 0.64
         },
         {
           "radius_m": 400,
-          "total": 5132436.4,
-          "daily_avg": 56400.4,
+          "total": 5149127.2,
+          "daily_avg": 56583.8,
           "trade_area_count": 6,
-          "effective_trade_areas": 2.06
+          "effective_trade_areas": 2.05
         },
         {
           "radius_m": 500,
-          "total": 7443914.6,
-          "daily_avg": 81801.3,
+          "total": 7408526.0,
+          "daily_avg": 81412.4,
           "trade_area_count": 8,
-          "effective_trade_areas": 3.81
+          "effective_trade_areas": 3.79
         }
       ]
     },
@@ -332,6 +366,80 @@
       "covered_trade_areas": 8,
       "level": "high"
     },
+    "resident": {
+      "unit": "count 는 명(사람 수), households 는 가구, persons_per_household 는 명/가구",
+      "share_unit": "비율 (0~1)",
+      "period_code": "20262",
+      "period": "2026년 2분기",
+      "count": 19932.0,
+      "households": 14143.0,
+      "persons_per_household": 1.409,
+      "age_share": {
+        "10": 0.0631,
+        "20": 0.198,
+        "30": 0.2848,
+        "40": 0.1781,
+        "50": 0.1239,
+        "60": 0.1522
+      },
+      "trade_area_count": 8,
+      "covered_trade_areas": 8,
+      "benchmark": {
+        "unit": "배수(1.0 = 서울 평균), scale_percentile 은 백분위",
+        "baseline": "서울 전체 상권 주거인구 (2026년 2분기 · 1,633곳, 가중 합계 기준)",
+        "age_index": {
+          "10": 0.693,
+          "20": 1.095,
+          "30": 1.636,
+          "40": 1.304,
+          "50": 0.809,
+          "60": 0.576
+        },
+        "scale_percentile": 65,
+        "persons_per_household_index": 0.799
+      }
+    },
+    "worker": {
+      "unit": "count 는 명(사람 수)",
+      "share_unit": "비율 (0~1)",
+      "period_code": "20262",
+      "period": "2026년 2분기",
+      "count": 137708.0,
+      "age_share": {
+        "10": 0.0011,
+        "20": 0.2087,
+        "30": 0.2986,
+        "40": 0.2536,
+        "50": 0.1754,
+        "60": 0.0626
+      },
+      "trade_area_count": 8,
+      "covered_trade_areas": 8,
+      "benchmark": {
+        "unit": "배수(1.0 = 서울 평균), scale_percentile 은 백분위",
+        "baseline": "서울 전체 상권 직장인구 (2026년 2분기 · 1,641곳, 가중 합계 기준)",
+        "age_index": {
+          "10": 0.55,
+          "20": 1.155,
+          "30": 1.037,
+          "40": 0.989,
+          "50": 0.931,
+          "60": 0.74
+        },
+        "scale_percentile": 97,
+        "persons_per_household_index": null
+      }
+    },
+    "population_summary": {
+      "unit": "배수. visitor_multiple = 유동인구(명/일) ÷ 주거인구, worker_to_resident_index = 직장/주거 비 ÷ 서울 비",
+      "basis_trade_areas": 8,
+      "visitor_multiple": 6.801,
+      "worker_to_resident_ratio": 6.909,
+      "seoul_worker_to_resident_ratio": 1.264,
+      "worker_to_resident_index": 5.465,
+      "composition": "직장 중심",
+      "composition_rule": "index ≥ 1.5 직장 중심, ≤ 0.67 주거 중심, 그 사이 혼재 (서울 1,627곳 기준). type 과 별개"
+    },
     "selection": {
       "applied": false,
       "selectable": [
@@ -348,7 +456,7 @@
       ],
       "dropped": [],
       "reason": null,
-      "unavailable_reason": "ELICE_MODEL·ELICE_API_KEY·ELICE_BASE_URL 이 있어야 블록 선별을 합니다."
+      "unavailable_reason": "자료 선별 기능을 사용할 수 없습니다."
     },
     "sources": [
       {
@@ -362,6 +470,18 @@
         "url": "https://data.seoul.go.kr/dataList/OA-15560/S/1/datasetView.do",
         "license": "공공누리 1유형(출처표시)",
         "period": "2026년 2분기"
+      },
+      {
+        "name": "서울시 상권분석서비스(상주인구-상권)",
+        "url": "https://data.seoul.go.kr/dataList/OA-15584/S/1/datasetView.do",
+        "license": "공공누리 1유형(출처표시)",
+        "period": "2026년 2분기"
+      },
+      {
+        "name": "서울시 상권분석서비스(직장인구-상권)",
+        "url": "https://data.seoul.go.kr/dataList/OA-15569/S/1/datasetView.do",
+        "license": "공공누리 1유형(출처표시)",
+        "period": "2026년 2분기"
       }
     ]
   },
@@ -370,6 +490,6 @@
     "유동인구 유형은 직업 데이터가 아닌 연령·요일 분포에서 추정한 값입니다.",
     "상권영역 API 가 폴리곤을 주지 않아 상권 구역을 면적 등가원으로 근사했습니다.",
     "radius_profile 은 상권 안 인구가 고르게 분포한다고 보고 면적 비율로 안분한 추정값입니다 — 원자료가 상권 조각 단위라 반경으로 정확히 자를 수 없습니다.",
-    "반경에 걸친 상권은 구역 전체를 집계했습니다 — 가장 바깥 경계는 약 871m 로 반경 500m 를 넘습니다."
+    "반경에 걸친 상권은 구역 전체를 집계했습니다 — 가장 바깥 경계는 약 870m 로 반경 500m 를 넘습니다."
   ]
 }

@@ -8,51 +8,40 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import replace
 from functools import partial
-from importlib.resources import files
-from typing import Any
 
-from openai.types.chat import ChatCompletionMessage
 from pydantic import ValidationError
 
-from app.agents import business_lifecycle, commercial_area, decision, floating_population
-from app.agents.commercial_area.config import Settings
-from app.agents.decision.agent import GenerateDecision
-from app.agents.floating_population import llm as floating_llm
-from app.config import AddressSettings
+from app.agents import business_lifecycle, commercial_area, floating_population
+from app.agents.business_lifecycle import supplement as lifecycle_supplement
+from app.agents.commercial_area import supplement as commercial_supplement
+from app.agents.data_models import parse_data
 from app.schemas import (
-    AGENT_IDS,
     DEFAULT_RADIUS_M,
     AgentAnalysis,
     AgentError,
     AgentId,
     AnalysisTask,
-    DecisionRequest,
-    DecisionResult,
     Site,
+    SupplementOperation,
     validate_radius,
 )
 from app.services.settings import ExecutionSettings, validate_timeout
 
-from . import llm, tools
+from . import tools
 
 AnalysisAgent = Callable[[AnalysisTask], Awaitable[AgentAnalysis]]
 AgentRegistry = dict[AgentId, AnalysisAgent]
-GenerateAction = Callable[[list[Any], list[Any]], Awaitable[ChatCompletionMessage]]
 
 __all__ = [
     "AgentRegistry",
     "AnalysisAgent",
     "build_react_agents",
-    "default_agents",
+    "build_supplement_tools",
     "prepare_task",
     "run_agents",
-    "run_analysis",
-    "run_react",
 ]
 
 
@@ -74,12 +63,6 @@ async def prepare_task(
         site=resolved,
         radius_m=radius_m,
     )
-
-
-def default_agents(settings: Settings | None = None) -> AgentRegistry:
-    """기존 상권 설정 인자를 유지하면서 공통 3종 등록을 재사용합니다."""
-    execution = ExecutionSettings.from_env()
-    return build_react_agents(replace(execution, commercial=settings) if settings else execution)
 
 
 def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegistry:
@@ -108,7 +91,6 @@ def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegist
             analyze=partial(
                 floating_population.analyze,
                 settings=settings.floating,
-                select=partial(floating_llm.select_blocks, settings=settings.floating_llm),
             ),
         ),
         "business_lifecycle": partial(
@@ -117,7 +99,6 @@ def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegist
             analyze=partial(
                 business_lifecycle.analyze,
                 settings=settings.lifecycle,
-                llm_settings=settings.lifecycle_llm,
             ),
         ),
         "commercial_area": partial(
@@ -126,6 +107,38 @@ def build_react_agents(settings: ExecutionSettings | None = None) -> AgentRegist
             analyze=partial(commercial_area.analyze, settings=settings.commercial),
         ),
     }
+
+
+def build_supplement_tools(settings: ExecutionSettings) -> list[tools.SupplementTool]:
+    """등록만으로 외부 호출하지 않으며 유동인구 보완은 연결하지 않습니다."""
+    return [
+        tools.SupplementTool(
+            operation=SupplementOperation(
+                agent_id="commercial_area",
+                operation="retry_lq_baseline",
+                description=(
+                    "최초 주변 비교 조회 실패 시 경쟁 판단에 꼭 필요한 자료만 재조회합니다. "
+                    "주 반경 점포는 재조회하지 않습니다."
+                ),
+            ),
+            execute=partial(commercial_supplement.supplement, settings=settings.commercial),
+            eligible=partial(commercial_supplement.eligible, settings=settings.commercial),
+            accept=commercial_supplement.accept,
+        ),
+        tools.SupplementTool(
+            operation=SupplementOperation(
+                agent_id="business_lifecycle",
+                operation="fetch_quarter_details",
+                description=(
+                    "추세 판단에 필요할 때 동일 상권·기간의 분기별 건수·폐업률을 확인합니다. "
+                    "최대 12개 분기이며 없는 분기를 채우거나 점수를 재계산하지 않습니다."
+                ),
+            ),
+            execute=partial(lifecycle_supplement.supplement, settings=settings.lifecycle),
+            eligible=lifecycle_supplement.eligible,
+            accept=lifecycle_supplement.accept,
+        ),
+    ]
 
 
 def _crash_to_analysis(task: AnalysisTask, agent_id: AgentId, _exc: BaseException) -> AgentAnalysis:
@@ -168,6 +181,8 @@ async def run_agents(
         analysis = AgentAnalysis.model_validate(result)
         if analysis.agent_id != agent_id or analysis.request_id != task.request_id:
             raise ValueError("분석 결과의 요청 ID 또는 에이전트 ID가 일치하지 않습니다.")
+        if analysis.data:
+            parse_data(analysis.agent_id, analysis.data)
         if on_analysis_completed is not None:
             await on_analysis_completed(analysis)
         return analysis
@@ -179,151 +194,3 @@ async def run_agents(
             raise result
         analyses.append(result)
     return analyses
-
-
-async def run_analysis(
-    address: str,
-    *,
-    site: Site | None = None,
-    radius_m: int = DEFAULT_RADIUS_M,
-    settings: Settings | None = None,
-    agents: AgentRegistry | None = None,
-    generate: GenerateDecision | None = None,
-    request_id: str | None = None,
-) -> DecisionResult:
-    """주소 하나로 최종판단 결과까지 만듭니다.
-
-    `site`를 주면 좌표 변환을 건너뜁니다. `agents`와 `generate`는 시험용
-    대역을 넣기 위한 자리입니다.
-    """
-    radius_m = validate_radius(radius_m)
-    settings = settings or Settings.from_env()
-
-    async def resolve(address: str) -> Site:
-        return (
-            site
-            if site is not None
-            else await tools.resolve_site(
-                address,
-                AddressSettings(
-                    api_key=settings.geocoding_api_key, timeout=settings.request_timeout_s
-                ),
-            )
-        )
-
-    task = await prepare_task(
-        address,
-        resolve=resolve,
-        radius_m=radius_m,
-        request_id=request_id,
-    )
-    analyses = await run_agents(task, agents or default_agents(settings))
-    request = DecisionRequest(
-        request_id=task.request_id,
-        address=task.site.input_address,
-        analyses=analyses,
-    )
-    return await decision.analyze(request, generate=generate)
-
-
-async def run_react(
-    address: str,
-    *,
-    resolve: Callable[[str], Awaitable[Site]],
-    agents: AgentRegistry,
-    radius_m: int = DEFAULT_RADIUS_M,
-    generate_action: GenerateAction | None = None,
-    generate: GenerateDecision | None = None,
-    request_id: str | None = None,
-    on_task_prepared: Callable[[AnalysisTask], Awaitable[None]] | None = None,
-    on_analysis_completed: Callable[[AgentAnalysis], Awaitable[None]] | None = None,
-    agent_timeout: float = 180.0,
-) -> DecisionResult:
-    """도구 호출과 관찰을 반복합니다. 주소 도구와 세 분석기는 명시적으로 연결합니다."""
-    radius_m = validate_radius(radius_m)
-    address = address.strip()
-    if not address:
-        raise ValueError("주소가 비어 있습니다.")
-    if set(agents) != set(AGENT_IDS):
-        raise ValueError("세 분석 에이전트를 모두 연결해 주세요.")
-    # 요청 ID를 모델이 만들거나 변경하지 못하게 먼저 검증합니다.
-    request_id = uuid.uuid4().hex if request_id is None else request_id
-    if not isinstance(request_id, str) or not request_id.strip():
-        raise ValueError("요청 ID가 비어 있습니다.")
-    messages: list[Any] = [
-        {"role": "system", "content": files(__package__).joinpath("prompt.md").read_text("utf-8")},
-        {
-            "role": "user",
-            "content": json.dumps({"address": address, "radius_m": radius_m}, ensure_ascii=False),
-        },
-    ]
-    task = None
-    analyses = None
-    choose = generate_action or llm.generate_action
-    for _ in range(6):
-        produced = await choose(messages, tools.TOOL_DEFINITIONS)
-        message = ChatCompletionMessage.model_validate(produced)
-        if message.refusal or not message.tool_calls or len(message.tool_calls) != 1:
-            raise RuntimeError("모델은 한 번에 하나의 도구를 호출해야 합니다.")
-        call = message.tool_calls[0]
-        if call.type != "function":
-            raise RuntimeError("지원하지 않는 도구 호출 형식입니다.")
-        messages.append(
-            message.model_dump(
-                include={"role", "content", "tool_calls"},
-                exclude_none=True,
-            )
-        )
-        try:
-            arguments = json.loads(call.function.arguments)
-        except (ValueError, TypeError):
-            arguments = None
-        name = call.function.name
-        expected = (
-            "prepare_address"
-            if task is None
-            else ("run_analyses" if analyses is None else "make_decision")
-        )
-        observation: dict[str, Any]
-        if arguments != {} or name != expected:
-            observation = {"status": "error", "message": f"빈 인자로 {expected}를 호출하세요."}
-        elif name == "prepare_address":
-            task = await prepare_task(
-                address, resolve=resolve, request_id=request_id, radius_m=radius_m
-            )
-            if on_task_prepared is not None:
-                await on_task_prepared(task)
-            observation = {"status": "ok", "task": task.model_dump(mode="json")}
-        elif name == "run_analyses":
-            assert task is not None
-            analyses = await run_agents(
-                task,
-                agents,
-                on_analysis_completed=on_analysis_completed,
-                agent_timeout=agent_timeout,
-            )
-            observation = {
-                "status": "ok",
-                "analyses": [
-                    item.model_dump(mode="json", include={"agent_id", "status", "scope"})
-                    for item in analyses
-                ],
-            }
-        else:
-            assert task is not None and analyses is not None
-            return await decision.analyze(
-                DecisionRequest(
-                    request_id=task.request_id,
-                    address=task.site.input_address,
-                    analyses=analyses,
-                ),
-                generate=generate,
-            )
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": json.dumps(observation, ensure_ascii=False, allow_nan=False),
-            }
-        )
-    raise RuntimeError("오케스트레이터의 최대 모델 호출 횟수 6회를 초과했습니다.")

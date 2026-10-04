@@ -5,62 +5,72 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
 from app.db import repository as repo
-from app.db.connection import (
-    BACKEND_DIR,
-    SCHEMA_VERSION,
-    SchemaVersionError,
-    connect,
-    initialize,
-    resolve_path,
-)
+from app.db.connection import BACKEND_DIR, connect, initialize, resolve_path
 from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 
 class RepositoryTests(unittest.TestCase):
-    def test_schema_version_is_stamped_and_idempotent(self):
-        initialize(self.path)
-        with connect(self.path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
-        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+    def test_parallel_initialization_preserves_schema_and_existing_data(self):
+        for attempt in range(10):
+            path = self.path.parent / f"parallel-{attempt}.sqlite3"
+            barrier = threading.Barrier(8)
 
-    def test_version_mismatch_fails_without_touching_data(self):
-        with connect(self.path) as db:
-            db.execute("PRAGMA user_version = 0")
-        with self.assertRaises(SchemaVersionError) as caught:
-            initialize(self.path)
-        self.assertIn(str(resolve_path(self.path)), str(caught.exception))
-        with connect(self.path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 0)
-        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+            def start(path=path, barrier=barrier):
+                barrier.wait(timeout=5)
+                return initialize(path)
 
-    def test_concurrent_initialize_on_fresh_files(self):
-        errors: list[BaseException] = []
-        for round_index in range(20):
-            fresh = self.path.parent / f"fresh-{round_index}.sqlite3"
-            start = threading.Barrier(4)
-
-            def run(target: Path = fresh, barrier: threading.Barrier = start) -> None:
-                barrier.wait()
-                try:
-                    initialize(target)
-                except Exception as error:
-                    errors.append(error)
-
-            threads = [threading.Thread(target=run) for _ in range(4)]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
-            with connect(fresh) as db:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(start) for _ in range(8)]
+                self.assertEqual([future.result(timeout=15) for future in futures], [path] * 8)
+            repo.create_request("preserved", "시험 주소", db_path=path)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(start) for _ in range(8)]
+                for future in futures:
+                    future.result(timeout=15)
+            self.assertEqual(repo.get_request("preserved", db_path=path)["status"], "pending")
+            with connect(path) as db:
                 self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "wal")
-                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
-        self.assertEqual(errors, [])
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
 
-    def test_radius_constraint(self):
+    def test_retry_rejects_changed_or_unknown_catalog_without_claiming(self):
+        from app.schemas import AgentError
+
+        repo.fail_request(
+            "request", AgentError(code="ANALYSIS_FAILED", message="시험"), db_path=self.path
+        )
+        failed_at = repo.get_request("request", db_path=self.path)["completed_at"]
+        for version in ("other", None):
+            with connect(self.path) as db:
+                db.execute("UPDATE analysis_requests SET catalog_version=?", (version,))
+            with self.assertRaisesRegex(repo.DecisionRetryConflictError, "업종표 버전"):
+                repo.claim_decision_retry("request", failed_at, db_path=self.path)
+            self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "failed")
+
+    def test_catalog_version_is_saved_and_old_rows_remain_unknown(self):
+        from app.industries.catalog import CATALOG_VERSION
+
+        self.assertEqual(
+            repo.get_request("request", db_path=self.path)["catalog_version"], CATALOG_VERSION
+        )
+        with connect(self.path) as db:
+            db.execute("ALTER TABLE analysis_requests DROP COLUMN catalog_version")
+        initialize(self.path)
+        initialize(self.path)
+        self.assertIsNone(repo.get_request("request", db_path=self.path)["catalog_version"])
+
+    def test_radius_migration_preserves_old_requests(self):
+        with connect(self.path) as db:
+            db.execute("ALTER TABLE analysis_requests DROP COLUMN radius_m")
+        initialize(self.path)
+        initialize(self.path)
+        row = repo.get_request("request", db_path=self.path)
+        self.assertIsNone(row["radius_m"])
+        self.assertEqual(row["status"], "running")
         repo.create_request("new", "주소", radius_m=300, db_path=self.path)
         self.assertEqual(repo.get_request("new", db_path=self.path)["radius_m"], 300)
         for value in (0, -1, 1.5, "invalid"):

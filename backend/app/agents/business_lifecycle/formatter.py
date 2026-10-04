@@ -1,5 +1,6 @@
 from typing import Any
 
+from app.agents.business_lifecycle.schemas import BusinessLifecycleData
 from app.industries import MAPPING_REVIEW_WARNING, TAXONOMY
 from app.industries.catalog import EXPECTED_INDUSTRY_COUNT, INDUSTRIES
 from app.schemas import AgentAnalysis, Scope
@@ -7,6 +8,19 @@ from app.schemas import AgentAnalysis, Scope
 
 class BusinessLifecycleFormatterError(RuntimeError):
     """Business Lifecycle 결과 변환 오류."""
+
+
+def describe_industry(industry: dict[str, Any]) -> dict[str, Any]:
+    """관측된 건수만 설명하고 계산된 점수·신뢰도는 보존합니다."""
+    metrics = industry["metrics"]
+    opened, closed = metrics["period_open_count"], metrics["period_close_count"]
+    label = "개업 우위" if opened > closed else "폐업 우위" if opened < closed else "개폐업 균형"
+    return {
+        **industry,
+        "type": label,
+        "evidence": [f"분석 기간 개업 {opened}개소, 폐업 {closed}개소입니다."],
+        "warning": "건수의 우위는 수익성이나 생존 가능성을 보장하지 않습니다.",
+    }
 
 
 def determine_status(
@@ -40,7 +54,7 @@ def format_scored_industry(
     industry: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    LLM 분석이 완료된 업종을
+    수치 설명이 완료된 업종을
     중재 Agent용 공통 형태로 변환한다.
     """
 
@@ -49,6 +63,7 @@ def format_scored_industry(
         "industry_name": industry["industry_name"],
         "score": industry["lifecycle_score"],
         "type": industry["type"],
+        "citable": {"type": False, "evidence": False},
         "confidence": industry["confidence"],
         "data_available": True,
         "score_available": True,
@@ -275,6 +290,10 @@ def format_for_mediator(
         scored_count=scored_count,
         unscored_count=unscored_count,
     )
+    if status == "no_data" and any(
+        row["data_available"] and row["confidence"] == "low" for row in industries
+    ):
+        status = "partial"
 
     scope = build_scope(
         agent_result=agent_result,
@@ -317,6 +336,7 @@ def format_for_mediator(
             ),
             "industries": industries,
         }
+        BusinessLifecycleData.model_validate(data)
 
     formatted_result: dict[
         str,

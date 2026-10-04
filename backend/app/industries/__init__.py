@@ -20,7 +20,7 @@ from .catalog import CATALOG_VERSION, EXPECTED_INDUSTRY_COUNT
 from .models import Industry
 
 MAPPING_REVIEW_WARNING = "서울시 업종 연결 중 53건은 모델 판정이며 사람 검수가 완료되지 않았습니다."
-TAXONOMY = {
+TAXONOMY: dict[str, str | int] = {
     "id": "sbiz-middle-75",
     "version": CATALOG_VERSION,
     "industry_count": EXPECTED_INDUSTRY_COUNT,
@@ -34,13 +34,10 @@ DATA_DIR = PACKAGE_DIR / "data"
 MASTER_PATH = DATA_DIR / "industries.csv"
 SEOUL_LINK_PATH = DATA_DIR / "seoul_to_industry.csv"
 LEGACY70_LINK_PATH = DATA_DIR / "legacy70_to_industry.csv"
-# 개폐업 `industry_master.json` 과 같은 모양으로 내보내는 생성물.
-MASTER_JSON_PATH = DATA_DIR / "industry_master.json"
 
 __all__ = [
     "DATA_DIR",
     "LEGACY70_LINK_PATH",
-    "MASTER_JSON_PATH",
     "MASTER_PATH",
     "PACKAGE_DIR",
     "SEOUL_LINK_PATH",

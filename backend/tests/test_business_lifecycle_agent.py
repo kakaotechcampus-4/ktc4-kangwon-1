@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from typing import Any
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from app.agents.business_lifecycle.agent import (
     AGENT_ID,
+    BusinessLifecycleAgentError,
     analyze,
 )
 from app.agents.business_lifecycle.area_resolver import (
@@ -16,8 +20,9 @@ from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaNoDataError,
     BusinessAreaResolverError,
 )
+from app.agents.business_lifecycle.client import SeoulOpenAPINoDataError
 from app.agents.business_lifecycle.config import Settings
-from app.agents.business_lifecycle.llm import BusinessLifecycleAgentError
+from app.agents.business_lifecycle.schemas import BusinessLifecycleData
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
@@ -48,7 +53,6 @@ def fake_area(site: Site, settings: Settings) -> BusinessArea:
         dong_name="가락동",
         x=0,
         y=0,
-        distance_m=91.2,
     )
 
 
@@ -109,6 +113,35 @@ def fake_pipeline(
 
 
 class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_formatted_data_matches_model_and_rejects_renamed_key(self):
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=fake_area,
+            run_pipeline=fake_pipeline,
+        )
+        restored = json.loads(json.dumps(result.data, ensure_ascii=False))
+        BusinessLifecycleData.model_validate(restored)
+        row = dict(restored["industries"][0])
+        row["upjong_code"] = row.pop("industry_id")
+        with self.assertRaises(ValidationError):
+            BusinessLifecycleData.model_validate({**restored, "industries": [row]})
+
+    async def test_radius_is_recorded_but_does_not_change_polygon(self):
+        results = []
+        for radius in (300, 700):
+            result = await analyze(
+                task().model_copy(update={"radius_m": radius}),
+                settings=Settings(base_quarter_override="20244"),
+                area_resolver=fake_area,
+                run_pipeline=fake_pipeline,
+            )
+            self.assertEqual(result.data["metadata"]["requested_radius_m"], radius)
+            self.assertIs(result.data["metadata"]["radius_applied"], False)
+            results.append(result)
+        self.assertEqual(results[0].scope, results[1].scope)
+        self.assertEqual(results[0].data["industries"], results[1].data["industries"])
+
     async def test_bundled_area_reaches_pipeline_without_external_calls(self):
         site = GARAK_SITE.model_copy(
             update={
@@ -248,7 +281,7 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
             request_id: str | None,
             area_name: str | None,
         ) -> dict[str, Any]:
-            raise ValueError("서울시 Open API에서 조회된 데이터가 없습니다.")
+            raise SeoulOpenAPINoDataError("조회 조건에 맞는 자료가 없습니다.")
 
         result = await analyze(
             task(),

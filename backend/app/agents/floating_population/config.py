@@ -8,10 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from app.config import BACKEND_DIR as BACKEND_DIR
-from app.config import load_environment
-
-# 기존 CLI 가져오기 경로를 유지합니다.
-load_dotenv_if_present = load_environment
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
@@ -20,12 +16,12 @@ SEOUL_OPEN_API_BASE = "http://openapi.seoul.go.kr:8088"
 # 2026-09-07 실호출로 확인된 서비스명. 데이터셋이 개편되면 각 페이지의 "Open API" 탭에서 재확인.
 FLPOP_SERVICE = "VwsmTrdarFlpopQq"  # 상권분석서비스(길단위인구-상권) OA-15568
 TRDAR_AREA_SERVICE = "TbgisTrdarRelm"  # 상권분석서비스(영역-상권) OA-15560
+RESIDENT_SERVICE = "VwsmTrdarRepopQq"  # 상권분석서비스(상주인구-상권) OA-15584
+WORKER_SERVICE = "VwsmTrdarWrcPopltnQq"  # 상권분석서비스(직장인구-상권) OA-15569
 
 
 @dataclass(frozen=True)
 class Settings:
-    analysis_radius_m: int = 500
-
     page_size: int = 1000
     trdar_area_max_pages: int = 20
     flpop_max_pages: int = 5
@@ -36,8 +32,9 @@ class Settings:
     # 원본은 2021Q1 부터 22개 분기가 있지만 리포트에 필요한 건 최근 흐름뿐이다.
     trend_quarters: int = 4
 
-    # 분석 반경(500m) **안쪽을** 나눠 보는 지점들(m). 반경을 넓히는 게 아니라 쪼개는 것이라
-    # 마지막 값이 analysis_radius_m 과 같다. 전부 로컬 면적 안분이라 API 호출은 늘지 않는다.
+    # 분석 반경 **안쪽을** 나눠 보는 지점들(m). 반경을 넓히는 게 아니라 쪼개는 것이라 분석
+    # 반경보다 큰 값은 버리고 분석 반경 자체를 마지막 점으로 붙인다(agent.py).
+    # 전부 로컬 면적 안분이라 API 호출은 늘지 않는다.
     radius_profile_m: tuple[int, ...] = (50, 100, 200, 300, 400, 500)
 
     base_url: str = SEOUL_OPEN_API_BASE
@@ -54,8 +51,5 @@ class Settings:
             "flpop_service": os.environ.get("SEOUL_FLPOP_SERVICE"),
             "trdar_area_service": os.environ.get("SEOUL_TRDAR_AREA_SERVICE"),
         }
-        radius = os.environ.get("ANALYSIS_RADIUS_M")
-        if radius:
-            env_values["analysis_radius_m"] = int(radius)
         env_values.update(overrides)
         return cls(**{k: v for k, v in env_values.items() if v is not None})
