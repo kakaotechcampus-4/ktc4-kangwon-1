@@ -41,13 +41,13 @@ class ContextTests(unittest.TestCase):
         ok = Finding(
             claim="점포 {0}개",
             signal="context",
-            industry_code="I201",
+            industry_code="SV020",
             evidence=[EvidenceRef(path=path)],
         )
         long = Finding(
             claim="가" * 197 + "{0}",
             signal="context",
-            industry_code="I201",
+            industry_code="SV020",
             evidence=[EvidenceRef(path="/by_middle/0/lq")],
         )
         bare = ok.model_copy(update={"claim": "점포가 96개"})
@@ -71,18 +71,18 @@ class ContextTests(unittest.TestCase):
             data=self.data,
         )
 
-    def finding(self, path, claim="점포 {0}개", code="I212"):
+    def finding(self, path, claim="점포 {0}개", code="SV026"):
         return Finding(claim=claim, signal="context", industry_code=code, evidence=[{"path": path}])
 
     def test_digest_keeps_all_industries_and_zero(self):
         request = DecisionRequest(request_id="r", address="주소", analyses=[self.source])
         context = self.build_context(request, briefs=[], answers=[])
         rows = {row["code"]: row for row in context["industry_digest"]}
-        self.assertEqual(len(rows), 75)
-        metrics = rows["I201"]["metrics"]
+        self.assertEqual(len(rows), 51)
+        metrics = rows["SV020"]["metrics"]
         self.assertTrue(any(m["path"] == "/by_middle/0/count" and m["value"] == 0 for m in metrics))
         self.assertFalse(any(m["path"].endswith("/lq") for m in metrics))
-        self.assertEqual(rows["I203"]["metrics"], [])
+        self.assertEqual(rows["SV022"]["metrics"], [])
         self.assertNotIn("analyses", context)
         self.assertEqual(self.source.data, self.data)
 
@@ -104,8 +104,8 @@ class ContextTests(unittest.TestCase):
     def test_invalid_or_other_industry_and_parent_bypass_dropped(self):
         bad = [
             self.finding("/by_middle/0/count"),
-            self.finding("/by_middle/0/lq", code="I201"),
-            self.finding("/by_middle/0", code="I201"),
+            self.finding("/by_middle/0/lq", code="SV020"),
+            self.finding("/by_middle/0", code="SV020"),
             self.finding("/missing"),
         ]
         valid, warnings = self.validate_findings(bad, agent_id="commercial_area", data=self.data)
@@ -113,7 +113,7 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(len(warnings), 4)
 
     def test_radius_metrics_keep_their_own_scope(self):
-        industry = lookup.get("I212")
+        industry = lookup.get("SV026")
         slice_ = RadiusSlice(
             radius_m=100,
             store_total=40,
@@ -122,7 +122,7 @@ class ContextTests(unittest.TestCase):
             top_by_count=[
                 CategoryRank(
                     rank=1,
-                    code="I212",
+                    code="SV026",
                     name=industry.name,
                     count=7,
                     density_per_km2=222.8,
@@ -145,7 +145,7 @@ class ContextTests(unittest.TestCase):
             briefs=[],
             answers=[],
         )
-        row = next(r for r in context["industry_digest"] if r["code"] == "I212")
+        row = next(r for r in context["industry_digest"] if r["code"] == "SV026")
         metric = next(m for m in row["metrics"] if m["value"] == 7)
         self.assertEqual(metric["radius_m"], {"path": "/by_radius/0/radius_m", "value": 100})
 
@@ -209,7 +209,7 @@ class ContextTests(unittest.TestCase):
                 self.finding(
                     "/industries/0/metrics/recent_year_close_rate",
                     "분기 평균 폐업 비율 {0}%",
-                    "I201",
+                    "SV020",
                 )
             ],
             agent_id="business_lifecycle",
@@ -229,7 +229,7 @@ class ContextTests(unittest.TestCase):
         source = self.source.model_copy(update={"agent_id": "business_lifecycle", "data": data})
         brief = fallback_brief(site_task(), source)
         paths = {ref.path for f in brief.findings for ref in f.evidence}
-        self.assertIn("/industries/74/score", paths)
+        self.assertIn("/industries/50/score", paths)
         self.assertIn("/industries/0/score", paths)
 
     def test_fallback_has_real_paths_and_is_not_model_output(self):
@@ -252,7 +252,7 @@ class ContextNumberTests(unittest.TestCase):
             finding = Finding(
                 claim=claim,
                 signal="context",
-                industry_code="I212",
+                industry_code="SV026",
                 evidence=[{"path": p} for p in paths],
             )
             return len(validate_findings([finding], agent_id="commercial_area", data=data)[0])

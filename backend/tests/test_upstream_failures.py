@@ -173,7 +173,7 @@ class UpstreamTests(unittest.IsolatedAsyncioTestCase):
                 area_resolver=fake_area,
             )
         self.assertEqual(result.status, "partial")
-        row = next(i for i in result.data["industries"] if i["industry_id"] == "I201")
+        row = next(i for i in result.data["industries"] if i["industry_id"] == "SV020")
         self.assertIsNone(row["score"])
         self.assertEqual(row["metrics"]["latest_store_count"], 20)
         self.assertEqual(row["confidence"], "low")
@@ -226,6 +226,6 @@ class UpstreamTests(unittest.IsolatedAsyncioTestCase):
     async def test_one_scored_industry_has_no_relative_rank(self):
         frame = await preprocess([r for r in raw_rows() if r["svc_induty_cd"] == "CS100001"])
         scored = calculate_lifecycle_scores(frame, 4).set_index("service_id")
-        self.assertTrue(pd.isna(scored.loc["I201", "lifecycle_score"]))
-        self.assertEqual(scored.loc["I201", "confidence"], "low")
-        self.assertEqual(scored.loc["I201", "latest_store_count"], 20)
+        self.assertTrue(pd.isna(scored.loc["SV020", "lifecycle_score"]))
+        self.assertEqual(scored.loc["SV020", "confidence"], "low")
+        self.assertEqual(scored.loc["SV020", "latest_store_count"], 20)

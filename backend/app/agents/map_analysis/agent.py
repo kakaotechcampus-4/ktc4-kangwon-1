@@ -140,7 +140,7 @@ async def observe(
         if q.facility_code:
             return q.facility_code
         # 카카오 대응이 명확한 음식점·카페만 제한합니다. 다른 업종은 임의 배정하지 않습니다.
-        if q.industry_code == "I212":
+        if q.industry_code == "SV026":
             return "CE7"
         return "FD6" if get(q.industry_code).major_code == "I2" else None
 

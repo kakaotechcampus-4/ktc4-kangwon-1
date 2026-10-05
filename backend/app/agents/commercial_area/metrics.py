@@ -102,7 +102,7 @@ def build_middle_rows(
     district_total = sum(district_counts.values()) if district_counts else 0
 
     known = {m.code: m for m in master}
-    # 누적 유인(Nelson 2원칙)용 대분류 집계. 중분류 75회를 도는 루프 안에서 매번 다시 세지 않도록
+    # 누적 유인(Nelson 2원칙)용 대분류 집계. 업종 루프 안에서 매번 다시 세지 않도록
     # 여기서 한 번만 만든다.
     major_counts = count_by_major(stores)
     middle_counts_by_major: dict[str, list[int]] = {}

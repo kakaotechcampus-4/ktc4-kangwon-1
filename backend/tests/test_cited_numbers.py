@@ -3,7 +3,7 @@ import unittest
 from app.evidence import CitationError, render_cited
 
 SOURCES = {
-    "commercial_area": {"by_middle": [{"code": "I201", "count": 1234, "lq": 1.24}]},
+    "commercial_area": {"by_middle": [{"code": "SV020", "count": 1234, "lq": 1.24}]},
     "floating_population": {
         "age_share": {"age_20": 0.31, "10": 0.05},
         "time_share": {"11_14": 0.2},

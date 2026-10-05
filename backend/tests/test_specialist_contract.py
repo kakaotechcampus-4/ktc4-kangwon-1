@@ -13,13 +13,13 @@ class SpecialistContractTests(unittest.TestCase):
         self.query = {
             "agent_id": "commercial_area",
             "question": "한식 점포 수를 확인해 주세요.",
-            "industry_codes": ["I201"],
+            "industry_codes": ["SV020"],
             "why_needed": "경쟁 판단",
             "expected_impact": "추천 순위 검토",
         }
 
     def test_query_rejects_unknown_and_duplicate_industries(self):
-        for codes in (["I299"], ["I201", "I201"]):
+        for codes in (["I299"], ["SV020", "SV020"]):
             with self.subTest(codes=codes), self.assertRaises(ValidationError):
                 schemas.SpecialistQuery(**{**self.query, "industry_codes": codes})
 
@@ -27,7 +27,7 @@ class SpecialistContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             schemas.ConsultPlan(action="ask_specialists", queries=[self.query, self.query])
         plan = schemas.ConsultPlan(action="ask_specialists", queries=[self.query])
-        self.assertEqual(plan.queries[0].industry_codes, ["I201"])
+        self.assertEqual(plan.queries[0].industry_codes, ["SV020"])
         with self.assertRaises(ValidationError):
             schemas.ConsultPlan(
                 action="ask_specialists",
@@ -68,7 +68,7 @@ class SpecialistContractTests(unittest.TestCase):
             )
 
     def test_finding_requires_valid_industry_and_pointer(self):
-        base = dict(claim="점포가 있습니다.", signal="context", industry_code="I201")
+        base = dict(claim="점포가 있습니다.", signal="context", industry_code="SV020")
         for changed in (
             {"industry_code": "I299", "evidence": [{"path": "/count"}]},
             {"evidence": [{"path": "count"}]},

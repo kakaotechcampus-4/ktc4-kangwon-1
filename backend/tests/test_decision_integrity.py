@@ -43,7 +43,7 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
             "summary": "가상 시험 판단",
             "recommendations": [
                 {
-                    "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                    "category": {"major": "음식점업", "middle": "한식 음식점"},
                     "score": 50,
                     "reasons": ["시험 근거"],
                     "risks": [],
@@ -68,19 +68,19 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(name, prompt)
 
     async def test_only_existing_lookup_aliases_are_normalized(self):
-        self.response["recommendations"][0]["category"]["middle"] = "한식음식점"
+        self.response["recommendations"][0]["category"]["middle"] = "한식 음식점"
         result = await analyze(self.request, generate=Mock(return_value=self.response))
-        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
-        self.assertEqual(self.response["recommendations"][0]["category"]["middle"], "한식음식점")
+        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점")
+        self.assertEqual(self.response["recommendations"][0]["category"]["middle"], "한식 음식점")
 
     async def test_each_list_accepts_five_but_rejects_six_without_padding(self):
         names = [
-            "한식 음식점업",
-            "중식 음식점업",
-            "일식 음식점업",
-            "서양식 음식점업",
-            "기타 간이 음식점업",
-            "비알코올 음료점업",
+            "한식 음식점",
+            "중식 음식점",
+            "일식 음식점",
+            "양식·외국식 음식점",
+            "간이 음식점",
+            "카페·비알코올 음료점",
         ]
         template = self.response["recommendations"][0]
         for target in ("recommendations", "not_recommended"):
@@ -103,7 +103,7 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_subcategory_and_wrong_major_are_rejected(self):
         for major, middle in (
             ("음식점업", "치킨전문점"),
-            ("소매업", "한식 음식점업"),
+            ("소매업", "한식 음식점"),
             ("음식점업", "한식 음싣점업"),
         ):
             self.response["recommendations"][0]["category"] = {"major": major, "middle": middle}
@@ -112,7 +112,7 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_aliases_cannot_duplicate_a_code_across_either_list(self):
         alias = copy.deepcopy(self.response["recommendations"][0])
-        alias["category"]["middle"] = "한식음식점"
+        alias["category"]["middle"] = "한식 음식점"
         for target in ("recommendations", "not_recommended"):
             response = copy.deepcopy(self.response)
             response[target].append(alias)
@@ -168,7 +168,7 @@ class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pointer_uses_original_array_order_not_code_or_rank(self):
         self.request["analyses"][0]["data"] = {
-            "rows": [{"code": "I212", "count": 2}, {"code": "I201", "count": 0}]
+            "rows": [{"code": "SV026", "count": 2}, {"code": "SV020", "count": 0}]
         }
         self.response["recommendations"][0]["evidence"][0]["path"] = "/rows/1/count"
         await analyze(self.request, generate=Mock(return_value=self.response))

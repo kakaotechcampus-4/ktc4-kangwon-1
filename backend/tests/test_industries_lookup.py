@@ -10,10 +10,10 @@ class NameNormalizationTests(unittest.TestCase):
     def test_team_vocabularies_resolve_to_one_industry(self):
         # 지금 팀 안에서 갈려 있는 세 표기. 이게 합쳐지는 게 이 모듈의 존재 이유다.
         found = [
-            lookup.find_by_name(name) for name in ("한식음식점", "한식 음식점업", "한식음식점업")
+            lookup.find_by_name(name) for name in ("한식 음식점", "한식 음식점", "한식 음식점")
         ]
         self.assertTrue(all(found))
-        self.assertEqual({industry.code for industry in found}, {"I201"})
+        self.assertEqual({industry.code for industry in found}, {"SV020"})
 
     def test_unknown_name_returns_none(self):
         self.assertIsNone(lookup.find_by_name("존재하지 않는 업종"))
@@ -27,8 +27,8 @@ class CodeLookupTests(unittest.TestCase):
         self.assertIsNone(lookup.find("ZZ999"))
 
     def test_seoul_code_folds_into_the_industry(self):
-        self.assertEqual(lookup.from_seoul("CS100005").code, "I210")
-        self.assertEqual(lookup.from_seoul("CS300002").code, "G204")
+        self.assertEqual(lookup.from_seoul("CS100005").code, "SV024")
+        self.assertEqual(lookup.from_seoul("CS300002").code, "SV003")
 
     def test_excluded_seoul_code_has_no_industry(self):
         self.assertIsNone(lookup.from_seoul("CS300043"))
@@ -37,18 +37,18 @@ class CodeLookupTests(unittest.TestCase):
     def test_several_seoul_codes_share_one_industry(self):
         # 서울시가 우리보다 잘게 쪼개져 있어 생기는 일. 합산은 맞지만 되돌릴 수는 없다.
         codes = {lookup.from_seoul(code).code for code in ("CS100005", "CS100006", "CS100007")}
-        self.assertEqual(codes, {"I210"})
+        self.assertEqual(codes, {"SV024"})
 
 
 class Legacy70Tests(unittest.TestCase):
     def test_one_legacy_industry_can_split(self):
         codes = [industry.code for industry in lookup.from_legacy70(33)]
-        self.assertEqual(codes, ["G202", "G203", "G222"])
+        self.assertEqual(codes, ["SV001", "SV002", "SV017"])
 
     def test_industry_without_seoul_route_is_still_reachable(self):
-        # 개폐업이 서울시 자료로는 못 만든다고 한 업종. 우리 자료로 이어진다.
+        # 51개 서비스 Master에서 빠진 과거 Public 업종은 추정 연결하지 않는다.
         codes = [industry.code for industry in lookup.from_legacy70(43)]
-        self.assertEqual(codes, ["Q101", "Q104"])
+        self.assertEqual(codes, [])
 
     def test_unknown_legacy_id_returns_empty(self):
         self.assertEqual(lookup.from_legacy70(999), ())
@@ -56,10 +56,10 @@ class Legacy70Tests(unittest.TestCase):
 
 class CategoryBridgeTests(unittest.TestCase):
     def test_as_category_passes_team_contract_validation(self):
-        major, middle = lookup.as_category("I201")
+        major, middle = lookup.as_category("SV020")
         category = Category(major=major, middle=middle)
         self.assertEqual(category.major, "음식점업")
-        self.assertEqual(category.middle, "한식 음식점업")
+        self.assertEqual(category.middle, "한식 음식점")
 
     def test_every_industry_produces_a_valid_category(self):
         from app.industries.catalog import INDUSTRIES

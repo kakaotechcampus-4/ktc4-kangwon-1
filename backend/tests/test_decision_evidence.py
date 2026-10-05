@@ -37,15 +37,15 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         renamed["industries"][0]["upjong_code"] = renamed["industries"][0].pop("industry_id")
         with self.assertRaises(ValidationError):
             index_paths(renamed, "business_lifecycle")
-        extra = {**data, "top_industries": [{"upjong_code": "I201", "store_count": 12}]}
+        extra = {**data, "top_industries": [{"upjong_code": "SV020", "store_count": 12}]}
         with self.assertRaises(ValidationError):
             index_paths(extra, "business_lifecycle")
 
     async def test_invalid_category_is_corrected_at_both_model_boundaries(self):
         for category in (
             {"code": "I299"},
-            {"code": "I201", "major": "음식점업", "middle": "한식 음식점업 "},
-            {"code": "I201", "major": "다른 분류", "middle": "한식 음식점업"},
+            {"code": "SV020", "major": "음식점업", "middle": "한식 음식점 "},
+            {"code": "SV020", "major": "다른 분류", "middle": "한식 음식점"},
         ):
             for real_model in (False, True):
                 bad = self.response("/industries/1/metrics/net")
@@ -58,7 +58,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                             result = await evaluate(self.request)
                     else:
                         result = await evaluate(self.request, generate=call)
-                    self.assertEqual(result.recommendations[0].category.code, "I201")
+                    self.assertEqual(result.recommendations[0].category.code, "SV020")
                     correction = json.loads(call.call_args_list[1].args[1])["correction"]
                     self.assertEqual(correction["reason"], "invalid_category")
                     self.assertEqual(correction["field"], "recommendations.0.category")
@@ -104,7 +104,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         lifecycle = lifecycle_data(
-            lifecycle_row("I201", metrics={"net": 0}, type="설명", citable={"type": False})
+            lifecycle_row("SV020", metrics={"net": 0}, type="설명", citable={"type": False})
         )
         paths = index_paths(lifecycle, "business_lifecycle")
         for path in (
@@ -112,14 +112,14 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
             "/industries/0/metrics/net",
             "/industries/0/metrics",
         ):
-            self.assertEqual(paths[path], "I201")
+            self.assertEqual(paths[path], "SV020")
         for path in ("/industries/0/type", "/industries/0"):
             self.assertNotIn(path, paths)
         commercial = mock_commercial_area_data()
         commercial["by_middle"][0].update(count=2, lq=3.0, citable={"lq": False})
         paths = index_paths(commercial, "commercial_area")
-        self.assertEqual(paths["/by_middle/0/code"], "I201")
-        self.assertEqual(paths["/by_middle/0/count"], "I201")
+        self.assertEqual(paths["/by_middle/0/code"], "SV020")
+        self.assertEqual(paths["/by_middle/0/count"], "SV020")
         for path in ("/by_middle/0/lq", "/by_middle/0"):
             self.assertNotIn(path, paths)
 
@@ -139,7 +139,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     def test_field_policy_preserves_values_without_allowing_parent_citation(self):
         data = lifecycle_data(
             lifecycle_row(
-                "I201",
+                "SV020",
                 metrics={"net": 0},
                 type="성장",
                 evidence=["생성 문장"],
@@ -160,8 +160,8 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     def test_lifecycle_generated_text_is_not_evidence(self):
         row = format_scored_industry(
             {
-                "industry_id": "I201",
-                "industry_name": "한식 음식점업",
+                "industry_id": "SV020",
+                "industry_name": "한식 음식점",
                 "lifecycle_score": 60,
                 "type": "성장",
                 "confidence": "high",
@@ -189,8 +189,8 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.source = next(s for s in self.request.analyses if s.agent_id == "business_lifecycle")
         self.source.data = lifecycle_data(
-            lifecycle_row("S209", metrics={"net": 3}),
-            lifecycle_row("I201", data_available=True, metrics={"net": 0, "missing": None}),
+            lifecycle_row("SV045", metrics={"net": 3}),
+            lifecycle_row("SV020", data_available=True, metrics={"net": 0, "missing": None}),
         )
 
     def response(self, path, agent_id="business_lifecycle"):
@@ -215,7 +215,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         entry = next(
             e
             for e in entries
-            if e["industry_code"] == "I201" and e["agent_id"] == "business_lifecycle"
+            if e["industry_code"] == "SV020" and e["agent_id"] == "business_lifecycle"
         )
         self.assertIn("/industries/1/metrics/net", entry["paths"])
         self.assertNotIn("/industries/1/metrics/missing", entry["paths"])
@@ -252,19 +252,19 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_commercial_code_and_supplement_paths_match_industry(self):
         source = next(s for s in self.request.analyses if s.agent_id == "commercial_area")
         data = mock_commercial_area_data()
-        laundry = lookup.get("S209")
+        laundry = lookup.get("SV045")
         data["by_middle"][0].update(
-            code="S209",
+            code="SV045",
             name=laundry.name,
             major_code=laundry.major_code,
             major_name=laundry.major_name,
             count=3,
         )
         data["by_middle"][1].update(
-            code="I201",
-            name=lookup.get("I201").name,
-            major_code=lookup.get("I201").major_code,
-            major_name=lookup.get("I201").major_name,
+            code="SV020",
+            name=lookup.get("SV020").name,
+            major_code=lookup.get("SV020").major_code,
+            major_name=lookup.get("SV020").major_name,
             count=0,
         )
         data["supplement_lq"] = {
@@ -272,7 +272,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
             "baseline_radius_m": 2000,
             "baseline_store_total": 9000,
             "checked_at": "2026-10-03T00:00:00+00:00",
-            "industries": [{"industry_id": "I201", "citable": {"lq": True}, "lq": 0.0}],
+            "industries": [{"industry_id": "SV020", "citable": {"lq": True}, "lq": 0.0}],
             "note": "보완",
         }
         source.data = data
@@ -290,7 +290,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_or_conflicting_identity_is_not_shared_evidence(self):
         for changes, error in (
             ({"industry_id": "unknown"}, ValidationError),
-            ({"industry_name": lookup.get("S209").name}, ValidationError),
+            ({"industry_name": lookup.get("SV045").name}, ValidationError),
             ({"confidence": "none"}, DecisionContractError),
         ):
             original = self.source.data["industries"][1].copy()

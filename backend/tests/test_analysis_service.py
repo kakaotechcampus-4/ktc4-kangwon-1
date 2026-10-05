@@ -107,7 +107,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
                 "summary": "시험 판단",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점"},
                         "score": 60,
                         "reasons": ["시험 자료"],
                         "risks": [],

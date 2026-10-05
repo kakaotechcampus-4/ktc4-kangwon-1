@@ -8,14 +8,14 @@ from app.schemas import AgentAnalysis, DecisionRequest
 
 class SchemaTests(unittest.TestCase):
     def test_category_code_fills_names_and_preserves_old_input(self):
-        category = schemas.Category.model_validate({"code": "I201"})
+        category = schemas.Category.model_validate({"code": "SV020"})
         self.assertEqual(category.major, "음식점업")
-        self.assertEqual(category.middle, "한식 음식점업")
-        legacy = schemas.Category(major="음식점업", middle="한식 음식점업")
-        self.assertEqual(legacy.code, "I201")
+        self.assertEqual(category.middle, "한식 음식점")
+        legacy = schemas.Category(major="음식점업", middle="한식 음식점")
+        self.assertEqual(legacy.code, "SV020")
 
     def test_category_rejects_unknown_code_and_name_conflict(self):
-        for value in ({"code": "UNKNOWN"}, {"code": "I201", "middle": "중식 음식점업"}):
+        for value in ({"code": "UNKNOWN"}, {"code": "SV020", "middle": "중식 음식점"}):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 schemas.Category.model_validate(value)
 
@@ -79,11 +79,11 @@ class SchemaTests(unittest.TestCase):
                 }
                 for index, middle in enumerate(
                     [
-                        "중식 음식점업",
-                        "서양식 음식점업",
-                        "일식 음식점업",
-                        "한식 음식점업",
-                        "기타 간이 음식점업",
+                        "중식 음식점",
+                        "양식·외국식 음식점",
+                        "일식 음식점",
+                        "한식 음식점",
+                        "간이 음식점",
                     ]
                 )
             ],
@@ -91,7 +91,7 @@ class SchemaTests(unittest.TestCase):
             "limitations": [],
         }
         content = schemas.DecisionContent.model_validate(payload)
-        self.assertEqual(content.recommendations[-1].category.middle, "기타 간이 음식점업")
+        self.assertEqual(content.recommendations[-1].category.middle, "간이 음식점")
 
     def test_decision_request_rejects_another_request_result(self):
         with self.assertRaises(ValueError):

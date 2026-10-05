@@ -89,7 +89,7 @@ backend/
 │  ├─ seoul.py               # 서울 API 비동기 전송·본문 검증
 │  ├─ llm/                   # 모델 호출·설정, 요청별 호출 예산(budget.py)
 │  ├─ db/                    # 연결·테이블(schema.sql)·저장소
-│  ├─ industries/            # 공통 75개 중분류 업종·매핑
+│  ├─ industries/            # 공통 51개 서비스 통합 업종·매핑
 │  └─ agents/
 │     ├─ orchestration/      # 그래프, 병렬 실행, 보완, 전문가 도구 연결(consult.py)
 │     ├─ decision/           # 판정관: 지시문(prompt.md), 입력 구성(context.py), 근거 검증
@@ -130,7 +130,7 @@ backend/
 ![유동인구 에이전트 구조](../docs/agent/유동인구.png)
 
 - `agent.py`의 `analyze()`가 진입점입니다. `metrics.py`: 집계·기준선·추세·반경·신뢰도. `geo.py`: 상권 겹침 판정.
-- 공통 수요 자료입니다. 75개 업종으로 인구를 임의 배분하지 않습니다.
+- 공통 수요 자료입니다. 51개 업종으로 인구를 임의 배분하지 않습니다.
 - 유동(명/일), 상주, 직장 인구는 모집단이 달라 더하지 않습니다.
 
 </details>
@@ -162,7 +162,7 @@ backend/
 <summary>지도 — 주변 업종·시설 조회</summary>
 
 - `agent.py`의 `observe()`가 같은 좌표·반경으로 카카오맵을 검색합니다.
-- 원본 장소를 보존하고, 업종 검색 표본만 LLM으로 공통 75개 업종에 매핑합니다(7일 캐시).
+- 원본 장소를 보존하고, 업종 검색 표본만 LLM으로 공통 51개 업종에 매핑합니다(7일 캐시).
 - 조회 시점의 등록 정보입니다. 분기 통계와 더하거나 폐업률 분모로 쓰지 않습니다.
 - 사용법은 [지도 도구 README](app/agents/map_analysis/README.md)를 봅니다.
 
@@ -373,7 +373,7 @@ SQLite 상대 경로는 실행 위치와 관계없이 `backend/` 기준입니다
 
 ## 공통 업종
 
-[app/industries/](app/industries/README.md)가 공통 75개 중분류 업종과 매핑의 기준입니다.
+[app/industries/](app/industries/README.md)가 공통 51개 서비스 업종과 매핑의 기준입니다.
 
 - 원본은 `industries/data/*.csv`, 생성물은 `catalog.py`입니다. 생성물을 직접 고치지 않습니다.
 - 서울시 업종 매핑 99건 중 모델 판정 53건은 아직 사람 검수가 필요합니다.

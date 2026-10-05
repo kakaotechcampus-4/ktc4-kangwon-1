@@ -12,14 +12,14 @@ from app.schemas import MapData
 
 
 def map_data():
-    industry = lookup.get("I201")
+    industry = lookup.get("SV020")
     return MapData.model_validate(
         {
             "queries": {
                 "q1": {
                     "request": {
                         "kind": "industry",
-                        "industry_code": "I201",
+                        "industry_code": "SV020",
                         "query": "한식",
                         "why_needed": "경쟁 확인",
                         "expected_impact": "추천 조정",
@@ -35,13 +35,13 @@ def map_data():
                     "name": "가",
                     "category_name": "음식점",
                     "mapping_status": "mapped",
-                    "industry_code": "I201",
+                    "industry_code": "SV020",
                     "mapping_method": "llm",
                 },
                 "p2": {"name": "나", "category_name": "음식점", "mapping_status": "unmapped"},
             },
             "industries": {
-                "I201": {
+                "SV020": {
                     "name": industry.name,
                     "major": industry.major_name,
                     "place_ids": ["p1"],
@@ -74,13 +74,13 @@ class OwnerTests(unittest.TestCase):
             "baseline_reference_date": None,
             "from_cache": False,
             "industries": [
-                {"industry_id": "I201", "citable": {"lq": True}, "lq": 1.1},
-                {"industry_id": "I212", "citable": {"lq": True}, "lq": None},
+                {"industry_id": "SV020", "citable": {"lq": True}, "lq": 1.1},
+                {"industry_id": "SV026", "citable": {"lq": True}, "lq": None},
             ],
             "note": "보완",
         }
         owners = industry_owners("commercial_area", data)
-        self.assertEqual(owners["/supplement_lq/industries/1"], "I212")
+        self.assertEqual(owners["/supplement_lq/industries/1"], "SV026")
 
     def test_lifecycle_rows_and_supplement_block(self):
         data = mock_business_lifecycle_data(with_supplement=True)
@@ -91,7 +91,7 @@ class OwnerTests(unittest.TestCase):
     def test_map_industries_and_mapped_places(self):
         self.assertEqual(
             industry_owners("map_analysis", map_data()),
-            {"/industries/I201": "I201", "/places/p1": "I201"},
+            {"/industries/SV020": "SV020", "/places/p1": "SV020"},
         )
 
     def test_population_has_no_rows_even_when_blocks_are_removed(self):

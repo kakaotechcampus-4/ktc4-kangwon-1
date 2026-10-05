@@ -63,9 +63,9 @@
 ## 개폐업 해석
 
 - 현재 business_lifecycle의 업종 목록은 data.industries입니다. 각 행에는 industry_id, industry_name, score, type, confidence, data_available, score_available, data_status, data_complete, metrics, evidence, warning이 있습니다. metadata, coverage, taxonomy, scoring_method는 data 바로 아래의 별도 항목입니다. 실제 입력에서 존재 여부를 확인합니다.
-- taxonomy.id가 sbiz-middle-75인 자료끼리는 개폐업 industries 각 행의 industry_id와 상권 by_middle 각 행의 code로 업종을 연결합니다. 명칭과 분류 범위도 확인하며, 코드를 배열 인덱스로 사용하지 않습니다. 다른 분류 체계나 과거 입력은 대응이 확인되는 업종만 연결하고 불명확한 대응은 한계로 남깁니다.
+- taxonomy.id가 service-industry-51인 자료끼리는 개폐업 industries 각 행의 industry_id와 상권 by_middle 각 행의 code로 업종을 연결합니다. 명칭과 분류 범위도 확인하며, 코드를 배열 인덱스로 사용하지 않습니다. 다른 분류 체계나 과거 입력은 대응이 확인되는 업종만 연결하고 불명확한 대응은 한계로 남깁니다.
 - 세부 업종 여러 개가 하나의 중분류에 대응하면 개별 상대 점수·폐업률을 단순 평균하지 않습니다. 분모와 집계 범위가 없으면 일부 세부 업종의 참고 자료로만 설명합니다.
-- 공통 중분류에 합쳐진 지표를 원본 소분류별 관측값으로 되돌리지 않습니다. 예를 들어 I210(기타 간이 음식점업) 집계만으로 치킨집만의 수요나 폐업률을 단정할 수 없습니다.
+- 서비스 업종에 합쳐진 지표를 원본 소분류별 관측값으로 되돌리지 않습니다. 예를 들어 SV024(간이 음식점) 집계만으로 치킨집만의 수요나 폐업률을 단정할 수 없습니다.
 - 개폐업 미지원 25개 중분류의 결측값은 실제 0이나 높은 안정성이 아닙니다. 지원 여부와 가용 자료를 확인하고 부족한 축을 한계로 남깁니다.
 - 서울시 업종 연결은 사람 검수가 끝나지 않은 모델 판정 53건을 포함합니다. taxonomy의 검수 상태와 warnings를 확인하고 해당 매핑에 의존한 판단의 불확실성을 limitations에 명시합니다.
 - industries 각 행의 score는 개폐업 측 상대 점수입니다. score_available이 false이거나 score가 null이면 점수를 사용하지 않습니다. data.scoring_method와 비교 대상을 읽고 값·가중치를 임의로 변경하지 않습니다. 정의가 빠졌다면 계산식이나 평가 기간을 추측하지 않습니다.
@@ -81,7 +81,7 @@
 
 - 유동 규모와 시간대, 업종별 개폐업 현황, 경쟁 점포와 상권 특성을 함께 검토합니다.
 - 업종은 `category.code`로 선택합니다. 중분류까지 판단하며 공식 대분류·중분류 명칭은 코드에서 채웁니다.
-- 뒤에 제공된 공통 75개 중분류 목록만 후보로 사용합니다. 이름을 함께 반환한다면 반드시 같은 행의 공식명과 일치해야 합니다.
+- 뒤에 제공된 서비스 통합 업종 51개 목록만 후보로 사용합니다. 이름을 함께 반환한다면 반드시 같은 행의 공식명과 일치해야 합니다.
 - 특정 업종군으로 제한하지 않습니다. 원본 세부 업종이나 상표를 독립 중분류로 만들거나, 비슷한 이름만 보고 분류를 추측하지 않습니다.
 - 먼저 자료의 위치·기간·분류 대응을 확인하고, 후보별로 수요 적합성 → 경쟁·집적 → 개폐업 안정성을 검토합니다. 연령이나 유형 하나만으로 업종 선호를 단정하지 않습니다.
 - 여러 축이 일치하면 지지 근거를, 상충하면 장점과 위험을 함께 설명합니다. 누락된 축은 임의 점수로 채우지 않습니다. 충분한 자료가 있을 때 서로 다른 분석 출처의 근거를 연결합니다.
@@ -117,7 +117,7 @@
 - 최상위 키는 "status", "summary", "recommendations", "not_recommended", "limitations" 다섯 개만 포함합니다.
 - "status"는 "ok" 또는 "no_data"입니다. "summary"는 비어 있지 않은 문자열, 두 업종 목록은 배열, "limitations"는 비어 있지 않은 문자열들의 배열이며 한계가 없으면 []입니다.
 - 두 업종 목록의 각 항목은 "category", "score", "reasons", "evidence", "risks"만 포함합니다.
-- "category"는 {"code": "I201"}처럼 공통 중분류 코드를 가진 객체입니다. "score"는 0~100 정수입니다.
+- "category"는 {"code": "SV020"}처럼 서비스 canonical code를 가진 객체입니다. "score"는 0~100 정수입니다.
 - "reasons"는 비어 있지 않은 문자열을 하나 이상 가진 배열입니다. "risks"도 문자열 배열이며 없으면 []입니다.
 - reasons·risks에는 숫자를 직접 쓰지 않습니다. 숫자 자리에 {0}, {1}처럼 같은 항목 evidence 배열의 번호를 쓰면 코드가 그 경로의 원자료 값을 채웁니다.
   예: "반경 안 한식 점포가 {0}개이고 주변보다 {1}배 몰려 있습니다." + evidence [점포 수 경로, LQ 경로]
@@ -176,7 +176,7 @@ industry_digest·neighborhood 각 항목의 path가 가리키는 원자료에 �
 
 입력 읽는 법:
 - sources: 분석별 status·scope·warnings·rate_basis입니다. error·no_data 분석은 근거로 쓰지 않습니다.
-- industry_digest: 75개 업종별로 코드가 계산 없이 골라 둔 {agent_id, path, value}입니다.
+- industry_digest: 서비스 Master 각 업종별로 코드가 계산 없이 골라 둔 {agent_id, path, value}입니다.
   metrics가 비어 있으면 점포 0개가 아니라 자료 미확보·인용 불가입니다. 0과 구분합니다.
 - neighborhood: 업종에 속하지 않는 동네 공통 값(인구·밀도·다양성 등)입니다. 모든 업종의 직접 근거로 쓰지 않습니다.
 - briefs: 전문가가 자기 원자료를 읽고 쓴 해석입니다. answers: 되물은 질문의 답변입니다.
@@ -263,7 +263,7 @@ map_lookup 스키마가 제공될 때만 주변 업종·시설 확인을 요청�
 why_needed와 expected_impact에 후보 판단에 필요한 이유와 영향을 적으세요.
 업종은 공통 코드와 실제 지도에서 쓸 짧은 검색어, 시설은 허용 시설 코드만 요청합니다.
 주소·반경은 실행기가 고정합니다. 검색어에 주소나 별도 반경을 덧붙이지 마세요.
-75개 전체 조회나 누락 채우기를 위한 무의미한 검색은 금지합니다.
+서비스 Master 전체 조회나 누락 채우기를 위한 무의미한 검색은 금지합니다.
 
 map_observation은 분기 통계가 아닌 조회 시점 지도 등록 정보입니다. 장소는 실제 영업 여부가
 확인된 것이 아니고 매핑은 LLM 추론입니다. 분기 점포 수와 더하거나 폐업률 분모로 쓰지 마세요.
@@ -272,7 +272,7 @@ queries의 total_count는 검색 결과 건수, industries의 sampled_count는 I
 시설 분류가 전체 학교라면 초등학교만의 수로 해석하지 마세요. 거리는 도보 시간이 아닙니다.
 
 지도 근거 agent_id는 map_analysis이고 path는 map_observation.data 내부 경로입니다.
-허용 예: /industries/I212/sampled_count, /places/장소ID/distance_m,
+허용 예: /industries/SV026/sampled_count, /places/장소ID/distance_m,
 /queries/q1/total_count. 업종 표본·장소 근거의 매핑 코드는 추천 업종과 일치해야 합니다.
 키워드의 양수 total_count는 해당 업종의 확정 건수로 인용할 수 없습니다.
 시설 검색 건수와 정상 업종 검색 0건은 인용할 수 있지만 0건은 검색 결과 없음이지 실제 점포 없음이 아닙니다.

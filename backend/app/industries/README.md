@@ -1,116 +1,57 @@
-# 팀 공통 업종 어휘 — 소상공인 중분류 75종
+# 팀 공통 업종 어휘 — 서비스 통합 업종 51개
 
-세 에이전트가 같은 업종을 가리킬 코드가 없어서 만들었다.
-
-| 에이전트 | 예전에 쓰던 표현 |
-| --- | --- |
-| 경쟁업체 | 소상공인 중분류 코드 `I201` |
-| 개폐업 | 자체 정수 `industry_id` 1~70 |
-| 유동인구 | 업종 개념 없음 |
-| 결정 | `Category(major, middle)` 자유 문자열 |
-
-`app/schemas.py`의 `Category`가 유일한 접점인데 둘 다 제약 없는 문자열이라, 같은 한식이
-`한식음식점` / `한식 음식점업` / `중식` 으로 갈려 있었다. 이 어휘가 그 기준을 세운다.
+commercial_area, business_lifecycle, map_analysis, decision이 공유하는 최종 추천
+taxonomy다. 서비스 업종은 원천 코드와 구분되는 `SV001`~`SV051`을 사용하며,
+`taxonomy.id`는 `service-industry-51`이다. floating_population은 업종별 분석이
+아니므로 이 taxonomy에 의존하지 않는다.
 
 ## 쓰는 법
 
 ```python
 from app.industries import lookup
 
-lookup.find_by_name("한식음식점")  # 표기가 달라도 같은 업종으로 찾는다
-lookup.from_seoul("CS100005")  # 서울시 생활밀접업종 코드 → 우리 업종
-lookup.from_legacy70(33)  # 개폐업 70업종 ID → 우리 업종 (여럿일 수 있다)
-lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Category 에 그대로 넣는다
+lookup.find_by_name("한식 음식점")
+lookup.from_seoul("CS100005")  # 서울시 코드 → SV024
+lookup.as_category("SV020")  # ("음식점업", "한식 음식점")
 ```
 
-표 자체가 필요하면 `catalog.py`를 직접 읽는다. 개폐업 에이전트도 이 파일을 직접 사용한다.
-
-| 기존 개폐업 이름 | 여기 |
-| --- | --- |
-| `SERVICE_INDUSTRIES` (75, 공통 상수 별칭) | `INDUSTRIES` (75) |
-| `SEOUL_TO_SERVICE` | `SEOUL_TO_INDUSTRY` |
-| `EXCLUDED_SEOUL_INDUSTRIES` | `EXCLUDED_SEOUL_INDUSTRIES` |
-| `UNSUPPORTED_SERVICE_INDUSTRIES` | `INDUSTRIES_WITHOUT_SEOUL` (25) |
-
-## 구성
-
-```
-75종
- ├─ 50종  서울시 생활밀접업종 99개가 여기로 접힌다
- └─ 25종  소상공인 단독 — 서울시 100대에 없다
-```
-
-단독 25종에 광고 · 시장조사 · 경영컨설팅 · 엔지니어링 · 병원 · 기타 보건 · 마사지 · 장례가 들어 있다.
-서울시 자료가 "생활밀접"만 다뤄 빠진 자리를 우리 전국 자료가 메운다.
-
-서울시 `CS300043 전자상거래업`은 **제외**한다. 무점포라 상가 자료에 잡히지 않는다.
-
-## 고치는 법
-
-원본은 `data/*.csv` 셋이고, `catalog.py`는 **자동 생성물**이다.
-생성물은 직접 고치지 않는다.
+런타임 기준은 자동 생성된 `catalog.py`다. 원본 CSV와 역할은 다음과 같다.
 
 | 파일 | 내용 |
 | --- | --- |
-| `data/industries.csv` | 75종 마스터 |
-| `data/seoul_to_industry.csv` | 서울시 99 → 중분류 |
-| `data/legacy70_to_industry.csv` | 개폐업 70 → 중분류 (마이그레이션용) |
+| `data/industries.csv` | 51개 서비스 Master |
+| `data/public_to_industry.csv` | 소상공인 원천 중·소분류 → 서비스 업종 |
+| `data/seoul_to_industry.csv` | 서울시 생활밀접업종 → 서비스 업종 |
+| `data/legacy70_to_industry.csv` | 과거 70업종 조회 호환용 원천표 |
 
 ```bash
 cd backend
-python scripts/build_industry_catalog.py            # 검증 후 catalog.py 재생성
-python scripts/build_industry_catalog.py --check    # 검증만. CI 가 이걸 돌린다
-```
-
-마스터를 공식 업종코드 파일에서 다시 만들 때는 아래 순서로 돌린다.
-`build_upjong_master`가 `industries.csv`를 4개 컬럼으로 다시 쓰므로 `build_industry_links`로
-`has_seoul`·`note`를 채운 뒤 카탈로그를 재생성해야 검증을 통과한다.
-
-```bash
-python scripts/build_upjong_master.py --official-csv <받은파일.csv>
-python scripts/build_industry_links.py --force
 python scripts/build_industry_catalog.py
+python scripts/build_industry_catalog.py --check
 ```
 
-### ⚠️ CSV 를 엑셀로 저장하지 말 것
+CSV는 BOM 있는 UTF-8만 허용한다. `catalog.py`는 직접 수정하지 않는다.
 
-엑셀에서 열었다 저장하면 인코딩이 cp949 로 바뀌고 행이 날아간다. 실제로 175행짜리 파일이
-131행이 된 적이 있다. 빌드가 BOM 없는 파일을 거부하므로 런타임까지 번지지는 않지만,
-**보기만 하고 닫거나 복사본을 열자.**
+## 원천 매핑 원칙
 
-## 알아둘 것
+- commercial_area는 점포 원자료를 서비스 업종으로 먼저 매핑하고 count, share,
+  LQ, 반경 집계를 다시 계산한다.
+- G213과 G215는 중분류 전체를 복제하지 않는다. `indsSclsCd`를 사용해 각각
+  `SV002`/`SV009`, `SV010`/`SV011`로 한 번만 배정한다. 알 수 없는 소분류는
+  `unmapped_store_count`로 남긴다.
+- business_lifecycle는 분기별 CS 원천 count를 서비스 업종별로 먼저 합산한 뒤
+  rate, trend, score를 다시 계산한다. 원천 score나 rate를 평균하지 않는다.
+- `SV046`~`SV051`은 서울시 Lifecycle 직접 대응이 없다. 0으로 채우지 않고
+  `unsupported`, `score_available=false`, 지표 `null`로 유지한다.
+- 지원 업종의 원천·분기 일부가 빠지면 `incomplete`, 전혀 관측되지 않으면
+  `missing`, 완전한 관측은 `observed`다. 실제 관측 0과 결측은 구분한다.
 
-**서울시가 우리보다 잘게 쪼개져 있다.** 99개가 50개 중분류로 접히므로 **합산은 맞지만 되돌릴 수 없다.**
+서울시 연결은 팀 확정표 90행이며, 지정되지 않은 10개 서울시 업종은 명시적으로
+제외한다. `N110`의 Lifecycle 대응은 `CS200046 의류임대`만 사용한다.
 
-```
-제과점 · 패스트푸드점 · 치킨전문점 · 분식전문점  →  I210 기타 간이 음식점업
-일반의원 · 치과의원 · 한의원                   →  Q102 의원
-```
+과거 `legacy70` 연결은 저장 결과 조회 호환용일 뿐 신규 Lifecycle 계산 경로가
+아니다. 과거 점수를 51개 점수로 복제하거나 평균하지 않는다.
 
-`I210` 점포 수를 보고 그게 치킨집이었는지 제과점이었는지는 알 수 없다.
-
-**개폐업 점수는 그대로 옮기면 안 된다.** 개폐업이 주는 건 개수가 아니라 0~100 점수인데,
-70 → 75 변환이 양방향 N:M 이다. `from_legacy70(33)` 이 셋을 돌려주고, 반대로 `Q102` 에는
-개폐업 3업종이 몰린다. 점수 3개를 산술평균하면 점포 1개짜리와 100개짜리를 같은 무게로 섞는다.
-신규 개폐업 분석은 원본 서울시 건수를 75개 업종으로 먼저 합산한 뒤 기존 상대 점수를
-재계산한다. 비율은 합산 분자/분모에서 계산하고 분모 0은 null이다.
-`lookup.from_legacy70()`는 과거 결과 조회용 연결만 제공하며 과거 점수를 신규 점수로 변환하지 않는다.
-
-신규 `AgentAnalysis.data.taxonomy.id`는 `sbiz-middle-75`이며 카탈로그 버전을 함께 기록한다.
-`taxonomy.version`은 생성 카탈로그의 `CATALOG_VERSION`(원본 CSV 내용의 해시)이며 분석 실행 버전이 아니다.
-공통 `Category` 계약은 기존 `major`/`middle` 두 문자열을 유지한다.
-개폐업 `industry_id`는 `I201` 같은 문자열이다. 25개 미지원 업종은 `unsupported`,
-지원되지만 조회되지 않은 업종은 `missing`, 원천 업종·분기·건수 일부 누락은 `incomplete`,
-완전한 관측은 `observed`로 구분한다. 관측 0은 유지하며 부분 합계를 완전 집계로 표시하지 않는다.
-동일 분기·상권·원본 업종 행은 완전히 같은 행만 중복 제거하고 상충 행은 오류로 처리한다.
-
-상권 분석은 운영 마스터 누락·구조 오류를 설정 오류로 반환한다. 알 수 없는 중분류는
-`coverage.unmapped_store_count`로 표시하며 75개 업종에 추정 배분하지 않는다.
-테스트 등에서 주입한 별도 마스터는 `custom-middle`로 표시한다.
-
-70개 어휘를 쓰던 과거 개폐업 예제(`examples/fixtures/business_lifecycle_*.json`)는 삭제했다.
-기존 DB 기록은 신규 formatter로 자동 변환하지 않는다.
-
-**서울시 연결 99건 중 53건이 모델 판정이다.** `data/seoul_to_industry.csv` 의 `match_method` 가
-`모델` 인 행은 사람 검수를 거치지 않았다. `근거 소분류`(`evidence_small`) 칸을 보면
-무엇을 보고 판단했는지 알 수 있다.
+`taxonomy.version`은 원본 CSV 내용에서 만든 `CATALOG_VERSION`이다. Master가
+바뀌면 catalog 생성 스크립트를 실행하고 전체 테스트로 세 Agent와 Decision의
+code/name 집합이 일치하는지 확인한다.

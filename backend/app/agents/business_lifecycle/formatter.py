@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.agents.business_lifecycle.schemas import BusinessLifecycleData
-from app.industries import MAPPING_REVIEW_WARNING, TAXONOMY
+from app.industries import TAXONOMY
 from app.industries.catalog import EXPECTED_INDUSTRY_COUNT, INDUSTRIES
 from app.schemas import AgentAnalysis, Scope
 
@@ -120,7 +120,7 @@ def build_warnings(
     전체 분석 결과에 대한 해석상 주의사항을 생성한다.
     """
 
-    warnings: list[str] = [MAPPING_REVIEW_WARNING]
+    warnings: list[str] = []
 
     unscored_count = sum(1 for industry in industries if not industry["score_available"])
 
@@ -242,12 +242,13 @@ def format_for_mediator(
     industries.sort(key=lambda item: item["industry_id"])
 
     # ========================================================
-    # 4. 공통 75개 Master 검증
+    # 4. 공통 서비스 Master 검증
     # ========================================================
 
     if len(industries) != EXPECTED_INDUSTRY_COUNT:
         raise BusinessLifecycleFormatterError(
-            f"Business Lifecycle 결과의 업종 수가 75개가 아닙니다. 현재={len(industries)}"
+            "Business Lifecycle 결과의 업종 수가 Master와 다릅니다. "
+            f"기대={EXPECTED_INDUSTRY_COUNT}, 현재={len(industries)}"
         )
 
     industry_ids = [industry["industry_id"] for industry in industries]
@@ -265,7 +266,7 @@ def format_for_mediator(
         extra_ids = sorted(actual_ids - expected_ids)
 
         raise BusinessLifecycleFormatterError(
-            f"75개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
+            f"Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
         )
 
     # ========================================================

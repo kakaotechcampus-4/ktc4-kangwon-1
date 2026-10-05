@@ -174,7 +174,7 @@ def calculate_lifecycle_scores(
         score_df["confidence"] = "low"
 
     # ========================================================
-    # 8. 공통 75개 Master에 점수 다시 결합
+    # 8. 공통 서비스 Master에 점수 다시 결합
     # ========================================================
 
     score_result = score_df[

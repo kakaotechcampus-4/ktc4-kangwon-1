@@ -22,7 +22,7 @@ async def run() -> int:
     parser.add_argument("--lon", type=float)
     parser.add_argument("--radius", type=int, default=DEFAULT_RADIUS_M)
     parser.add_argument("--query", action="append", dest="queries")
-    parser.add_argument("--industry-code", help="업종 조회 시 공통 75개 업종 코드")
+    parser.add_argument("--industry-code", help="업종 조회 시 서비스 통합 업종 코드")
     args = parser.parse_args()
 
     load_dotenv_if_present()

@@ -116,7 +116,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 "opbiz_stor_co": 0,
                 "clsbiz_stor_co": 1,
             }
-            for source in INDUSTRY_TO_SEOUL["I201"]
+            for source in INDUSTRY_TO_SEOUL["SV020"]
         ]
         with patch(
             "app.agents.business_lifecycle.preprocess.fetch_recent_store_data", return_value=rows
@@ -126,7 +126,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetch.call_args.kwargs["area_code"], "test-area")
         detail = result.data["supplement_quarters"]
         self.assertEqual(detail["quarters"], ["20241", "20242", "20243", "20244"])
-        entry = next(row for row in detail["industries"] if row["industry_id"] == "I201")
+        entry = next(row for row in detail["industries"] if row["industry_id"] == "SV020")
         self.assertIsNone(entry["opened_counts"][0])
         self.assertEqual(entry["opened_counts"][-1], 0)
         self.assertEqual(result.data["industries"], previous.data["industries"])
@@ -149,7 +149,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 "metadata": {"area_code": "test-area", "base_quarter": "20244", "quarter_count": 2},
                 "industries": [
                     {
-                        "industry_id": "I201",
+                        "industry_id": "SV020",
                         "confidence": "low",
                         "metrics": {
                             "period_open_count": 3,
@@ -168,7 +168,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             "quarters": ["20243", "20244"],
             "industries": [
                 {
-                    "industry_id": "I201",
+                    "industry_id": "SV020",
                     "confidence": "low",
                     "store_counts": [8, 10],
                     "opened_counts": [1, 2],
@@ -197,7 +197,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 "metadata": {"area_code": "test-area", "base_quarter": "20251", "quarter_count": 5},
                 "industries": [
                     {
-                        "industry_id": "I201",
+                        "industry_id": "SV020",
                         "confidence": "low",
                         "metrics": {
                             "period_open_count": 104,
@@ -216,7 +216,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             "quarters": ["20241", "20242", "20243", "20244", "20251"],
             "industries": [
                 {
-                    "industry_id": "I201",
+                    "industry_id": "SV020",
                     "confidence": "low",
                     "store_counts": [100] * 5,
                     "opened_counts": [100, 1, 1, 1, 1],
@@ -235,7 +235,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             "business_lifecycle",
             {
                 "metadata": {"area_code": "test-area", "base_quarter": "20244", "quarter_count": 4},
-                "industries": [{"industry_id": "I201", "score": 72}],
+                "industries": [{"industry_id": "SV020", "score": 72}],
             },
         )
         with patch(
@@ -262,7 +262,9 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 if agent_id == "commercial_area":
                     result.data.update({"radius_m": task.radius_m, "lq_retryable": True})
                 else:
-                    for row, code in zip(result.data["industries"], ("I201", "I212"), strict=True):
+                    for row, code in zip(
+                        result.data["industries"], ("SV020", "SV026"), strict=True
+                    ):
                         row["industry_id"] = code
                         row.setdefault("metrics", {}).update(
                             period_open_count=None, period_close_count=None
@@ -313,7 +315,7 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
                 "opbiz_stor_co": 0,
                 "clsbiz_stor_co": 1,
             }
-            for code in INDUSTRY_TO_SEOUL["I201"]
+            for code in INDUSTRY_TO_SEOUL["SV020"]
         ]
         with (
             tempfile.TemporaryDirectory() as temporary,

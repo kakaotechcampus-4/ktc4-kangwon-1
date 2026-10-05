@@ -20,13 +20,13 @@ from app.agents.commercial_area.metrics import (
 from app.agents.commercial_area.schemas import MiddleCode, Store
 
 MASTER = [
-    MiddleCode(code="I201", name="한식 음식점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I212", name="비알코올 음료점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I202", name="중식 음식점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="G204", name="종합 소매업", major_code="G2", major_name="소매업"),
+    MiddleCode(code="SV020", name="한식 음식점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV026", name="카페·비알코올 음료점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV021", name="중식 음식점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV003", name="종합 소매", major_code="G2", major_name="소매업"),
     MiddleCode(
-        code="R102",
-        name="도서관, 사적지 및 유사 여가관련 서비스업",
+        code="SV037",
+        name="독서실·유사 여가시설",
         major_code="R1",
         major_name="수리 및 개인 서비스업",
     ),
@@ -63,15 +63,15 @@ def store(
 
 
 def sample_stores():
-    stores = [store("I201", "한식", "I2", "음식점업", f"한식{i}") for i in range(6)]
-    stores += [store("I212", "커피/음료", "I2", "음식점업", f"카페{i}") for i in range(3)]
-    stores.append(store("G204", "편의점", "G2", "소매업", "편의점0"))
+    stores = [store("SV020", "한식", "I2", "음식점업", f"한식{i}") for i in range(6)]
+    stores += [store("SV026", "커피/음료", "I2", "음식점업", f"카페{i}") for i in range(3)]
+    stores.append(store("SV003", "편의점", "G2", "소매업", "편의점0"))
     return stores
 
 
 def ring_stores():
-    near = [store("I201", "한식", "I2", "음식점업", f"가까운{i}") for i in range(4)]
-    far = [store("I212", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027) for i in range(3)]
+    near = [store("SV020", "한식", "I2", "음식점업", f"가까운{i}") for i in range(4)]
+    far = [store("SV026", "커피/음료", "I2", "음식점업", f"먼{i}", lat=37.5027) for i in range(3)]
     return near + far
 
 
@@ -86,7 +86,7 @@ class MetricsTests(unittest.TestCase):
     def test_area_and_density(self):
         self.assertTrue(math.isclose(area_km2(500), math.pi * 0.25, rel_tol=1e-9))
         rows = build_middle_rows(sample_stores(), 500, MASTER)
-        han = next(r for r in rows if r.code == "I201")
+        han = next(r for r in rows if r.code == "SV020")
         self.assertTrue(math.isclose(han.density_per_km2, 6 / area_km2(500), rel_tol=1e-3))
         self.assertNotIn("density_sq", han.model_dump())
         self.assertNotIn("marshallian", han.model_dump())
@@ -99,13 +99,13 @@ class MetricsTests(unittest.TestCase):
     def test_master_categories_present_even_when_zero(self):
         rows = build_middle_rows(sample_stores(), 500, MASTER)
         self.assertEqual(len(rows), len(MASTER))
-        zero = next(r for r in rows if r.code == "I202")
+        zero = next(r for r in rows if r.code == "SV021")
         self.assertEqual(zero.count, 0)
         self.assertIsNone(zero.lq)
 
     def test_same_and_diff_type_counts(self):
         stores = sample_stores()
-        han = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "I201")
+        han = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "SV020")
         self.assertEqual(han.count, 6)
         self.assertNotIn("same_type_count", han.model_dump())
         self.assertEqual(han.diff_type_count, len(stores) - 6)
@@ -123,11 +123,11 @@ class MetricsTests(unittest.TestCase):
 
     def test_lq_uses_baseline_shares(self):
         rows = build_middle_rows(
-            sample_stores(), 500, MASTER, {"I201": 100, "I212": 100, "G204": 200}
+            sample_stores(), 500, MASTER, {"SV020": 100, "SV026": 100, "SV003": 200}
         )
-        han = next(r for r in rows if r.code == "I201")
+        han = next(r for r in rows if r.code == "SV020")
         self.assertTrue(math.isclose(han.lq, (6 / 10) / (100 / 400), rel_tol=1e-3))
-        self.assertIsNone(next(r for r in rows if r.code == "R102").lq)
+        self.assertIsNone(next(r for r in rows if r.code == "SV037").lq)
 
     def test_restaurant_density_counts_only_food_major(self):
         density = build_restaurant_density(sample_stores(), 500, Settings())
@@ -146,22 +146,22 @@ class MetricsTests(unittest.TestCase):
 class DistrictComparisonTests(unittest.TestCase):
     def test_district_ratio_is_independent_of_local_baseline(self):
         stores = sample_stores()
-        district = {"I201": 200, "I212": 200, "G204": 600}
-        local = {"I201": 100, "I212": 100, "G204": 200}
+        district = {"SV020": 200, "SV026": 200, "SV003": 600}
+        local = {"SV020": 100, "SV026": 100, "SV003": 200}
         rows = build_middle_rows(stores, 500, MASTER, local, district)
-        han = next(r for r in rows if r.code == "I201")
+        han = next(r for r in rows if r.code == "SV020")
 
         self.assertTrue(math.isclose(han.lq, (6 / 10) / (100 / 400), rel_tol=1e-3))
         self.assertTrue(math.isclose(han.lq_district, (6 / 10) / (200 / 1000), rel_tol=1e-3))
 
     def test_district_ratio_is_none_without_district_counts(self):
-        rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100})
+        rows = build_middle_rows(sample_stores(), 500, MASTER, {"SV020": 100})
         self.assertTrue(all(r.lq_district is None for r in rows))
 
     def test_district_specialization_names_the_district(self):
         from app.agents.commercial_area.metrics import build_district_specialization
 
-        rows = build_middle_rows(sample_stores(), 500, MASTER, None, {"I201": 200, "G204": 800})
+        rows = build_middle_rows(sample_stores(), 500, MASTER, None, {"SV020": 200, "SV003": 800})
         ranks = build_district_specialization(rows, Settings(), "송파구")
 
         self.assertTrue(ranks)
@@ -173,33 +173,33 @@ class ClusterAttractionTests(unittest.TestCase):
     def test_cluster_count_is_the_whole_major(self):
         rows = build_middle_rows(sample_stores(), 500, MASTER)
         counts = {r.code: r.major_cluster_count for r in rows}
-        self.assertEqual(counts["I201"], 9)
-        self.assertEqual(counts["I212"], 9)
-        self.assertEqual(counts["G204"], 1)
-        self.assertEqual(counts["R102"], 0)
+        self.assertEqual(counts["SV020"], 9)
+        self.assertEqual(counts["SV026"], 9)
+        self.assertEqual(counts["SV003"], 1)
+        self.assertEqual(counts["SV037"], 0)
 
     def test_zero_count_category_still_reports_its_cluster(self):
         rows = build_middle_rows(sample_stores(), 500, MASTER)
-        jung = next(r for r in rows if r.code == "I202")
-        han = next(r for r in rows if r.code == "I201")
+        jung = next(r for r in rows if r.code == "SV021")
+        han = next(r for r in rows if r.code == "SV020")
         self.assertEqual(jung.count, 0)
         self.assertEqual(jung.major_cluster_count, han.major_cluster_count)
         self.assertEqual(jung.major_cluster_diversity, han.major_cluster_diversity)
 
     def test_diversity_counts_only_inside_the_major(self):
         rows = build_middle_rows(sample_stores(), 500, MASTER)
-        han = next(r for r in rows if r.code == "I201")
+        han = next(r for r in rows if r.code == "SV020")
         self.assertAlmostEqual(
             han.major_cluster_diversity, effective_categories(hhi([6, 3])), places=4
         )
         self.assertLess(han.major_cluster_diversity, 3.0)
-        self.assertEqual(next(r for r in rows if r.code == "G204").major_cluster_diversity, 1.0)
-        self.assertEqual(next(r for r in rows if r.code == "R102").major_cluster_diversity, 0.0)
+        self.assertEqual(next(r for r in rows if r.code == "SV003").major_cluster_diversity, 1.0)
+        self.assertEqual(next(r for r in rows if r.code == "SV037").major_cluster_diversity, 0.0)
 
     def test_unknown_category_is_not_assigned_to_known_cluster(self):
         stores = sample_stores()
         stores.append(store("Z999", "미확인업종", "Z9", "미확인", "신규"))
-        row = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "I201")
+        row = next(r for r in build_middle_rows(stores, 500, MASTER) if r.code == "SV020")
         self.assertEqual(row.major_cluster_count, 9)
         self.assertAlmostEqual(row.major_cluster_diversity, 1.8, places=4)
 
@@ -222,7 +222,7 @@ class FranchiseTests(unittest.TestCase):
         result = build_franchise(stores, ["한식0"], rows)
 
         self.assertEqual(result.count, 2)
-        self.assertEqual({row.code for row in result.by_middle}, {"I201"})
+        self.assertEqual({row.code for row in result.by_middle}, {"SV020"})
 
     def test_empty_store_list_does_not_divide_by_zero(self):
         result = build_franchise([], ["한식0"], [])
@@ -247,7 +247,7 @@ class RadiusSliceTests(unittest.TestCase):
         slices = build_radius_slices(ring_stores(), 37.5, 127.0, MASTER, settings)
         self.assertEqual([s.radius_m for s in slices], [50, 100, 500])
         self.assertEqual([s.store_total for s in slices], [4, 4, 7])
-        self.assertEqual(slices[0].top_by_count[0].name, "한식 음식점업")
+        self.assertEqual(slices[0].top_by_count[0].name, "한식 음식점")
         self.assertEqual(slices[-1].absent_category_count, 3)
         self.assertTrue(slices[0].explanations.store_total.startswith("반경 50m 안에"))
         self.assertNotIn("LQ", slices[0].explanations.specialization)

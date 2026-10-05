@@ -27,15 +27,27 @@ from app.industries import (  # noqa: E402
     LEGACY70_LINK_PATH,
     MASTER_PATH,
     PACKAGE_DIR,
+    PUBLIC_LINK_PATH,
     SEOUL_LINK_PATH,
 )
 
 CATALOG_PATH = PACKAGE_DIR / "catalog.py"
 
-EXPECTED_COUNT = 75
+EXPECTED_COUNT = 51
 SOURCE_PERIOD = "2026년 1분기"
-EXCLUDED_SEOUL = {"CS300043": "전자상거래업"}
-MATCH_METHODS = {"정확", "모델", "부분", "수동"}
+EXCLUDED_SEOUL = {
+    "CS200040": "녹음실",
+    "CS200042": "통번역서비스",
+    "CS200045": "비디오/서적임대",
+    "CS200047": "가정용품임대",
+    "CS300005": "주류도매",
+    "CS300023": "미용재료",
+    "CS300037": "중고차판매",
+    "CS300040": "재생용품 판매점",
+    "CS300042": "주유소",
+    "CS300043": "전자상거래업",
+}
+MATCH_METHODS = {"정확", "모델", "부분", "수동", "팀확정"}
 LEGACY_RANGE = range(1, 71)
 
 MASTER_COLUMNS = {"middle_code", "middle_name", "major_code", "major_name", "has_seoul", "note"}
@@ -47,9 +59,11 @@ SEOUL_COLUMNS = {
     "evidence_small",
     "note",
 }
+PUBLIC_COLUMNS = {"public_middle_code", "public_small_code", "industry_code", "note"}
 LEGACY_COLUMNS = {"legacy_id", "legacy_name", "middle_code", "split_count", "route", "note"}
 
 SEOUL_CODE = re.compile(r"^CS\d{6}$")
+SERVICE_CODE = re.compile(r"^SV\d{3}$")
 TAIL = re.compile(r"(소매업|판매업|운영업|서비스업|전문점|판매|소매|업소|업|점)$")
 NOISE = re.compile(r"[\s\-,·ㆍ/()]|및")
 
@@ -103,6 +117,8 @@ def check_master(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
         code = row["middle_code"]
         if not code or not row["middle_name"]:
             raise Failure(f"필수 값이 비었습니다 — {row}")
+        if not SERVICE_CODE.fullmatch(code):
+            raise Failure(f"서비스 canonical code 형식이 아닙니다 — {code!r}")
         if code in master:
             raise Failure(f"중분류 코드가 중복입니다 — {code}")
         master[code] = row
@@ -122,6 +138,43 @@ def check_master(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
         if row["has_seoul"] not in {"Y", "N"}:
             raise Failure(f"{code}: has_seoul 이 Y/N 이 아닙니다 — {row['has_seoul']!r}")
     return master
+
+
+def check_public(
+    rows: list[dict[str, str]], master: dict[str, dict[str, str]]
+) -> dict[str, set[str]]:
+    """소상공인 원천 중·소분류가 서비스 업종에 한 번만 배정됐는지 검사한다."""
+    seen: set[tuple[str, str]] = set()
+    by_middle: dict[str, set[str]] = {}
+    blank_middle: set[str] = set()
+    detailed_middle: set[str] = set()
+    for row in rows:
+        middle = row["public_middle_code"]
+        small = row["public_small_code"]
+        industry = row["industry_code"]
+        if not re.fullmatch(r"[A-Z]\d{3}", middle):
+            raise Failure(f"Public 중분류 코드 형식이 아닙니다 — {middle!r}")
+        if small and (not re.fullmatch(r"[A-Z]\d{5}", small) or not small.startswith(middle)):
+            raise Failure(f"{middle}: Public 소분류 코드 형식이 아닙니다 — {small!r}")
+        key = (middle, small)
+        if key in seen:
+            raise Failure(f"Public 분류가 중복입니다 — {middle}/{small or '*'}")
+        seen.add(key)
+        if industry not in master:
+            raise Failure(f"{middle}/{small or '*'}: {industry!r}가 마스터에 없습니다.")
+        by_middle.setdefault(middle, set()).add(industry)
+        (detailed_middle if small else blank_middle).add(middle)
+
+    mixed = blank_middle & detailed_middle
+    if mixed:
+        raise Failure(f"중분류 전체 매핑과 소분류 매핑을 함께 쓸 수 없습니다 — {sorted(mixed)}")
+    linked = {row["industry_code"] for row in rows}
+    if linked != set(master):
+        raise Failure(
+            "Public 연결 대상과 마스터가 다릅니다 — "
+            f"누락 {sorted(set(master) - linked)}, 초과 {sorted(linked - set(master))}"
+        )
+    return by_middle
 
 
 def check_seoul(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -> None:
@@ -149,7 +202,7 @@ def check_seoul(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -
             )
 
 
-def check_legacy(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -> None:
+def check_legacy(rows: list[dict[str, str]]) -> None:
     by_id: dict[int, set[str]] = {}
     for row in rows:
         try:
@@ -158,10 +211,6 @@ def check_legacy(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) 
             raise Failure(f"legacy_id 가 정수가 아닙니다 — {row['legacy_id']!r}") from exc
         if legacy_id not in LEGACY_RANGE:
             raise Failure(f"legacy_id 가 1~70 밖입니다 — {legacy_id}")
-        if row["middle_code"] not in master:
-            raise Failure(
-                f"legacy {legacy_id}: 중분류 {row['middle_code']!r} 가 마스터에 없습니다."
-            )
         if row["route"] not in {"seoul", "direct"}:
             raise Failure(f"legacy {legacy_id}: route 가 허용값이 아닙니다 — {row['route']!r}")
         by_id.setdefault(legacy_id, set()).add(row["middle_code"])
@@ -189,6 +238,7 @@ def fingerprint(*groups: list[dict[str, str]]) -> str:
 
 def render(
     master: dict[str, dict[str, str]],
+    public: list[dict[str, str]],
     seoul: list[dict[str, str]],
     legacy: list[dict[str, str]],
 ) -> str:
@@ -202,6 +252,17 @@ def render(
     majors = [
         (repr(c), f"({r['major_code']!r}, {r['major_name']!r})") for c, r in sorted(master.items())
     ]
+    public_middle_to: dict[str, str] = {}
+    public_small_to: dict[str, str] = {}
+    public_middle_targets: dict[str, set[str]] = {}
+    for row in public:
+        public_middle_targets.setdefault(row["public_middle_code"], set()).add(row["industry_code"])
+        if row["public_small_code"]:
+            public_small_to[row["public_small_code"]] = row["industry_code"]
+        else:
+            public_middle_to[row["public_middle_code"]] = row["industry_code"]
+    public_middle_items = [(repr(k), repr(v)) for k, v in sorted(public_middle_to.items())]
+    public_small_items = [(repr(k), repr(v)) for k, v in sorted(public_small_to.items())]
     seoul_to = [
         (repr(r["seoul_code"]), repr(r["middle_code"]))
         for r in sorted(seoul, key=lambda r: r["seoul_code"])
@@ -218,9 +279,12 @@ def render(
         if r["has_seoul"] == "N"
     ]
 
-    legacy_to: dict[int, list[str]] = {}
+    legacy_to_sets: dict[int, set[str]] = {}
     for row in sorted(legacy, key=lambda r: (int(r["legacy_id"]), r["middle_code"])):
-        legacy_to.setdefault(int(row["legacy_id"]), []).append(row["middle_code"])
+        legacy_to_sets.setdefault(int(row["legacy_id"]), set()).update(
+            public_middle_targets.get(row["middle_code"], ())
+        )
+    legacy_to = {key: sorted(value) for key, value in legacy_to_sets.items() if value}
     legacy_block = [(str(k), repr(tuple(v))) for k, v in sorted(legacy_to.items())]
 
     industry_to_legacy: dict[str, list[int]] = {}
@@ -245,7 +309,7 @@ from __future__ import annotations
 
 from typing import Final
 
-CATALOG_VERSION: Final = "{fingerprint(list(master.values()), seoul, legacy)}"
+CATALOG_VERSION: Final = "{fingerprint(list(master.values()), public, seoul, legacy)}"
 SOURCE_PERIOD: Final = "{SOURCE_PERIOD}"
 EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
 
@@ -263,6 +327,18 @@ EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
             "Final[dict[str, tuple[str, str]]]",
             majors,
             "중분류 코드 → (대분류 코드, 대분류명)",
+        ),
+        dict_block(
+            "PUBLIC_MIDDLE_TO_INDUSTRY",
+            "Final[dict[str, str]]",
+            public_middle_items,
+            "소상공인 원천 중분류 코드 → 서비스 업종. 분할 중분류는 여기 없다.",
+        ),
+        dict_block(
+            "PUBLIC_SMALL_TO_INDUSTRY",
+            "Final[dict[str, str]]",
+            public_small_items,
+            "분할 대상 소상공인 원천 소분류 코드 → 서비스 업종.",
         ),
         dict_block(
             "SEOUL_TO_INDUSTRY",
@@ -292,7 +368,7 @@ EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
             "LEGACY70_TO_INDUSTRY",
             "Final[dict[int, tuple[str, ...]]]",
             legacy_block,
-            "개폐업 70업종 ID → 중분류. 마이그레이션용이며 개폐업이 옮겨오면 지운다.",
+            "개폐업 70업종 ID → 서비스 업종. 과거 호환용이며 신규 실행에는 쓰지 않는다.",
         ),
         dict_block(
             "INDUSTRY_TO_LEGACY70",
@@ -329,13 +405,15 @@ def main() -> int:
 
     try:
         master_rows = read_strict(MASTER_PATH, MASTER_COLUMNS)
+        public_rows = read_strict(PUBLIC_LINK_PATH, PUBLIC_COLUMNS)
         seoul_rows = read_strict(SEOUL_LINK_PATH, SEOUL_COLUMNS)
         legacy_rows = read_strict(LEGACY70_LINK_PATH, LEGACY_COLUMNS)
 
         master = check_master(master_rows)
+        check_public(public_rows, master)
         check_seoul(seoul_rows, master)
-        check_legacy(legacy_rows, master)
-        rendered = ruff_format(render(master, seoul_rows, legacy_rows))
+        check_legacy(legacy_rows)
+        rendered = ruff_format(render(master, public_rows, seoul_rows, legacy_rows))
     except Failure as exc:
         print(f"검증 실패: {exc}")
         return 1
@@ -347,7 +425,7 @@ def main() -> int:
 
     print(f"업종 {len(master)}종 — 서울시 연결 {linked} · 단독 {len(master) - linked}")
     print(f"서울시 연결 {len(seoul_rows)}행 · 판정방식 {by_method}")
-    print(f"  '모델' {by_method.get('모델', 0)}건은 사람 검수가 필요합니다")
+    print(f"Public 연결 {len(public_rows)}행")
     print(f"개폐업 연결 {len(legacy_rows)}행 / {len({r['legacy_id'] for r in legacy_rows})}업종")
 
     outputs = ((CATALOG_PATH, rendered),)

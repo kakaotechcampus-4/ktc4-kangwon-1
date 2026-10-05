@@ -28,7 +28,7 @@ from app.schemas import AnalysisTask
 
 
 def raw_rows():
-    # I210 네 원천을 합치면 분기당 점포 100, 폐업 10: 비율 평균 25%가 아닌 10%.
+    # SV024의 네 원천을 합치면 분기당 점포 100, 폐업 10: 비율 평균 25%가 아닌 10%.
     return [
         normalize_row(
             {
@@ -96,19 +96,19 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["coverage"]["scored_industries"], 2)
 
     async def test_lookup_support_matches_mapping(self):
-        self.assertTrue(lookup.get("I201").has_seoul)
-        self.assertFalse(lookup.get("I205").has_seoul)
+        self.assertTrue(lookup.get("SV020").has_seoul)
+        self.assertFalse(lookup.get("SV046").has_seoul)
 
     async def test_raw_counts_are_combined_before_rates_and_scores(self):
         frame = await preprocess(raw_rows())
         self.assertEqual(set(frame.service_id), set(INDUSTRIES))
-        row = frame.set_index("service_id").loc["I210"]
+        row = frame.set_index("service_id").loc["SV024"]
         self.assertEqual(row.period_close_count, 40)
         self.assertEqual(row.latest_store_count, 100)
         self.assertEqual(row.avg_close_rate, 10)
         scored = calculate_lifecycle_scores(frame, 4).set_index("service_id")
-        self.assertEqual(scored.loc["I210", "lifecycle_score"], 55)
-        self.assertEqual(scored.loc["I201", "lifecycle_score"], 95)
+        self.assertEqual(scored.loc["SV024", "lifecycle_score"], 55)
+        self.assertEqual(scored.loc["SV020", "lifecycle_score"], 95)
 
     async def test_identical_duplicates_do_not_inflate_counts(self):
         rows = raw_rows()
@@ -143,13 +143,16 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
             if row["svc_induty_cd"] == "CS100005":
                 row["clsbiz_stor_co"] = None
         frame = (await preprocess(rows)).set_index("service_id")
-        self.assertIn("I201", frame.index)
-        self.assertEqual(frame.loc["I201", "latest_store_count"], 0)
-        self.assertTrue(pd.isna(frame.loc["I201", "avg_close_rate"]))
-        self.assertTrue(pd.isna(frame.loc["I210", "period_close_count"]))
-        self.assertEqual(frame.loc["I201", "data_status"], "observed")
-        self.assertEqual(frame.loc["I202", "data_status"], "missing")
-        self.assertEqual(frame.loc["I205", "data_status"], "unsupported")
+        self.assertIn("SV020", frame.index)
+        self.assertEqual(frame.loc["SV020", "latest_store_count"], 0)
+        self.assertTrue(pd.isna(frame.loc["SV020", "avg_close_rate"]))
+        self.assertTrue(pd.isna(frame.loc["SV024", "period_close_count"]))
+        self.assertEqual(frame.loc["SV020", "data_status"], "observed")
+        self.assertEqual(frame.loc["SV021", "data_status"], "missing")
+        self.assertEqual(frame.loc["SV046", "data_status"], "unsupported")
+        for code in ("SV046", "SV047", "SV048", "SV049", "SV050", "SV051"):
+            self.assertEqual(frame.loc[code, "data_status"], "unsupported")
+            self.assertTrue(pd.isna(frame.loc[code, "period_open_count"]))
 
     async def test_missing_source_or_quarter_cannot_claim_complete_score(self):
         for rows in (
@@ -157,13 +160,13 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
             [r for r in raw_rows() if r["stdr_yyqu_cd"] != "20242"],
         ):
             frame = await preprocess(rows)
-            self.assertIn("I210", set(frame.service_id))
-            row = frame.set_index("service_id").loc["I210"]
+            self.assertIn("SV024", set(frame.service_id))
+            row = frame.set_index("service_id").loc["SV024"]
             self.assertFalse(row.data_complete)
             score = calculate_lifecycle_scores(frame, 4).set_index("service_id")
-            self.assertTrue(pd.isna(score.loc["I210", "lifecycle_score"]))
+            self.assertTrue(pd.isna(score.loc["SV024", "lifecycle_score"]))
 
-    async def test_api_to_formatter_uses_canonical_75_codes_without_llm(self):
+    async def test_api_to_formatter_uses_canonical_service_codes_without_llm(self):
         def request_page(**kwargs):
             self.assertEqual(kwargs["area_code"], "3120240")
             self.assertEqual(kwargs["start_index"], 1)
@@ -192,8 +195,8 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
             result = await run_business_lifecycle_agent("3120240", "20244", 4, "pipeline-test")
         formatted = format_for_mediator(result)
         self.assertEqual({i["industry_id"] for i in formatted.data["industries"]}, set(INDUSTRIES))
-        self.assertEqual(formatted.data["taxonomy"]["id"], "sbiz-middle-75")
-        snack = next(i for i in formatted.data["industries"] if i["industry_id"] == "I210")
+        self.assertEqual(formatted.data["taxonomy"]["id"], "service-industry-51")
+        snack = next(i for i in formatted.data["industries"] if i["industry_id"] == "SV024")
         self.assertEqual(snack["metrics"]["avg_close_rate"], 10)
         self.assertEqual(snack["score"], 55)
         # 40 / 400 = 10%는 분기 평균이며, 40 / 100 = 40%인 연간 비율이 아닙니다.
@@ -202,9 +205,7 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(basis.get("unit"), "%/분기")
         self.assertEqual(basis.get("denominator"), "대상 분기의 점포 수 합계")
         self.assertEqual(basis.get("annualized"), False)
-        self.assertTrue(
-            any("53" in warning and "검수" in warning for warning in formatted.warnings)
-        )
+        self.assertFalse(any("검수" in warning for warning in formatted.warnings))
         for change in ({"industry_name": "잘못된 이름"}, {"industry_id": 1}, {"industry_id": True}):
             invalid = copy.deepcopy(result)
             invalid["industry_scores"][0].update(change)
@@ -228,7 +229,7 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
             ):
                 result = await build_agent_input("3120240", "20244", 4)
             self.assertEqual(result["industries"], [])
-            self.assertEqual(len(result["unavailable_industries"]), 75)
+            self.assertEqual(len(result["unavailable_industries"]), 51)
 
     async def test_unavailable_input_keeps_coverage_and_observed_metrics(self):
         rows = [r for r in raw_rows() if r["svc_induty_cd"] != "CS100005"]
@@ -237,8 +238,8 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await build_agent_input("3120240", "20244", 4)
         unavailable = {i["industry_id"]: i for i in result["unavailable_industries"]}
-        self.assertIn("I210", unavailable)
-        row = unavailable["I210"]
+        self.assertIn("SV024", unavailable)
+        row = unavailable["SV024"]
         self.assertEqual(row["data_status"], "incomplete")
         self.assertFalse(row["data_complete"])
         self.assertIsNone(row["metrics"]["latest_store_count"])

@@ -61,7 +61,7 @@ class ApiMockTests(unittest.IsolatedAsyncioTestCase):
             "summary": "가상 자료 기반 연결 시험입니다.",
             "recommendations": [
                 {
-                    "category": {"major": "음식점업", "middle": "중식 음식점업"},
+                    "category": {"major": "음식점업", "middle": "중식 음식점"},
                     "score": 60,
                     "reasons": ["가상 유동인구와 점포 집계가 있습니다."],
                     "risks": [],

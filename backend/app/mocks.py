@@ -63,7 +63,7 @@ def mock_commercial_area_data() -> dict[str, Any]:
             "description": "목업 상권 자료입니다.",
             "radius_m": 500,
             "store_total": 1241,
-            "by_middle": [_middle("I201", 96, 1.24), _middle("I212", 71, 2.1)],
+            "by_middle": [_middle("SV020", 96, 1.24), _middle("SV026", 71, 2.1)],
             "diversity": Diversity(hhi_major=0.2, hhi_middle=0.1, effective_categories=10.0),
             "restaurant_density": RestaurantDensity(
                 value=212.0, unit="stores_per_km2", store_count=167
@@ -102,10 +102,10 @@ def mock_business_lifecycle_data(*, with_supplement: bool = False) -> dict[str, 
             "period": "최근 4분기",
             "quarter_count": 4,
         },
-        "coverage": {"target_industries": 75, "scored_industries": 2, "unscored_industries": 73},
+        "coverage": {"target_industries": 51, "scored_industries": 2, "unscored_industries": 49},
         "taxonomy": dict(TAXONOMY),
         "scoring_method": {},
-        "industries": [_lifecycle("I201", 72.0, 12, 9), _lifecycle("I212", 28.0, 18, 16)],
+        "industries": [_lifecycle("SV020", 72.0, 12, 9), _lifecycle("SV026", 28.0, 18, 16)],
     }
     if with_supplement:
         data["supplement_quarters"] = {
@@ -115,7 +115,7 @@ def mock_business_lifecycle_data(*, with_supplement: bool = False) -> dict[str, 
             "rate_unit": "%",
             "industries": [
                 {
-                    "industry_id": "I201",
+                    "industry_id": "SV020",
                     "store_counts": [40, 41, 42, 42],
                     "opened_counts": [3, 3, 3, 3],
                     "closed_counts": [2, 2, 3, 2],
@@ -210,24 +210,24 @@ def mock_generate(system_prompt: str, input_json: str) -> dict[str, Any]:
         "summary": "점심 수요가 기대되는 한식은 추천하고 이미 몰린 음료점은 피합니다.",
         "recommendations": [
             {
-                "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                "category": {"major": "음식점업", "middle": "한식 음식점"},
                 "score": 72,
                 "reasons": ["반경 안 한식 점포가 {0}개이고 주변보다 {1}배 몰려 있습니다."],
                 "evidence": [
-                    _cited(payload, "commercial_area", "I201", "count"),
-                    _cited(payload, "commercial_area", "I201", "lq"),
+                    _cited(payload, "commercial_area", "SV020", "count"),
+                    _cited(payload, "commercial_area", "SV020", "lq"),
                 ],
                 "risks": ["경쟁 점포가 {0}개라 가격 경쟁이 있습니다."],
             }
         ],
         "not_recommended": [
             {
-                "category": {"major": "음식점업", "middle": "비알코올 음료점업"},
+                "category": {"major": "음식점업", "middle": "카페·비알코올 음료점"},
                 "score": 28,
                 "reasons": ["주변보다 {0}배 몰려 있고 개폐업 점수는 {1}점입니다."],
                 "evidence": [
-                    _cited(payload, "commercial_area", "I212", "lq"),
-                    _cited(payload, "business_lifecycle", "I212", "score"),
+                    _cited(payload, "commercial_area", "SV026", "lq"),
+                    _cited(payload, "business_lifecycle", "SV026", "score"),
                 ],
                 "risks": ["신규 진입 시 가격 경쟁에 노출됩니다."],
             }

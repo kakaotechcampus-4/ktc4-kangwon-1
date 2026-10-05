@@ -205,7 +205,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "summary": "대역 자료로 연결을 검증했습니다.",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점"},
                         "score": 60,
                         "reasons": ["유동과 점포 집계를 확인했습니다."],
                         "risks": [],
@@ -291,7 +291,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             entry = next(
                 e
                 for e in entries
-                if e["agent_id"] == "business_lifecycle" and e["industry_code"] == "I210"
+                if e["agent_id"] == "business_lifecycle" and e["industry_code"] == "SV024"
             )
             path = next(p for p in entry["paths"] if p.endswith("/metrics/avg_close_rate"))
             return {
@@ -301,7 +301,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "limitations": [],
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "기타 간이 음식점업"},
+                        "category": {"major": "음식점업", "middle": "간이 음식점"},
                         "score": 60,
                         "reasons": ["각 분석 원본 확인"],
                         "risks": [],
@@ -330,11 +330,11 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 all(item.status in {"ok", "partial"} for item in result.source_analyses)
             )
-            self.assertEqual(len(result.source_analyses[1].data["industries"]), 75)
+            self.assertEqual(len(result.source_analyses[1].data["industries"]), 51)
             snack = next(
                 item
                 for item in result.source_analyses[1].data["industries"]
-                if item["industry_id"] == "I210"
+                if item["industry_id"] == "SV024"
             )
             self.assertEqual(snack["metrics"]["avg_close_rate"], 10)
             self.assertEqual(snack["score"], 55)

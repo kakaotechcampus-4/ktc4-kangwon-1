@@ -33,7 +33,7 @@
 | 반경별 순위·해설 | `by_radius[]` |
 | 사람이 읽는 요약 | `summary` |
 
-업종은 소상공인 상권업종분류 **중분류 75종**을 쓴다. 결정 에이전트의 `category.middle`과 같은 단위다. 반경 안에 없는 업종도 0으로 채워 전달한다.
+업종은 팀 확정 **서비스 통합 업종 51종**을 쓴다. 원천 중·소분류를 먼저 서비스 업종으로 매핑하고, 반경 안에 없는 업종도 0으로 채워 전달한다.
 
 각 지표를 그렇게 정의한 논문 근거는 팀 문서 `부동산 agent/논문근거_경쟁지표.md`에 정리돼 있다.
 
@@ -127,7 +127,7 @@ result = asyncio.run(
 | `radius_m` · `store_total` | 결정·화면 | 분석 반경과 그 안의 총 점포 수 |
 | `data_reference_date` | 결정 | 자료 기준일 `"2026-03-31"`. **API 응답에 날짜 필드가 0개라** `sources.py` 상수에서 온다 |
 | `by_major` | 화면 | 대분류 10종 집계. 상권 성격을 한눈에 보여주는 용도 |
-| `by_middle` | **결정** | 중분류 75종 전수. LQ·집적·특화 지표가 전부 여기 있다 |
+| `by_middle` | **결정** | 서비스 업종 51종 전수. LQ·집적·특화 지표가 전부 여기 있다 |
 | `by_radius` | 화면 | 반경 50~500m 5단계 순위와 해설 문장 |
 | `diversity` | 결정 | HHI와 유효 업종수 |
 | `restaurant_density` | 결정 | 음식점 밀도 + 원시 개수 |
@@ -168,7 +168,7 @@ result = asyncio.run(
 
 ### 실으면 안 되는 것
 
-- **`by_middle` 75행 전부를 차트로 그리면 안 된다.** ⚠️ **가장 위험한 자리다.**
+- **`by_middle` 51행 전부를 차트로 그리면 안 된다.** ⚠️ **가장 위험한 자리다.**
   0건 업종이 22개 섞여 있어 축을 잡아먹고, 상위 3종이 전체의 절반을 차지해 나머지가 안 보인다.
   상위 N개만 자르거나 `by_radius[].top_by_count`(이미 순위로 잘려 있다)를 쓴다.
 - `same_type_count`·`marshallian`·`density_sq`·`restaurant_density.squared`는 중복 표현이라 제거했다.
@@ -259,22 +259,17 @@ python examples/run_commercial_area.py --lat 37.4748 --lon 127.1416 --out exampl
 
 ## 업종 코드 마스터
 
-반경 안에 **없는 업종까지 0으로 채우려면** 중분류 75종 목록이 필요하다. 이 목록은 팀 공통 업종
+반경 안에 **없는 업종까지 0으로 채우려면** 서비스 업종 51종 목록이 필요하다. 이 목록은 팀 공통 업종
 어휘가 되면서 [`app/industries/data/industries.csv`](../../industries/README.md)로 옮겨졌다.
-LQ·HHI·부재 업종 수의 분모가 이 75칸이라, 다른 체계로 바꾸면 값이 통째로 달라진다.
+LQ·HHI·부재 업종 수의 분모가 이 51칸이라, 다른 체계로 바꾸면 값이 통째로 달라진다.
 
-갱신하려면 [상권업종분류 코드](https://www.data.go.kr/data/15067631/fileData.do)를 받아 아래를 실행한다.
+Master나 원천 연결표를 갱신한 뒤 아래를 실행한다.
 
 ```bash
-python scripts/build_upjong_master.py --official-csv <받은파일.csv>
-python scripts/build_industry_links.py --force    # has_seoul·note 를 다시 채운다
-python scripts/build_industry_catalog.py          # catalog.py 재생성
+python scripts/build_industry_catalog.py
 ```
 
-**세 줄을 같이 돌려야 한다.** 첫 줄이 마스터를 4개 컬럼으로만 다시 쓰기 때문에 `has_seoul`·`note`가
-사라지고, 그대로 두면 `build_industry_catalog.py` 검증이 실패한다.
-
-원본 파일 인코딩이 CP949다. 스크립트가 자동으로 처리한다.
+G213/G215는 소분류 코드로 분리하며, 알 수 없는 소분류는 임의 배정하지 않는다.
 
 ## 반경 상한
 

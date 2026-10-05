@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from app.agents.decision import analyze
+from app.industries.catalog import INDUSTRIES
 
 BACKEND = Path(__file__).resolve().parents[1]
 EXAMPLES = BACKEND / "examples" / "decision"
@@ -161,7 +162,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.generate.assert_called_once()
         self.assertEqual(result.request_id, "sample-001")
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
+        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점")
         self.assertEqual(result.source_analyses[0].data, self.request["analyses"][0]["data"])
         prompt, payload = self.generate.call_args.args
         self.assertIn("성공 확률", prompt)
@@ -169,13 +170,18 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"reasons"', prompt)
         self.assertIn('"path"', prompt)
         self.assertIn("반드시 5개", prompt)
+        candidate_codes = {
+            line.split(" | ", 1)[0] for line in prompt.splitlines() if line.startswith("SV")
+        }
+        self.assertEqual(candidate_codes, set(INDUSTRIES))
+        self.assertEqual(len(candidate_codes), 51)
         self.assertEqual(
             json.loads(payload)["analyses"][0]["data"], self.request["analyses"][0]["data"]
         )
 
     async def test_sample_lifecycle_rows_are_catalog_industries(self):
         industries = self.request["analyses"][1]["data"]["industries"]
-        self.assertEqual([row["industry_id"] for row in industries], ["I201", "I212"])
+        self.assertEqual([row["industry_id"] for row in industries], ["SV020", "SV026"])
 
     async def test_rejects_invalid_input_before_calling_model(self):
         invalid_cases = []
@@ -221,7 +227,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         duplicate = copy.deepcopy(self.response)
         duplicate["not_recommended"][0]["category"] = {
             "major": "음식점업",
-            "middle": "중식 음식점업",
+            "middle": "중식 음식점",
         }
         bad_path = copy.deepcopy(self.response)
         bad_path["recommendations"][0]["evidence"][0]["path"] = "/missing"

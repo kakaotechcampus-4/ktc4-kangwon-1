@@ -15,6 +15,7 @@ import httpx
 from app.agents.commercial_area import analyze
 from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.industries import canonicalize_stores
 from app.agents.commercial_area.schemas import CommercialAreaData, MiddleCode, Store
 from app.agents.commercial_area.sources import SBIZ_PERIOD, SBIZ_REFERENCE_DATE
 from app.agents.orchestration.workflow import run_agents
@@ -24,11 +25,11 @@ from app.mocks import mock_commercial_area_data
 from app.schemas import AgentAnalysis, AnalysisTask
 
 MASTER = [
-    MiddleCode(code="I201", name="한식", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I212", name="커피/음료", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I202", name="중식", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="G204", name="편의점", major_code="G2", major_name="소매업"),
-    MiddleCode(code="R102", name="이용/미용", major_code="R1", major_name="수리 및 개인 서비스업"),
+    MiddleCode(code="SV020", name="한식", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV026", name="커피/음료", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV021", name="중식", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="SV003", name="편의점", major_code="G2", major_name="소매업"),
+    MiddleCode(code="SV037", name="이용/미용", major_code="R1", major_name="수리 및 개인 서비스업"),
 ]
 
 
@@ -51,9 +52,9 @@ def sample_stores(district_code=None, district_name=None):
             district_name=district_name,
         )
 
-    stores = [make("I201", "한식", "I2", "음식점업", f"한식{i}") for i in range(6)]
-    stores += [make("I212", "커피/음료", "I2", "음식점업", f"카페{i}") for i in range(3)]
-    stores.append(make("G204", "편의점", "G2", "소매업", "편의점0"))
+    stores = [make("SV020", "한식", "I2", "음식점업", f"한식{i}") for i in range(6)]
+    stores += [make("SV026", "커피/음료", "I2", "음식점업", f"카페{i}") for i in range(3)]
+    stores.append(make("SV003", "편의점", "G2", "소매업", "편의점0"))
     return stores
 
 
@@ -67,6 +68,26 @@ SITE = {
     "latitude": 37.5006,
     "longitude": 127.0364,
 }
+
+
+class ServiceTaxonomyMappingTests(unittest.TestCase):
+    def test_split_public_categories_are_mapped_once_by_small_code(self):
+        template = sample_stores()[0]
+        raw = [
+            replace(template, store_id="sports", middle_code="G213", small_code="G21304"),
+            replace(template, store_id="book", middle_code="G213", small_code="G21301"),
+            replace(template, store_id="medicine", middle_code="G215", small_code="G21501"),
+            replace(template, store_id="cosmetic", middle_code="G215", small_code="G21503"),
+            replace(template, store_id="unknown", middle_code="G213", small_code="G21399"),
+        ]
+
+        mapped = canonicalize_stores(raw)
+
+        self.assertEqual(len(mapped), len(raw))
+        self.assertEqual(
+            [store.middle_code for store in mapped],
+            ["SV002", "SV009", "SV010", "SV011", "G213"],
+        )
 
 
 class FakeClient(StoreClient):
@@ -289,7 +310,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.district_calls, 1)
         self.assertEqual(result.data["district_baseline"]["signgu_code"], "11710")
         self.assertEqual(result.data["district_baseline"]["signgu_name"], "송파구")
-        han = next(r for r in result.data["by_middle"] if r["code"] == "I201")
+        han = next(r for r in result.data["by_middle"] if r["code"] == "SV020")
         self.assertIsNotNone(han["lq_district"])
 
     async def test_district_step_skipped_without_code(self):
@@ -414,14 +435,14 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
             "app.agents.commercial_area.agent.load_middle_master",
             return_value=[
                 MiddleCode(
-                    code="I201",
-                    name=lookup.get("I201").name,
+                    code="SV020",
+                    name=lookup.get("SV020").name,
                     major_code="I2",
                     major_name="음식점업",
                 ),
                 MiddleCode(
-                    code="I212",
-                    name=lookup.get("I212").name,
+                    code="SV026",
+                    name=lookup.get("SV026").name,
                     major_code="I2",
                     major_name="음식점업",
                 ),
@@ -431,7 +452,7 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                 self.task, settings=self.settings, store_client=FakeClient(self.settings, stores)
             )
         paths = index_paths(result.data, "commercial_area")
-        index = next(i for i, row in enumerate(result.data["by_middle"]) if row["code"] == "I212")
+        index = next(i for i, row in enumerate(result.data["by_middle"]) if row["code"] == "SV026")
         self.assertEqual(result.data["by_middle"][index]["count"], 3)
         self.assertIn(f"/by_middle/{index}/count", paths)
         self.assertNotIn(f"/by_middle/{index}/lq", paths)
@@ -442,8 +463,8 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
             "app.agents.commercial_area.agent.load_middle_master",
             return_value=[
                 MiddleCode(
-                    code="I212",
-                    name=lookup.get("I212").name,
+                    code="SV026",
+                    name=lookup.get("SV026").name,
                     major_code="I2",
                     major_name="음식점업",
                 )
@@ -488,7 +509,9 @@ class AgentContractTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(result.error)
                 self.assertEqual(result.data["store_total"], 10)
                 self.assertEqual(
-                    next(row["count"] for row in result.data["by_middle"] if row["code"] == "I201"),
+                    next(
+                        row["count"] for row in result.data["by_middle"] if row["code"] == "SV020"
+                    ),
                     6,
                 )
                 self.assertEqual(result.data, baseline.data)
@@ -574,8 +597,8 @@ class ClientBehaviourTests(unittest.IsolatedAsyncioTestCase):
                 "bizesNm": f"가게{i}",
                 "indsLclsCd": "I2",
                 "indsLclsNm": "음식점업",
-                "indsMclsCd": "I201",
-                "indsMclsNm": "한식 음식점업",
+                "indsMclsCd": "SV020",
+                "indsMclsNm": "한식 음식점",
                 "signguCd": "11710",
                 "signguNm": "송파구",
                 "lat": "37.5",

@@ -30,7 +30,7 @@ def plan():
         queries=[
             {
                 "kind": "industry",
-                "industry_code": "I212",
+                "industry_code": "SV026",
                 "query": "카페",
                 "why_needed": "경쟁",
                 "expected_impact": "순위",
@@ -58,7 +58,7 @@ def payload():
 async def mapper(prompt, raw):
     data = json.loads(raw)
     return {
-        key: {"status": "mapped", "industry_code": "I202", "reason": "원본 중식 분류"}
+        key: {"status": "mapped", "industry_code": "SV021", "reason": "원본 중식 분류"}
         for key in data["categories"]
     }
 
@@ -118,7 +118,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, "partial")
         self.assertEqual(set(result.data.places), {"123", "456"})
         self.assertEqual(result.data.places["456"].mapping_status, "unmapped")
-        self.assertEqual(result.data.industries["I202"].sampled_count, 1)
+        self.assertEqual(result.data.industries["SV021"].sampled_count, 1)
         self.assertTrue(any("미확정" in w for w in result.warnings))
 
     async def test_expired_or_broken_cache_requeries_model(self):
@@ -131,7 +131,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
 
         async def generate(prompt, raw):
             calls.append(raw)
-            return {"c1": {"status": "mapped", "industry_code": "I202", "reason": "중식"}}
+            return {"c1": {"status": "mapped", "industry_code": "SV021", "reason": "중식"}}
 
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "mapping.sqlite3"
@@ -143,7 +143,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
             await map_categories(categories, **args)
             path.write_bytes(b"broken cache")
             result = await map_categories(categories, **args)
-            self.assertEqual(result["c1"].industry_code, "I202")
+            self.assertEqual(result["c1"].industry_code, "SV021")
             self.assertEqual(len(calls), 3)
 
     async def test_unconfirmed_mapping_is_not_cached_and_model_change_requeries(self):
@@ -157,7 +157,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
             return (
                 {"c1": {"status": "unmapped", "reason": "자료 부족"}}
                 if len(calls) < 3
-                else {"c1": {"status": "mapped", "industry_code": "I202", "reason": "중식"}}
+                else {"c1": {"status": "mapped", "industry_code": "SV021", "reason": "중식"}}
             )
 
         with tempfile.TemporaryDirectory() as folder:
@@ -181,7 +181,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
             categories = json.loads(raw)["categories"]
             calls.append(categories)
             return {
-                key: {"status": "mapped", "industry_code": "I202", "reason": "중식"}
+                key: {"status": "mapped", "industry_code": "SV021", "reason": "중식"}
                 for key in categories
             }
 
@@ -204,7 +204,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
                 cache_path=path,
             )
             self.assertEqual(set(calls[1]), {"c3"})
-            self.assertEqual(result["c2"].industry_code, "I202")
+            self.assertEqual(result["c2"].industry_code, "SV021")
 
             async def failed(*args):
                 raise RuntimeError("모델 실패")
@@ -222,9 +222,9 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_industry_search_uses_broad_category_without_changing_query(self):
         for code, query, category in (
-            ("I212", "커피", "CE7"),
-            ("I201", "백반", "FD6"),
-            ("S209", "세탁", None),
+            ("SV026", "커피", "CE7"),
+            ("SV020", "백반", "FD6"),
+            ("SV045", "세탁", None),
         ):
 
             def handle(req, query=query, category=category):
@@ -252,7 +252,7 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
         result = await self.observe(data)
         self.assertEqual(result.status, "partial")
         self.assertEqual(set(result.data.places), {"123"})
-        self.assertEqual(result.data.industries["I202"].sampled_count, 1)
+        self.assertEqual(result.data.industries["SV021"].sampled_count, 1)
 
     async def test_empty_category_is_not_sent_to_mapper(self):
         data = payload()
@@ -273,8 +273,8 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
         from app.llm.config import LLMSettings
 
         value = (
-            '{"c1":{"status":"mapped","industry_code":"I202","reason":"분류"},'
-            '"c1":{"status":"mapped","industry_code":"I212","reason":"충돌"}}'
+            '{"c1":{"status":"mapped","industry_code":"SV021","reason":"분류"},'
+            '"c1":{"status":"mapped","industry_code":"SV026","reason":"충돌"}}'
         )
         with (
             patch(
@@ -303,8 +303,8 @@ class MapMappingTests(unittest.IsolatedAsyncioTestCase):
         request.queries.append(request.queries[0].model_copy(update={"query": "커피"}))
         result = await self.observe(payload(), request)
         self.assertEqual(len(result.data.places), 1)
-        self.assertEqual(result.data.industries["I202"].sampled_count, 1)
-        self.assertNotIn("I212", result.data.industries)
+        self.assertEqual(result.data.industries["SV021"].sampled_count, 1)
+        self.assertNotIn("SV026", result.data.industries)
         self.assertEqual(result.data.queries["q1"].total_count, 80)
         self.assertTrue(result.data.queries["q1"].has_more)
 

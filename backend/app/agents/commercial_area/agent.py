@@ -12,7 +12,7 @@ from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 from .client import SbizApiError, StoreClient
 from .config import Settings
 from .franchise import build_franchise, load_brands
-from .industries import load_middle_master
+from .industries import canonicalize_stores, load_middle_master
 from .metrics import (
     build_district_specialization,
     build_diversity,
@@ -96,6 +96,7 @@ async def analyze(
                 ),
                 warnings=warnings,
             )
+        stores = canonicalize_stores(stores)
 
         # 응답에 날짜 필드가 없는 것을 확인했지만, 원천이 나중에 추가할 수 있어 앞단은 남긴다.
         period = meta.get("reference_date") or SBIZ_PERIOD
@@ -142,6 +143,7 @@ async def analyze(
                 candidates,
                 grid_m=settings.lq_cache_grid_m,
             )
+            baseline_stores = canonicalize_stores(baseline_stores)
             baseline_counts = dict(count_by_middle(baseline_stores))
             baseline = LqBaseline(
                 requested_radius_m=requested_baseline,
@@ -174,6 +176,7 @@ async def analyze(
         if district_code:
             try:
                 district_stores, district_meta = await client.stores_in_district(district_code)
+                district_stores = canonicalize_stores(district_stores)
                 district_counts = dict(count_by_middle(district_stores))
                 district_baseline = DistrictBaseline(
                     signgu_code=district_code,

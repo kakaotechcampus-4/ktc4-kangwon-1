@@ -42,6 +42,6 @@ class CallerTests(unittest.IsolatedAsyncioTestCase):
             ),
         ):
             await match_upjong_by_small.fill_with_model(
-                settings, {"s1": ("한식", "I201")}, rows, picks, {}
+                settings, {"s1": ("한식", "SV020")}, rows, picks, {}
             )
         self.assertEqual(picks, {"CS100001": (["s1"], "모델")})

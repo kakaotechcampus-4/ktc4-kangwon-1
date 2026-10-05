@@ -508,12 +508,12 @@
           "quarter_count": 4
         },
         "coverage": {
-          "target_industries": 75,
+          "target_industries": 51,
           "scored_industries": 2,
-          "unscored_industries": 73
+          "unscored_industries": 49
         },
         "taxonomy": {
-          "id": "sbiz-middle-75",
+          "id": "service-industry-51",
           "version": "18143b8da57d",
           "industry_count": 75,
           "seoul_mapping_review": "pending",
@@ -522,8 +522,8 @@
         "scoring_method": {},
         "industries": [
           {
-            "industry_id": "I201",
-            "industry_name": "한식 음식점업",
+            "industry_id": "SV020",
+            "industry_name": "한식 음식점",
             "score": 72.0,
             "type": "개업 우위",
             "citable": {
@@ -543,8 +543,8 @@
             "warning": null
           },
           {
-            "industry_id": "I212",
-            "industry_name": "비알코올 음료점업",
+            "industry_id": "SV026",
+            "industry_name": "카페·비알코올 음료점",
             "score": 28.0,
             "type": "개업 우위",
             "citable": {
@@ -582,8 +582,8 @@
         "by_major": [],
         "by_middle": [
           {
-            "code": "I201",
-            "name": "한식 음식점업",
+            "code": "SV020",
+            "name": "한식 음식점",
             "major_code": "I2",
             "major_name": "음식점업",
             "count": 96,
@@ -598,8 +598,8 @@
             "citable": null
           },
           {
-            "code": "I212",
-            "name": "비알코올 음료점업",
+            "code": "SV026",
+            "name": "카페·비알코올 음료점",
             "major_code": "I2",
             "major_name": "음식점업",
             "count": 71,

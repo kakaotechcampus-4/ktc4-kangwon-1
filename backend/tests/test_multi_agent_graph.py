@@ -81,7 +81,7 @@ class MultiGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([a.round for a in answers], [1, 2])
         self.assertEqual(result.source_analyses[2].data["store_total"], 1241)
         self.assertTrue(
-            all("analyses" not in p and len(p["industry_digest"]) == 75 for p in inputs)
+            all("analyses" not in p and len(p["industry_digest"]) == 51 for p in inputs)
         )
         self.assertEqual(len(inputs[-1]["answers"]), 2)
 
@@ -150,4 +150,4 @@ class MultiGraphTests(unittest.IsolatedAsyncioTestCase):
             generate=mock_generate,
             generate_specialists=dict.fromkeys((*AGENT_IDS, "map_analysis"), forbidden),
         )
-        self.assertEqual(result.recommendations[0].category.code, "I201")
+        self.assertEqual(result.recommendations[0].category.code, "SV020")

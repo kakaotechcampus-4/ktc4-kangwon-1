@@ -302,7 +302,7 @@ class CommercialClientTests(unittest.IsolatedAsyncioTestCase):
 class CommercialCalculationTests(unittest.TestCase):
     def test_specialization_without_baseline_radius_does_not_invent_zero_metres(self):
         master = [
-            MiddleCode(code="I201", name="한식 음식점업", major_code="I2", major_name="음식점업")
+            MiddleCode(code="SV020", name="한식 음식점", major_code="I2", major_name="음식점업")
         ]
         stores = [
             Store(
@@ -311,7 +311,7 @@ class CommercialCalculationTests(unittest.TestCase):
                 major_code="I2",
                 major_name="음식점업",
                 branch_name=None,
-                middle_code="I201",
+                middle_code="SV020",
                 middle_name="한식",
                 small_code=None,
                 small_name=None,
@@ -322,7 +322,7 @@ class CommercialCalculationTests(unittest.TestCase):
             for index in range(5)
         ]
         slices = build_radius_slices(
-            stores, 37.5, 127.0, master, CommercialSettings(), {"I201": 10}, None
+            stores, 37.5, 127.0, master, CommercialSettings(), {"SV020": 10}, None
         )
         text = slices[-1].explanations.specialization
         self.assertNotIn("0m", text)

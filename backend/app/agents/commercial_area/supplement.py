@@ -7,6 +7,7 @@ from app.schemas import AgentAnalysis, AnalysisTask
 
 from .client import StoreClient
 from .config import Settings
+from .industries import canonicalize_stores
 from .metrics import _ratio_against, count_by_middle
 
 
@@ -56,6 +57,7 @@ async def supplement(
         await client.aclose()
     if meta.get("truncated") or not stores or meta.get("radius_m") not in candidates:
         raise ValueError("완전한 주변 비교 자료를 확보하지 못했습니다.")
+    stores = canonicalize_stores(stores)
     counts = dict(count_by_middle(stores))
     result = previous.model_copy(deep=True)
     data = previous.model_dump()["data"]

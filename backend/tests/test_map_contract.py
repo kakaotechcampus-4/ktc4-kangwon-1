@@ -13,7 +13,7 @@ def plan_data():
         "queries": [
             {
                 "kind": "industry",
-                "industry_code": "I212",
+                "industry_code": "SV026",
                 "query": "카페",
                 "why_needed": "현재 경쟁 확인",
                 "expected_impact": "후보 비교",
@@ -26,7 +26,7 @@ class MapContractTests(unittest.TestCase):
     def test_query_boundaries(self):
         self.assertTrue(hasattr(schemas, "MapLookupPlan"))
         plan = schemas.MapLookupPlan.model_validate(plan_data())
-        self.assertEqual(plan.queries[0].industry_code, "I212")
+        self.assertEqual(plan.queries[0].industry_code, "SV026")
         for update in (
             {"industry_code": "bad"},
             {"query": "가" * 51},
@@ -57,7 +57,7 @@ class MapContractTests(unittest.TestCase):
         self.assertTrue(hasattr(schemas, "MapPlace"))
         with self.assertRaises(ValidationError):
             schemas.MapPlace(
-                name="가게", category_name="기타", mapping_status="ambiguous", industry_code="I212"
+                name="가게", category_name="기타", mapping_status="ambiguous", industry_code="SV026"
             )
 
     def test_observation_rejects_inconsistent_status_and_time(self):

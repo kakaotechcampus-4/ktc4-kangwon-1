@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
-from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
+from app.industries.catalog import (
+    INDUSTRIES,
+    INDUSTRY_MAJORS,
+    PUBLIC_MIDDLE_TO_INDUSTRY,
+    PUBLIC_SMALL_TO_INDUSTRY,
+)
 
 from .config import Settings
 from .schemas import MiddleCode, Store
@@ -23,6 +29,32 @@ def load_middle_master(settings: Settings | None = None) -> list[MiddleCode]:
         )
         for code, name in sorted(INDUSTRIES.items())
     ]
+
+
+def canonicalize_store(store: Store) -> Store:
+    """소상공인 원천 분류를 서비스 canonical 업종으로 한 번만 접는다.
+
+    G213/G215처럼 중분류가 분할된 경우에는 소분류가 연결표에 있을 때만
+    매핑한다. 알 수 없는 소분류를 어느 한쪽으로 추정하지 않는다.
+    """
+    industry_code = PUBLIC_SMALL_TO_INDUSTRY.get(store.small_code or "")
+    if industry_code is None:
+        industry_code = PUBLIC_MIDDLE_TO_INDUSTRY.get(store.middle_code)
+    if industry_code is None:
+        return store
+    major_code, major_name = INDUSTRY_MAJORS[industry_code]
+    return replace(
+        store,
+        major_code=major_code,
+        major_name=major_name,
+        middle_code=industry_code,
+        middle_name=INDUSTRIES[industry_code],
+    )
+
+
+def canonicalize_stores(stores: Sequence[Store]) -> list[Store]:
+    """점포 수와 순서를 보존하며 모든 집계 전에 서비스 업종으로 변환한다."""
+    return [canonicalize_store(store) for store in stores]
 
 
 def master_from_stores(stores: Sequence[Store]) -> list[MiddleCode]:

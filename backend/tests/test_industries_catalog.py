@@ -13,6 +13,8 @@ from app.industries.catalog import (
     INDUSTRY_TO_LEGACY70,
     INDUSTRY_TO_SEOUL,
     LEGACY70_TO_INDUSTRY,
+    PUBLIC_MIDDLE_TO_INDUSTRY,
+    PUBLIC_SMALL_TO_INDUSTRY,
     SEOUL_TO_INDUSTRY,
 )
 from app.industries.lookup import normalize_name
@@ -22,8 +24,13 @@ LEGACY_IDS = range(1, 71)
 
 class CatalogTests(unittest.TestCase):
     def test_industry_count_matches_declaration(self):
+        self.assertEqual(EXPECTED_INDUSTRY_COUNT, 51)
         self.assertEqual(len(INDUSTRIES), EXPECTED_INDUSTRY_COUNT)
         self.assertEqual(len(INDUSTRY_MAJORS), EXPECTED_INDUSTRY_COUNT)
+
+    def test_codes_and_names_are_unique(self):
+        self.assertEqual(len(INDUSTRIES), len(set(INDUSTRIES)))
+        self.assertEqual(len(INDUSTRIES), len(set(INDUSTRIES.values())))
 
     def test_names_stay_distinct_after_normalization(self):
         keys = [normalize_name(name) for name in INDUSTRIES.values()]
@@ -58,27 +65,30 @@ class SeoulLinkTests(unittest.TestCase):
         self.assertEqual(set(INDUSTRIES_WITHOUT_SEOUL), set(INDUSTRIES) - linked)
 
     def test_unlinked_industries_are_the_ones_seoul_cannot_supply(self):
-        # 개폐업이 "서울시 자료로는 못 만든다"고 한 업종의 대상들. 우리 자료가 메우는 자리다.
-        # G212(생활용품)만 예외 — 서울시 악기·조명용품이 붙어 있어 단독이 아니다.
-        for code in (
-            "I206",
-            "Q101",
-            "Q104",
-            "S208",
-            "S210",
-            "S211",
-            "M105",
-            "M106",
-            "M107",
-            "M109",
-        ):
-            self.assertIn(code, INDUSTRIES_WITHOUT_SEOUL)
-        self.assertNotIn("G212", INDUSTRIES_WITHOUT_SEOUL)
+        self.assertEqual(
+            set(INDUSTRIES_WITHOUT_SEOUL),
+            {"SV046", "SV047", "SV048", "SV049", "SV050", "SV051"},
+        )
+
+
+class PublicLinkTests(unittest.TestCase):
+    def test_every_link_points_at_a_known_industry(self):
+        for code in (*PUBLIC_MIDDLE_TO_INDUSTRY.values(), *PUBLIC_SMALL_TO_INDUSTRY.values()):
+            self.assertIn(code, INDUSTRIES)
+
+    def test_split_middle_categories_use_only_small_codes(self):
+        self.assertNotIn("G213", PUBLIC_MIDDLE_TO_INDUSTRY)
+        self.assertNotIn("G215", PUBLIC_MIDDLE_TO_INDUSTRY)
+        self.assertEqual(PUBLIC_SMALL_TO_INDUSTRY["G21304"], "SV002")
+        self.assertEqual(PUBLIC_SMALL_TO_INDUSTRY["G21305"], "SV002")
+        self.assertEqual(PUBLIC_SMALL_TO_INDUSTRY["G21301"], "SV009")
+        self.assertEqual(PUBLIC_SMALL_TO_INDUSTRY["G21501"], "SV010")
+        self.assertEqual(PUBLIC_SMALL_TO_INDUSTRY["G21503"], "SV011")
 
 
 class Legacy70Tests(unittest.TestCase):
-    def test_every_legacy_industry_is_covered(self):
-        self.assertEqual(set(LEGACY70_TO_INDUSTRY), set(LEGACY_IDS))
+    def test_unmapped_legacy_sources_are_not_guessed(self):
+        self.assertEqual(set(LEGACY_IDS) - set(LEGACY70_TO_INDUSTRY), {14, 34, 43, 59, 67})
 
     def test_every_link_points_at_a_known_industry(self):
         for codes in LEGACY70_TO_INDUSTRY.values():

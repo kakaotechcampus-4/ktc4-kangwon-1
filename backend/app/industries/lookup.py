@@ -72,8 +72,8 @@ def from_seoul(seoul_code: str) -> Industry | None:
 def from_legacy70(legacy_id: int) -> tuple[Industry, ...]:
     """개폐업 70업종 ID를 우리 업종으로.
 
-    **여럿이 돌아올 수 있다.** 개폐업 하나가 우리 중분류 여럿으로 갈라지는 경우가 8건 있다
-    (예: 33 자동차·모터사이클·부품 → G202 · G203 · G222). 개폐업이 주는 값은 개수가 아니라
+    **여럿이 돌아올 수 있다.** 과거 개폐업 하나가 서비스 업종 여럿으로 갈라질 수 있다
+    (예: 33 자동차·모터사이클·부품 → SV001 · SV002 · SV017). 개폐업이 주는 값은 개수가 아니라
     0~100 점수라 **여기 나온 업종들에 그대로 복제하면 안 된다.** 가중 방식은 팀 미합의 사항이다.
     """
     return tuple(get(code) for code in LEGACY70_TO_INDUSTRY.get(legacy_id, ()))

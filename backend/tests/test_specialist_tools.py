@@ -37,15 +37,15 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_only_tool_preserves_paths_and_rejects_bad_codes(self):
         tools = self.tools("commercial_area")
-        result = await tools["get_industry_counts"].execute({"codes": ["I201"]})
+        result = await tools["get_industry_counts"].execute({"codes": ["SV020"]})
         self.assertTrue(
             any(r["path"] == "/by_middle/0/count" and r["value"] == 96 for r in result["records"])
         )
-        self.assertFalse(any(r["industry_code"] == "I212" for r in result["records"]))
+        self.assertFalse(any(r["industry_code"] == "SV026" for r in result["records"]))
         with self.assertRaises(ToolArgumentError):
             await tools["get_industry_counts"].execute({"codes": ["I299"]})
         with self.assertRaises(ToolArgumentError):
-            await tools["get_industry_counts"].execute({"codes": ["I201"], "radius_m": 1})
+            await tools["get_industry_counts"].execute({"codes": ["SV020"], "radius_m": 1})
         self.assertNotIn("retry_lq_baseline", tools)
         self.assertEqual(self.tools("map_analysis"), {})
 
@@ -62,12 +62,12 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                 "compare_seoul": {"metric": "scale_percentile"},
             },
             "business_lifecycle": {
-                "get_industry_metrics": {"codes": ["I201"]},
-                "compare_industries": {"codes": ["I201", "I212"]},
+                "get_industry_metrics": {"codes": ["SV020"]},
+                "compare_industries": {"codes": ["SV020", "SV026"]},
             },
             "commercial_area": {
-                "get_industry_counts": {"codes": ["I201"]},
-                "get_radius_breakdown": {"code": "I201"},
+                "get_industry_counts": {"codes": ["SV020"]},
+                "get_radius_breakdown": {"code": "SV020"},
                 "get_district_specialization": {},
             },
         }
@@ -154,9 +154,9 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.analyses[2], previous)
 
     async def test_radius_tool_keeps_slice_radius(self):
-        self.analyses[2].data["by_radius"] = [radius_slice("I201", 7, 100)]
+        self.analyses[2].data["by_radius"] = [radius_slice("SV020", 7, 100)]
         result = await self.tools("commercial_area")["get_radius_breakdown"].execute(
-            {"code": "I201"}
+            {"code": "SV020"}
         )
         values = {r["path"]: r["value"] for r in result["records"]}
         self.assertEqual(values["/by_radius/0/radius_m"], 100)
@@ -204,7 +204,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.orchestration.consult import map_adoptable
         from app.industries.lookup import find
 
-        master = find("I212")
+        master = find("SV026")
         payload = {
             "request_id": "r",
             "observation_id": "old",
@@ -228,12 +228,12 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                         "name": "카페",
                         "category_name": "카페",
                         "mapping_status": "mapped",
-                        "industry_code": "I212",
+                        "industry_code": "SV026",
                         "mapping_method": "llm",
                     }
                 },
                 "industries": {
-                    "I212": {
+                    "SV026": {
                         "name": master.name,
                         "major": master.major_name,
                         "place_ids": ["p"],

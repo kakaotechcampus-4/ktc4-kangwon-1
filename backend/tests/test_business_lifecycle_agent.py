@@ -77,9 +77,9 @@ def fake_pipeline(
             },
         },
         "coverage": {
-            "target_industries": 75,
+            "target_industries": 51,
             "scored_industries": 1,
-            "unscored_industries": 74,
+            "unscored_industries": 50,
         },
         "scoring_method": {
             "score_type": "relative",
@@ -88,8 +88,8 @@ def fake_pipeline(
         "summary": "테스트 요약입니다.",
         "industry_scores": [
             {
-                "industry_id": "I201",
-                "industry_name": "한식 음식점업",
+                "industry_id": "SV020",
+                "industry_name": "한식 음식점",
                 "lifecycle_score": 71.5,
                 "type": "성장·안정형",
                 "confidence": "high",
@@ -103,11 +103,11 @@ def fake_pipeline(
                 "industry_name": INDUSTRIES[industry_id],
                 "data_available": False,
                 "confidence": "none",
-                "observed_quarters": 7 if industry_id == "I202" else 0,
+                "observed_quarters": 7 if industry_id == "SV021" else 0,
                 "missing_reason": "테스트용 데이터 부족입니다.",
             }
             for industry_id in INDUSTRIES
-            if industry_id != "I201"
+            if industry_id != "SV020"
         ],
     }
 
@@ -175,9 +175,9 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.scope.area, "개롱역 (3120240)")
         self.assertEqual(result.scope.period, "20221~20244 (12개 분기)")
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
-        self.assertEqual(len(result.data["industries"]), 75)
+        self.assertEqual(len(result.data["industries"]), 51)
         unavailable = next(
-            industry for industry in result.data["industries"] if industry["industry_id"] == "I202"
+            industry for industry in result.data["industries"] if industry["industry_id"] == "SV021"
         )
         self.assertEqual(unavailable["source_coverage"].get("observed_quarters"), 7)
 
@@ -331,7 +331,7 @@ class BusinessAreaResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
         self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
         self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "env_override")
-        self.assertEqual(len(result.data["industries"]), 75)
+        self.assertEqual(len(result.data["industries"]), 51)
 
 
 if __name__ == "__main__":

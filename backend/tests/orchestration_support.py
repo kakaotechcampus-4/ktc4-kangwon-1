@@ -54,7 +54,7 @@ def lq_supplement(baseline_store_total=9000):
     }
 
 
-def radius_slice(code="I201", count=7, radius_m=100):
+def radius_slice(code="SV020", count=7, radius_m=100):
     return RadiusSlice(
         radius_m=radius_m,
         store_total=40,
