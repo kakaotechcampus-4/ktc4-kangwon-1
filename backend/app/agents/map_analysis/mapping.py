@@ -1,4 +1,4 @@
-"""고유 원본 분류를 공통 업종에 한 번만 매핑합니다."""
+"""질문 업종과 원본 분류 쌍의 동종 여부를 한 번에 판단합니다."""
 
 import asyncio
 import hashlib
@@ -10,16 +10,13 @@ from collections.abc import Awaitable, Callable
 from contextlib import closing
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Literal, Self
-
-from pydantic import model_validator
+from typing import Any
 
 from app.config import BACKEND_DIR
-from app.industries.catalog import INDUSTRIES
 from app.llm.budget import BudgetStorageError
 from app.llm.client import complete_json
 from app.llm.config import LLMSettings
-from app.schemas import Schema, Text
+from app.schemas import MatchStatus, Schema, Text
 
 GenerateMapping = Callable[[str, str], Awaitable[Any] | Any]
 
@@ -49,41 +46,31 @@ def _cache(
                 ).fetchone()
                 if row:
                     try:
-                        item = CategoryMapping.model_validate_json(row[0])
+                        item = MatchJudgement.model_validate_json(row[0])
                     except ValueError:
                         continue
-                    if item.status == "mapped":
+                    if item.status in {"same", "different"}:
                         result[key] = item
             return result
     except (OSError, sqlite3.Error):
         return {}
 
 
-class CategoryMapping(Schema):
-    status: Literal["mapped", "ambiguous", "unmapped"]
-    industry_code: Text | None = None
+class MatchJudgement(Schema):
+    status: MatchStatus
     reason: Text
 
-    @model_validator(mode="after")
-    def check_code(self) -> Self:
-        if self.status == "mapped":
-            if self.industry_code not in INDUSTRIES:
-                raise ValueError("공통 업종 코드가 아닙니다.")
-        elif self.industry_code is not None:
-            raise ValueError("미확정 분류는 코드를 지정하지 않습니다.")
-        return self
 
-
-async def map_categories(
-    categories: dict[str, dict[str, str]],
+async def judge_matches(
+    pairs: dict[str, dict],
     *,
     generate: GenerateMapping | None = None,
     settings: LLMSettings | None = None,
     cache_path: Path | None = None,
-) -> dict[str, CategoryMapping]:
-    if not categories:
+) -> dict[str, MatchJudgement]:
+    if not pairs:
         return {}
-    prompt = files(__package__).joinpath("prompt.md").read_text("utf-8")
+    prompt = await asyncio.to_thread(files(__package__).joinpath("prompt.md").read_text, "utf-8")
     settings = settings or LLMSettings.from_env("MAP_MAPPING")
     # 주입한 대역은 명시적으로 지정한 임시 캐시만 사용합니다.
     if cache_path is None and generate is None:
@@ -91,22 +78,22 @@ async def map_categories(
     keys = {
         key: hashlib.sha256(
             json.dumps(
-                [value, INDUSTRIES, prompt, settings.model, settings.base_url],
+                [value, prompt, settings.model, settings.base_url],
                 ensure_ascii=False,
                 sort_keys=True,
             ).encode()
         ).hexdigest()
-        for key, value in categories.items()
+        for key, value in pairs.items()
+        if not value.get("place_names")
     }
     cached = await asyncio.to_thread(_cache, cache_path, keys) if cache_path else {}
-    pending = {key: value for key, value in categories.items() if key not in cached}
+    pending = {key: value for key, value in pairs.items() if key not in cached}
     if not pending:
         return cached
     raw = json.dumps(
         {
-            "categories": pending,
-            "industries": INDUSTRIES,
-            "schema": CategoryMapping.model_json_schema(),
+            "pairs": pending,
+            "schema": MatchJudgement.model_json_schema(),
         },
         ensure_ascii=False,
     )
@@ -115,8 +102,8 @@ async def map_categories(
         if inspect.isawaitable(result):
             result = await result
         if not isinstance(result, dict) or set(result) != set(pending):
-            raise ValueError("원본 분류와 매핑 응답 항목이 다릅니다.")
-        validated = {key: CategoryMapping.model_validate(value) for key, value in result.items()}
+            raise ValueError("입력 쌍과 동종 판단 응답 항목이 다릅니다.")
+        validated = {key: MatchJudgement.model_validate(value) for key, value in result.items()}
     except BudgetStorageError:
         raise
     except (RuntimeError, ValueError):
@@ -131,7 +118,7 @@ async def map_categories(
             {
                 key: value.model_dump_json()
                 for key, value in validated.items()
-                if value.status == "mapped"
+                if value.status in {"same", "different"} and key in keys
             },
         )
     return cached | validated

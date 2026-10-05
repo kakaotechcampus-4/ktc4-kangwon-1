@@ -39,11 +39,31 @@ _AGE_KEYS = {
 }
 
 
-def _num(row: dict, key: str) -> float:
+def _num(row: dict, key: str) -> float | None:
+    """API·CSV의 빈 숫자를 None으로 정규화하며 실제 영값은 유지합니다."""
     v = row.get(key)
-    if v is None or v == "":
-        return 0.0
+    if v is None or isinstance(v, str) and v.strip().lower() in {"", "null"}:
+        return None
     return float(v)
+
+
+def missing_fields(
+    record: PopulationRecord | FlpopRecord, *, households: bool = False
+) -> list[str]:
+    """문자열 식별자는 제외하고 결측인 수치 경로만 반환합니다."""
+    data = record.model_dump(exclude={"trdar_cd", "stdr_yyqu_cd"})
+    if not households:
+        data.pop("households", None)
+    return [
+        path
+        for key, value in data.items()
+        for path, number in (
+            [(f"{key}/{part}", number) for part, number in value.items()]
+            if isinstance(value, dict)
+            else [(key, value)]
+        )
+        if number is None
+    ]
 
 
 def _trdar_code(row: dict) -> str:
@@ -101,7 +121,7 @@ class TrdarArea(BaseModel):
             trdar_cd_nm=str(row.get("TRDAR_CD_NM") or "").strip(),
             x=float(row["XCNTS_VALUE"]),
             y=float(row["YDNTS_VALUE"]),
-            relm_ar=_num(row, "RELM_AR"),
+            relm_ar=_num(row, "RELM_AR") or 0.0,
             trdar_se_nm=str(row.get("TRDAR_SE_CD_NM") or "").strip() or None,
             adstrd_nm=str(row.get("ADSTRD_CD_NM") or "").strip() or None,
         )
@@ -119,8 +139,8 @@ class PopulationRecord(BaseModel):
 
     trdar_cd: str
     stdr_yyqu_cd: str
-    total: float
-    by_age: dict[str, float]
+    total: float | None
+    by_age: dict[str, float | None]
     households: float | None = None
 
     @staticmethod
@@ -156,12 +176,12 @@ class FlpopRecord(BaseModel):
 
     trdar_cd: str
     stdr_yyqu_cd: str
-    total: float
-    male: float
-    female: float
-    by_time: dict[str, float]
-    by_day: dict[str, float]
-    by_age: dict[str, float]
+    total: float | None
+    male: float | None
+    female: float | None
+    by_time: dict[str, float | None]
+    by_day: dict[str, float | None]
+    by_age: dict[str, float | None]
 
     @classmethod
     def from_api_row(cls, row: dict) -> FlpopRecord:

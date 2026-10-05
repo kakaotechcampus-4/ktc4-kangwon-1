@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import httpx
 import openai
+from llm_stream_fixture import stream_response
 
 
 class SettingsTests(unittest.TestCase):
@@ -105,7 +106,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 payload["choices"] = {"SECRET-UPSTREAM": {}}
             elif choices == "number":
                 payload["choices"] = 1
-            return httpx.Response(status, json=payload)
+            return stream_response(status, json=payload)
 
         constructor = openai.AsyncOpenAI
 

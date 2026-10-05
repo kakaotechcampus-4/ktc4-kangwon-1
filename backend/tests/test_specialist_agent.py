@@ -96,6 +96,38 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(calls), 5)
         self.assertEqual(result.source, "fallback")
 
+    async def test_fallback_preserves_exclusion_warnings_and_tool_records(self):
+        responses = iter(
+            [
+                tool_message("invented", {}),
+                tool_message(
+                    "finish",
+                    {
+                        "headline": "제외될 주장",
+                        "findings": [
+                            {
+                                "claim": "점포 999개",
+                                "signal": "context",
+                                "evidence": [{"path": "/store_total"}],
+                            },
+                            {},
+                        ],
+                    },
+                ),
+            ]
+        )
+
+        async def generate(messages, definitions):
+            return next(responses)
+
+        result = await self.write(self.task, self.source, generate=generate, tools={})
+        self.assertEqual(result.source, "fallback")
+        self.assertEqual(result.tool_calls[0].tool, "invented")
+        self.assertIn("전문가 근거 제외: 2번 형식 오류", result.limitations)
+        self.assertIn(
+            "전문가 근거 제외: 1번 수치·단위 불일치 (맞지 않는 수: 999)", result.limitations
+        )
+
     async def test_model_failure_does_not_invent_an_answer(self):
         async def fail(messages, definitions):
             raise RuntimeError("외부 모델 실패")
@@ -116,7 +148,7 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         seen = []
 
         async def generate(messages, definitions):
-            seen.append(json.loads(messages[1]["content"])["data"])
+            seen.append(json.loads(messages[1]["content"])["facts"]["shared"][""])
             return tool_message("finish", {"headline": "확인", "findings": [], "limitations": []})
 
         observation = await map_observation(
@@ -145,7 +177,12 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
             generate=generate,
             tools={},
         )
-        self.assertEqual(seen, [self.source.data])
+        expected = {
+            key: value
+            for key, value in self.source.data.items()
+            if isinstance(value, (str, int, float)) and not isinstance(value, bool)
+        }
+        self.assertEqual(seen, [expected])
 
     async def test_cancellation_is_not_a_fallback(self):
         import asyncio

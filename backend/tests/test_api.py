@@ -20,6 +20,117 @@ from app.services.settings import ExecutionSettings
 
 
 class ApiTests(unittest.TestCase):
+    def test_polling_each_uses_one_database_connection(self):
+        from dataclasses import replace
+
+        settings = replace(self.settings, analysis_mode="multi_agent", evaluators_enabled=True)
+        with TestClient(main.create_app(settings=settings, load_env=False)) as client:
+            created = client.post("/api/v1/analyses?mock=true", json={"address": "시험 주소"})
+            self.assertEqual(created.status_code, 200, created.text)
+            request_id = created.headers["X-Request-ID"]
+            for suffix in ("", "/events"):
+                with (
+                    self.subTest(endpoint=suffix),
+                    patch("sqlite3.connect", wraps=sqlite3.connect) as opened,
+                ):
+                    response = client.get(f"/api/v1/analyses/{request_id}{suffix}")
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(opened.call_count, 1)
+                if not suffix:
+                    self.assertEqual(len(response.json()["evaluation"]["evaluations"]), 4)
+                    self.assertEqual(len(response.json()["deliberation"]["briefs"]), 3)
+
+    def test_supplement_index_survives_reinitialization(self):
+        from app.db.connection import initialize
+
+        initialize(self.path)
+        initialize(self.path)
+        with connect(self.path) as db:
+            columns = db.execute("PRAGMA index_info(idx_supplement_events_request_id)").fetchall()
+        self.assertEqual([row["name"] for row in columns], ["request_id"])
+
+    def test_async_answer_change_is_rejected_before_acceptance(self):
+        started = self.client.post(
+            "/api/v1/analyses?mock=true", json={"address": "시험 주소", "allow_questions": True}
+        )
+        self.assertEqual(started.status_code, 200, started.text)
+        waiting = started.json()
+        path = f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true"
+        body = {
+            "request_id": waiting["request_id"],
+            "question_set_id": waiting["question_set_id"],
+            "answers": [],
+        }
+        self.assertEqual(self.client.post(path, json=body).status_code, 200)
+        body["answers"] = [{"field": "floor", "status": "answered", "value": "2층"}]
+        changed = self.client.post(path + "&wait=false", json=body)
+        self.assertEqual(changed.status_code, 409)
+        self.assertEqual(changed.json(), {"detail": "이미 제출한 답변은 변경할 수 없습니다."})
+
+    def test_detail_errors_keep_response_and_log_safe_categories(self):
+        from pydantic import ValidationError
+
+        secret = "SECRET-RAW-INPUT"
+        try:
+            DecisionResult.model_validate({"secret": secret})
+        except ValidationError as invalid:
+            errors = [ValueError(secret), invalid, json.JSONDecodeError(secret, secret, 0)]
+        errors.append(sqlite3.OperationalError(secret))
+        for error in errors:
+            with (
+                self.subTest(error=type(error).__name__),
+                patch(
+                    "app.db.analysis_repository.repository.get_analysis_view_data",
+                    side_effect=error,
+                ),
+                self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
+            ):
+                response = self.client.get("/api/v1/analyses/saved-request")
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.json(), {"detail": "저장된 분석 조회에 실패했습니다."})
+            log = "\n".join(captured.output)
+            self.assertIn(
+                "저장 자료 손상" if isinstance(error, ValueError) else "예상 못 한 오류", log
+            )
+            self.assertIn("saved-request", log)
+            self.assertNotIn(secret, log)
+
+    def test_write_errors_log_without_raw_exception(self):
+        secret = "SECRET-RAW-INPUT"
+        cases = [
+            (
+                "/api/v1/analyses?mock=true",
+                {"address": "시험 주소"},
+                "app.services.analysis.run_graph",
+                "분석 결과 처리 또는 저장에 실패했습니다.",
+            ),
+            (
+                "/api/v1/analyses/saved-request/answers?mock=true",
+                {"request_id": "saved-request", "question_set_id": "q", "answers": []},
+                "app.api.v1.routes.repository.get_request",
+                "답변 처리 또는 저장에 실패했습니다.",
+            ),
+            (
+                "/api/v1/analyses/saved-request/retry-decision?mock=true",
+                {"failed_at": "now"},
+                "app.api.v1.routes.repository.get_request",
+                "최종판단 검증 또는 저장에 실패했습니다.",
+            ),
+        ]
+        for path, body, target, message in cases:
+            with (
+                self.subTest(path=path),
+                patch(target, side_effect=sqlite3.OperationalError(secret)),
+                self.assertLogs("app.api.v1.routes", level="ERROR") as captured,
+            ):
+                response = self.client.post(path, json=body)
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.json(), {"detail": message})
+            log = "\n".join(captured.output)
+            self.assertIn("예상 못 한 오류", log)
+            self.assertIn(response.headers["X-Request-ID"], log)
+            self.assertNotIn(secret, log)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -114,8 +225,8 @@ class ApiTests(unittest.TestCase):
         agents = mock_agents()
         agents["floating_population"] = invalid
         with (
-            patch("app.api.v1.routes.mock_agents", return_value=agents),
-            patch("app.api.v1.routes.mock_generate") as decision,
+            patch("app.services.mocking.mock_agents", return_value=agents),
+            patch("app.services.mocking.mock_generate") as decision,
         ):
             response = self.client.post("/api/v1/analyses?mock=true", json={"address": "시험 주소"})
         self.assertEqual(response.status_code, 500)
