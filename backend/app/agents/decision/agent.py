@@ -9,6 +9,7 @@ from importlib.resources import files
 from typing import Any
 
 from app.agents.floating_population.selection import SELECTABLE
+from app.education_zone import EducationZoneScan
 from app.evidence import (
     MAP_AGENT_ID,
     CitationError,
@@ -119,6 +120,7 @@ async def evaluate(
     question_fields: list[QuestionField] | None = None,
     user_answers: list[LandlordAnswer] | None = None,
     site: Site | None = None,
+    education_zones: EducationZoneScan | None = None,
     allow_map_lookup: bool = False,
     deliberation: dict | None = None,
     evaluation: dict | None = None,
@@ -133,7 +135,9 @@ async def evaluate(
     observation = request.map_observation
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
-    limitations = _collect_limitations(sources, available, observation, answers, feedback)
+    limitations = _collect_limitations(
+        sources, available, observation, answers, feedback, education_zones
+    )
     if deliberation is not None:
         limitations.extend(
             message
@@ -149,6 +153,7 @@ async def evaluate(
             allowed_questions,
             answers,
             site,
+            education_zones,
             feedback,
             supplement_context,
             allow_map_lookup,
@@ -441,9 +446,28 @@ def _valid_map_evidence(path: str, industry_name: str, observation: MapObservati
     return bool(industry and can_cite(observation.data, path, industry.code) is None)
 
 
-def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:
+def _zone_limitations(zones) -> list[str]:
+    """보호구역 사실은 모델 문장과 무관하게 코드가 직접 한계에 남깁니다."""
+    if zones is None:
+        return []
+    if zones.status == "error":
+        return ["교육환경보호구역을 확인하지 못했습니다. 보호구역이 아니라는 뜻이 아닙니다."]
+    if not zones.zones:
+        return []
+    names = " · ".join(dict.fromkeys(zone.name for zone in zones.zones))
+    return [
+        f"교육환경보호구역({names})에 속합니다. 유흥주점·숙박업·노래연습장·PC방 등이 "
+        "제한되며, 절대보호구역은 금지, 상대보호구역은 심의 대상입니다. "
+        "최종 확인은 관할 교육지원청이 필요합니다."
+    ]
+
+
+def _collect_limitations(
+    sources, available, observation, answers, feedback, zones=None
+) -> list[str]:
     """원본의 실패·범위 차이·미확인 답변을 모읍니다."""
     limitations = list(feedback or [])
+    limitations.extend(_zone_limitations(zones))
     if observation is not None:
         limitations.extend(observation.warnings)
         if observation.status in {"error", "partial"}:
@@ -487,6 +511,7 @@ def _build_prompt(
     allowed_questions,
     answers,
     site,
+    education_zones,
     feedback,
     supplement_context,
     allow_map_lookup,
@@ -573,6 +598,8 @@ def _build_prompt(
         payload["user_answers"] = [a.model_dump(mode="json") for a in answers]
     if site is not None:
         payload["site"] = Site.model_validate(site).model_dump(mode="json")
+    if education_zones is not None:
+        payload["education_zones"] = education_zones.model_dump(mode="json")
     if operations:
         payload["supplement_operations"] = [item.model_dump() for item in operations]
     if feedback:

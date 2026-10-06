@@ -87,7 +87,10 @@ async def evaluate_with_log(state, request, **kwargs):
 
 
 async def judge(state, request, *, deps: GraphDeps, **kwargs):
-    outcome, entries = await evaluate_with_log(state, request, **kwargs)
+    # 보호구역은 주소 단계에서 한 번 조회해 두므로 모든 판정 호출에 같은 값이 갑니다.
+    outcome, entries = await evaluate_with_log(
+        state, request, education_zones=state.get("education_zones"), **kwargs
+    )
     if (
         "evaluations" in state
         and isinstance(outcome, DecisionResult)

@@ -13,7 +13,7 @@ from pathlib import Path
 from prepare_task import MOCK_ADDRESS, mock_resolve
 
 from app.config import load_environment
-from app.mocks import mock_generate
+from app.mocks import mock_generate, zone_scan
 from app.schemas import DecisionRequest
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
@@ -40,6 +40,7 @@ async def run(offline: bool, *, db_path: str | Path | None = None):
         resolve=mock_resolve,
         agents={item.agent_id: make_agent(item) for item in source.analyses},
         generate=mock_generate if offline else None,
+        find_zones=zone_scan if offline else None,
         db_path=db_path,
         settings=ExecutionSettings() if offline else ExecutionSettings.from_env(),
     )
