@@ -1,0 +1,25 @@
+name: OIDC 연결 확인
+
+# 배포를 붙이기 전에 인증만 검증합니다. 문제가 생겼을 때 원인이
+# 인증인지 배포인지 가리기 위해 따로 둡니다.
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/deploy]
+
+permissions:
+  id-token: write   # 빠지면 Credentials could not be loaded 가 납니다
+  contents: read    # permissions 블록을 쓰는 순간 나머지는 전부 none 이 됩니다
+
+jobs:
+  verify:
+    name: AWS 자격증명 확인
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/ktc-github-deploy
+          aws-region: ap-northeast-2
+
+      - name: 누구로 인증됐는지 확인
+        run: aws sts get-caller-identity
