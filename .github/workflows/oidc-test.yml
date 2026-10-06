@@ -23,3 +23,9 @@ jobs:
 
       - name: 누구로 인증됐는지 확인
         run: aws sts get-caller-identity
+
+      - name: S3 업로드 확인
+        run: |
+          echo "probe from actions $(date -u +%FT%TZ)" > probe.txt
+          aws s3 cp probe.txt s3://ktc4-kangwon-1-deploy/_probe-from-actions.txt
+          aws s3 ls s3://ktc4-kangwon-1-deploy/
