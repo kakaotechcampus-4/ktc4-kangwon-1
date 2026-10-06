@@ -20,7 +20,6 @@ load_dotenv_if_present = load_environment
 VWORLD_DATA_URL = "https://api.vworld.kr/req/data"
 # 국토교통부 교육환경보호구역. 교육지원청이 고시한 구역 폴리곤 그 자체입니다.
 EDUCATION_ZONE_LAYER = "LT_C_UO101"
-MAX_BUFFER_M = 1_000
 PAGE_SIZE = 1_000
 
 # 같은 좌표에 절대·상대 구역이 겹칠 수 있어 재시도만 분기하고 결과는 모두 수집합니다.
@@ -113,7 +112,6 @@ class EducationZoneScan(Model):
 
     status: Literal["ok", "error"]
     center: Coordinate
-    buffer_m: int
     queried_at: str
     zones: list[EducationZone] = Field(default_factory=list)
     error: ZoneError | None = None
@@ -172,7 +170,6 @@ async def find_education_zones(
     latitude: float,
     longitude: float,
     *,
-    buffer_m: int = 0,
     with_geometry: bool = False,
     settings: EducationZoneSettings | None = None,
     client: httpx.AsyncClient | None = None,
@@ -182,7 +179,10 @@ async def find_education_zones(
     거리를 계산하지 않습니다. 교육지원청이 고시한 구역 폴리곤에 좌표가 들어가는지를
     V-World가 판정하므로, 학교 출입문·경계까지의 거리를 따로 재지 않아도 됩니다.
 
-    buffer_m을 주면 좌표를 그만큼 확장해 근처 구역까지 봅니다.
+    반경을 넓히면 "주변에 구역이 있다"가 섞여 들어오므로 점으로만 조회합니다.
+    학교가 여럿이면 보호구역이 겹쳐 zones가 여러 건일 수 있습니다.
+    하나라도 절대보호구역이면 금지이므로 전부 담아 돌려줍니다.
+
     반환값의 status=ok이고 zones가 비어 있으면 보호구역이 아니라는 뜻이며,
     조회 실패(status=error)와 반드시 구분해서 읽어야 합니다.
 
@@ -193,8 +193,6 @@ async def find_education_zones(
     for value, low, high in ((latitude, -90.0, 90.0), (longitude, -180.0, 180.0)):
         if type(value) not in (float, int) or not math.isfinite(value) or not low <= value <= high:
             raise EducationZoneError("INVALID_COORDINATE", "좌표 값이 올바르지 않습니다.")
-    if type(buffer_m) is not int or not 0 <= buffer_m <= MAX_BUFFER_M:
-        raise EducationZoneError("INVALID_BUFFER", f"버퍼는 0~{MAX_BUFFER_M}m 사이여야 합니다.")
     key = settings.api_key
     if not isinstance(key, str) or not key.strip():
         raise EducationZoneError("CONFIG_ERROR", "V-World 인증키가 설정되지 않았습니다.")
@@ -204,7 +202,6 @@ async def find_education_zones(
             return await find_education_zones(
                 latitude,
                 longitude,
-                buffer_m=buffer_m,
                 with_geometry=with_geometry,
                 settings=settings,
                 client=owned,
@@ -220,7 +217,8 @@ async def find_education_zones(
         "data": EDUCATION_ZONE_LAYER,
         # EPSG:4326 기준이라 경도가 x, 위도가 y입니다.
         "geomFilter": f"POINT({longitude} {latitude})",
-        "buffer": buffer_m,
+        # 점으로만 봅니다. 50m·200m 거리는 이미 고시된 폴리곤에 들어 있습니다.
+        "buffer": 0,
         "geometry": "true" if with_geometry else "false",
         "attribute": "true",
         "crs": "EPSG:4326",
@@ -235,7 +233,6 @@ async def find_education_zones(
         return EducationZoneScan(
             status="error",
             center=center,
-            buffer_m=buffer_m,
             queried_at=_now(),
             error=ZoneError(code=code, message=message),
         )
@@ -260,7 +257,7 @@ async def find_education_zones(
             elif response.status_code >= 400:
                 return failed("UPSTREAM_FAILED", "구역 조회 요청이 거부되었습니다.")
             else:
-                scan, retryable = _parse(response, center, buffer_m, with_geometry=with_geometry)
+                scan, retryable = _parse(response, center, with_geometry=with_geometry)
                 if not retryable:
                     return scan
                 last = scan
@@ -274,7 +271,6 @@ async def find_education_zones(
 def _parse(
     response: httpx.Response,
     center: Coordinate,
-    buffer_m: int,
     *,
     with_geometry: bool,
 ) -> tuple[EducationZoneScan, bool]:
@@ -293,7 +289,7 @@ def _parse(
     if status == "NOT_FOUND":
         # 좌표가 어느 구역에도 들어가지 않은 정상 응답입니다.
         return (
-            EducationZoneScan(status="ok", center=center, buffer_m=buffer_m, queried_at=queried_at),
+            EducationZoneScan(status="ok", center=center, queried_at=queried_at),
             False,
         )
 
@@ -306,7 +302,6 @@ def _parse(
                 EducationZoneScan(
                     status="error",
                     center=center,
-                    buffer_m=buffer_m,
                     queried_at=queried_at,
                     error=ZoneError(code=code, message="구역 조회 서비스가 요청을 거절했습니다."),
                 ),
@@ -316,7 +311,6 @@ def _parse(
             EducationZoneScan(
                 status="error",
                 center=center,
-                buffer_m=buffer_m,
                 queried_at=queried_at,
                 error=ZoneError(code=code, message="구역 조회 서비스에서 오류가 발생했습니다."),
             ),
@@ -349,7 +343,6 @@ def _parse(
         EducationZoneScan(
             status="ok",
             center=center,
-            buffer_m=buffer_m,
             queried_at=queried_at,
             zones=zones,
             warnings=warnings,

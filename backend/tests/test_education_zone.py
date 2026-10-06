@@ -79,10 +79,10 @@ class EducationZoneTests(unittest.IsolatedAsyncioTestCase):
             seen.update(request.url.params)
             return httpx.Response(200, json=NOT_FOUND)
 
-        await self.scan(handler, buffer_m=50)
+        await self.scan(handler)
         self.assertEqual(seen["data"], ez.EDUCATION_ZONE_LAYER)
         self.assertEqual(seen["geomFilter"], f"POINT({LNG} {LAT})")
-        self.assertEqual(seen["buffer"], "50")
+        self.assertEqual(seen["buffer"], "0")
         self.assertEqual(seen["geometry"], "false")
         self.assertEqual(seen["crs"], "EPSG:4326")
         self.assertEqual(seen["request"], "GetFeature")
@@ -251,17 +251,12 @@ class EducationZoneTests(unittest.IsolatedAsyncioTestCase):
         for kwargs, code in (
             ({"latitude": 91.0}, "INVALID_COORDINATE"),
             ({"longitude": 181.0}, "INVALID_COORDINATE"),
-            ({"buffer_m": -1}, "INVALID_BUFFER"),
-            ({"buffer_m": ez.MAX_BUFFER_M + 1}, "INVALID_BUFFER"),
         ):
             with self.subTest(**kwargs):
                 args = {"latitude": LAT, "longitude": LNG, **kwargs}
                 with self.assertRaises(ez.EducationZoneError) as caught:
                     await ez.find_education_zones(
-                        args["latitude"],
-                        args["longitude"],
-                        buffer_m=args.get("buffer_m", 0),
-                        settings=self.settings(),
+                        args["latitude"], args["longitude"], settings=self.settings()
                     )
                 self.assertEqual(caught.exception.code, code)
 
