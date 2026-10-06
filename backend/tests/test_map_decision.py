@@ -13,6 +13,20 @@ from app.schemas import AnalysisTask, DecisionRequest, MapLookupPlan
 
 
 class MapDecisionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_map_evidence_uses_model_without_serialization(self):
+        from test_map_matching import observation
+
+        from app.agents.decision.agent import _valid_map_evidence
+        from app.industries.lookup import get
+        from app.schemas import MapData, MapObservation
+
+        observed = MapObservation.model_validate(observation())
+        with patch.object(
+            MapData, "model_dump", side_effect=AssertionError("지도 모델 직렬화 금지")
+        ) as dump:
+            self.assertTrue(_valid_map_evidence("/places/x/distance_m", get("I212").name, observed))
+        dump.assert_not_called()
+
     async def asyncSetUp(self):
         self.task = AnalysisTask(request_id="r", site=mock_site())
         self.request = DecisionRequest(

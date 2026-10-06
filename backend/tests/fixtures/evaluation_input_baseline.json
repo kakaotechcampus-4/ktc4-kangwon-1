@@ -1,0 +1,158 @@
+{
+  "draft": {
+    "summary": "점심 직장인 수요가 뚜렷하고 커피·음료는 이미 포화에 가깝습니다.",
+    "recommendations": [
+      {
+        "category": {
+          "code": "I201",
+          "major": "음식점업",
+          "middle": "한식 음식점업"
+        },
+        "score": 72,
+        "reasons": [
+          "직장인 비중이 41%로 점심 수요를 기대할 수 있습니다."
+        ],
+        "evidence": [
+          {
+            "agent_id": "floating_population",
+            "path": "/office_worker_share"
+          },
+          {
+            "agent_id": "commercial_area",
+            "path": "/by_middle/0"
+          }
+        ],
+        "risks": [
+          "점포 수가 이미 96개로 경쟁이 적지 않습니다."
+        ]
+      }
+    ],
+    "not_recommended": [
+      {
+        "category": {
+          "code": "I212",
+          "major": "음식점업",
+          "middle": "비알코올 음료점업"
+        },
+        "score": 28,
+        "reasons": [
+          "주변 대비 2.1배로 이미 몰려 있고 폐업도 16건입니다."
+        ],
+        "evidence": [
+          {
+            "agent_id": "commercial_area",
+            "path": "/by_middle/1"
+          },
+          {
+            "agent_id": "business_lifecycle",
+            "path": "/industries/1"
+          }
+        ],
+        "risks": [
+          "신규 진입 시 가격 경쟁에 노출됩니다."
+        ]
+      }
+    ]
+  },
+  "industry_digest": [
+    {
+      "code": "I201",
+      "name": "한식 음식점업",
+      "metrics": [
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/0/count",
+          "value": 96
+        },
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/0/lq",
+          "value": 1.24
+        }
+      ]
+    },
+    {
+      "code": "I212",
+      "name": "비알코올 음료점업",
+      "metrics": [
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/1/count",
+          "value": 71
+        },
+        {
+          "agent_id": "commercial_area",
+          "path": "/by_middle/1/lq",
+          "value": 2.1
+        }
+      ]
+    }
+  ],
+  "neighborhood": [
+    {
+      "agent_id": "floating_population",
+      "path": "/daily_average",
+      "value": 18320
+    },
+    {
+      "agent_id": "floating_population",
+      "path": "/peak_hours/0",
+      "value": "12:00-13:00"
+    },
+    {
+      "agent_id": "floating_population",
+      "path": "/peak_hours/1",
+      "value": "18:00-20:00"
+    },
+    {
+      "agent_id": "floating_population",
+      "path": "/office_worker_share",
+      "value": 0.41
+    },
+    {
+      "agent_id": "commercial_area",
+      "path": "/store_total",
+      "value": 1241
+    }
+  ],
+  "sources": [
+    {
+      "agent_id": "floating_population",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "warnings": [],
+      "rate_basis": null,
+      "metadata": null
+    },
+    {
+      "agent_id": "business_lifecycle",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "warnings": [],
+      "rate_basis": null,
+      "metadata": null
+    },
+    {
+      "agent_id": "commercial_area",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "warnings": [],
+      "rate_basis": null,
+      "metadata": null
+    }
+  ],
+  "map_context": null,
+  "allowed_requests": [
+    "none",
+    "ask_specialists"
+  ]
+}

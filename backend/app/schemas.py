@@ -1,6 +1,6 @@
 """팀 간 연결에 필요한 입력과 출력을 정의합니다."""
 
-from typing import Annotated, Any, Literal, Self, get_args
+from typing import Annotated, Any, ClassVar, Literal, Self, get_args
 
 from pydantic import (
     AfterValidator,
@@ -33,6 +33,27 @@ class Schema(BaseModel):
         allow_inf_nan=False,
         revalidate_instances="always",
     )
+
+
+class IndustryRow(Schema):
+    industry_key: ClassVar[str] = "industry_code"
+    name_key: ClassVar[str | None] = None
+
+    @model_validator(mode="after")
+    def check_industry(self) -> Self:
+        code = getattr(self, self.industry_key)
+        industry = lookup.find(code) if isinstance(code, str) else None
+        if industry is None:
+            raise ValueError("공통 업종표에 없는 업종 코드입니다.")
+        name = getattr(self, self.name_key) if self.name_key else None
+        named = lookup.find_by_name(name) if isinstance(name, str) else None
+        if name is not None and (named is None or named.code != industry.code):
+            raise ValueError("업종 코드와 명칭이 일치하지 않습니다.")
+        return self
+
+    @property
+    def owner_code(self) -> str:
+        return str(getattr(self, self.industry_key))
 
 
 # 유동인구·개폐업·상권 에이전트 공통 입력
@@ -302,7 +323,7 @@ class MapQuery(Schema):
 
 class MapLookupPlan(Schema):
     action: Literal["map_lookup"]
-    queries: list[MapQuery] = Field(min_length=1, max_length=5)
+    queries: list[MapQuery] = Field(min_length=1, max_length=8)
 
     def unique_queries(self) -> list[MapQuery]:
         seen = set()
@@ -315,6 +336,9 @@ class MapLookupPlan(Schema):
         return result
 
 
+MatchStatus = Literal["same", "different", "unclear"]
+
+
 class MapQueryResult(Schema):
     request: MapQuery
     status: Literal["ok", "error"]
@@ -324,9 +348,15 @@ class MapQueryResult(Schema):
     place_ids: list[Text] = Field(default_factory=list)
     has_more: bool | None = None
     error: Text | None = None
+    # 질문 업종 기준 장소별 동종 판단. 시설 검색·옛 자료는 비어 있습니다.
+    matches: dict[Text, MatchStatus] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def check_result(self) -> Self:
+        if not self.matches.keys() <= set(self.place_ids) or (
+            self.matches and (self.request.kind == "infrastructure" or self.status == "error")
+        ):
+            raise ValueError("동종 판단은 성공한 업종 검색의 장소만 참조해야 합니다.")
         if self.status == "error":
             if not self.error or self.total_count is not None or self.place_ids:
                 raise ValueError("실패한 검색은 건수·장소 대신 오류를 반환합니다.")
@@ -345,6 +375,7 @@ class MapPlace(Schema):
     category_code: str = ""
     distance_m: Annotated[int, Field(ge=0)] | None = None
     place_url: Text | None = None
+    # mapping_status·industry_code는 2026-10 이전 관측 호환용입니다.
     mapping_status: Literal["mapped", "ambiguous", "unmapped", "not_applicable"] = "not_applicable"
     industry_code: Text | None = None
     mapping_method: Literal["llm"] | None = None
@@ -389,6 +420,10 @@ class MapData(Schema):
         for place_id, place in self.places.items():
             if place.industry_code:
                 expected.setdefault(place.industry_code, set()).add(place_id)
+        for query in self.queries.values():
+            for place_id, match in query.matches.items():
+                if match == "same" and query.request.industry_code:
+                    expected.setdefault(query.request.industry_code, set()).add(place_id)
         if set(expected) != set(self.industries):
             raise ValueError("매핑 장소와 업종 집계가 다릅니다.")
         for code, group in self.industries.items():
@@ -424,7 +459,7 @@ class MapObservation(Schema):
         if stamp.utcoffset() != timedelta(0):
             raise ValueError("지도 조회 시각은 UTC여야 합니다.")
         queries = self.data.queries
-        if not 1 <= len(queries) <= 5 or set(queries) != {
+        if not 1 <= len(queries) <= 8 or set(queries) != {
             f"q{i}" for i in range(1, len(queries) + 1)
         }:
             raise ValueError("지도 검색 식별자가 올바르지 않습니다.")
@@ -441,6 +476,7 @@ class MapObservation(Schema):
             len(success) != len(queries)
             or not any(q.total_count for q in success)
             or any(p.mapping_status in {"unmapped", "ambiguous"} for p in self.data.places.values())
+            or any("unclear" in q.matches.values() for q in queries.values())
         ):
             raise ValueError("불완전한 지도 관측은 partial이어야 합니다.")
         return self
@@ -613,7 +649,7 @@ class ConsultPlan(Schema):
 
 class SpecialistAnswer(Schema):
     request_id: Text
-    round: Annotated[int, Field(ge=1, le=2)]
+    round: Annotated[int, Field(ge=1, le=6)]
     query: SpecialistQuery
     status: Literal["answered", "partial", "unavailable"]
     findings: list[Finding] = Field(max_length=5)
@@ -646,13 +682,62 @@ class QuestionSnapshotV2(QuestionSnapshot):
 
     version: Literal[2] = 2  # type: ignore[assignment]
     brief_agents: list[AgentId] = Field(min_length=3, max_length=3)
-    consult_round: Annotated[int, Field(ge=0, le=2)] = 0
+    consult_round: Annotated[int, Field(ge=0, le=6)] = 0
     map_attempt: Annotated[int, Field(gt=0)] | None = None
-    llm_calls: Annotated[int, Field(ge=0, le=24)] = 0
+    llm_calls: Annotated[int, Field(ge=0, le=64)] = 0
     elapsed_seconds: Annotated[float, Field(ge=0)] = 0.0
 
     @model_validator(mode="after")
     def check_briefs(self) -> Self:
         if set(self.brief_agents) != set(AGENT_IDS):
             raise ValueError("세 전문가의 브리핑 참조가 필요합니다.")
+        return self
+
+
+EvaluatorId = Literal["examiner", "founder", "customer", "landlord_advocate"]
+EVALUATOR_IDS = get_args(EvaluatorId)
+EvaluationRequest = Literal["none", "map_lookup", "supplement", "ask_specialists", "ask_user"]
+
+
+class EvaluationComment(Schema):
+    index: Annotated[int, Field(ge=0, le=3)]
+    industry_code: IndustryCode | None = None
+    comment: Annotated[str, Field(min_length=1, max_length=300)]
+    evidence: list[Evidence] = Field(default_factory=list, max_length=3)
+    request: EvaluationRequest = "none"
+
+
+class Evaluation(Schema):
+    request_id: Text
+    evaluator: EvaluatorId
+    source: Literal["model", "failed"]
+    verdict: Literal["agree", "conditional", "oppose"] | None = None
+    comments: list[EvaluationComment] = Field(default_factory=list, max_length=4)
+    notes: list[Text] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_result(self) -> Self:
+        if (self.source == "model") != (self.verdict is not None):
+            raise ValueError("모델 평가에는 판정이 필요하며 실패에는 판정을 넣지 않습니다.")
+        if self.source == "failed" and self.comments:
+            raise ValueError("실패한 평가에는 지적을 넣지 않습니다.")
+        if [c.index for c in self.comments] != list(range(len(self.comments))):
+            raise ValueError("지적 번호는 0부터 연속이어야 합니다.")
+        return self
+
+
+class EvaluationLogEntry(Schema):
+    evaluator: EvaluatorId
+    index: Annotated[int, Field(ge=0, le=3)]
+    decision: Literal["accepted", "partial", "rejected", "unreviewed"]
+    applied: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    dropped: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    reason: Annotated[str, Field(min_length=1, max_length=300)]
+
+    @model_validator(mode="after")
+    def check_parts(self) -> Self:
+        if (self.applied is not None) != (self.decision in {"accepted", "partial"}) or (
+            self.dropped is not None
+        ) != (self.decision in {"partial", "rejected"}):
+            raise ValueError("반영 결정과 반영한 부분·버린 부분이 일치하지 않습니다.")
         return self

@@ -16,7 +16,19 @@ from app.schemas import AGENT_IDS
 async def expert(messages, definitions):
     payload = json.loads(messages[1]["content"])
     data = payload.get("analysis", {}).get("data", payload.get("data", {}))
-    records = scalar_records(data)
+    records = (
+        [
+            {"path": parent + "/" + field, "value": value, "industry_code": code}
+            for code, groups in [
+                (None, payload["facts"]["shared"]),
+                *payload["facts"]["industries"].items(),
+            ]
+            for parent, fields in groups.items()
+            for field, value in fields.items()
+        ]
+        if "facts" in payload
+        else scalar_records(data)
+    )
     findings = (
         [
             {
@@ -107,7 +119,9 @@ class MultiGraphTests(unittest.IsolatedAsyncioTestCase):
         decisions = 0
 
         async def concurrent(messages, definitions):
-            stage = "brief" if "analysis" in json.loads(messages[1]["content"]) else "answer"
+            stage = (
+                "brief" if json.loads(messages[1]["content"]).get("task") == "브리핑" else "answer"
+            )
             counts[stage] += 1
             if counts[stage] == 3:
                 gates[stage].set()

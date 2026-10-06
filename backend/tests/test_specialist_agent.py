@@ -4,7 +4,7 @@ import importlib.util
 import json
 import unittest
 
-from app.mocks import mock_site
+from app.mocks import mock_commercial_area_data, mock_site
 from app.schemas import AgentAnalysis, AnalysisTask, Scope, SpecialistQuery
 
 
@@ -34,7 +34,7 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
             agent_id="commercial_area",
             status="ok",
             scope=Scope(area="반경", period="분기"),
-            data={"store_total": 7},
+            data=mock_commercial_area_data(),
         )
 
     async def test_valid_brief_uses_code_owned_identity(self):
@@ -45,7 +45,7 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
                     "headline": "주변 점포",
                     "findings": [
                         {
-                            "claim": "점포 7개",
+                            "claim": "점포 {0}개",
                             "signal": "context",
                             "evidence": [{"path": "/store_total"}],
                         }
@@ -58,7 +58,30 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             (result.request_id, result.agent_id, result.source), ("r", "commercial_area", "model")
         )
-        self.assertEqual(result.findings[0].claim, "점포 7개")
+        self.assertEqual(result.findings[0].claim, "점포 1,241개")
+
+    async def test_headline_numbers_are_not_passed_through(self):
+        async def generate(messages, definitions):
+            return tool_message(
+                "finish",
+                {
+                    "headline": "주변 점포 7개 이상",
+                    "findings": [
+                        {
+                            "claim": "점포 {0}개",
+                            "signal": "context",
+                            "evidence": [{"path": "/store_total"}],
+                        }
+                    ],
+                    "limitations": [],
+                },
+            )
+
+        result = await self.write(self.task, self.source, generate=generate, tools={})
+        self.assertEqual(result.source, "model")
+        self.assertFalse(any(ch.isdigit() for ch in result.headline))
+        self.assertEqual([f.claim for f in result.findings], ["점포 1,241개"])
+        self.assertTrue(any("헤드라인" in text for text in result.limitations))
 
     async def test_unknown_tool_rejected_and_loop_bounded(self):
         calls = []
@@ -72,6 +95,38 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(c.status == "rejected" for c in result.tool_calls))
         self.assertLessEqual(len(calls), 5)
         self.assertEqual(result.source, "fallback")
+
+    async def test_fallback_preserves_exclusion_warnings_and_tool_records(self):
+        responses = iter(
+            [
+                tool_message("invented", {}),
+                tool_message(
+                    "finish",
+                    {
+                        "headline": "제외될 주장",
+                        "findings": [
+                            {
+                                "claim": "점포 999개",
+                                "signal": "context",
+                                "evidence": [{"path": "/store_total"}],
+                            },
+                            {},
+                        ],
+                    },
+                ),
+            ]
+        )
+
+        async def generate(messages, definitions):
+            return next(responses)
+
+        result = await self.write(self.task, self.source, generate=generate, tools={})
+        self.assertEqual(result.source, "fallback")
+        self.assertEqual(result.tool_calls[0].tool, "invented")
+        self.assertIn("전문가 근거 제외: 2번 형식 오류", result.limitations)
+        self.assertIn(
+            "전문가 근거 제외: 1번 수치·단위 불일치 (맞지 않는 수: 999)", result.limitations
+        )
 
     async def test_model_failure_does_not_invent_an_answer(self):
         async def fail(messages, definitions):
@@ -93,7 +148,7 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
         seen = []
 
         async def generate(messages, definitions):
-            seen.append(json.loads(messages[1]["content"])["data"])
+            seen.append(json.loads(messages[1]["content"])["facts"]["shared"][""])
             return tool_message("finish", {"headline": "확인", "findings": [], "limitations": []})
 
         observation = await map_observation(
@@ -122,7 +177,12 @@ class SpecialistTests(unittest.IsolatedAsyncioTestCase):
             generate=generate,
             tools={},
         )
-        self.assertEqual(seen, [self.source.data])
+        expected = {
+            key: value
+            for key, value in self.source.data.items()
+            if isinstance(value, (str, int, float)) and not isinstance(value, bool)
+        }
+        self.assertEqual(seen, [expected])
 
     async def test_cancellation_is_not_a_fallback(self):
         import asyncio
@@ -192,7 +252,7 @@ class StepAllotmentTests(unittest.IsolatedAsyncioTestCase):
                     "headline": "점포",
                     "findings": [
                         {
-                            "claim": "점포 7개",
+                            "claim": "점포 {0}개",
                             "signal": "context",
                             "evidence": [{"path": "/store_total"}],
                         }
@@ -212,7 +272,7 @@ class StepAllotmentTests(unittest.IsolatedAsyncioTestCase):
             agent_id="commercial_area",
             status="ok",
             scope=Scope(area="반경", period="분기"),
-            data={"store_total": 7},
+            data=mock_commercial_area_data(),
         )
         task = AnalysisTask(request_id="r", site=mock_site())
         brief = await write_brief(

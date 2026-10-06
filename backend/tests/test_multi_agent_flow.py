@@ -10,9 +10,9 @@ from unittest.mock import patch
 import httpx
 import openai
 from fastapi.testclient import TestClient
+from llm_stream_fixture import stream_response
 
 from app.db import repository as repo
-from app.evidence import scalar_records
 from app.llm.config import LLMSettings
 from app.main import create_app
 from app.mocks import mock_agents, mock_generate, mock_resolve
@@ -54,6 +54,7 @@ class MultiFlowTests(unittest.TestCase):
         self.assertEqual(saved["status"], "waiting_for_input")
         self.assertEqual(saved["map_observation"]["radius_m"], 300)
         self.assertEqual(len(saved["deliberation"]["briefs"]), 3)
+        self.assertEqual(saved["deliberation"]["answers"][0]["status"], "answered")
         self.assertEqual(saved["deliberation"]["answers"][0]["tool_calls"][0]["status"], "ok")
         self.assertNotIn("execution_json", saved)
         answer = {
@@ -93,8 +94,13 @@ class MultiTransportTests(unittest.IsolatedAsyncioTestCase):
             payload = json.loads(request.content)
             requests.append(payload)
             if payload.get("tools"):
-                data = json.loads(payload["messages"][1]["content"])["analysis"]["data"]
-                record = scalar_records(data)[0]
+                facts = json.loads(payload["messages"][1]["content"])["facts"]
+                record = next(
+                    {"path": parent + "/" + field, "value": value, "industry_code": code}
+                    for code, groups in [(None, facts["shared"]), *facts["industries"].items()]
+                    for parent, fields in groups.items()
+                    for field, value in fields.items()
+                )
                 message = {
                     "role": "assistant",
                     "tool_calls": [
@@ -127,7 +133,7 @@ class MultiTransportTests(unittest.IsolatedAsyncioTestCase):
                 if reject:
                     result["recommendations"][0]["evidence"][0]["path"] = "/missing"
                 message, finish = {"role": "assistant", "content": json.dumps(result)}, "stop"
-            return httpx.Response(
+            return stream_response(
                 200,
                 json={
                     "id": "test",

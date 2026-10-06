@@ -134,8 +134,8 @@ def build_franchise(
         if len(normalized) >= MIN_BRAND_LENGTH
     }
     matched = [s for s in stores if is_franchise(s, normalized_brands)]
-    counts = Counter(s.middle_code for s in matched)
     totals = {row.code: row.count for row in middle_rows}
+    counts = Counter(s.middle_code for s in matched if s.middle_code in totals)
     names = {row.code: row.name for row in middle_rows}
 
     by_middle = [

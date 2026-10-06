@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "total_count": 87,
+    "is_end": false
+  },
+  "documents": [
+    {
+      "id": "17002849",
+      "place_name": "리더스카이학원",
+      "category_name": "교육,학문 > 학원",
+      "category_group_code": "AC5",
+      "distance": "32"
+    },
+    {
+      "id": "17109873",
+      "place_name": "서정발레무용스튜디오",
+      "category_name": "교육,학문 > 학원 > 무용학원,발레학원",
+      "category_group_code": "AC5",
+      "distance": "43"
+    },
+    {
+      "id": "27137514",
+      "place_name": "C&C미술학원 개롱캠퍼스",
+      "category_name": "교육,학문 > 학원 > 미술학원",
+      "category_group_code": "AC5",
+      "distance": "55"
+    },
+    {
+      "id": "27137861",
+      "place_name": "삼성영어 오금캠퍼스",
+      "category_name": "교육,학문 > 학원 > 어학원 > 영어학원",
+      "category_group_code": "AC5",
+      "distance": "57"
+    },
+    {
+      "id": "997836636",
+      "place_name": "가곡교실",
+      "category_name": "교육,학문 > 학원 > 음악학원",
+      "category_group_code": "AC5",
+      "distance": "62"
+    },
+    {
+      "id": "27137511",
+      "place_name": "청람서원",
+      "category_name": "교육,학문 > 학원 > 서예,한문학원",
+      "category_group_code": "AC5",
+      "distance": "71"
+    },
+    {
+      "id": "27264933",
+      "place_name": "주아트스쿨",
+      "category_name": "교육,학문 > 학원 > 미술학원",
+      "category_group_code": "AC5",
+      "distance": "72"
+    },
+    {
+      "id": "692257829",
+      "place_name": "홍쌤역사&논술",
+      "category_name": "교육,학문 > 학원 > 논술학원",
+      "category_group_code": "AC5",
+      "distance": "76"
+    },
+    {
+      "id": "1336042481",
+      "place_name": "백향목학원 고등2관",
+      "category_name": "교육,학문 > 학원",
+      "category_group_code": "AC5",
+      "distance": "82"
+    },
+    {
+      "id": "1598634856",
+      "place_name": "JF실용음악학원",
+      "category_name": "교육,학문 > 학원 > 음악학원 > 실용음악학원",
+      "category_group_code": "AC5",
+      "distance": "84"
+    },
+    {
+      "id": "635490253",
+      "place_name": "송파이엔엠",
+      "category_name": "교육,학문 > 학원",
+      "category_group_code": "AC5",
+      "distance": "103"
+    },
+    {
+      "id": "27280755",
+      "place_name": "l&B실용음악학원",
+      "category_name": "교육,학문 > 학원 > 음악학원",
+      "category_group_code": "AC5",
+      "distance": "112"
+    },
+    {
+      "id": "27285857",
+      "place_name": "탑에듀플러스",
+      "category_name": "교육,학문 > 학원",
+      "category_group_code": "AC5",
+      "distance": "129"
+    },
+    {
+      "id": "1348336476",
+      "place_name": "매직피플마술학원",
+      "category_name": "가정,생활 > 취미 > 마술",
+      "category_group_code": "",
+      "distance": "171"
+    },
+    {
+      "id": "704698044",
+      "place_name": "백향목에듀수학학원",
+      "category_name": "교육,학문 > 학원 > 수학학원",
+      "category_group_code": "AC5",
+      "distance": "173"
+    }
+  ]
+}
