@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 
 from app.agents.orchestration import tools
 from app.agents.orchestration.supplement import OnSupplement
+from app.education_zone import EducationZoneScan
 from app.schemas import (
     EVALUATOR_IDS,
     AgentAnalysis,
@@ -50,6 +51,8 @@ class GraphState(TypedDict, total=False):
     )
     map_done: bool
     map_observation: MapObservation | None
+    # 주소 확정 직후 한 번만 조회합니다. 없으면 조회를 걸지 않은 실행입니다.
+    education_zones: EducationZoneScan | None
     operations: list[SupplementOperation]
     supplement_done: bool
     feedback: list[str]

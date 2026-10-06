@@ -3,15 +3,19 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from app.education_zone import EducationZoneScan
 from app.schemas import (
     AgentAnalysis,
     AnalysisTask,
     MapLookupPlan,
     MapObservation,
+    Site,
     SupplementOperation,
 )
 
 MapLookup = Callable[[AnalysisTask, MapLookupPlan], Awaitable[MapObservation]]
+# 좌표만 있으면 되므로 분석 작업 전체가 아니라 Site만 받습니다.
+ZoneLookup = Callable[[Site], Awaitable[EducationZoneScan]]
 OnMapRequested = Callable[[AnalysisTask, MapLookupPlan], Awaitable[None]]
 OnMapCompleted = Callable[[MapObservation], Awaitable[None]]
 

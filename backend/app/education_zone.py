@@ -38,6 +38,8 @@ FATAL_ERROR_CODES = {
 MAX_BACKOFF_S = 30.0
 # Referer 없는 요청은 INCORRECT_KEY로 거절됩니다. 배포 주소가 생기면 바꿉니다.
 DEFAULT_REFERER = "http://localhost:8000"
+# 보호구역 조회 하나가 주소 단계를 오래 붙잡지 않게 합니다. 실측은 0.1초 수준입니다.
+LOOKUP_TIMEOUT_S = 20.0
 
 
 class EducationZoneError(Exception):
@@ -116,6 +118,16 @@ class EducationZoneScan(Model):
     zones: list[EducationZone] = Field(default_factory=list)
     error: ZoneError | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+def failed_scan(latitude: float, longitude: float, code: str, message: str) -> EducationZoneScan:
+    """조회를 시작도 못 했을 때 쓰는 실패 결과입니다. 보호구역 없음과 구분합니다."""
+    return EducationZoneScan(
+        status="error",
+        center=Coordinate(latitude=latitude, longitude=longitude),
+        queried_at=_now(),
+        error=ZoneError(code=code, message=message),
+    )
 
 
 def _now() -> str:
@@ -349,3 +361,32 @@ def _parse(
         ),
         False,
     )
+
+
+def site_lookup(settings: EducationZoneSettings | None = None):
+    """Site를 받는 조회 함수를 만듭니다. 인증키가 없으면 None이라 조회를 걸지 않습니다."""
+    settings = settings or EducationZoneSettings.from_env()
+    if not settings.api_key:
+        return None
+
+    async def lookup(site: Any) -> EducationZoneScan:
+        return await find_education_zones(site.latitude, site.longitude, settings=settings)
+
+    return lookup
+
+
+async def scan_site(site: Any, lookup: Any, *, timeout_s: float = LOOKUP_TIMEOUT_S):
+    """조회 실패를 결과로 바꿔 돌려줍니다. 보호구역 하나로 분석을 멈추지 않습니다."""
+    if lookup is None:
+        return None
+    try:
+        async with asyncio.timeout(timeout_s):
+            return EducationZoneScan.model_validate(await lookup(site))
+    except TimeoutError:
+        return failed_scan(
+            site.latitude, site.longitude, "ZONE_TIMEOUT", "구역 조회 시간이 초과되었습니다."
+        )
+    except Exception:
+        return failed_scan(
+            site.latitude, site.longitude, "ZONE_FAILED", "구역 조회에 실패했습니다."
+        )

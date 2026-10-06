@@ -421,3 +421,24 @@ async def map_observation(task, plan):
         warnings=["외부 조회 없는 목업입니다."],
         data=MapData(queries=queries, places=places, industries=industries),
     )
+
+
+async def zone_scan(site):
+    """외부 호출 없는 보호구역 대역입니다. 흐름 확인용이며 실제 고시 자료가 아닙니다."""
+    from app.education_zone import Coordinate, EducationZone, EducationZoneScan
+
+    return EducationZoneScan(
+        status="ok",
+        center=Coordinate(latitude=site.latitude, longitude=site.longitude),
+        queried_at="2026-01-01T00:00:00+09:00",
+        zones=[
+            EducationZone(
+                name="상대보호구역",
+                note="목업 자료입니다.",
+                notice_year="2024",
+                notice_no="0001",
+                sido="서울특별시",
+                sigungu="송파구",
+            )
+        ],
+    )

@@ -21,7 +21,7 @@ from app.agents.orchestration.graph import run_graph
 from app.agents.orchestration.nodes.decision import evaluate_with_log
 from app.agents.orchestration.state import GraphState
 from app.agents.orchestration.supplement import OnSupplement, validate_tools
-from app.agents.orchestration.tools import MapLookup, SupplementTool
+from app.agents.orchestration.tools import MapLookup, SupplementTool, ZoneLookup
 from app.agents.orchestration.validation import (
     validate_address,
     validate_agents,
@@ -39,6 +39,7 @@ from app.db import repository
 from app.db.analysis_repository import SqliteAnalysisRepository
 from app.db.connection import initialize
 from app.db.types import ExecutionState, ResumeBundle
+from app.education_zone import scan_site, site_lookup
 from app.execution.errors import (
     DecisionExecutionError,
     capture_decision_failures,
@@ -99,6 +100,7 @@ async def resume_analysis(
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     supplements: list[SupplementTool] | None = None,
     map_lookup: MapLookup | None = None,
+    find_zones: ZoneLookup | None = None,
     generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
 ) -> DecisionResult:
     """답변을 한 번만 수락하고 저장된 분석으로 최종판단을 재개합니다."""
@@ -149,6 +151,7 @@ async def resume_analysis(
                         supplements,
                         map_lookup,
                         evaluation_state,
+                        find_zones,
                     )
                 else:
                     result = await _evaluate_saved(bundle, generate=generate, path=path)
@@ -178,6 +181,7 @@ async def execute_analysis(
     on_supplement: OnSupplement | None = None,
     allow_questions: Literal[False] = False,
     map_lookup: MapLookup | None = None,
+    find_zones: ZoneLookup | None = None,
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
 ) -> DecisionResult: ...
@@ -200,6 +204,7 @@ async def execute_analysis(
     on_supplement: OnSupplement | None = None,
     allow_questions: bool,
     map_lookup: MapLookup | None = None,
+    find_zones: ZoneLookup | None = None,
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
 ) -> DecisionResult | WaitingForInput: ...
@@ -223,6 +228,7 @@ async def execute_analysis(
     on_supplement: OnSupplement | None = None,
     allow_questions: bool = False,
     map_lookup: MapLookup | None = None,
+    find_zones: ZoneLookup | None = None,
     generate_specialists: dict[SpecialistId, GenerateSpecialist] | None = None,
     generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None = None,
 ) -> DecisionResult | WaitingForInput:
@@ -239,6 +245,8 @@ async def execute_analysis(
     request_id = request_id.strip()
     settings = settings or ExecutionSettings.from_env()
     resolve = resolve if resolve is not None else partial(resolve_site, settings=settings.address)
+    # 인증키가 없으면 None이라 조회 자체를 걸지 않습니다.
+    find_zones = find_zones if find_zones is not None else site_lookup()
     agents = agents if agents is not None else build_react_agents(settings)
     generate = generate or partial(decision.generate_decision, settings=settings.decision_llm)
     db_path = db_path if db_path is not None else settings.db_path
@@ -277,6 +285,7 @@ async def execute_analysis(
         on_supplement,
         allow_questions,
         map_lookup,
+        find_zones,
         experts,
         evaluators,
     )
@@ -559,6 +568,7 @@ async def _resume_graph(
     supplements,
     map_lookup,
     evaluation_state,
+    find_zones=None,
 ):
     capabilities = bundle["execution"].get("capabilities", {})
     if capabilities.get("map"):
@@ -576,6 +586,9 @@ async def _resume_graph(
     experts = build_specialist_generators(
         settings, generate_specialists, with_map=map_lookup is not None
     )
+    # 재개는 주소 노드를 건너뛰므로 보호구역을 여기서 한 번 더 확보합니다.
+    scan = await scan_site(bundle["task"].site, find_zones or site_lookup())
+    zones: GraphState = {"education_zones": scan} if scan is not None else {}
     result = await run_graph(
         bundle["task"].site.input_address,
         radius_m=bundle["task"].radius_m,
@@ -600,7 +613,7 @@ async def _resume_graph(
         hooks=_storage_hooks(
             path, bundle["source_attempts"], request_id=bundle["request"].request_id
         ),
-        resume_state={**evaluation_state, **build_resume_state(bundle)},
+        resume_state={**evaluation_state, **build_resume_state(bundle), **zones},
     )
     if not isinstance(result, DecisionResult):
         raise ValueError("재개 후에는 질문을 발행할 수 없습니다.")
@@ -661,6 +674,7 @@ async def _execute_new(
     on_supplement,
     allow_questions,
     map_lookup,
+    find_zones,
     experts,
     evaluators,
 ):
@@ -724,6 +738,7 @@ async def _execute_new(
                     supplements=supplements,
                     allow_questions=allow_questions,
                     map_lookup=map_lookup,
+                    find_zones=find_zones,
                     mode=settings.analysis_mode,
                     generate_specialists=experts,
                     evaluators_enabled=settings.evaluators_enabled,

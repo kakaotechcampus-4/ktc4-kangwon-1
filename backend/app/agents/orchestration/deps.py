@@ -35,6 +35,7 @@ from .validation import (
     validate_map_lookup,
     validate_request_id,
     validate_specialists,
+    validate_zone_lookup,
 )
 
 
@@ -52,6 +53,7 @@ class GraphDeps:
     generate_evaluators: dict[EvaluatorId, GenerateEvaluation] | None
     supplements: list[tools.SupplementTool]
     map_lookup: tools.MapLookup | None
+    find_zones: tools.ZoneLookup | None
     hooks: RunHooks
     budget: LLMBudget | None
     agent_timeout: float
@@ -79,6 +81,7 @@ class GraphDeps:
         ):
             raise ValueError("주소 변환·최종판단은 호출 가능한 함수여야 합니다.")
         validate_map_lookup(self.map_lookup)
+        validate_zone_lookup(self.find_zones)
         validate_allow_questions(self.allow_questions)
         if self.allow_questions and self.hooks.on_questions is None:
             raise ValueError("질문을 저장할 수 없는 실행입니다.")
