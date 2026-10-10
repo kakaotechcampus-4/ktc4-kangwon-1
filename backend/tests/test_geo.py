@@ -1,5 +1,6 @@
 """WGS84 → EPSG:5181 투영식을 검사합니다."""
 
+import math
 import unittest
 
 from app.geo import to_epsg5181
@@ -29,6 +30,15 @@ class ProjectionTests(unittest.TestCase):
         # 중앙자오선에서 먼 부산에서만 0.21m 로 벌어진다.
         _, y = to_epsg5181(35.1796, 129.0756)
         self.assertAlmostEqual(y, 188993.756, delta=0.01)
+
+    def test_inverse_round_trip_within_a_metre(self):
+        from app.geo import from_epsg5181
+
+        for lat, lon in ((37.5183291, 127.1051123), (37.6551, 127.0473), (37.4801, 126.8972)):
+            x, y = to_epsg5181(lat, lon)
+            back_lat, back_lon = from_epsg5181(x, y)
+            bx, by = to_epsg5181(back_lat, back_lon)
+            self.assertLess(math.hypot(bx - x, by - y), 1.0)
 
 
 if __name__ == "__main__":

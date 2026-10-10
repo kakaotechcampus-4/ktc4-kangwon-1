@@ -89,3 +89,21 @@ def to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
         )
     )
     return x, y
+
+
+def from_epsg5181(x: float, y: float) -> tuple[float, float]:
+    lat, lon = 38.0, 127.0
+    for _ in range(20):
+        fx, fy = to_epsg5181(lat, lon)
+        dx, dy = x - fx, y - fy
+        if math.hypot(dx, dy) < 1e-4:
+            break
+        step = 1e-6
+        x_lat, y_lat = to_epsg5181(lat + step, lon)
+        x_lon, y_lon = to_epsg5181(lat, lon + step)
+        a, b = (x_lat - fx) / step, (x_lon - fx) / step
+        c, d = (y_lat - fy) / step, (y_lon - fy) / step
+        det = a * d - b * c
+        lat += (d * dx - b * dy) / det
+        lon += (a * dy - c * dx) / det
+    return lat, lon
