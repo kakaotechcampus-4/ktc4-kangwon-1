@@ -93,6 +93,18 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
         self.assertNotIn("SECRET", str(caught.exception))
 
+    async def test_duplicate_key_is_named_without_the_reply(self):
+        reply = '{"items": [{"evidence": [1], "risks": ["SECRET"], "evidence": [2]}]}'
+        with patch(
+            "app.llm.client._complete",
+            return_value=ChatCompletionMessage(role="assistant", content=reply),
+        ):
+            with self.assertRaises(LLMResponseError) as caught:
+                await complete_json("", "{}", LLMSettings())
+        self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
+        self.assertEqual(caught.exception.diagnostics, {"duplicate_key": "evidence"})
+        self.assertNotIn("SECRET", str(caught.exception))
+
     async def test_schema_fields_are_safe(self):
         with patch(
             "app.agents.decision.llm.client.complete_json",

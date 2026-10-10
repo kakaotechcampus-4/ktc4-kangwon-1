@@ -46,6 +46,120 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
                 await analyze(self.request, generate=generate)
             self.assertEqual(generate.call_count, 1)
 
+    async def test_risk_number_error_names_sentence_path_and_units(self):
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            content = copy.deepcopy(self.response)
+            if len(inputs) == 1:
+                content["recommendations"][0]["risks"] = ["주변보다 {1}% 높습니다."]
+            return content
+
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(result.status, "ok")
+        correction = inputs[1]["correction"]
+        self.assertEqual(correction["field"], "recommendations.0.risks.0")
+        self.assertEqual(correction["sentence"], "주변보다 {1}% 높습니다.")
+        self.assertEqual(
+            correction["problem"],
+            {
+                "index": 1,
+                "agent_id": "commercial_area",
+                "path": "/by_middle/0/lq",
+                "unit": "%",
+                "allowed_units": ["배"],
+            },
+        )
+        self.assertEqual(
+            correction["evidence"],
+            [
+                {"index": 0, "agent_id": "commercial_area", "path": "/by_middle/0/count"},
+                {"index": 1, "agent_id": "commercial_area", "path": "/by_middle/0/lq"},
+            ],
+        )
+
+    async def test_correction_lists_every_citation_error_in_the_output(self):
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            content = copy.deepcopy(self.response)
+            if len(inputs) == 1:
+                content["recommendations"][0]["risks"] = ["주변보다 {1}% 높습니다."]
+                content["not_recommended"][0]["reasons"] = ["폐업이 9개입니다."]
+            return content
+
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(result.status, "ok")
+        correction = inputs[1]["correction"]
+        self.assertEqual(correction["field"], "recommendations.0.risks.0")
+        others = correction["other_problems"]
+        self.assertEqual(len(others), 1)
+        self.assertEqual(others[0]["field"], "not_recommended.0.reasons.0")
+        self.assertEqual(others[0]["reason"], "number_uncited")
+        self.assertEqual(others[0]["sentence"], "폐업이 9개입니다.")
+        self.assertEqual(others[0]["problem"], {"number": "9"})
+        self.assertEqual(len(others[0]["evidence"]), 2)
+
+    async def test_single_citation_error_has_no_other_problems(self):
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            content = copy.deepcopy(self.response)
+            if len(inputs) == 1:
+                content["recommendations"][0]["risks"] = ["주변보다 {1}% 높습니다."]
+            return content
+
+        await analyze(self.request, generate=generate)
+        self.assertNotIn("other_problems", inputs[1]["correction"])
+
+    async def test_duplicate_key_json_gets_one_correction_without_previous_output(self):
+        from app.llm.client import LLMResponseError
+
+        calls = []
+
+        async def generate(prompt, payload):
+            calls.append((prompt, json.loads(payload)))
+            if len(calls) == 1:
+                raise LLMResponseError("LLM_INVALID_JSON", duplicate_key="evidence")
+            return copy.deepcopy(self.response)
+
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(len(calls), 2)
+        prompt, payload = calls[1]
+        self.assertEqual(
+            payload["correction"],
+            {
+                "stage": "decision_output",
+                "field": "output",
+                "reason": "duplicate_key",
+                "key": "evidence",
+                "correction_attempt": 0,
+            },
+        )
+        self.assertNotIn("previous_decision", payload)
+        self.assertIn("evidence 키를 두 번", prompt)
+
+    async def test_duplicate_key_twice_stops_after_two_calls(self):
+        from app.llm.client import LLMResponseError
+
+        generate = Mock(side_effect=LLMResponseError("LLM_INVALID_JSON", duplicate_key="evidence"))
+        with self.assertRaises(RuntimeError) as caught:
+            await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(caught.exception.failures[0]["reason"], "duplicate_key")
+
+    async def test_other_invalid_json_is_not_corrected(self):
+        from app.llm.client import LLMResponseError
+
+        generate = Mock(side_effect=LLMResponseError("LLM_INVALID_JSON"))
+        with self.assertRaises(LLMResponseError):
+            await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 1)
+
     async def test_correction_cannot_switch_to_data_supplement(self):
         from app.agents.decision.agent import evaluate
         from app.schemas import SupplementOperation

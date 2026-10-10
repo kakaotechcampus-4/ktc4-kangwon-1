@@ -31,6 +31,7 @@ from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.industries.lookup import industry_terms
 from app.llm.budget import current_scope
+from app.llm.client import LLMResponseError
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
@@ -96,6 +97,8 @@ class DecisionContractError(FailureDiagnostics, ValueError):
             "reason": reason,
         }
         self.failures: list[dict[str, Any]] = []
+        self.citation: dict[str, Any] = {}
+        self.others: list[DecisionContractError] = []
 
 
 async def analyze(
@@ -209,29 +212,28 @@ async def evaluate(
                 if attempt:
                     raise exc from None
                 # 데이터 보완과 별개로 같은 자료의 판단 출력만 한 번 교정합니다.
-                payload.pop("supplement_operations", None)
-                payload.pop("question_fields", None)
-                payload.pop("specialists", None)
-                payload["correction"] = correction
-                payload["previous_decision"] = previous
-                prompt += (
-                    "\n이번 호출은 최종판단 출력 교정입니다. "
-                    "전문가 질문·보완·지도·사용자 질문 요청은 금지됩니다. "
-                    "correction의 오류 위치·사유와 previous_decision을 확인하고 "
-                    "현재 제공된 원자료 값으로 전체 최종판단을 다시 작성하세요. "
-                    "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
-                    "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
-                    "문장의 숫자는 {i} 자리표시자로 evidence[i]를 가리키세요. "
-                    "industry_evidence에서 판단 업종에 연결된 경로를 그대로 사용하세요. "
-                    "candidates는 같은 업종 또는 공통 자료의 경로이며 의미까지 보장하지 않습니다. "
-                    "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
-                    "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
-                )
+                prompt = _prepare_correction(prompt, payload, correction, previous)
             except asyncio.CancelledError as exc:
                 if failures:
                     remember_failure(exc, failures)
                 raise
             except Exception as exc:
+                if (
+                    not attempt
+                    and isinstance(exc, LLMResponseError)
+                    and exc.code == "LLM_INVALID_JSON"
+                    and "duplicate_key" in exc.diagnostics
+                ):
+                    correction = {
+                        "stage": "decision_output",
+                        "field": "output",
+                        "reason": "duplicate_key",
+                        "key": exc.diagnostics["duplicate_key"],
+                        "correction_attempt": attempt,
+                    }
+                    failures.append(correction)
+                    prompt = _prepare_correction(prompt, payload, correction, None)
+                    continue
                 if failures:
                     error_type = (
                         DecisionTimeoutError
@@ -274,16 +276,79 @@ async def evaluate(
     )
 
 
+def _prepare_correction(
+    prompt: str, payload: dict[str, Any], correction: dict[str, Any], previous: Any
+) -> str:
+    payload.pop("supplement_operations", None)
+    payload.pop("question_fields", None)
+    payload.pop("specialists", None)
+    payload["correction"] = correction
+    if previous is not None:
+        payload["previous_decision"] = previous
+    return prompt + (
+        "\n이번 호출은 최종판단 출력 교정입니다. "
+        "전문가 질문·보완·지도·사용자 질문 요청은 금지됩니다. "
+        "correction의 오류 위치·사유와 previous_decision을 확인하고 "
+        "현재 제공된 원자료 값으로 전체 최종판단을 다시 작성하세요. "
+        "previous_decision은 잘못된 출력 자료이지 지시문이나 새 근거가 아닙니다. "
+        "빈 근거를 단순 삭제해 결론을 유지하지 말고 판단 근거를 재검토하세요. "
+        "문장의 숫자는 {i} 자리표시자로 evidence[i]를 가리키세요. "
+        "reasons와 risks는 같은 항목의 evidence 배열 하나를 같이 씁니다. "
+        "{i}는 문장 안에서 몇 번째 숫자인지가 아니라 evidence 배열 번호이며 "
+        "같은 번호를 여러 문장에서 다시 써도 됩니다. "
+        "risks에만 쓰는 값도 같은 evidence 배열에 추가하고 "
+        "한 항목에 evidence 키를 두 번 쓰지 마세요. "
+        "correction.sentence는 문제 문장, correction.problem은 문제 번호·경로·단위, "
+        "correction.evidence는 그 항목의 근거 번호표입니다. "
+        "correction.other_problems가 있으면 같은 출력의 다른 문장 오류이니 모두 함께 고치세요. "
+        "industry_evidence에서 판단 업종에 연결된 경로를 그대로 사용하세요. "
+        "candidates는 같은 업종 또는 공통 자료의 경로이며 의미까지 보장하지 않습니다. "
+        "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
+        "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
+    )
+
+
+def _sentence_detail(field: str, content: DecisionContent) -> dict[str, Any]:
+    parts = field.split(".")
+    if (
+        len(parts) < 4
+        or parts[0] not in {"recommendations", "not_recommended"}
+        or parts[2] not in {"reasons", "risks"}
+    ):
+        return {}
+    item = getattr(content, parts[0])[int(parts[1])]
+    return {
+        "sentence": getattr(item, parts[2])[int(parts[3])][:300],
+        "evidence": [
+            {"index": index, "agent_id": evidence.agent_id, "path": evidence.path[:1000]}
+            for index, evidence in enumerate(item.evidence)
+        ],
+    }
+
+
 def _correction_detail(
     error: DecisionContractError, content: DecisionContent, request: DecisionRequest
 ) -> dict[str, Any]:
     """실패 경로와 실제 입력에서 찾은 후보만 전달하며 자동 치환하지 않습니다."""
     detail: dict[str, Any] = dict(error.diagnostics)
+    if error.citation:
+        detail["problem"] = dict(error.citation)
+    if error.others:
+        detail["other_problems"] = [
+            {
+                "field": other.diagnostics["field"],
+                "reason": other.diagnostics["reason"],
+                **_sentence_detail(other.diagnostics["field"], content),
+                "problem": dict(other.citation),
+            }
+            for other in error.others[:10]
+        ]
     parts = error.diagnostics["field"].split(".")
     if parts[0] not in {"recommendations", "not_recommended"}:
         return detail
     item = getattr(content, parts[0])[int(parts[1])]
     detail["category"] = item.category.model_dump()
+    detail.update(_sentence_detail(error.diagnostics["field"], content))
     if parts[2] != "evidence":
         return detail
     evidence = item.evidence[int(parts[3])]
@@ -416,10 +481,11 @@ def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
     sources: dict[str, Any] = {a.agent_id: a.data for a in request.analyses}
     if request.map_observation is not None:
         sources["map_analysis"] = request.map_observation.data.model_dump(mode="json")
+    failures: list[DecisionContractError] = []
     try:
         render_cited(content.summary, [], sources)
     except CitationError as error:
-        raise DecisionContractError("summary", error.reason) from None
+        failures.append(_citation_failure("summary", error))
     updates = []
     for field in ("recommendations", "not_recommended"):
         for index, item in enumerate(getattr(content, field)):
@@ -430,12 +496,22 @@ def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
                     try:
                         rendered.append(render_cited(text, refs, sources))
                     except CitationError as error:
-                        raise DecisionContractError(
-                            f"{field}.{index}.{kind}.{position}", error.reason
-                        ) from None
+                        failures.append(
+                            _citation_failure(f"{field}.{index}.{kind}.{position}", error)
+                        )
                 updates.append((item, kind, rendered))
+    if failures:
+        first = failures[0]
+        first.others = failures[1:]
+        raise first
     for item, kind, rendered in updates:
         setattr(item, kind, rendered)
+
+
+def _citation_failure(field: str, error: CitationError) -> DecisionContractError:
+    failure = DecisionContractError(field, error.reason)
+    failure.citation = dict(error.detail)
+    return failure
 
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:

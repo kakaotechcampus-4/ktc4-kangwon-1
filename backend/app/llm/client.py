@@ -39,6 +39,12 @@ class LLMResponseError(RuntimeError):
         super().__init__(message)
 
 
+class _DuplicateKey(ValueError):
+    def __init__(self, key: str):
+        super().__init__(key)
+        self.key = key
+
+
 class LLMHTTPError(RuntimeError):
     """서버 원문 대신 허용된 진단 항목만 전달합니다."""
 
@@ -193,7 +199,11 @@ async def complete_json(
         def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             result = dict(pairs)
             if len(result) != len(pairs):
-                raise ValueError
+                seen: set[str] = set()
+                for key, _value in pairs:
+                    if key in seen:
+                        raise _DuplicateKey(key)
+                    seen.add(key)
             return result
 
         result = json.loads(
@@ -203,6 +213,8 @@ async def complete_json(
         )
         if not isinstance(result, dict):
             raise ValueError
+    except _DuplicateKey as error:
+        raise LLMResponseError("LLM_INVALID_JSON", duplicate_key=error.key[:50]) from None
     except (ValueError, TypeError):
         raise LLMResponseError("LLM_INVALID_JSON") from None
     return result

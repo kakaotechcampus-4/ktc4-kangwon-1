@@ -68,6 +68,30 @@ class CitedNumberTests(unittest.TestCase):
         self.assertEqual(self.reason("{0}명", [COUNT]), "unit_mismatch")
         self.assertEqual(self.reason("{0}만 개", [COUNT]), "unit_mismatch")
 
+    def detail(self, text, refs):
+        with self.assertRaises(CitationError) as caught:
+            render_cited(text, refs, SOURCES)
+        return caught.exception.detail
+
+    def test_errors_name_the_number_placeholder_path_and_units(self):
+        self.assertEqual(self.detail("점포 1234개", [COUNT]), {"number": "1234"})
+        self.assertEqual(self.detail("{1}개", [COUNT]), {"index": 1, "evidence_count": 1})
+        self.assertEqual(
+            self.detail("{0}", [("floating_population", "/flag")]),
+            {"index": 0, "agent_id": "floating_population", "path": "/flag"},
+        )
+        self.assertEqual(
+            self.detail("점포 {0}개, 비율 {1}%", [COUNT, LQ]),
+            {
+                "index": 1,
+                "agent_id": "commercial_area",
+                "path": "/by_middle/0/lq",
+                "unit": "%",
+                "allowed_units": ["배"],
+            },
+        )
+        self.assertEqual(self.detail("{0}만 개", [COUNT])["unit"], "만")
+
 
 class PopulationUnitTests(unittest.TestCase):
     def test_quarter_totals_and_area_counts_have_units(self):

@@ -15,9 +15,10 @@ _DIGITS = re.compile(r"\d+")
 
 
 class CitationError(ValueError):
-    def __init__(self, reason: str):
+    def __init__(self, reason: str, **detail: Any):
         super().__init__(reason)
         self.reason = reason
+        self.detail: dict[str, Any] = detail
 
 
 def _dict_keys(data: Any, path: str) -> list[str]:
@@ -54,28 +55,39 @@ def render_cited(
             lambda m: "" if int(m.group(1)) in map_radii else m.group(0),
             uncited,
         )
-    if any(digits not in labels for digits in _DIGITS.findall(uncited)):
-        raise CitationError("number_uncited")
+    missing = [digits for digits in _DIGITS.findall(uncited) if digits not in labels]
+    if missing:
+        raise CitationError("number_uncited", number=missing[0])
     pieces: list[str] = []
     cursor = 0
     for match in _PLACEHOLDER.finditer(text):
         index = int(match.group(1))
         if index >= len(refs):
-            raise CitationError("placeholder_out_of_range")
+            raise CitationError("placeholder_out_of_range", index=index, evidence_count=len(refs))
         agent_id, path = refs[index]
         data = sources.get(agent_id, {})
+        where = {"index": index, "agent_id": agent_id, "path": path}
         try:
             value = resolve_pointer(data, path)
         except (KeyError, IndexError, ValueError, TypeError):
-            raise CitationError("placeholder_value_invalid") from None
+            raise CitationError("placeholder_value_invalid", **where) from None
         if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-            raise CitationError("placeholder_value_invalid")
-        if _SCALE.match(text, match.end()):
-            raise CitationError("unit_mismatch")
-        unit = _UNIT.match(text, match.end())
+            raise CitationError("placeholder_value_invalid", **where)
         allowed = _allowed_units(agent_id, path, data)
-        if unit and unit.group(1) not in allowed | ({"명"} if "명/일" in allowed else set()):
-            raise CitationError("unit_mismatch")
+        scale = _SCALE.match(text, match.end())
+        unit = _UNIT.match(text, match.end())
+        wrong = scale or (
+            unit
+            if unit and unit.group(1) not in allowed | ({"명"} if "명/일" in allowed else set())
+            else None
+        )
+        if wrong:
+            raise CitationError(
+                "unit_mismatch",
+                **where,
+                unit=wrong.group(0).strip(),
+                allowed_units=sorted(allowed),
+            )
         pieces.extend(
             [text[cursor : match.start()], value if isinstance(value, str) else f"{value:,}"]
         )
