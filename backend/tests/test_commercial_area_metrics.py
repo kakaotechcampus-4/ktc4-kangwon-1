@@ -224,6 +224,55 @@ class FranchiseTests(unittest.TestCase):
         self.assertEqual(result.count, 2)
         self.assertEqual({row.code for row in result.by_middle}, {"I201"})
 
+    def test_brand_alias_in_parentheses_and_html_entities_match_store_names(self):
+        stores = [
+            store("I210", "간이음식", "I2", "음식점업", "BHC 방배본동점"),
+            store("I210", "간이음식", "I2", "음식점업", "(주)브레댄코"),
+            store("I210", "간이음식", "I2", "음식점업", "비에이치씨 역삼점"),
+            store("I201", "한식", "I2", "음식점업", "동네식당"),
+        ]
+        brands = ["비에이치씨(BHC)", "브레댄코(bread&amp;co.DAILY-NEW)"]
+        self.assertEqual(build_franchise(stores, brands, []).count, 3)
+
+    def test_latin_alias_matches_a_whole_latin_run_not_part_of_a_word(self):
+        stores = [
+            store("I201", "한식", "I2", "음식점업", "Eat Story"),
+            store("I201", "한식", "I2", "음식점업", "GREAT 식당"),
+            store("I201", "한식", "I2", "음식점업", "EAT 강남점"),
+        ]
+        self.assertEqual(build_franchise(stores, ["이트(EAT)"], []).count, 1)
+
+    def test_short_name_outside_parentheses_matches_only_the_start_of_a_store_name(self):
+        stores = [
+            store("I201", "한식", "I2", "음식점업", "드림플레이스"),
+            store("I201", "한식", "I2", "음식점업", "강산뷰티헤어"),
+            store("I201", "한식", "I2", "음식점업", "티헤어 강남점"),
+        ]
+        brands = ["플레이(pley)", "티헤어(T HAIR)"]
+        self.assertEqual(build_franchise(stores, brands, []).count, 1)
+
+    def test_short_alias_needs_a_branch_suffix_or_nothing_after_it(self):
+        stores = [
+            store("I201", "한식", "I2", "음식점업", "아이엠에스인증원"),
+            store("I201", "한식", "I2", "음식점업", "롯데IM"),
+            store("I201", "한식", "I2", "음식점업", "아이엠 종로점"),
+            store("I212", "커피/음료", "I2", "음식점업", "메가엠지씨커피명동중앙우체국점"),
+            store("G204", "편의점", "G2", "소매업", "CU필동"),
+        ]
+        brands = ["아이엠(i.M)", "메가엠지씨커피(MEGA MGC COFFEE)", "씨유(CU)"]
+        self.assertEqual(build_franchise(stores, brands, []).count, 3)
+
+    def test_plain_brand_inside_a_longer_store_name_is_still_matched(self):
+        stores = [store("G204", "편의점", "G2", "소매업", "GS25LG서울빌딩점")]
+        self.assertEqual(build_franchise(stores, ["GS25"], []).count, 1)
+
+    def test_two_letter_alias_matches_only_the_whole_name(self):
+        stores = [
+            store("I201", "한식", "I2", "음식점업", "가나다식당"),
+            store("I201", "한식", "I2", "음식점업", "GN"),
+        ]
+        self.assertEqual(build_franchise(stores, ["가나푸드(GN)"], []).count, 1)
+
     def test_empty_store_list_does_not_divide_by_zero(self):
         result = build_franchise([], ["한식0"], [])
         self.assertEqual(result.count, 0)
