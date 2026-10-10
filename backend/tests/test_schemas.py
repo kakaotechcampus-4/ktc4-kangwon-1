@@ -7,6 +7,18 @@ from app.schemas import AgentAnalysis, DecisionRequest
 
 
 class SchemaTests(unittest.TestCase):
+    def test_category_code_fills_names_and_preserves_old_input(self):
+        category = schemas.Category.model_validate({"code": "I201"})
+        self.assertEqual(category.major, "음식점업")
+        self.assertEqual(category.middle, "한식 음식점업")
+        legacy = schemas.Category(major="음식점업", middle="한식 음식점업")
+        self.assertEqual(legacy.code, "I201")
+
+    def test_category_rejects_unknown_code_and_name_conflict(self):
+        for value in ({"code": "UNKNOWN"}, {"code": "I201", "middle": "중식 음식점업"}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                schemas.Category.model_validate(value)
+
     def test_analysis_task_keeps_resolved_site(self):
         task = schemas.AnalysisTask.model_validate(
             {

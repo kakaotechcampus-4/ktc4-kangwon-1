@@ -1,30 +1,30 @@
-"""오케스트레이터가 사용하는 기존 주소 변환 도구를 공개합니다.
+"""오케스트레이션 그래프가 쓰는 보완 도구와 지도 조회 타입을 정의합니다."""
 
-목업 실행에서는 이 도구 대신 별도의 주소 변환 대역을 주입합니다.
-"""
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
-from app.address import resolve_site
+from app.education_zone import EducationZoneScan
+from app.schemas import (
+    AgentAnalysis,
+    AnalysisTask,
+    MapLookupPlan,
+    MapObservation,
+    Site,
+    SupplementOperation,
+)
 
-__all__ = ["resolve_site"]
+MapLookup = Callable[[AnalysisTask, MapLookupPlan], Awaitable[MapObservation]]
+# 좌표만 있으면 되므로 분석 작업 전체가 아니라 Site만 받습니다.
+ZoneLookup = Callable[[Site], Awaitable[EducationZoneScan]]
+OnMapRequested = Callable[[AnalysisTask, MapLookupPlan], Awaitable[None]]
+OnMapCompleted = Callable[[MapObservation], Awaitable[None]]
 
-# 도구 인자는 비워 두고 요청 자료는 실행기가 관리합니다.
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-                "additionalProperties": False,
-            },
-        },
-    }
-    for name, description in (
-        ("prepare_address", "사용자 주소를 변환하고 분석 공통 입력을 준비합니다."),
-        ("run_analyses", "주소 준비 후 세 분석 에이전트를 병렬 실행합니다."),
-        ("make_decision", "분석 수집 후 최종판단 에이전트에 결과를 전달합니다."),
-    )
-]
+
+@dataclass(frozen=True)
+class SupplementTool:
+    """실행 가능 조건과 부분 작업 함수를 함께 등록합니다."""
+
+    operation: SupplementOperation
+    execute: Callable[[AnalysisTask, AgentAnalysis], Awaitable[AgentAnalysis]]
+    eligible: Callable[[AnalysisTask, AgentAnalysis], bool]
+    accept: Callable[[AgentAnalysis, AgentAnalysis], bool] | None = None

@@ -10,10 +10,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+from orchestration_support import run_service
 from pydantic import ValidationError
 
-from app import orchestrator
-from app.agents.orchestration import tools, workflow
+from app.agents.orchestration import workflow
+from app.agents.orchestration import workflow as orchestrator
 from app.schemas import AnalysisTask, Site
 
 
@@ -29,10 +30,6 @@ def sample_site():
 
 
 class PrepareTaskTests(unittest.IsolatedAsyncioTestCase):
-    async def test_legacy_import_uses_same_workflow(self):
-        self.assertIs(orchestrator.prepare_task, workflow.prepare_task)
-        self.assertIs(orchestrator.run_analysis, workflow.run_analysis)
-
     async def test_prepares_task(self):
         self.assertTrue(callable(getattr(orchestrator, "prepare_task", None)))
         resolve = AsyncMock(return_value=sample_site())
@@ -69,11 +66,11 @@ class PrepareTaskTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_lookup_failure_stops_analysis(self):
         with (
-            patch.object(tools, "resolve_site", side_effect=ValueError("변환 실패")),
+            patch("app.services.analysis.resolve_site", side_effect=ValueError("변환 실패")),
             patch.object(workflow, "run_agents") as agents,
         ):
             with self.assertRaises(ValueError):
-                await orchestrator.run_analysis("주소")
+                await run_service("주소")
             agents.assert_not_awaited()
 
 

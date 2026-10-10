@@ -18,7 +18,6 @@ from app.agents import commercial_area, floating_population
 from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.agents.commercial_area.franchise import _brand_items, save_brands
-from app.agents.floating_population import llm as floating_llm
 from app.agents.floating_population.client import SeoulOpenDataClient
 from app.agents.floating_population.config import Settings as FloatingSettings
 from app.agents.orchestration import build_react_agents
@@ -126,7 +125,7 @@ async def run(fixture: dict, *, db_path: str | Path | None = None):
             page_size=2,
             max_retries=0,
         )
-        fp_settings = FloatingSettings(api_key="mock-key", analysis_radius_m=500, trend_quarters=2)
+        fp_settings = FloatingSettings(api_key="mock-key", trend_quarters=2)
         # 브랜드 조회는 HTTP 주입이 없어 목업 원본을 파싱해 기존 캐시 경로로 전달합니다.
         brands = [str(row["brandNm"]) for row in _brand_items(fixture["responses"]["brands"])]
         if not brands:
@@ -149,7 +148,6 @@ async def run(fixture: dict, *, db_path: str | Path | None = None):
                         floating_population.analyze,
                         settings=fp_settings,
                         client=population_client,
-                        select=partial(floating_llm.select_blocks, settings=settings.floating_llm),
                     ),
                 )
                 agents["commercial_area"] = partial(

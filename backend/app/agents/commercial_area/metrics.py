@@ -133,12 +133,9 @@ def build_middle_rows(
                 count=count,
                 share=round(_share(count, total), 6),
                 density_per_km2=round(density, 4),
-                density_sq=round(density**2, 4),
                 lq=lq,
                 lq_district=lq_district,
-                same_type_count=count,
                 diff_type_count=diff_count,
-                marshallian=round(density, 4),
                 jacobian=round(effective_categories(hhi(other_counts)), 4),
                 major_cluster_count=major_counts.get(entry.major_code, 0),
                 major_cluster_diversity=cluster_diversity.get(entry.major_code, 0.0),
@@ -376,9 +373,12 @@ def build_radius_slices(
         total = len(subset)
         absent_count = sum(1 for r in rows if r.count == 0)
 
-        top_rows = sorted(rows, key=lambda r: (-r.count, r.name))[:size]
-        bottom_rows = sorted(rows, key=lambda r: (r.count, r.name))[:size]
-        concentration_rows = sorted(rows, key=lambda r: (-r.density_per_km2, r.name))[:size]
+        observed_rows = [row for row in rows if row.count > 0]
+        top_rows = sorted(observed_rows, key=lambda r: (-r.count, r.name))[:size]
+        bottom_rows = sorted(observed_rows, key=lambda r: (r.count, r.name))[:size]
+        concentration_rows = sorted(observed_rows, key=lambda r: (-r.density_per_km2, r.name))[
+            :size
+        ]
         threshold = settings.min_count_for_specialization
         specialization_rows = sorted(
             [r for r in rows if r.lq is not None and r.count >= threshold],
@@ -429,8 +429,7 @@ def build_restaurant_density(
     density = _density(count, radius_m)
     return RestaurantDensity(
         value=round(density, 4),
-        squared=round(density**2, 4),
         unit="stores_per_km2",
         store_count=count,
-        seoul_percentile=seoul_percentile(density) if in_seoul else None,
+        seoul_percentile=seoul_percentile(density) if in_seoul and radius_m == 500 else None,
     )

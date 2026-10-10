@@ -385,7 +385,7 @@ B1의 오즈비입니다.
 **왜 백분위인가** 추정이 아니라 **관측 분포 그 자체**라 틀릴 여지가 없습니다.
 폐업 자료도 필요 없습니다. 유동인구 `benchmark.scale_percentile`과 같은 방식입니다.
 
-갱신은 `python examples/build_density_baseline.py` 로 다시 받아
+갱신은 `python scripts/build_density_baseline.py` 로 다시 받아
 `commercial_area/baseline.py`의 상수를 바꿉니다.
 
 ---

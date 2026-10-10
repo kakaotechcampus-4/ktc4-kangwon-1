@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Any
 
@@ -75,7 +76,7 @@ def get_score_missing_reason(
     # ========================================================
 
     if pd.isna(row.get("recent_year_close_rate")):
-        return "최근 1년 폐업률을 계산하기 위한 데이터가 부족합니다."
+        return "최근 최대 4개 분기의 평균 폐업률을 계산하기 위한 데이터가 부족합니다."
 
     # ========================================================
     # 4. 장기 추세 지표 부족
@@ -84,10 +85,12 @@ def get_score_missing_reason(
     if pd.isna(row.get("close_rate_trend")):
         return "과거 대비 최근 폐업률 변화를 계산하기 위한 데이터가 부족합니다."
 
+    if row.get("confidence") == "low" and pd.isna(row.get("lifecycle_score")):
+        return "비교 가능한 업종이 2개 미만이라 상대 점수를 보류했습니다. 관측값은 유지합니다."
     return "Lifecycle Score 계산에 필요한 데이터가 부족합니다."
 
 
-def build_agent_input(
+async def build_agent_input(
     area_code: str,
     base_quarter: str,
     quarter_count: int = 12,
@@ -111,12 +114,26 @@ def build_agent_input(
     # 순서로 자동 호출된다.
     # ========================================================
 
-    df = score_business_lifecycle(
+    df = await score_business_lifecycle(
         area_code=area_code,
         base_quarter=base_quarter,
         quarter_count=quarter_count,
         settings=settings,
     )
+    return await asyncio.to_thread(
+        _build_input, df, area_code, base_quarter, quarter_count, request_id, area_name
+    )
+
+
+def _build_input(
+    df: pd.DataFrame,
+    area_code: str,
+    base_quarter: str,
+    quarter_count: int,
+    request_id: str | None,
+    area_name: str | None,
+) -> dict[str, Any]:
+    """데이터프레임의 분리·행 변환도 작업 스레드에서 처리합니다."""
 
     # ========================================================
     # 2. 실제 분석 기간 확인
@@ -238,7 +255,7 @@ def build_agent_input(
                 },
                 "observed_quarters": to_int(row.get("observed_quarters")),
                 "lifecycle_score": None,
-                "confidence": "none",
+                "confidence": str(row["confidence"]),
                 "missing_reason": (
                     get_score_missing_reason(
                         row=row,
@@ -271,6 +288,24 @@ def build_agent_input(
         # ====================================================
         "scoring_method": {
             "score_type": "relative",
+            "rate_basis": {
+                "unit": "%/분기",
+                "denominator": "대상 분기의 점포 수 합계",
+                "annualized": False,
+                "description": (
+                    "점포 수로 가중한 분기 평균 비율이며 연간 누적률·생존확률이 아닙니다."
+                ),
+                "periods": {
+                    "avg_open_rate": quarter_count,
+                    "avg_close_rate": quarter_count,
+                    "net_change_rate": quarter_count,
+                    "turnover_rate": quarter_count,
+                    "recent_year_close_rate": min(4, quarter_count),
+                    "recent_year_net_change_rate": min(4, quarter_count),
+                    "oldest_year_close_rate": min(4, quarter_count),
+                },
+                "trend_unit": "%p",
+            },
             "description": (
                 "최근 개폐업 데이터와 폐업률 변화 추세를 "
                 "기반으로 분석 가능한 업종끼리 상대 비교한 "
@@ -285,9 +320,9 @@ def build_agent_input(
             "notes": [
                 ("lifecycle_score는 미래 생존확률이 아니다."),
                 ("lifecycle_score는 분석 가능한 업종끼리 상대 비교한 점수이다."),
-                ("최근 1년 폐업률은 낮을수록 긍정적으로 평가한다."),
-                ("전체 분석기간 순증감률은 높을수록 긍정적으로 평가한다."),
-                ("회전율은 낮을수록 안정적으로 평가한다."),
+                ("최근 최대 4개 분기의 평균 폐업률은 낮을수록 긍정적으로 평가한다."),
+                ("전체 분석기간의 분기 평균 순증감률은 높을수록 긍정적으로 평가한다."),
+                ("분기 평균 회전율은 낮을수록 안정적으로 평가한다."),
                 ("close_rate_trend가 음수이면 과거보다 최근 폐업률이 낮아진 것이다."),
                 ("close_rate_trend가 양수이면 과거보다 최근 폐업률이 높아진 것이다."),
             ],

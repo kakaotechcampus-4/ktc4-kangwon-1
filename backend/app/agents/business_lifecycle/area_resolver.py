@@ -3,22 +3,20 @@
 from __future__ import annotations
 
 import math
-import os
 import struct
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 
 from app.geo import to_epsg5181
 from app.schemas import Site
 
-from .config import PACKAGE_DIR, Settings
-
-DEFAULT_SHAPE_DIR = PACKAGE_DIR / "data" / "trdar_area"
-DEFAULT_SHAPE_STEM = "TbgisTrdarRelm"
-SHAPE_PATH_ENV = "BUSINESS_LIFECYCLE_AREA_SHP_PATH"
+from .config import Settings
 
 Point = tuple[float, float]
-Ring = list[Point]
+Ring = Sequence[Point]
 
 
 @dataclass(frozen=True)
@@ -33,15 +31,14 @@ class BusinessArea:
     dong_name: str | None
     x: float
     y: float
-    distance_m: float = 0.0
     warning: str = ""
 
 
 @dataclass(frozen=True)
 class ShapeFeature:
-    attributes: dict[str, str | None]
+    attributes: Mapping[str, str | None]
     bbox: tuple[float, float, float, float]
-    rings: list[Ring]
+    rings: tuple[tuple[Point, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -86,15 +83,7 @@ def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
     return area
 
 
-def resolve_shape_path() -> Path:
-    raw_path = os.getenv(SHAPE_PATH_ENV)
-    if raw_path:
-        return Path(raw_path)
-    return DEFAULT_SHAPE_DIR / f"{DEFAULT_SHAPE_STEM}.shp"
-
-
-def required_shape_paths(shape_path: Path | None = None) -> list[Path]:
-    path = shape_path or resolve_shape_path()
+def required_shape_paths(path: Path) -> list[Path]:
     return [
         path.with_suffix(".shp"),
         path.with_suffix(".shx"),
@@ -103,7 +92,8 @@ def required_shape_paths(shape_path: Path | None = None) -> list[Path]:
     ]
 
 
-def load_shape_features(shape_path: Path) -> list[ShapeFeature]:
+def load_shape_features(shape_path: Path) -> tuple[ShapeFeature, ...]:
+    shape_path = shape_path.resolve()
     paths = required_shape_paths(shape_path)
     missing = [path for path in paths if not path.exists()]
     if missing:
@@ -111,6 +101,17 @@ def load_shape_features(shape_path: Path) -> list[ShapeFeature]:
         raise BusinessAreaResolverError(
             f"서울시 공식 상권영역 SHP 구성 파일이 없습니다. 필요한 파일: {missing_text}"
         )
+
+    signature = tuple((stat.st_mtime_ns, stat.st_size) for stat in (path.stat() for path in paths))
+    # 속성과 중첩 좌표까지 읽기 전용이므로 요청마다 복사하지 않습니다.
+    return _load_cached_shapes(shape_path, signature)
+
+
+@lru_cache(maxsize=4)
+def _load_cached_shapes(
+    shape_path: Path, signature: tuple[tuple[int, int], ...]
+) -> tuple[ShapeFeature, ...]:
+    """구성 파일이 변경되면 새 키로 다시 읽습니다."""
 
     _validate_projection(shape_path.with_suffix(".prj"))
     attributes = read_dbf(shape_path.with_suffix(".dbf"))
@@ -122,15 +123,15 @@ def load_shape_features(shape_path: Path) -> list[ShapeFeature]:
             f"SHP={len(polygons)}, DBF={len(attributes)}"
         )
 
-    return [
+    return tuple(
         ShapeFeature(
-            attributes=attribute,
+            attributes=MappingProxyType(dict(attribute)),
             bbox=polygon[0],
-            rings=polygon[1],
+            rings=tuple(tuple(ring) for ring in polygon[1]),
         )
         for attribute, polygon in zip(attributes, polygons, strict=True)
         if attribute is not None and polygon is not None
-    ]
+    )
 
 
 def read_polygon_shapes(
@@ -287,7 +288,7 @@ def _validate_projection(path: Path) -> None:
         )
 
 
-def polygon_contains_point(rings: list[Ring], x: float, y: float) -> bool:
+def polygon_contains_point(rings: Sequence[Ring], x: float, y: float) -> bool:
     inside = False
 
     for ring in rings:
@@ -348,7 +349,9 @@ def _bbox_contains(bbox: tuple[float, float, float, float], x: float, y: float) 
 
 
 def _feature_area(feature: ShapeFeature) -> float:
-    return sum(abs(_ring_area(ring)) for ring in feature.rings)
+    # SHP는 외곽이 시계 방향, 구멍이 반시계 방향입니다. 링 순서와 무관하게
+    # 부호를 유지해 더해야 구멍을 빼고 독립 외곽·구멍 안의 섬을 더합니다.
+    return abs(sum(_ring_area(ring) for ring in feature.rings))
 
 
 def _ring_area(ring: Ring) -> float:
@@ -385,7 +388,7 @@ def _feature_to_business_area(
     )
 
 
-def _clean(row: dict[str, str | None], *keys: str) -> str | None:
+def _clean(row: Mapping[str, str | None], *keys: str) -> str | None:
     normalized = {_normalize_key(key): value for key, value in row.items()}
     for key in keys:
         value = row.get(key) or normalized.get(_normalize_key(key))

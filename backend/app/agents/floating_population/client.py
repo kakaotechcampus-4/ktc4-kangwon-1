@@ -1,4 +1,4 @@
-"""서울 열린데이터광장 Open API 클라이언트 (길단위인구 · 상권영역).
+"""서울 열린데이터광장 Open API 클라이언트 (길단위인구 · 상권영역 · 주거인구 · 직장인구).
 
 요청 형식: {base}/{KEY}/json/{SERVICE}/{START}/{END}/[{추가 경로 인자}/]
 응답 형식: {"<SERVICE>": {"list_total_count": N, "RESULT": {"CODE": "INFO-000", ...}, "row": [...]}}
@@ -20,12 +20,10 @@ from datetime import date
 
 import httpx
 
+from app.seoul import SeoulOpenApiError, previous_quarter, request_json
+
 from .config import Settings
 from .models import FlpopRecord, TrdarArea
-
-
-class SeoulOpenApiError(RuntimeError):
-    pass
 
 
 class MissingApiKeyError(RuntimeError):
@@ -35,11 +33,6 @@ class MissingApiKeyError(RuntimeError):
 def quarter_code(d: date) -> str:
     """2026-09-09 → '20263' (기준년분기 코드)."""
     return f"{d.year}{(d.month - 1) // 3 + 1}"
-
-
-def previous_quarter(code: str) -> str:
-    year, q = int(code[:4]), int(code[4])
-    return f"{year - 1}4" if q == 1 else f"{year}{q - 1}"
 
 
 class SeoulOpenDataClient:
@@ -62,6 +55,7 @@ class SeoulOpenDataClient:
         self._http = http
         self._owns_http = http is None
         self.today = today or date.today()
+        self._latest_quarter: str | None = None
         if not self.settings.api_key:
             raise MissingApiKeyError(
                 "FLOATING_POPULATION_API_KEY 가 설정되지 않았습니다. "
@@ -92,20 +86,10 @@ class SeoulOpenDataClient:
         rows = await self._fetch_all(
             self.settings.trdar_area_service, self.settings.trdar_area_max_pages
         )
-        return [TrdarArea.from_api_row(r) for r in rows]
-
-    async def fetch_flpop(self, trdar_cds: set[str]) -> tuple[str, list[FlpopRecord]]:
-        """최신 분기의 길단위인구를 받아 대상 상권만 거른다.
-
-        반환: (기준년분기, 레코드 목록). API 가 상권코드 필터를 지원하지 않아 그 분기 전체를
-        받은 뒤 거른다 — 1회 호출(4페이지)로 끝나므로 그대로 둔다.
-        """
-        quarter = await self.latest_quarter()
-        rows = await self._fetch_all(
-            self.settings.flpop_service, self.settings.flpop_max_pages, extra=quarter
-        )
-        records = [FlpopRecord.from_api_row(r) for r in rows]
-        return quarter, [r for r in records if r.trdar_cd in trdar_cds]
+        try:
+            return [TrdarArea.from_api_row(r) for r in rows]
+        except (ValueError, TypeError, KeyError) as exc:
+            raise SeoulOpenApiError("상권영역 응답의 필드가 올바르지 않습니다.") from exc
 
     async def fetch_flpop_series(
         self, trdar_cds: set[str], quarters: int
@@ -126,20 +110,41 @@ class SeoulOpenDataClient:
             code = previous_quarter(code)
         codes.reverse()  # 오래된 순
 
-        pages = await asyncio.gather(
-            *(
+        tasks = [
+            asyncio.create_task(
                 self._fetch_all(self.settings.flpop_service, self.settings.flpop_max_pages, extra=c)
-                for c in codes
             )
-        )
+            for c in codes
+        ]
+        try:
+            pages = await asyncio.gather(*tasks)
+        except BaseException:
+            # 한 조회가 실패하거나 부모가 취소되어도 다른 조회를 닫힌 클라이언트에
+            # 남겨 두지 않습니다. 정리 중 재취소도 자식의 finally를 끊지 않습니다.
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            settled = asyncio.gather(*tasks, return_exceptions=True)
+            while not settled.done():
+                try:
+                    await asyncio.shield(settled)
+                except asyncio.CancelledError:
+                    continue
+            settled.result()
+            raise
         series: list[tuple[str, list[FlpopRecord]]] = []
         for c, rows in zip(codes, pages, strict=True):
-            records = [FlpopRecord.from_api_row(r) for r in rows]
+            try:
+                records = [FlpopRecord.from_api_row(r) for r in rows]
+            except (ValueError, TypeError, KeyError) as exc:
+                raise SeoulOpenApiError("유동인구 응답의 필드가 올바르지 않습니다.") from exc
             series.append((c, [r for r in records if r.trdar_cd in trdar_cds]))
         return series
 
     async def latest_quarter(self) -> str:
         """데이터가 존재하는 가장 최신 분기. 오늘 분기부터 거꾸로 1행씩 탐침한다."""
+        if self._latest_quarter is not None:
+            return self._latest_quarter
         code = quarter_code(self.today)
         for _ in range(self.settings.quarter_probe_limit):
             body = await self._get(self.settings.flpop_service, 1, 1, extra=code)
@@ -147,6 +152,7 @@ class SeoulOpenDataClient:
             if svc.get("RESULT", {}).get("CODE") == "INFO-000" and int(
                 svc.get("list_total_count", 0)
             ):
+                self._latest_quarter = code
                 return code
             code = previous_quarter(code)
         raise SeoulOpenApiError(
@@ -162,18 +168,9 @@ class SeoulOpenDataClient:
         start = 1
         for _ in range(max_pages):
             end = start + self.settings.page_size - 1
-            payload = await self._get(service, start, end, extra=extra)
-            body = payload.get(service)
-            if body is None:
-                raise SeoulOpenApiError(
-                    f"응답에 '{service}' 키가 없음 — 서비스명 오류 가능. 응답: {str(payload)[:200]}"
-                )
-            code = body.get("RESULT", {}).get("CODE", "")
-            if code == "INFO-200":  # 해당하는 데이터 없음 (마지막 페이지 이후)
+            body = await self._get_page(service, start, end, extra=extra)
+            if body.get("RESULT", {}).get("CODE") == "INFO-200":  # 마지막 페이지 이후
                 break
-            if code and code != "INFO-000":
-                message = body.get("RESULT", {}).get("MESSAGE")
-                raise SeoulOpenApiError(f"{service} {code}: {message}")
             page = body.get("row", [])
             rows.extend(page)
             total = int(body.get("list_total_count", 0))
@@ -182,11 +179,26 @@ class SeoulOpenDataClient:
             start = end + 1
         return rows
 
+    async def _get_page(self, service: str, start: int, end: int, extra: str | None = None) -> dict:
+        """한 페이지의 서비스 본문. 결과 코드가 정상(INFO-000)·자료 없음(INFO-200)이 아니면 예외."""
+        payload = await self._get(service, start, end, extra=extra)
+        body = payload.get(service)
+        if body is None:
+            if payload.get("RESULT", {}).get("CODE") == "INFO-200":
+                return {"RESULT": {"CODE": "INFO-200"}, "row": [], "list_total_count": 0}
+            raise SeoulOpenApiError(f"응답에 '{service}' 키가 없습니다. 서비스명을 확인해 주세요.")
+        code = body.get("RESULT", {}).get("CODE", "")
+        if code and code not in ("INFO-000", "INFO-200"):
+            raise SeoulOpenApiError("서울 API가 요청을 거절했습니다.")
+        return body
+
     async def _get(self, service: str, start: int, end: int, extra: str | None = None) -> dict:
-        s = self.settings
-        url = f"{s.base_url}/{s.api_key}/json/{service}/{start}/{end}/"
-        if extra:
-            url += f"{extra}/"
-        resp = await self.http().get(url)
-        resp.raise_for_status()
-        return resp.json()
+        return await request_json(
+            self.http(),
+            base_url=self.settings.base_url,
+            api_key=self.settings.api_key or "",
+            service=service,
+            start=start,
+            end=end,
+            extra=extra,
+        )

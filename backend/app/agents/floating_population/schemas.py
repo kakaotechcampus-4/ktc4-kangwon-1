@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas import Schema, Text
 
 
@@ -49,25 +51,25 @@ class Population(Schema):
     unit: Text
     share_unit: Text
 
-    daily_avg: float  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
-    female_ratio: float
+    daily_avg: float | None  # 분기 합계 ÷ 분기 일수. 다른 에이전트의 "명/일" 과 비교 가능한 값
+    female_ratio: float | None
 
     # 원본은 선별과 무관하게 보존합니다. 최종판단 입력 복사본에서만 이 셋을 제외할 수 있습니다.
     # 기존 저장 자료를 읽을 수 있도록 nullable 계약은 유지합니다.
-    by_age: dict[str, float] | None
-    age_share: dict[str, float]
+    by_age: dict[str, float | None] | None
+    age_share: dict[str, float | None]
 
-    by_time: dict[str, float] | None
+    by_time: dict[str, float | None] | None
     # 시간대 비교는 반드시 이 값으로 한다 — 구간 길이가 3~6시간으로 달라서 총량으로 비교하면
     # 6시간짜리 00~06시가 거의 항상 1위가 된다(실데이터에서 확인된 왜곡).
-    time_per_hour_share: dict[str, float]
-    peak_time_band: Text
+    time_per_hour_share: dict[str, float | None]
+    peak_time_band: Text | None
 
-    by_day: dict[str, float] | None
+    by_day: dict[str, float | None] | None
     # 주중·주말 평균 인원수는 내보내지 않는다. 한때 `weekday_daily_avg` 로 두었더니 "하루
     # 평균" 으로 읽혔는데 실제로는 분기 중 해당 요일 합계들의 평균이라 하루 평균의 13배였다.
     # 쓸 곳은 이 비율뿐이라 비율만 낸다.
-    weekend_to_weekday_ratio: float
+    weekend_to_weekday_ratio: float | None
 
 
 class Benchmark(Schema):
@@ -79,17 +81,17 @@ class Benchmark(Schema):
 
     unit: Text
     baseline: Text
-    age_index: dict[str, float]
-    time_per_hour_index: dict[str, float]
+    age_index: dict[str, float | None]
+    time_per_hour_index: dict[str, float | None]
 
-    lunch_index: float  # 11~14시
-    evening_index: float  # 17~21시
-    night_index: float  # 21~24시
-    weekend_index: float
+    lunch_index: float | None  # 11~14시
+    evening_index: float | None  # 17~21시
+    night_index: float | None  # 21~24시
+    weekend_index: float | None
 
     # 상권 1곳당 일평균. 분기 합계로 두면 블록 unit("배수")과 어긋나고 오독 위험도 남는다.
-    mean_daily_per_trade_area: float
-    scale_percentile: int  # 서울 상권 중 규모 백분위(상권 1곳당 기준)
+    mean_daily_per_trade_area: float | None
+    scale_percentile: int | None  # 서울 상권 중 규모 백분위(상권 1곳당 기준)
 
 
 class TypeJudgement(Schema):
@@ -100,7 +102,7 @@ class TypeJudgement(Schema):
     signals_unit: Text
     reasons: list[Text]
     # 판정에 쓴 숫자를 그대로 남긴다. 결정 에이전트가 문장이 아니라 값을 인용할 수 있도록.
-    signals: dict[str, float]
+    signals: dict[str, float | None]
     thresholds: dict[str, float]
     rules_version: Text
 
@@ -128,10 +130,10 @@ class QuarterPoint(Schema):
     period: Text  # "2026년 2분기"
     # 분기 합계는 싣지 않는다 — 분기 일수(90~92일)가 달라 그대로 비교하면 가짜 증감이 섞이고,
     # 비교에 쓸 수 있는 형태는 일평균뿐이다.
-    daily_avg: float
+    daily_avg: float | None
     trade_area_count: int
-    age_share: dict[str, float]
-    time_per_hour_share: dict[str, float]
+    age_share: dict[str, float | None]
+    time_per_hour_share: dict[str, float | None]
 
 
 class Trend(Schema):
@@ -158,8 +160,8 @@ class RadiusPoint(Schema):
     """
 
     radius_m: int
-    total: float
-    daily_avg: float
+    total: float | None
+    daily_avg: float | None
     # 조금이라도 걸친 상권 수(안분 가중치 > 0). 반경 안에 통째로 든 상권 수가 아니다.
     trade_area_count: int
     # 안분 가중치의 합. 상권 "몇 곳분" 인지를 뜻한다(예: 2.4 = 상권 2.4곳분).
@@ -178,6 +180,90 @@ class RadiusProfile(Schema):
     unit: Text
     method: Text
     points: list[RadiusPoint]
+
+
+class PopulationBenchmark(Schema):
+    """주거·직장인구의 서울 대비 지표. 기준선은 같은 응답의 서울 전체 상권에서 계산한다."""
+
+    unit: Text
+    baseline: Text
+    age_index: dict[str, float | None]
+    # 상권 1곳당 인구의 서울 상권 중 백분위(0~100). 합계로 재면 상권이 많은 지역이 무조건 높다.
+    scale_percentile: int | None
+    # 주거인구만. 가구당 인원의 서울 대비 배수 — 1 미만이면 1인가구가 많은 동네다.
+    persons_per_household_index: float | None = None
+
+
+class ResidentPopulation(Schema):
+    """주거인구(상주인구) — 그 상권에 **사는 사람 수**. 통행량이 아니다.
+
+    같은 상권 집합(유동인구와 동일)을 합산한다. 가구당 인원을 따로 내는 이유: 아파트 가구
+    컬럼이 비어 있어 "아파트 동네" 는 못 가리지만, 가구당 인원(서울 평균 약 1.76명)으로
+    1인가구 동네와 가족 동네는 갈린다. 업종 추천에는 총 인구보다 이쪽이 직접적이다.
+    """
+
+    unit: Text
+    share_unit: Text
+    period_code: Text
+    period: Text
+    count: float | None
+    households: float | None
+    persons_per_household: float | None
+    age_share: dict[str, float | None]
+    # 반경과 겹친 상권 수 / 그중 이 자료가 있는 상권 수. 시장·역 상권은 주거인구가 없다.
+    trade_area_count: int
+    covered_trade_areas: int
+    benchmark: PopulationBenchmark
+
+
+class WorkerPopulation(Schema):
+    """직장인구 — 그 상권에서 **일하는 사람 수**. 통행량이 아니다."""
+
+    unit: Text
+    share_unit: Text
+    period_code: Text
+    period: Text
+    count: float | None
+    age_share: dict[str, float | None]
+    trade_area_count: int
+    covered_trade_areas: int
+    benchmark: PopulationBenchmark
+
+
+class PopulationSummary(Schema):
+    """세 인구를 한데 놓고 본 총괄. **더하지 않고 비율로만 본다.**
+
+    유동인구는 통행량(중복 집계), 주거·직장인구는 사람 수라 합이 의미를 갖지 않는다. 비율도
+    세 자료가 **모두 있는 상권만**으로 낸다 — 시장·역 상권처럼 한쪽만 있는 조각이 섞이면
+    분자와 분모가 서로 다른 구역을 세게 된다.
+
+    `composition` 은 결정론적 규칙이다(LLM 아님). 유동인구 유형(`type`) 판정 입력이 아니고
+    그 판정과 따로 선다 — 주거·직장인구는 유형 판정의 검증 정답으로 쓰던 값이라 판정에 넣으면
+    검증이 무의미해진다.
+    """
+
+    unit: Text
+    basis_trade_areas: int
+    # 유동인구 일평균 통행량 ÷ 주거인구. "하루 통행량이 사는 사람의 몇 배인가".
+    visitor_multiple: float | None
+    worker_to_resident_ratio: float | None
+    # 서울 전체(두 자료가 모두 있는 상권)의 직장/주거 비. index 의 분모다.
+    seoul_worker_to_resident_ratio: float | None
+    # 직장/주거 비의 서울 대비 배수. composition 판정에 쓰는 값이다.
+    worker_to_resident_index: float | None
+    composition: Text  # "주거 중심" · "직장 중심" · "주거·직장 혼재" · "판단 불가"
+    composition_rule: Text
+
+
+class Finding(Schema):
+    """숫자를 풀어 쓴 해석 한 줄. **코드가 규칙으로 만든다(LLM 아님).**
+
+    `path` 는 문장이 기대는 값의 JSON Pointer 다 — 결정 에이전트가 이 문장을 근거로 쓸 때
+    `evidence.path` 에 그대로 옮기면 검증을 통과한다.
+    """
+
+    text: Text
+    path: Text
 
 
 class Selection(Schema):
@@ -217,6 +303,8 @@ class FloatingPopulationData(Schema):
     """
 
     description: Text
+    # 아래 숫자들의 핵심을 풀어 쓴 문장. 맨 앞에 두어 먼저 읽히게 한다. 선별 대상이 아니다.
+    interpretation: list[Finding] = Field(default_factory=list)
     period_code: Text
     radius_m: int
     # 과거 저장 자료의 null은 허용하되, 새 분석은 선별 전 원본을 보존합니다.
@@ -227,5 +315,10 @@ class FloatingPopulationData(Schema):
     radius_profile: RadiusProfile | None
     type: TypeJudgement
     reliability: Reliability
+    # 주거·직장인구와 총괄. 조회에 실패하면 null 이고 유동인구 분석은 그대로 나간다.
+    # 선별 대상이 아니다 — 작고 판단에 직접 쓰는 블록이라 항상 싣는다.
+    resident: ResidentPopulation | None = None
+    worker: WorkerPopulation | None = None
+    population_summary: PopulationSummary | None = None
     selection: Selection
     sources: list[Source]

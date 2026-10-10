@@ -1,64 +1,21 @@
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import type { ChangeEvent } from 'react';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
-import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
-import { createAnalysis } from '@/lib/api/analyses';
-import { saveAnalysisResult, saveRequestId } from '@/lib/api/resultStore';
 
-export default function AddressInput() {
-  const router = useRouter();
-  const [roadAddress, setRoadAddress] = useState('');
-  const [floorUnit, setFloorUnit] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+type AddressInputProps = {
+  roadAddress: string;
+  onRoadAddressChange: (value: string) => void;
+  floorUnit: string;
+  onFloorUnitChange: (value: string) => void;
+};
 
-  async function handleSubmit() {
-    if (!roadAddress.trim()) {
-      alert('주소를 입력해주세요');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    try {
-      // mock 옵션 없이 기본값(false)으로 호출한다 — 실제 백엔드를 부른다.
-      // 테스트 단계에서 백엔드 키 없이 화면만 확인하려면 아래를
-      // createAnalysis(roadAddress, { mock: true })로 임시로 바꿔서 쓴다.
-      const fullAddress = floorUnit.trim()
-        ? `${roadAddress} ${floorUnit}`
-        : roadAddress;
-      const { result, requestId } = await createAnalysis(fullAddress);
-
-      if (result.status === 'no_data') {
-        console.warn('[AddressInput] no_data:', result.limitations);
-        alert(
-          [
-            '이 주소에서는 추천할 업종을 찾지 못했습니다.',
-            ...result.limitations,
-          ].join('\n')
-        );
-        return;
-      }
-
-      saveRequestId(requestId);
-      saveAnalysisResult(result);
-      router.push('/report');
-    } catch (error) {
-      console.error('[AddressInput] 분석 요청 실패:', error);
-      const message =
-        error instanceof Error
-          ? error.message
-          : '분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-      alert(message);
-    } finally {
-      // 성공 시엔 위에서 이미 페이지를 이동하므로, 여기 도달하는 건
-      // 실패했을 때뿐이다.
-      setIsAnalyzing(false);
-    }
-  }
-
+export default function AddressInput({
+  roadAddress,
+  onRoadAddressChange,
+  floorUnit,
+  onFloorUnitChange,
+}: AddressInputProps) {
   return (
     <Card
       className="w-full gap-4"
@@ -84,7 +41,9 @@ export default function AddressInput() {
           <Input
             id="road-address"
             value={roadAddress}
-            onChange={(event) => setRoadAddress(event.target.value)}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onRoadAddressChange(event.target.value)
+            }
             placeholder="서울특별시 관악구 봉천로 123"
           />
         </div>
@@ -98,32 +57,12 @@ export default function AddressInput() {
           <Input
             id="floor-unit"
             value={floorUnit}
-            onChange={(event) => setFloorUnit(event.target.value)}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onFloorUnitChange(event.target.value)
+            }
             placeholder="1층 101호"
           />
         </div>
-      </div>
-
-      <div className="flex w-full justify-end gap-3 pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="text-gray-500"
-          style={{ padding: '14px 24px' }}
-        >
-          임시 저장
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          style={{ padding: '14px 24px' }}
-          disabled={isAnalyzing}
-          onClick={handleSubmit}
-        >
-          {isAnalyzing
-            ? '분석 중... (최대 10분 정도 걸릴 수 있어요)'
-            : '다음 · AI 판독 결과 확인'}
-        </Button>
       </div>
     </Card>
   );

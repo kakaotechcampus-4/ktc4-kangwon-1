@@ -16,16 +16,152 @@ EXAMPLES = BACKEND / "examples" / "decision"
 
 
 class AgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_corrects_invalid_evidence_once_without_changing_sources(self):
+        broken = copy.deepcopy(self.response)
+        broken["recommendations"][0]["evidence"][0]["path"] = "/missing"
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            return broken if len(inputs) == 1 else copy.deepcopy(self.response)
+
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(len(inputs), 2)
+        self.assertEqual(inputs[0]["analyses"], inputs[1]["analyses"])
+        self.assertEqual(inputs[1]["correction"]["reason"], "evidence_not_found")
+        self.assertNotIn("supplement_operations", inputs[1])
+
+    async def test_invalid_correction_stops_after_two_model_calls(self):
+        broken = copy.deepcopy(self.response)
+        broken["recommendations"][0]["evidence"][0]["path"] = "/missing"
+        generate = Mock(return_value=broken)
+        with self.assertRaises(ValueError):
+            await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+
+    async def test_schema_and_transport_failures_do_not_trigger_correction(self):
+        for generate in (Mock(return_value={}), Mock(side_effect=RuntimeError("연결 실패"))):
+            with self.assertRaises((ValueError, RuntimeError)):
+                await analyze(self.request, generate=generate)
+            self.assertEqual(generate.call_count, 1)
+
+    async def test_correction_cannot_switch_to_data_supplement(self):
+        from app.agents.decision.agent import evaluate
+        from app.schemas import SupplementOperation
+
+        broken = copy.deepcopy(self.response)
+        broken["recommendations"][0]["evidence"][0]["path"] = "/missing"
+        plan = {
+            "action": "supplement",
+            "requests": [
+                {
+                    "agent_id": "commercial_area",
+                    "operation": "retry_lq_baseline",
+                    "decision_question": "경쟁 수준",
+                    "missing_information": "비교 자료",
+                    "why_needed": "추천 판단",
+                    "expected_impact": "경쟁 판단 변경",
+                }
+            ],
+        }
+        generate = Mock(side_effect=[broken, plan])
+        with self.assertRaises(ValueError):
+            await evaluate(
+                self.request,
+                generate=generate,
+                operations=[
+                    SupplementOperation(
+                        agent_id="commercial_area",
+                        operation="retry_lq_baseline",
+                        description="비교 조회",
+                    )
+                ],
+            )
+        self.assertEqual(generate.call_count, 2)
+        self.assertNotIn("supplement_operations", json.loads(generate.call_args.args[1]))
+
+    async def test_contract_diagnostics_distinguish_category_and_evidence_without_values(self):
+        self.request["analyses"][0]["data"]["empty"] = None
+        for field, value, reason in (
+            ("middle", "SECRET", "unknown_industry"),
+            ("major", "SECRET", "major_mismatch"),
+            ("path", "/SECRET", "evidence_not_found"),
+            ("path", "/~SECRET", "evidence_path_invalid"),
+            ("path", "/empty", "evidence_empty"),
+        ):
+            response = copy.deepcopy(self.response)
+            item = response["recommendations"][0]
+            if field == "path":
+                item["evidence"][0]["agent_id"] = "floating_population"
+                item["evidence"][0][field] = value
+            else:
+                item["category"][field] = value
+            with self.subTest(reason=reason), self.assertRaises(ValueError) as caught:
+                await analyze(self.request, generate=lambda *_, response=response: response)
+            self.assertEqual(getattr(caught.exception, "code", None), "DECISION_CONTRACT_INVALID")
+            diagnostics = caught.exception.diagnostics
+            self.assertEqual(diagnostics["reason"], reason)
+            self.assertEqual(diagnostics["stage"], "decision_validation")
+            self.assertTrue(diagnostics["field"].startswith("recommendations.0."))
+            self.assertNotIn("SECRET", str(caught.exception) + str(diagnostics))
+
     def setUp(self):
         self.request = json.loads((EXAMPLES / "input.json").read_text(encoding="utf-8"))
         self.response = json.loads((EXAMPLES / "response.json").read_text(encoding="utf-8"))
         self.generate = Mock(return_value=self.response)
 
+    async def test_bare_numbers_get_one_correction_then_are_rendered(self):
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            content = copy.deepcopy(self.response)
+            if len(inputs) == 1:
+                content["recommendations"][0]["reasons"] = ["점포가 96개입니다."]
+            return content
+
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(len(inputs), 2)
+        self.assertEqual(inputs[1]["correction"]["reason"], "number_uncited")
+        reasons = " ".join(result.recommendations[0].reasons + result.recommendations[0].risks)
+        self.assertNotIn("{", reasons)
+        self.assertIn("96", reasons)
+
+    async def test_correction_input_keeps_placeholders_when_a_later_item_fails(self):
+        inputs = []
+
+        async def generate(prompt, payload):
+            inputs.append(json.loads(payload))
+            content = copy.deepcopy(self.response)
+            if len(inputs) == 1:
+                content["not_recommended"][0]["reasons"] = ["폐업이 9개입니다."]
+            return content
+
+        result = await analyze(self.request, generate=generate)
+        previous = inputs[1]["previous_decision"]
+        self.assertEqual(
+            previous["recommendations"][0]["reasons"],
+            self.response["recommendations"][0]["reasons"],
+        )
+        self.assertNotIn("{", " ".join(result.recommendations[0].reasons))
+
+    async def test_summary_numbers_fail_after_correction(self):
+        from app.agents.decision.agent import DecisionContractError
+
+        broken = {**copy.deepcopy(self.response), "summary": "점포 96개"}
+        generate = Mock(return_value=broken)
+        with self.assertRaises(DecisionContractError) as caught:
+            await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(caught.exception.diagnostics["reason"], "number_uncited")
+
     async def test_returns_report_and_passes_flexible_data(self):
         result = await analyze(self.request, generate=self.generate)
+        self.generate.assert_called_once()
         self.assertEqual(result.request_id, "sample-001")
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.recommendations[0].category.middle, "중식 음식점업")
+        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
         self.assertEqual(result.source_analyses[0].data, self.request["analyses"][0]["data"])
         prompt, payload = self.generate.call_args.args
         self.assertIn("성공 확률", prompt)
@@ -37,9 +173,9 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             json.loads(payload)["analyses"][0]["data"], self.request["analyses"][0]["data"]
         )
 
-    async def test_sample_preserves_ten_source_rows_after_category_mapping(self):
+    async def test_sample_lifecycle_rows_are_catalog_industries(self):
         industries = self.request["analyses"][1]["data"]["industries"]
-        self.assertEqual(len(industries), 10)
+        self.assertEqual([row["industry_id"] for row in industries], ["I201", "I212"])
 
     async def test_rejects_invalid_input_before_calling_model(self):
         invalid_cases = []
@@ -123,8 +259,9 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             warnings=["해당 기간의 유효한 자료가 없습니다."],
         )
         self.response["recommendations"][0]["evidence"] = [
-            {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점업"}
+            {"agent_id": "commercial_area", "path": "/by_middle/0/count"}
         ]
+        self.response["recommendations"][0]["reasons"] = ["반경 안 점포가 {0}개입니다."]
         result = await analyze(self.request, generate=self.generate)
         self.assertEqual(result.status, "partial")
         self.assertTrue(
@@ -134,7 +271,12 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
     async def test_scope_difference_and_escaped_evidence(self):
         self.request["analyses"][1]["scope"]["period"] = "2026년 1분기"
         self.request["analyses"][0]["data"]["시간/비율~"] = 65
-        self.response["recommendations"][0]["evidence"][0]["path"] = "/시간~1비율~0"
+        self.response["recommendations"][0]["evidence"][0] = {
+            "agent_id": "floating_population",
+            "path": "/시간~1비율~0",
+        }
+        self.response["recommendations"][0]["reasons"] = ["근거 값은 {0}입니다."]
+        self.response["recommendations"][0]["risks"] = []
         result = await analyze(self.request, generate=self.generate)
         self.assertEqual(result.status, "partial")
         self.assertTrue(any("기준 기간" in item for item in result.limitations))

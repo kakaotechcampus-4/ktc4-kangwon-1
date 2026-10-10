@@ -16,7 +16,6 @@ import argparse
 import csv
 import hashlib
 import io
-import json
 import re
 import subprocess
 import sys
@@ -26,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.industries import (  # noqa: E402
     LEGACY70_LINK_PATH,
-    MASTER_JSON_PATH,
     MASTER_PATH,
     PACKAGE_DIR,
     SEOUL_LINK_PATH,
@@ -213,6 +211,12 @@ def render(
     for row in sorted(seoul, key=lambda r: r["seoul_code"]):
         industry_to_seoul.setdefault(row["middle_code"], []).append(row["seoul_code"])
     to_seoul = [(repr(c), repr(tuple(v))) for c, v in sorted(industry_to_seoul.items())]
+    terms: dict[str, list[str]] = {code: [] for code in master}
+    for row in seoul:
+        includes = terms[row["middle_code"]]
+        for term in [row["seoul_name"], *row["evidence_small"].split(" / ")]:
+            if term and term not in includes:
+                includes.append(term)
 
     without = [
         (repr(c), repr(r["middle_name"]))
@@ -254,6 +258,12 @@ EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
 '''
 
     blocks = [
+        dict_block(
+            "INDUSTRY_TERMS",
+            "Final[dict[str, tuple[str, ...]]]",
+            [(repr(code), repr(tuple(values))) for code, values in sorted(terms.items())],
+            "중분류 코드 → 서울 업종명·포함 소분류 설명. 검색어 변환과 동종 판단에 사용합니다.",
+        ),
         dict_block(
             "INDUSTRIES",
             "Final[dict[str, str]]",
@@ -306,36 +316,6 @@ EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
     return head + "\n".join(blocks)
 
 
-def render_json(
-    master: dict[str, dict[str, str]],
-    seoul: list[dict[str, str]],
-    legacy: list[dict[str, str]],
-) -> str:
-    """공통 75개 중분류의 배포용 업종 목록.
-
-    운영 개폐업 분석의 `industry_id`는 `code`에 담긴 문자열 중분류 코드다.
-    이 JSON의 정수 `industry_id`는 코드 오름차순의 보조 일련번호이며 운영 ID가 아니다.
-    과거 legacy70 정수 ID는 별도 연결표에 보관하며 이 일련번호와 구분한다.
-    """
-    industries = [
-        {
-            "industry_id": index,
-            "code": code,
-            "major": row["major_name"],
-            "name": row["middle_name"],
-        }
-        for index, (code, row) in enumerate(sorted(master.items()), 1)
-    ]
-    payload = {
-        "version": "1.0",
-        # catalog.py 의 CATALOG_VERSION 과 같은 값이다. 둘이 같은 CSV 에서 나왔는지 대조할 수 있다.
-        "catalog_version": fingerprint(list(master.values()), seoul, legacy),
-        "industry_count": len(industries),
-        "industries": industries,
-    }
-    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-
-
 def ruff_format(text: str) -> str:
     result = subprocess.run(
         [sys.executable, "-m", "ruff", "format", "-", "--stdin-filename", "catalog.py"],
@@ -368,7 +348,6 @@ def main() -> int:
         check_seoul(seoul_rows, master)
         check_legacy(legacy_rows, master)
         rendered = ruff_format(render(master, seoul_rows, legacy_rows))
-        rendered_json = render_json(master, seoul_rows, legacy_rows)
     except Failure as exc:
         print(f"검증 실패: {exc}")
         return 1
@@ -383,7 +362,7 @@ def main() -> int:
     print(f"  '모델' {by_method.get('모델', 0)}건은 사람 검수가 필요합니다")
     print(f"개폐업 연결 {len(legacy_rows)}행 / {len({r['legacy_id'] for r in legacy_rows})}업종")
 
-    outputs = ((CATALOG_PATH, rendered), (MASTER_JSON_PATH, rendered_json))
+    outputs = ((CATALOG_PATH, rendered),)
 
     stale = [path.name for path, text in outputs if _current(path) != text]
     print()
@@ -392,7 +371,7 @@ def main() -> int:
         if stale:
             print(f"{' · '.join(stale)} 가 CSV와 다릅니다. --check 없이 다시 돌려 생성하세요.")
             return 1
-        print("catalog.py 와 industry_master.json 이 CSV와 같습니다.")
+        print("catalog.py가 CSV와 같습니다.")
         return 0
 
     for path, text in outputs:

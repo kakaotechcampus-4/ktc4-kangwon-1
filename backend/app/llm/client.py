@@ -1,13 +1,42 @@
 """HTTP 재시도·응답 종료 검증을 한 경계에 둡니다."""
 
 import json
+import time
 from typing import Any
 
+import httpx
 import openai
+from openai.lib.streaming.chat import AsyncChatCompletionStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 
+from .budget import current_scope
 from .config import LLMSettings
+from .session import acquire_client
+
+
+class LLMResponseError(RuntimeError):
+    """원문 대신 코드와 호출자가 정제한 진단 정보만 보존합니다."""
+
+    MESSAGES = {
+        "LLM_TIMEOUT": "모델 요청 시간이 초과됐습니다.",
+        "LLM_CONNECTION_ERROR": "모델 서버에 연결하지 못했습니다.",
+        "LLM_REQUEST_ERROR": "모델 요청 처리에 실패했습니다.",
+        "LLM_INVALID_RESPONSE": "모델이 유효한 응답을 반환하지 않았습니다.",
+        "LLM_OUTPUT_LIMIT": "모델 응답이 길이 제한으로 중단됐습니다.",
+        "LLM_REFUSED": "모델 응답이 거절되거나 필터링됐습니다.",
+        "LLM_INCOMPLETE": "모델이 예상한 종료 형식으로 응답을 완료하지 못했습니다.",
+        "LLM_INVALID_JSON": "모델 응답 형식이 올바른 JSON 객체가 아닙니다.",
+        "LLM_SCHEMA_INVALID": "모델 응답 형식이 올바르지 않습니다. 필드 검증에 실패했습니다.",
+    }
+
+    def __init__(self, code: str, **diagnostics: Any):
+        self.code = code
+        self.diagnostics = diagnostics
+        message = self.MESSAGES[code]
+        if code == "LLM_SCHEMA_INVALID":
+            message += " 확인 항목: " + ", ".join(diagnostics.get("fields", []))
+        super().__init__(message)
 
 
 class LLMHTTPError(RuntimeError):
@@ -58,6 +87,32 @@ async def _complete(
     messages: list[Any], settings: LLMSettings, *, tools: list[Any] | None = None
 ) -> ChatCompletionMessage:
     settings.require_credentials()
+    budget, role, final = current_scope()
+    attempt = (
+        await budget.reserve(
+            role, final=final, input_chars=len(json.dumps(messages, ensure_ascii=False))
+        )
+        if budget is not None
+        else None
+    )
+    started = time.monotonic()
+    usage: list[Any] = []
+    status = "error"
+    try:
+        result = await _request(messages, settings, tools=tools, usage=usage)
+        status = "ok"
+        return result
+    finally:
+        if budget is not None and attempt is not None:
+            await budget.finish(
+                attempt,
+                status=status,
+                elapsed_ms=int((time.monotonic() - started) * 1000),
+                usage=usage[0] if usage else None,
+            )
+
+
+async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage:
     options: dict[str, Any] = {}
     if settings.max_tokens is not None:
         options["max_completion_tokens"] = settings.max_tokens
@@ -68,35 +123,55 @@ async def _complete(
     else:
         options.update(tools=tools, tool_choice="required", parallel_tool_calls=False)
     try:
-        async with openai.AsyncOpenAI(
-            api_key=settings.api_key,
-            base_url=settings.base_url,
-            timeout=settings.timeout_seconds,
-            max_retries=1,
+        async with acquire_client(
+            settings,
+            max_retries=0 if current_scope()[0] is not None else 1,
         ) as client:
-            response = await client.chat.completions.create(
-                model=settings.model or "", messages=messages, **options
+            raw_stream = await client.chat.completions.create(
+                model=settings.model or "",
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
+                **options,
             )
+            # SDK로 본문·도구 인자를 조립하고 기존 종료·JSON 검증을 그대로 적용합니다.
+            async with AsyncChatCompletionStream(
+                raw_stream=raw_stream, response_format=openai.omit, input_tools=openai.omit
+            ) as stream:
+                await stream.until_done()
+                response = stream.current_completion_snapshot
     except openai.APIStatusError as exc:
         raise LLMHTTPError(exc.status_code, exc.body) from None
+    except (openai.APITimeoutError, httpx.TimeoutException):
+        raise LLMResponseError("LLM_TIMEOUT") from None
+    except (openai.APIConnectionError, httpx.TransportError):
+        raise LLMResponseError("LLM_CONNECTION_ERROR") from None
     except (openai.APIError, ValueError, TypeError):
-        raise RuntimeError(
-            "모델 요청에 실패했습니다. 연결 상태와 모델 설정을 확인해 주세요."
-        ) from None
+        raise LLMResponseError("LLM_REQUEST_ERROR") from None
+    except (AssertionError, AttributeError, IndexError, KeyError):
+        raise LLMResponseError("LLM_INVALID_RESPONSE") from None
     if (
         not isinstance(response, ChatCompletion)
         or not isinstance(response.choices, list)
         or not response.choices
     ):
-        raise RuntimeError("모델이 응답을 반환하지 않았습니다.")
+        raise LLMResponseError("LLM_INVALID_RESPONSE")
+    usage.append(response.usage)
     choice = response.choices[0]
-    if (
-        not isinstance(choice, Choice)
-        or not isinstance(choice.message, ChatCompletionMessage)
-        or choice.finish_reason != ("stop" if tools is None else "tool_calls")
-        or choice.message.refusal
-    ):
-        raise RuntimeError("모델이 응답을 완료하지 못했습니다. 거절·길이 제한을 확인해 주세요.")
+    if not isinstance(choice, Choice) or not isinstance(choice.message, ChatCompletionMessage):
+        raise LLMResponseError("LLM_INVALID_RESPONSE")
+    finish = choice.finish_reason
+    safe_finish = (
+        finish
+        if finish in {"stop", "length", "tool_calls", "content_filter", "function_call"}
+        else "unknown"
+    )
+    if choice.message.refusal or finish == "content_filter":
+        raise LLMResponseError("LLM_REFUSED", finish_reason=safe_finish)
+    if finish == "length":
+        raise LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason=safe_finish)
+    if finish != ("stop" if tools is None else "tool_calls"):
+        raise LLMResponseError("LLM_INCOMPLETE", finish_reason=safe_finish)
     return choice.message
 
 
@@ -115,11 +190,21 @@ async def complete_json(
         def invalid_constant(_value: str) -> None:
             raise ValueError
 
-        result = json.loads(message.content or "", parse_constant=invalid_constant)
+        def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result = dict(pairs)
+            if len(result) != len(pairs):
+                raise ValueError
+            return result
+
+        result = json.loads(
+            message.content or "",
+            parse_constant=invalid_constant,
+            object_pairs_hook=unique_object,
+        )
         if not isinstance(result, dict):
             raise ValueError
     except (ValueError, TypeError):
-        raise RuntimeError("모델 응답 형식이 올바른 JSON 객체가 아닙니다.") from None
+        raise LLMResponseError("LLM_INVALID_JSON") from None
     return result
 
 

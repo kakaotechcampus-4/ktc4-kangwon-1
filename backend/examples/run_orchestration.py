@@ -7,14 +7,13 @@
 
 import argparse
 import asyncio
-import json
 import sys
 from pathlib import Path
 
-from openai.types.chat import ChatCompletionMessage
 from prepare_task import MOCK_ADDRESS, mock_resolve
 
 from app.config import load_environment
+from app.mocks import mock_generate, zone_scan
 from app.schemas import DecisionRequest
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
@@ -36,32 +35,12 @@ async def run(offline: bool, *, db_path: str | Path | None = None):
 
         return analyze
 
-    actions = iter(("prepare_address", "run_analyses", "make_decision"))
-
-    async def mock_action(messages, definitions):
-        name = next(actions)
-        return ChatCompletionMessage.model_validate(
-            {
-                "role": "assistant",
-                "tool_calls": [
-                    {
-                        "id": f"call-{name}",
-                        "type": "function",
-                        "function": {"name": name, "arguments": "{}"},
-                    }
-                ],
-            }
-        )
-
-    def mock_decision(system_prompt, input_json):
-        return json.loads((folder / "response.json").read_text("utf-8"))
-
     return await execute_analysis(
         source.address,
         resolve=mock_resolve,
         agents={item.agent_id: make_agent(item) for item in source.analyses},
-        generate_action=mock_action if offline else None,
-        generate=mock_decision if offline else None,
+        generate=mock_generate if offline else None,
+        find_zones=zone_scan if offline else None,
         db_path=db_path,
         settings=ExecutionSettings() if offline else ExecutionSettings.from_env(),
     )

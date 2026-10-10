@@ -47,7 +47,7 @@ lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Catego
 
 ## 고치는 법
 
-원본은 `data/*.csv` 셋이고, `catalog.py` 와 `data/industry_master.json` 은 **자동 생성물**이다.
+원본은 `data/*.csv` 셋이고, `catalog.py`는 **자동 생성물**이다.
 생성물은 직접 고치지 않는다.
 
 | 파일 | 내용 |
@@ -55,12 +55,21 @@ lookup.as_category("I201")  # ("음식점업", "한식 음식점업") — Catego
 | `data/industries.csv` | 75종 마스터 |
 | `data/seoul_to_industry.csv` | 서울시 99 → 중분류 |
 | `data/legacy70_to_industry.csv` | 개폐업 70 → 중분류 (마이그레이션용) |
-| `data/industry_master.json` | **생성물.** 개폐업 `industry_master.json` 과 같은 모양 |
 
 ```bash
 cd backend
-python scripts/build_industry_catalog.py            # 검증 후 catalog.py · industry_master.json 재생성
+python scripts/build_industry_catalog.py            # 검증 후 catalog.py 재생성
 python scripts/build_industry_catalog.py --check    # 검증만. CI 가 이걸 돌린다
+```
+
+마스터를 공식 업종코드 파일에서 다시 만들 때는 아래 순서로 돌린다.
+`build_upjong_master`가 `industries.csv`를 4개 컬럼으로 다시 쓰므로 `build_industry_links`로
+`has_seoul`·`note`를 채운 뒤 카탈로그를 재생성해야 검증을 통과한다.
+
+```bash
+python scripts/build_upjong_master.py --official-csv <받은파일.csv>
+python scripts/build_industry_links.py --force
+python scripts/build_industry_catalog.py
 ```
 
 ### ⚠️ CSV 를 엑셀로 저장하지 말 것
@@ -99,8 +108,8 @@ python scripts/build_industry_catalog.py --check    # 검증만. CI 가 이걸 �
 `coverage.unmapped_store_count`로 표시하며 75개 업종에 추정 배분하지 않는다.
 테스트 등에서 주입한 별도 마스터는 `custom-middle`로 표시한다.
 
-`examples/fixtures/business_lifecycle_*.json`은 70개 어휘를 쓰던 과거 예제다.
-신규 formatter에는 사용할 수 없고 기존 DB 기록도 자동 변환하지 않는다.
+70개 어휘를 쓰던 과거 개폐업 예제(`examples/fixtures/business_lifecycle_*.json`)는 삭제했다.
+기존 DB 기록은 신규 formatter로 자동 변환하지 않는다.
 
 **서울시 연결 99건 중 53건이 모델 판정이다.** `data/seoul_to_industry.csv` 의 `match_method` 가
 `모델` 인 행은 사람 검수를 거치지 않았다. `근거 소분류`(`evidence_small`) 칸을 보면

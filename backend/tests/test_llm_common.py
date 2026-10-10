@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import httpx
 import openai
+from llm_stream_fixture import stream_response
 
 
 class SettingsTests(unittest.TestCase):
@@ -105,7 +106,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 payload["choices"] = {"SECRET-UPSTREAM": {}}
             elif choices == "number":
                 payload["choices"] = 1
-            return httpx.Response(status, json=payload)
+            return stream_response(status, json=payload)
 
         constructor = openai.AsyncOpenAI
 
@@ -179,6 +180,8 @@ class EnvironmentTests(unittest.TestCase):
             for name in ("commercial_area", "floating_population"):
                 module = importlib.import_module(f"app.agents.{name}.config")
                 self.assertEqual(module.BACKEND_DIR, Path(__file__).resolve().parents[1])
+            for name in ("commercial_area", "map_analysis"):
+                module = importlib.import_module(f"app.agents.{name}.config")
                 self.assertIs(module.load_dotenv_if_present, common.load_environment)
             loader.assert_not_called()
             common.load_environment()
@@ -205,7 +208,10 @@ class EnvironmentTests(unittest.TestCase):
                 loader.assert_not_called()
                 from app.services.settings import ExecutionSettings
 
-                with patch("app.main.initialize") as initialize:
+                with (
+                    patch("app.main.initialize") as initialize,
+                    patch("app.main.repository.fail_interrupted"),
+                ):
                     app = module.create_app(
                         settings=ExecutionSettings(db_path="unused-test.sqlite3")
                     )
