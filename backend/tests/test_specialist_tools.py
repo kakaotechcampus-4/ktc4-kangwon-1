@@ -1,5 +1,6 @@
 """전문가 도구가 기존 자료와 외부 조회 경계를 지키는지 확인합니다."""
 
+import asyncio
 import importlib.util
 import unittest
 from types import SimpleNamespace
@@ -7,11 +8,54 @@ from types import SimpleNamespace
 from orchestration_support import radius_slice
 
 from app.agents.specialists.tools import ToolArgumentError
+from app.llm.budget import BudgetStorageError
 from app.mocks import mock_agents, mock_site
 from app.schemas import AnalysisTask, MapObservation
 
 
+def facts_records(result):
+    """도구의 새 포장을 풀어 기존 경로·값 검증을 유지합니다."""
+    facts = result["facts"]
+    return [
+        {"path": parent + "/" + field, "value": value, "industry_code": code}
+        for code, groups in [(None, facts["shared"]), *facts["industries"].items()]
+        for parent, fields in groups.items()
+        for field, value in fields.items()
+    ]
+
+
 class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_map_failure_contract(self):
+        for error in (
+            TimeoutError(),
+            RuntimeError("외부 실패"),
+            BudgetStorageError("저장 실패"),
+            ValueError("계약 오류"),
+            TypeError("계약 오류"),
+            asyncio.CancelledError(),
+        ):
+
+            async def lookup(task, request, error=error):
+                raise error
+
+            self.context = {}
+            tool = self.tools("map_analysis", map_lookup=lookup)["search_facility"]
+            with self.subTest(error=type(error).__name__):
+                if isinstance(
+                    error, (BudgetStorageError, ValueError, TypeError, asyncio.CancelledError)
+                ):
+                    with self.assertRaises(type(error)):
+                        await tool.execute({"code": "SW8"})
+                    self.assertNotIn("map_observation", self.context)
+                else:
+                    response = await tool.execute({"code": "SW8"})
+                    self.assertEqual(set(response), {"query_id", "status", "error", "adopted"})
+                    self.assertFalse(response["adopted"])
+                    observed = self.context["map_observation"]
+                    code = "MAP_TIMEOUT" if isinstance(error, TimeoutError) else "MAP_FAILED"
+                    self.assertEqual(observed.status, "error")
+                    self.assertEqual({q.error for q in observed.data.queries.values()}, {code})
+
     async def asyncSetUp(self):
         self.assertIsNotNone(importlib.util.find_spec("app.agents.orchestration.consult"))
         from app.agents.orchestration.consult import build_specialist_tools
@@ -25,23 +69,27 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
         self.context = {}
 
     def tools(self, role, **kwargs):
-        return self.build(
+        tools, self.context = self.build(
             self.task,
             role,
             analyses=self.analyses,
             supplements=[],
             map_lookup=kwargs.get("map_lookup"),
             hooks=self.hooks,
-            context=self.context,
+            state=self.context,
         )
+        return tools
 
     async def test_read_only_tool_preserves_paths_and_rejects_bad_codes(self):
         tools = self.tools("commercial_area")
         result = await tools["get_industry_counts"].execute({"codes": ["I201"]})
         self.assertTrue(
-            any(r["path"] == "/by_middle/0/count" and r["value"] == 96 for r in result["records"])
+            any(
+                r["path"] == "/by_middle/0/count" and r["value"] == 96
+                for r in facts_records(result)
+            )
         )
-        self.assertFalse(any(r["industry_code"] == "I212" for r in result["records"]))
+        self.assertFalse(any(r["industry_code"] == "I212" for r in facts_records(result)))
         with self.assertRaises(ToolArgumentError):
             await tools["get_industry_counts"].execute({"codes": ["I299"]})
         with self.assertRaises(ToolArgumentError):
@@ -52,7 +100,7 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_read_tools_use_only_their_own_stored_source(self):
         from unittest.mock import patch
 
-        from app.evidence import resolve_pointer
+        from app.evidence import can_cite, resolve_pointer
 
         cases = {
             "floating_population": {
@@ -79,13 +127,16 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
                 for name, args in queries.items():
                     result = await self.tools(role)[name].execute(args)
                     self.assertEqual(result["scope"], source.scope.model_dump())
-                    for record in result["records"]:
+                    for record in facts_records(result):
+                        self.assertIsNone(
+                            can_cite(source.data, record["path"], record["industry_code"])
+                        )
                         self.assertEqual(
                             record["value"], resolve_pointer(source.data, record["path"])
                         )
             network.assert_not_called()
 
-    async def test_map_reuses_queries_and_refuses_sixth(self):
+    async def test_map_reuses_queries_and_refuses_ninth(self):
         calls = []
 
         async def lookup(task, plan):
@@ -114,13 +165,13 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         tools = self.tools("map_analysis", map_lookup=lookup)
-        for code in ["SW8", "SW8", "PK6", "SC4", "HP8", "PM9"]:
+        for code in ["SW8", "SW8", "PK6", "SC4", "HP8", "PM9", "AC5", "CS2", "MT1"]:
             await tools["search_facility"].execute({"code": code})
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 8)
         result = await tools["search_facility"].execute({"code": "BK9"})
         self.assertIn("error", result)
-        self.assertEqual(len(calls), 5)
-        self.assertEqual(len(self.context["map_observation"].data.queries), 5)
+        self.assertEqual(len(calls), 8)
+        self.assertEqual(len(self.context["map_observation"].data.queries), 8)
 
     async def test_supplement_does_not_replace_original_values(self):
         from app.agents.orchestration.tools import SupplementTool
@@ -140,25 +191,66 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             lambda *_: True,
             lambda *_: True,
         )
-        tools = self.build(
+        tools, changes = self.build(
             self.task,
             "commercial_area",
             analyses=self.analyses,
             supplements=[tool],
             map_lookup=None,
             hooks=self.hooks,
-            context=self.context,
+            state=self.context,
         )
         result = await tools["retry_lq_baseline"].execute({})
         self.assertFalse(result["adopted"])
         self.assertEqual(self.analyses[2], previous)
+
+    async def test_accepted_supplement_returns_changes_without_mutating_input(self):
+        from app.agents.orchestration.consult import merge_specialist_changes
+        from app.agents.orchestration.tools import SupplementTool
+        from app.schemas import SupplementOperation
+
+        self.analyses[2].data.pop("data_reference_date", None)
+        before = [item.model_copy(deep=True) for item in self.analyses]
+        state = {"analyses": self.analyses, "feedback": ["기존 안내"]}
+
+        async def execute(task, analysis):
+            analysis.data["data_reference_date"] = "2026-10-04"
+            return analysis
+
+        tool = SupplementTool(
+            SupplementOperation(
+                agent_id="commercial_area", operation="retry_lq_baseline", description="재조회"
+            ),
+            execute,
+            lambda *_: True,
+            lambda *_: True,
+        )
+        tools, changes = self.build(
+            self.task,
+            "commercial_area",
+            analyses=self.analyses,
+            supplements=[tool],
+            map_lookup=None,
+            hooks=self.hooks,
+            state=state,
+        )
+        response = await tools["retry_lq_baseline"].execute({})
+        self.assertTrue(response["adopted"])
+        self.assertEqual(response["facts"]["shared"][""]["data_reference_date"], "2026-10-04")
+        self.assertEqual(self.analyses, before)
+        self.assertEqual(state, {"analyses": before, "feedback": ["기존 안내"]})
+        merged = merge_specialist_changes(state, [changes, {"feedback": ["다른 전문가 안내"]}])
+        self.assertEqual(merged["analyses"][2].data["data_reference_date"], "2026-10-04")
+        self.assertEqual(merged["analyses"][:2], before[:2])
+        self.assertEqual(merged["feedback"], ["기존 안내", "다른 전문가 안내"])
+        self.assertEqual(len(merged["supplement_context"]), 1)
 
     async def test_radius_tool_keeps_slice_radius(self):
         self.analyses[2].data["by_radius"] = [radius_slice("I201", 7, 100)]
         result = await self.tools("commercial_area")["get_radius_breakdown"].execute(
             {"code": "I201"}
         )
-        values = {r["path"]: r["value"] for r in result["records"]}
+        values = {r["path"]: r["value"] for r in facts_records(result)}
         self.assertEqual(values["/by_radius/0/radius_m"], 100)
         self.assertEqual(values["/by_radius/0/top_by_count/0/count"], 7)
 
@@ -191,11 +283,16 @@ class SpecialistToolTests(unittest.IsolatedAsyncioTestCase):
             )
 
         tools = self.tools("map_analysis", map_lookup=lookup)
-        for code in ["SW8", "PK6", "SC4", "HP8", "PM9"]:
-            await tools["search_facility"].execute({"code": code})
+        for code in ["SW8", "PK6", "SC4", "HP8", "PM9", "AC5", "CS2", "MT1"]:
+            response = await tools["search_facility"].execute({"code": code})
+            if code == "SW8":
+                self.assertEqual(set(response["citations"]), {"_facility"})
+            else:
+                self.assertEqual(set(response), {"query_id", "status", "error", "adopted"})
+                self.assertFalse(response["adopted"])
         result = await tools["search_facility"].execute({"code": "BK9"})
         self.assertIn("error", result)
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 8)
         self.assertEqual(len(self.context["map_observation"].data.queries), 1)
 
     async def test_mapped_evidence_cannot_be_replaced_by_unmapped_result(self):

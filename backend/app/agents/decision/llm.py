@@ -1,10 +1,53 @@
 """최종판단 스키마를 검증하며 모델 실패를 대체하지 않습니다."""
 
+import json
+from typing import Any
+
 from pydantic import ValidationError
 
 from app.llm import client
 from app.llm.config import LLMSettings
-from app.schemas import ConsultPlan, DecisionContent, MapLookupPlan, QuestionPlan, SupplementPlan
+from app.schemas import (
+    EVALUATOR_IDS,
+    ConsultPlan,
+    DecisionContent,
+    EvaluationLogEntry,
+    MapLookupPlan,
+    QuestionPlan,
+    SupplementPlan,
+)
+
+
+def split_evaluation_log(produced, evaluation: dict) -> tuple[Any, list[EvaluationLogEntry]]:
+    """공통 판단 검증 전에 로그를 분리하고 실제 지적과 일대일로 맞춥니다."""
+    keys = {
+        (item["evaluator"], comment["index"])
+        for item in evaluation["evaluations"]
+        for comment in item["comments"]
+    }
+    raw = None
+    if isinstance(produced, dict):
+        produced = dict(produced)
+        raw = produced.pop("evaluation_log", None)
+    entries: dict[tuple, EvaluationLogEntry] = {}
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            entry = EvaluationLogEntry.model_validate(item)
+        except ValidationError:
+            continue
+        key = (entry.evaluator, entry.index)
+        if key in keys and entry.decision != "unreviewed":
+            entries.setdefault(key, entry)
+    return produced, [
+        entries.get((role, index))
+        or EvaluationLogEntry(
+            evaluator=role,
+            index=index,
+            decision="unreviewed",
+            reason="판정관이 이 지적을 검토하지 않았습니다.",
+        )
+        for role, index in sorted(keys, key=lambda key: (EVALUATOR_IDS.index(key[0]), key[1]))
+    ]
 
 
 class InvalidDecisionCategory(ValueError):
@@ -37,10 +80,13 @@ def validate_content(payload) -> DecisionContent:
 
 async def generate_decision(
     system_prompt: str, input_json: str, settings: LLMSettings | None = None
-) -> DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan:
+) -> DecisionContent | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan | dict:
     payload = await client.complete_json(
         system_prompt, input_json, settings or LLMSettings.from_env("DECISION")
     )
+    if "evaluation" in json.loads(input_json):
+        # 평가 로그는 evaluate에서 분리한 뒤 기존 판단 검증과 교정 경로를 통과시킵니다.
+        return payload
     schema = (
         ConsultPlan
         if isinstance(payload, dict) and payload.get("action") == "ask_specialists"

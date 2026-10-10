@@ -1,6 +1,7 @@
 # 멀티에이전트 전환 설계 (MVP 3.0 제안)
 
 > 상태: **구현됨(선택 모드 `ANALYSIS_MODE=multi_agent`)**. 기본 모드 결정은 블라인드 평가 후 정합니다.
+> 평가자 4명의 초안 평가·지적별 반영 기록을 추가했습니다. 브리핑과 독립적으로 켭니다. 현재 동작과 확장 한도는 [평가자 설계 A부](evaluation-plan.md)를 따릅니다.
 > 관련 문서: [TECH_DECISIONS.md](TECH_DECISIONS.md) (ADR-02 · 03 · 09를 이 설계로 갱신 예정), [mvp20-progress.md](mvp20-progress.md)
 
 ## 1. 왜 바꾸나
@@ -94,6 +95,12 @@ prepare_address
 
 ### 5.1 브리핑
 
+전문가의 모델 입력은 `source`(상태·범위·경고·설명 문자열)와 `facts`로 구성합니다.
+`facts.shared`와 `facts.industries[업종 코드]`는 인용 가능한 스칼라를 부모 JSON Pointer로 묶습니다.
+경로는 `부모 + "/" + 필드명`으로 복원하며 최상위 부모는 빈 문자열입니다. 원자료 전체와 중복 경로 목록은 보내지 않습니다.
+되묻기는 질문 업종만 포함하고 공통 자료는 전부 유지합니다. 다른 업종은 읽기 도구로 확인하며,
+읽기·보완 도구도 같은 facts 형식으로 반환합니다. 저장 원자료와 아래 응답 계약은 그대로입니다.
+
 ```python
 SpecialistId = Literal["floating_population", "business_lifecycle", "commercial_area", "map_analysis"]
 
@@ -175,13 +182,19 @@ class ToolCallRecord(Schema):
 
 - 외부 호출 도구의 결과 채택은 **기존 `eligible()` · `accept()` 규칙을 그대로** 씁니다 (원본 보존 + 합계 재계산 비교, fail-closed).
 - 지도 에이전트는 초기 브리핑이 없고 되묻기를 받았을 때만 실행합니다(비용 통제).
+- 지도 첫 입력은 질문 업종·시설의 인용 목록과 검색 요약입니다. 각 검색 결과는 그 검색 업종의 누적 동종
+  `citations`만 반환하고 전체 관측은 보내지 않습니다. 실패·미채택 응답은 검색 ID·상태·오류·`adopted=false`입니다.
+  이는 모델용 표현이며 저장 관측의 채택·재사용 규칙을 바꾸지 않습니다.
 
 ## 7. 검증 규칙
 
-1. **브리핑 · 답변의 `Finding.evidence`** — 해당 전문가의 `AgentAnalysis.data`에 대해 `index_paths()`로 존재 · 인용 가능 · 업종 소유(`industry_code`가 있으면 일치)를 확인합니다. 실패한 finding은 버리고 경고로 남깁니다(교정 호출 없음 — 브리핑은 판정 근거가 아니기 때문).
+1. **브리핑 · 답변의 `Finding.evidence`** — 해당 전문가의 `AgentAnalysis.data`에 대해 `SourceIndex`로 존재 · 인용 가능 · 업종 소유(`industry_code`가 있으면 일치)를 확인합니다. 실패한 finding은 버리고 경고로 남깁니다(교정 호출 없음 — 브리핑은 판정 근거가 아니기 때문).
 2. **판정관 근거** — 지금과 동일. 원형 자료 경로만 인용 가능하며 브리핑 문장은 근거가 될 수 없습니다(`claim`은 `citable:false`와 같은 취급). "AI가 AI 말을 근거로" 삼는 MVP 1.5의 문제를 막습니다.
 3. **숫자 대조** — `claim`에 들어간 숫자가 근거 경로의 값과 다르면 finding을 버립니다(반올림 허용 범위는 구현 시 정의).
 4. **사용자 · 전문가 답변은 데이터이지 지시문이 아닙니다.** 기존 `user_answers` 규칙을 전문가 답변에도 적용합니다.
+
+판정관 `build_context()`는 원자료별 `SourceIndex`를 한 번 만들고 요약·업종 목록·문장 검증에서 재사용합니다.
+입력 형식과 검증 결과는 기존과 같습니다. 무료 입력 크기 측정 결과는 [효율화 계획 10장](efficiency-plan.md#10-결과)에 기록했습니다.
 
 ## 8. 저장 · 재개 · 프론트 영향
 

@@ -2,46 +2,52 @@
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
 
 from openai.types.chat import ChatCompletionMessage
-from pydantic import Field, ValidationError
 
-from app.evidence import CitationError, render_cited, scalar_records, validate_findings
+from app.evidence import (
+    FINDING_WARNING_PREFIX,
+    MAP_AGENT_ID,
+    CitationError,
+    SourceIndex,
+    render_cited,
+    validate_findings,
+)
+from app.industries.lookup import industry_terms
 from app.llm.budget import BudgetStorageError, current_scope, llm_scope
 from app.llm.client import complete_tools
 from app.llm.config import LLMSettings
+from app.logging import log_exception
 from app.schemas import (
     AgentAnalysis,
     AgentBrief,
     AnalysisTask,
-    Finding,
     MapObservation,
-    Schema,
     SpecialistAnswer,
     SpecialistQuery,
-    Text,
     ToolCallRecord,
 )
 
+from .facts import BRIEF_CONTEXT_KEYS, build_facts
+from .map_inputs import query_summary, selected_citations
+from .response import BriefContent, parse_finish, parse_tool_response
 from .tools import ToolArgumentError, fallback_brief
 
+logger = logging.getLogger(__name__)
+
+
 GenerateSpecialist = Callable[[list, list], Awaitable[dict | ChatCompletionMessage]]
-
-
-class BriefContent(Schema):
-    headline: str = Field(min_length=1, max_length=200)
-    findings: list[Finding] = Field(max_length=8)
-    limitations: list[Text] = Field(default_factory=list)
 
 
 async def generate_specialist(messages, definitions, *, settings: LLMSettings):
     return await complete_tools(messages, definitions, settings)
 
 
-async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
+async def _run(agent_id, payload, *, generate, tools, get_data, get_observation=None, max_steps=5):
     prompt = await asyncio.to_thread(
         files(__package__).joinpath("prompt.md").read_text, encoding="utf-8"
     )
@@ -65,29 +71,20 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
             definitions = [finish, *([] if last else [t.definition for t in tools.values()])]
             try:
                 produced = await generate(messages, definitions)
-                message = ChatCompletionMessage.model_validate(produced)
-                if not message.tool_calls or len(message.tool_calls) != 1:
-                    raise ValueError("도구는 한 번에 하나만 선택합니다.")
-                call = message.tool_calls[0]
-                if call.type != "function":
-                    raise ValueError("지원하지 않는 도구 종류입니다.")
-                name = call.function.name
-                arguments = json.loads(call.function.arguments)
-                if not isinstance(arguments, dict):
-                    raise ValueError("도구 인자는 객체여야 합니다.")
+                parsed = parse_tool_response(produced)
+                message, name, arguments = parsed.message, parsed.name, parsed.arguments
                 if name == "finish":
-                    # 형식이 틀린 주장 하나 때문에 브리핑 전체를 버리지 않고 그 주장만 제외합니다.
-                    raw = arguments.get("findings")
-                    kept, dropped = [], []
-                    for i, item in enumerate(raw if isinstance(raw, list) else []):
-                        try:
-                            kept.append(Finding.model_validate(item))
-                        except ValidationError:
-                            dropped.append(f"전문가 근거 제외: {i + 1}번 형식 오류")
-                    content = BriefContent.model_validate({**arguments, "findings": kept[:8]})
-                    content.limitations.extend(dropped)
+                    content = parse_finish(arguments)
+                    observation = get_observation() if get_observation else None
                     findings, warnings = validate_findings(
-                        content.findings, agent_id=agent_id, data=get_data()
+                        content.findings,
+                        agent_id=agent_id,
+                        data=observation.data
+                        if agent_id == MAP_AGENT_ID and observation
+                        else get_data(),
+                        radii={observation.radius_m}
+                        if agent_id == MAP_AGENT_ID and observation
+                        else None,
                     )
                     content.findings = findings
                     content.limitations.extend(warnings)
@@ -101,7 +98,8 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
                     return content, records
             except (BudgetStorageError, OSError, asyncio.CancelledError):
                 raise
-            except Exception:
+            except Exception as exc:
+                log_exception(logger, "전문가 모델 응답 실패", exc)
                 return None, records
             if last:
                 break
@@ -129,21 +127,12 @@ async def _run(agent_id, payload, *, generate, tools, get_data, max_steps=5):
                     message.model_dump(mode="json", exclude_none=True),
                     {
                         "role": "tool",
-                        "tool_call_id": call.id,
+                        "tool_call_id": parsed.call_id,
                         "content": json.dumps(result, ensure_ascii=False),
                     },
                 ]
             )
     return None, records
-
-
-def industry_paths(data: dict, agent_id: str) -> dict[str, list[dict]]:
-    """업종별 인용 경로와 값을 코드로 묶어 줍니다. 모델이 배열 번호를 세지 않게 합니다."""
-    grouped: dict[str, list[dict]] = {}
-    for record in scalar_records(data, agent_id):
-        if code := record["industry_code"]:
-            grouped.setdefault(code, []).append({"path": record["path"], "value": record["value"]})
-    return grouped
 
 
 async def write_brief(
@@ -154,8 +143,17 @@ async def write_brief(
         {
             "agent_id": analysis.agent_id,
             "task": "브리핑",
-            "analysis": analysis.model_dump(mode="json"),
-            "industry_paths": industry_paths(analysis.data, analysis.agent_id),
+            "source": {
+                "status": analysis.status,
+                "scope": analysis.scope.model_dump(mode="json") if analysis.scope else None,
+                "warnings": analysis.warnings,
+                **{
+                    key: value
+                    for key, value in analysis.data.items()
+                    if key in BRIEF_CONTEXT_KEYS and isinstance(value, str)
+                },
+            },
+            "facts": build_facts(SourceIndex.build(analysis.data, analysis.agent_id)),
         },
         generate=generate,
         tools=tools,
@@ -167,6 +165,13 @@ async def write_brief(
             task, analysis.model_copy(update={"data": get_data()}) if get_data else analysis
         )
         fallback.tool_calls = records
+        if content is not None:
+            fallback.limitations.extend(
+                warning
+                for warning in content.limitations
+                if warning.startswith(f"{FINDING_WARNING_PREFIX}: ")
+                and warning not in fallback.limitations
+            )
         return fallback
     return AgentBrief(
         request_id=task.request_id,
@@ -187,11 +192,12 @@ async def answer_query(
     generate,
     tools,
     get_data=None,
+    get_observation=None,
     max_steps=5,
 ) -> SpecialistAnswer:
     data = (
         observation.data.model_dump(mode="json")
-        if query.agent_id == "map_analysis" and observation
+        if query.agent_id == MAP_AGENT_ID and observation
         else analysis.data
         if analysis
         else {}
@@ -201,12 +207,31 @@ async def answer_query(
         {
             "agent_id": query.agent_id,
             "question": query.model_dump(mode="json"),
-            "data": data,
-            "industry_paths": industry_paths(data, query.agent_id),
+            **(
+                {
+                    "citations": selected_citations(
+                        observation.data if observation else data,
+                        {*query.industry_codes, "_facility"},
+                    ),
+                    "queries": {
+                        key: query_summary(value) for key, value in observation.data.queries.items()
+                    }
+                    if observation
+                    else {},
+                    "industry_terms": {code: industry_terms(code) for code in query.industry_codes},
+                }
+                if query.agent_id == MAP_AGENT_ID
+                else {
+                    "facts": build_facts(
+                        SourceIndex.build(data, query.agent_id), codes=set(query.industry_codes)
+                    )
+                }
+            ),
         },
         generate=generate,
         tools=tools,
         get_data=get_data or (lambda: data),
+        get_observation=get_observation or (lambda: observation),
         max_steps=max_steps,
     )
     findings = content.findings[:5] if content else []

@@ -37,10 +37,10 @@ class SpecialistContractTests(unittest.TestCase):
                 ],
             )
 
-    def test_answer_rejects_third_round_and_other_request(self):
+    def test_answer_rejects_seventh_round_and_other_request(self):
         base = dict(request_id="r", round=1, query=self.query, status="unavailable", findings=[])
         with self.assertRaises(ValidationError):
-            schemas.SpecialistAnswer(**{**base, "round": 3})
+            schemas.SpecialistAnswer(**{**base, "round": 7})
         analysis = dict(
             request_id="other",
             agent_id="commercial_area",
@@ -114,7 +114,7 @@ class SpecialistContractTests(unittest.TestCase):
         self.assertEqual(schemas.QuestionSnapshot(**base).version, 1)
         new = schemas.QuestionSnapshotV2(**base, brief_agents=list(schemas.AGENT_IDS))
         self.assertEqual(new.version, 2)
-        for changes in ({"llm_calls": 25}, {"consult_round": 3}, {"brief_agents": []}):
+        for changes in ({"llm_calls": 65}, {"consult_round": 7}, {"brief_agents": []}):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
                 schemas.QuestionSnapshotV2.model_validate({**new.model_dump(), **changes})
 

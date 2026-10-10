@@ -349,7 +349,9 @@ def _bbox_contains(bbox: tuple[float, float, float, float], x: float, y: float) 
 
 
 def _feature_area(feature: ShapeFeature) -> float:
-    return sum(abs(_ring_area(ring)) for ring in feature.rings)
+    # SHP는 외곽이 시계 방향, 구멍이 반시계 방향입니다. 링 순서와 무관하게
+    # 부호를 유지해 더해야 구멍을 빼고 독립 외곽·구멍 안의 섬을 더합니다.
+    return abs(sum(_ring_area(ring) for ring in feature.rings))
 
 
 def _ring_area(ring: Ring) -> float:

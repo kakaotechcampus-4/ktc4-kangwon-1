@@ -16,6 +16,7 @@ from .models import (
     period_ko,
     quarter_days,
 )
+from .numeric import complete_sum, ratio, rounded
 from .schemas import (
     Benchmark,
     Population,
@@ -34,21 +35,20 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     되므로 **일평균(`daily_avg`)으로만** 내보내고 합계는 싣지 않는다. 합계 원값이 남는 곳은
     `by_age`·`by_time`·`by_day` 뿐이다.
     """
-    total = sum(r.total for r in records)
-    denom = total or 1.0
-    female = sum(r.female for r in records)
+    total = complete_sum(r.total for r in records)
+    female = complete_sum(r.female for r in records)
 
-    by_age = {a: sum(r.by_age[a] for r in records) for a in AGE_BANDS}
-    by_time = {b: sum(r.by_time[b] for r in records) for b in TIME_BANDS}
-    by_day = {d: sum(r.by_day[d] for r in records) for d in DAYS}
+    by_age = {a: complete_sum(r.by_age[a] for r in records) for a in AGE_BANDS}
+    by_time = {b: complete_sum(r.by_time[b] for r in records) for b in TIME_BANDS}
+    by_day = {d: complete_sum(r.by_day[d] for r in records) for d in DAYS}
 
     # 시간대는 반드시 시간당 값으로 비교한다. 구간 길이가 3~6시간으로 달라서 총량으로 비교하면
     # 6시간짜리 00~06시가 거의 항상 1위가 된다(실데이터에서 확인된 왜곡).
-    per_hour = {b: by_time[b] / TIME_BAND_HOURS[b] for b in TIME_BANDS}
-    ph_sum = sum(per_hour.values()) or 1.0
+    per_hour = {b: ratio(by_time[b], TIME_BAND_HOURS[b]) for b in TIME_BANDS}
+    ph_sum = complete_sum(per_hour.values())
 
-    weekday_avg = sum(by_day[d] for d in WEEKDAYS) / len(WEEKDAYS)
-    weekend_avg = sum(by_day[d] for d in WEEKEND) / len(WEEKEND)
+    weekday_avg = ratio(complete_sum(by_day[d] for d in WEEKDAYS), len(WEEKDAYS))
+    weekend_avg = ratio(complete_sum(by_day[d] for d in WEEKEND), len(WEEKEND))
 
     days = quarter_days(quarter)
     return Population(
@@ -57,20 +57,22 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
             "by_age·by_time·by_day 는 분기 합계"
         ),
         share_unit="비율 (0~1)",
-        daily_avg=round(total / days, 1),
-        female_ratio=round(female / denom, 4),
-        by_age={a: float(v) for a, v in by_age.items()},
-        age_share={a: round(by_age[a] / denom, 4) for a in AGE_BANDS},
-        by_time={b: float(v) for b, v in by_time.items()},
-        time_per_hour_share={b: round(per_hour[b] / ph_sum, 4) for b in TIME_BANDS},
-        peak_time_band=max(TIME_BANDS, key=per_hour.__getitem__),
-        by_day={d: float(v) for d, v in by_day.items()},
-        weekend_to_weekday_ratio=round(weekend_avg / weekday_avg, 4) if weekday_avg else 0.0,
+        daily_avg=rounded(ratio(total, days), 1),
+        female_ratio=rounded(ratio(female, total), 4),
+        by_age=by_age,
+        age_share={a: rounded(ratio(by_age[a], total), 4) for a in AGE_BANDS},
+        by_time=by_time,
+        time_per_hour_share={b: rounded(ratio(per_hour[b], ph_sum), 4) for b in TIME_BANDS},
+        peak_time_band=max(TIME_BANDS, key=lambda b: per_hour[b] or 0.0)
+        if all(v is not None for v in per_hour.values())
+        else None,
+        by_day=by_day,
+        weekend_to_weekday_ratio=rounded(ratio(weekend_avg, weekday_avg), 4),
     )
 
 
 def _benchmark(
-    population: Population, quarter_total: float, trade_area_count: int, days: int
+    population: Population, quarter_total: float | None, trade_area_count: int, days: int
 ) -> Benchmark:
     """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다.
 
@@ -79,7 +81,7 @@ def _benchmark(
     표기가 어긋나고, 다른 에이전트의 "명/일" 옆에서 오독된다.
     """
     time_index = baseline.time_indices(population.time_per_hour_share)
-    mean_per_area = quarter_total / (trade_area_count or 1)
+    mean_per_area = ratio(quarter_total, trade_area_count or 1)
     return Benchmark(
         unit="배수(1.0 = 서울 평균), mean_daily_per_trade_area 는 명/일",
         baseline=baseline.BASELINE_LABEL,
@@ -93,7 +95,7 @@ def _benchmark(
         weekend_index=baseline.index(
             population.weekend_to_weekday_ratio, baseline.WEEKEND_TO_WEEKDAY_AVG
         ),
-        mean_daily_per_trade_area=round(mean_per_area / days, 1),
+        mean_daily_per_trade_area=rounded(ratio(mean_per_area, days), 1),
         scale_percentile=baseline.scale_percentile(mean_per_area),
     )
 
@@ -119,7 +121,7 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
         points_by_quarter[quarter] = QuarterPoint(
             period_code=quarter,
             period=period_ko(quarter),
-            daily_avg=round(pop.daily_avg, 1),
+            daily_avg=rounded(pop.daily_avg, 1),
             trade_area_count=len(rs),
             age_share=pop.age_share,
             time_per_hour_share=pop.time_per_hour_share,
@@ -127,8 +129,8 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
 
     points = [points_by_quarter[quarter] for quarter in sorted(points_by_quarter)]
 
-    def change(new: float, old: float) -> float | None:
-        return round((new - old) / old, 4) if old else None
+    def change(new: float | None, old: float | None) -> float | None:
+        return round((new - old) / old, 4) if new is not None and old else None
 
     def previous_quarter(quarter: str, count: int = 1) -> str:
         year, number = int(quarter[:4]), int(quarter[4])
@@ -189,7 +191,7 @@ def _radius_profile(
     """
     points: list[RadiusPoint] = []
     for r in sorted(radii):
-        total = 0.0
+        weighted: list[float | None] = []
         weight_sum = 0.0
         touched = 0
         for area, distance in scan_hits:
@@ -199,14 +201,15 @@ def _radius_profile(
             w = circle_overlap_ratio(distance, r, area.equivalent_radius_m)
             if w <= 0:
                 continue
-            total += record.total * w
+            weighted.append(record.total * w if record.total is not None else None)
             weight_sum += w
             touched += 1
+        total = complete_sum(weighted)
         points.append(
             RadiusPoint(
                 radius_m=r,
-                total=round(total, 1),
-                daily_avg=round(total / days, 1),
+                total=rounded(total, 1),
+                daily_avg=rounded(ratio(total, days), 1),
                 trade_area_count=touched,
                 effective_trade_areas=round(weight_sum, 2),
             )

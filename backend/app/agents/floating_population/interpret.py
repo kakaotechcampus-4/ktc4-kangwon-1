@@ -45,7 +45,7 @@ def interpret(data: FloatingPopulationData) -> list[Finding]:
         _peak(data.benchmark.age_index, AGE_LABELS, "유동인구 비중", "/benchmark/age_index"),
     ]
     weekend = data.benchmark.weekend_index
-    if weekend >= HIGH or weekend <= LOW:
+    if weekend is not None and (weekend >= HIGH or weekend <= LOW):
         tone = "주말에 상대적으로 붐빈다" if weekend >= HIGH else "주중 중심이다"
         findings.append(
             Finding(
@@ -111,11 +111,13 @@ def interpret(data: FloatingPopulationData) -> list[Finding]:
                 path="/reliability/level",
             )
         )
-    return findings
+    return [finding for finding in findings if finding is not None]
 
 
-def _scale(data: FloatingPopulationData) -> Finding:
+def _scale(data: FloatingPopulationData) -> Finding | None:
     p = data.benchmark.scale_percentile
+    if p is None or data.benchmark.mean_daily_per_trade_area is None:
+        return None
     rank = f"상위 {100 - p}%" if p >= 50 else f"하위 {p}%"
     return Finding(
         text=(
@@ -126,10 +128,15 @@ def _scale(data: FloatingPopulationData) -> Finding:
     )
 
 
-def _peak(index: dict[str, float], labels: dict[str, str], what: str, base: str) -> Finding:
+def _peak(
+    index: dict[str, float | None], labels: dict[str, str], what: str, base: str
+) -> Finding | None:
     """가장 높은 칸을 고른다. 두드러지지 않으면 "평균과 비슷하다" 고 쓴다."""
-    key = max(index, key=index.__getitem__)
+    if not index or any(value is None for value in index.values()):
+        return None
+    key = max(index, key=lambda key: index[key] or 0.0)
     value = index[key]
+    assert value is not None
     if value >= HIGH:
         text = f"{labels[key]} {what}이 서울 평균의 {value:.2f}배로 가장 두드러진다."
     else:
