@@ -26,6 +26,14 @@ class DecisionPromptTests(unittest.TestCase):
         ):
             self.assertIn(phrase, PROMPT)
 
+    def test_evidence_is_written_after_every_sentence(self):
+        from app.agents.decision.agent import _prepare_correction
+
+        phrase = "evidence는 reasons와 risks를 모두 쓴 뒤 마지막에"
+        self.assertIn('"category", "score", "reasons", "risks", "evidence" 순서', PROMPT)
+        self.assertIn(phrase, PROMPT)
+        self.assertIn(phrase, _prepare_correction("", {}, {}, None))
+
 
 if __name__ == "__main__":
     unittest.main()

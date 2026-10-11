@@ -61,6 +61,15 @@ class InvalidDecisionCategory(ValueError):
 
 def validate_content(payload) -> DecisionContent:
     """공통 계약은 유지하면서 모델의 업종 오류만 교정 단계로 전달합니다."""
+    if isinstance(payload, dict):
+        payload = {
+            **payload,
+            **{
+                field: [_with_embedded_evidence(item) for item in payload[field]]
+                for field in ("recommendations", "not_recommended")
+                if isinstance(payload.get(field), list)
+            },
+        }
     try:
         return DecisionContent.model_validate(payload)
     except ValidationError as exc:
@@ -76,6 +85,22 @@ def validate_content(payload) -> DecisionContent:
             field = ".".join(str(part) for part in errors[0]["loc"])
             raise InvalidDecisionCategory(payload, field) from None
         raise
+
+
+def _with_embedded_evidence(item):
+    if not isinstance(item, dict) or not isinstance(item.get("evidence"), list):
+        return item
+    item = {**item, "evidence": list(item["evidence"])}
+    for kind in ("reasons", "risks"):
+        if isinstance(item.get(kind), list):
+            embedded = [value for value in item[kind] if _is_evidence(value)]
+            item[kind] = [value for value in item[kind] if not _is_evidence(value)]
+            item["evidence"] += embedded
+    return item
+
+
+def _is_evidence(value) -> bool:
+    return isinstance(value, dict) and set(value) == {"agent_id", "path"}
 
 
 async def generate_decision(

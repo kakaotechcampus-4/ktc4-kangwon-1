@@ -199,11 +199,15 @@ async def complete_json(
         def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             result = dict(pairs)
             if len(result) != len(pairs):
-                seen: set[str] = set()
-                for key, _value in pairs:
-                    if key in seen:
+                seen: dict[str, Any] = {}
+                for key, value in pairs:
+                    if key in seen and not (
+                        isinstance(seen[key], list)
+                        and isinstance(value, list)
+                        and value[: len(seen[key])] == seen[key]
+                    ):
                         raise _DuplicateKey(key)
-                    seen.add(key)
+                    seen[key] = value
             return result
 
         result = json.loads(

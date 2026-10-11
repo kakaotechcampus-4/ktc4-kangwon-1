@@ -247,5 +247,40 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.diagnostics["parameter"], "reasoning_effort")
 
 
+class EmbeddedEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.payload = json.loads((EXAMPLES / "response.json").read_text(encoding="utf-8"))
+
+    def test_evidence_written_inside_sentences_moves_to_the_end_of_evidence(self):
+        from app.agents.decision.llm import validate_content
+
+        item = self.payload["recommendations"][0]
+        item["risks"] = [
+            "경쟁 점포가 {2}개입니다.",
+            {"agent_id": "business_lifecycle", "path": "/industries/0/score"},
+        ]
+        item["reasons"].append({"agent_id": "commercial_area", "path": "/by_middle/0/count"})
+        assessment = validate_content(self.payload).recommendations[0]
+        self.assertEqual(assessment.risks, ["경쟁 점포가 {2}개입니다."])
+        self.assertEqual(
+            [(evidence.agent_id, evidence.path) for evidence in assessment.evidence],
+            [
+                ("commercial_area", "/by_middle/0/count"),
+                ("commercial_area", "/by_middle/0/lq"),
+                ("commercial_area", "/by_middle/0/count"),
+                ("business_lifecycle", "/industries/0/score"),
+            ],
+        )
+
+    def test_other_objects_inside_sentences_are_still_rejected(self):
+        from pydantic import ValidationError
+
+        from app.agents.decision.llm import validate_content
+
+        self.payload["recommendations"][0]["risks"] = [{"text": "경쟁이 있습니다."}]
+        with self.assertRaises(ValidationError):
+            validate_content(self.payload)
+
+
 if __name__ == "__main__":
     unittest.main()

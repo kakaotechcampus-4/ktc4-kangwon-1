@@ -122,7 +122,8 @@
 
 - 최상위 키는 "status", "summary", "recommendations", "not_recommended", "limitations" 다섯 개만 포함합니다.
 - "status"는 "ok" 또는 "no_data"입니다. "summary"는 비어 있지 않은 문자열, 두 업종 목록은 배열, "limitations"는 비어 있지 않은 문자열들의 배열이며 한계가 없으면 []입니다.
-- 두 업종 목록의 각 항목은 "category", "score", "reasons", "evidence", "risks"만 포함합니다.
+- 두 업종 목록의 각 항목은 "category", "score", "reasons", "risks", "evidence" 순서로 이 다섯 키만 포함합니다.
+- evidence는 reasons와 risks를 모두 쓴 뒤 마지막에 씁니다. 두 목록의 문장에서 쓴 {i} 번호가 모두 evidence 배열 안에 있어야 합니다.
 - "category"는 {"code": "I201"}처럼 공통 중분류 코드를 가진 객체입니다. "score"는 0~100 정수입니다.
 - "reasons"는 비어 있지 않은 문자열을 하나 이상 가진 배열입니다. "risks"도 문자열 배열이며 없으면 []입니다.
 - reasons·risks에는 숫자를 직접 쓰지 않습니다. 숫자 자리에 {0}, {1}처럼 같은 항목 evidence 배열의 번호를 쓰면 코드가 그 경로의 원자료 값을 채웁니다.

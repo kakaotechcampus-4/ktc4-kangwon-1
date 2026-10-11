@@ -112,6 +112,33 @@ class PopulationUnitTests(unittest.TestCase):
                 "20대 비중 {0}명", [("floating_population", "/population/age_share/20")], sources
             )
 
+    def test_one_to_another_ratios_are_multiples(self):
+        from app.mocks import mock_floating_population_data
+
+        sources = {"floating_population": mock_floating_population_data()}
+        for text, path, expected in (
+            (
+                "주말 통행량은 주중의 {0}배",
+                "/population/weekend_to_weekday_ratio",
+                "주말 통행량은 주중의 0.6216배",
+            ),
+            (
+                "직장인구가 주거인구의 {0}배",
+                "/population_summary/worker_to_resident_ratio",
+                "직장인구가 주거인구의 6.909배",
+            ),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    render_cited(text, [("floating_population", path)], sources), expected
+                )
+        with self.assertRaises(CitationError):
+            render_cited(
+                "주말 통행량은 주중의 {0}%",
+                [("floating_population", "/population/weekend_to_weekday_ratio")],
+                sources,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

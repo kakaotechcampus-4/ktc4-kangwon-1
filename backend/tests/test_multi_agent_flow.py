@@ -131,7 +131,8 @@ class MultiTransportTests(unittest.IsolatedAsyncioTestCase):
             else:
                 result = mock_generate("", "")
                 if reject:
-                    result["recommendations"][0]["evidence"][0]["path"] = "/missing"
+                    for item in result["recommendations"] + result["not_recommended"]:
+                        item["evidence"][0]["path"] = "/missing"
                 message, finish = {"role": "assistant", "content": json.dumps(result)}, "stop"
             return stream_response(
                 200,

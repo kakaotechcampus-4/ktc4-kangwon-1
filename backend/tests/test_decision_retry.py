@@ -59,7 +59,8 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
             analyses=[await f(task) for f in mock_agents().values()],
         )
         broken = mock_generate("", "")
-        broken["recommendations"][0]["evidence"][0]["path"] = "/by_middle/0/cout"
+        for item in broken["recommendations"] + broken["not_recommended"]:
+            item["evidence"][0]["path"] = "/by_middle/0/cout"
         calls = []
 
         def generate(prompt, payload):
@@ -77,7 +78,8 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as folder:
             settings = ExecutionSettings(db_path=Path(folder) / "db.sqlite3")
             broken = mock_generate("", "")
-            broken["recommendations"][0]["evidence"][0]["path"] = "/missing"
+            for item in broken["recommendations"] + broken["not_recommended"]:
+                item["evidence"][0]["path"] = "/missing"
             with self.assertRaises(DecisionContractError):
                 await analysis.execute_analysis(
                     "시험",
@@ -138,7 +140,8 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
                 entered.set()
                 await release.wait()
                 result = mock_generate(prompt, payload)
-                result["recommendations"][0]["evidence"][0]["path"] = "/missing"
+                for item in result["recommendations"] + result["not_recommended"]:
+                    item["evidence"][0]["path"] = "/missing"
                 return result
 
             first = asyncio.create_task(

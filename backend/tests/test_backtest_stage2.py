@@ -82,7 +82,8 @@ class Counting:
 
 def bad_evidence(system_prompt, input_json):
     result = backtest_generate(system_prompt, input_json)
-    result["recommendations"][0]["evidence"][0]["path"] = "/missing/path"
+    for item in result["recommendations"] + result["not_recommended"]:
+        item["evidence"][0]["path"] = "/missing/path"
     return result
 
 

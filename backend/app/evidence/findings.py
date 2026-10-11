@@ -99,6 +99,8 @@ def _allowed_units(agent_id, path, data) -> set[str]:
         return {"배"}
     if leaf.endswith("_m"):
         return {"m", "미터"}
+    if "_to_" in leaf and leaf.endswith("_ratio"):
+        return {"배"}
     if any(k in path for k in ("rate", "share", "percentile", "ratio")):
         unit = rate_basis(data) or ""
         for prefix in ("population", "resident", "worker"):

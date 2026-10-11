@@ -3,6 +3,7 @@
 import asyncio
 import inspect
 import json
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from difflib import get_close_matches
 from importlib.resources import files
@@ -40,6 +41,7 @@ from app.schemas import (
     DecisionRequest,
     DecisionResult,
     EvaluationLogEntry,
+    IndustryAssessment,
     LandlordAnswer,
     MapLookupPlan,
     MapObservation,
@@ -189,10 +191,11 @@ async def evaluate(
                     return outcome
                 content = outcome
                 _validate_categories(content)
-                _validate_evidence(content, visible, observation)
-                _render_numbers(content, request)
+                dropped = _validate_evidence(content, visible, observation, drop=bool(attempt))
+                sentences, emptied = _render_numbers(content, request, drop=bool(attempt))
                 if evaluation_log is not None:
                     evaluation_log.extend(entries)
+                limitations.extend(_dropped_notes(sentences, dropped + emptied))
                 break
             except (InvalidDecisionCategory, DecisionContractError) as error:
                 if isinstance(error, InvalidDecisionCategory):
@@ -298,6 +301,7 @@ def _prepare_correction(
         "같은 번호를 여러 문장에서 다시 써도 됩니다. "
         "risks에만 쓰는 값도 같은 evidence 배열에 추가하고 "
         "한 항목에 evidence 키를 두 번 쓰지 마세요. "
+        "evidence는 reasons와 risks를 모두 쓴 뒤 마지막에 쓰세요. "
         "correction.sentence는 문제 문장, correction.problem은 문제 번호·경로·단위, "
         "correction.evidence는 그 항목의 근거 번호표입니다. "
         "correction.other_problems가 있으면 같은 출력의 다른 문장 오류이니 모두 함께 고치세요. "
@@ -449,35 +453,62 @@ def _validate_evidence(
     content: DecisionContent,
     sources: dict[str, AgentAnalysis],
     observation: MapObservation | None = None,
-) -> None:
+    *,
+    drop: bool = False,
+) -> list[str]:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
     indexes = {key: index_paths(source.data, key) for key, source in sources.items()}
-    for index, item in enumerate(content.recommendations + content.not_recommended):
-        field = (
-            f"recommendations.{index}"
-            if index < len(content.recommendations)
-            else f"not_recommended.{index - len(content.recommendations)}"
+    failures: list[DecisionContractError] = []
+    dropped: list[str] = []
+    kept: dict[str, list[IndustryAssessment]] = {}
+    for field in ("recommendations", "not_recommended"):
+        kept[field] = []
+        for index, item in enumerate(getattr(content, field)):
+            try:
+                _check_evidence(item, f"{field}.{index}", sources, indexes, observation)
+            except DecisionContractError as error:
+                if not drop:
+                    raise
+                failures.append(error)
+                dropped.append(item.category.middle)
+            else:
+                kept[field].append(item)
+    if failures and not any(kept.values()):
+        raise failures[0]
+    for field, items in kept.items():
+        setattr(content, field, items)
+    return dropped
+
+
+def _check_evidence(
+    item: IndustryAssessment,
+    field: str,
+    sources: dict[str, AgentAnalysis],
+    indexes: dict[str, Any],
+    observation: MapObservation | None,
+) -> None:
+    for evidence_index, evidence in enumerate(item.evidence):
+        location = f"{field}.evidence.{evidence_index}"
+        if evidence.agent_id == MAP_AGENT_ID:
+            if not _valid_map_evidence(evidence.path, item.category.middle, observation):
+                raise DecisionContractError(location + ".path", "source_unavailable")
+            continue
+        if evidence.agent_id not in sources:
+            raise DecisionContractError(location + ".agent_id", "source_unavailable")
+        industry = lookup.find_by_name(item.category.middle)
+        reason = can_cite(
+            sources[evidence.agent_id].data,
+            evidence.path,
+            industry.code if industry else None,
+            indexed=indexes[evidence.agent_id],
         )
-        for evidence_index, evidence in enumerate(item.evidence):
-            location = f"{field}.evidence.{evidence_index}"
-            if evidence.agent_id == MAP_AGENT_ID:
-                if not _valid_map_evidence(evidence.path, item.category.middle, observation):
-                    raise DecisionContractError(location + ".path", "source_unavailable")
-                continue
-            if evidence.agent_id not in sources:
-                raise DecisionContractError(location + ".agent_id", "source_unavailable")
-            industry = lookup.find_by_name(item.category.middle)
-            reason = can_cite(
-                sources[evidence.agent_id].data,
-                evidence.path,
-                industry.code if industry else None,
-                indexed=indexes[evidence.agent_id],
-            )
-            if reason:
-                raise DecisionContractError(location + ".path", reason)
+        if reason:
+            raise DecisionContractError(location + ".path", reason)
 
 
-def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
+def _render_numbers(
+    content: DecisionContent, request: DecisionRequest, *, drop: bool = False
+) -> tuple[int, list[str]]:
     sources: dict[str, Any] = {a.agent_id: a.data for a in request.analyses}
     if request.map_observation is not None:
         sources["map_analysis"] = request.map_observation.data.model_dump(mode="json")
@@ -487,6 +518,7 @@ def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
     except CitationError as error:
         failures.append(_citation_failure("summary", error))
     updates = []
+    lost: Counter[tuple[str, int]] = Counter()
     for field in ("recommendations", "not_recommended"):
         for index, item in enumerate(getattr(content, field)):
             refs = [(evidence.agent_id, evidence.path) for evidence in item.evidence]
@@ -499,13 +531,39 @@ def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
                         failures.append(
                             _citation_failure(f"{field}.{index}.{kind}.{position}", error)
                         )
+                        lost[field, index] += 1
                 updates.append((item, kind, rendered))
-    if failures:
+    if failures and (
+        not drop
+        or failures[0].diagnostics["field"] == "summary"
+        or not any(rendered for _, kind, rendered in updates if kind == "reasons")
+    ):
         first = failures[0]
         first.others = failures[1:]
         raise first
     for item, kind, rendered in updates:
         setattr(item, kind, rendered)
+    sentences = 0
+    emptied: list[str] = []
+    for field in ("recommendations", "not_recommended"):
+        kept = []
+        for index, item in enumerate(getattr(content, field)):
+            if item.reasons:
+                kept.append(item)
+                sentences += lost[field, index]
+            else:
+                emptied.append(item.category.middle)
+        setattr(content, field, kept)
+    return sentences, emptied
+
+
+def _dropped_notes(sentences: int, industries: list[str]) -> list[str]:
+    notes = []
+    if sentences:
+        notes.append(f"판정 근거 제외: 수치·단위를 확인하지 못한 문장 {sentences}개")
+    if industries:
+        notes.append(f"판정 근거 제외: 근거를 확인하지 못한 업종 ({', '.join(industries)})")
+    return notes
 
 
 def _citation_failure(field: str, error: CitationError) -> DecisionContractError:

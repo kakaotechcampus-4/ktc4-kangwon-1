@@ -59,8 +59,7 @@ class MapDecisionTests(unittest.IsolatedAsyncioTestCase):
         final = await evaluate(request, generate=mock_generate)
         self.assertEqual(final.map_observation, observed)
         content = mock_generate("", "")
-        content["recommendations"][0]["evidence"] = [
-            {"agent_id": "map_analysis", "path": "/queries/q1/total_count"}
-        ]
+        for item in content["recommendations"] + content["not_recommended"]:
+            item["evidence"] = [{"agent_id": "map_analysis", "path": "/queries/q1/total_count"}]
         with self.assertRaises(DecisionContractError):
             await evaluate(request, generate=Mock(return_value=content))

@@ -34,7 +34,8 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_correction_stops_after_two_model_calls(self):
         broken = copy.deepcopy(self.response)
-        broken["recommendations"][0]["evidence"][0]["path"] = "/missing"
+        for item in broken["recommendations"] + broken["not_recommended"]:
+            item["evidence"][0]["path"] = "/missing"
         generate = Mock(return_value=broken)
         with self.assertRaises(ValueError):
             await analyze(self.request, generate=generate)
@@ -205,12 +206,15 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             ("path", "/empty", "evidence_empty"),
         ):
             response = copy.deepcopy(self.response)
-            item = response["recommendations"][0]
+            items = response["recommendations"][:1]
             if field == "path":
-                item["evidence"][0]["agent_id"] = "floating_population"
-                item["evidence"][0][field] = value
-            else:
-                item["category"][field] = value
+                items += response["not_recommended"]
+            for item in items:
+                if field == "path":
+                    item["evidence"][0]["agent_id"] = "floating_population"
+                    item["evidence"][0][field] = value
+                else:
+                    item["category"][field] = value
             with self.subTest(reason=reason), self.assertRaises(ValueError) as caught:
                 await analyze(self.request, generate=lambda *_, response=response: response)
             self.assertEqual(getattr(caught.exception, "code", None), "DECISION_CONTRACT_INVALID")
@@ -264,6 +268,57 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.decision.agent import DecisionContractError
 
         broken = {**copy.deepcopy(self.response), "summary": "점포 96개"}
+        generate = Mock(return_value=broken)
+        with self.assertRaises(DecisionContractError) as caught:
+            await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(caught.exception.diagnostics["reason"], "number_uncited")
+
+    def dropped_notes(self, result):
+        return [item for item in result.limitations if item.startswith("판정 근거 제외")]
+
+    async def test_sentence_still_wrong_after_correction_is_dropped(self):
+        broken = copy.deepcopy(self.response)
+        broken["recommendations"][0]["risks"] = ["주변보다 {1}% 높습니다."]
+        generate = Mock(return_value=broken)
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(result.recommendations[0].risks, [])
+        self.assertEqual(len(result.not_recommended), 1)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(
+            self.dropped_notes(result), ["판정 근거 제외: 수치·단위를 확인하지 못한 문장 1개"]
+        )
+
+    async def test_item_left_without_reasons_after_correction_is_dropped(self):
+        broken = copy.deepcopy(self.response)
+        broken["not_recommended"][0]["reasons"] = ["폐업이 9개입니다."]
+        result = await analyze(self.request, generate=Mock(return_value=broken))
+        self.assertEqual(result.not_recommended, [])
+        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
+        self.assertEqual(
+            self.dropped_notes(result),
+            ["판정 근거 제외: 근거를 확인하지 못한 업종 (비알코올 음료점업)"],
+        )
+
+    async def test_item_citing_a_missing_path_after_correction_is_dropped(self):
+        broken = copy.deepcopy(self.response)
+        broken["not_recommended"][0]["evidence"][0]["path"] = "/missing"
+        generate = Mock(return_value=broken)
+        result = await analyze(self.request, generate=generate)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(result.not_recommended, [])
+        self.assertEqual(
+            self.dropped_notes(result),
+            ["판정 근거 제외: 근거를 확인하지 못한 업종 (비알코올 음료점업)"],
+        )
+
+    async def test_nothing_left_after_correction_still_fails(self):
+        from app.agents.decision.agent import DecisionContractError
+
+        broken = copy.deepcopy(self.response)
+        broken["recommendations"][0]["reasons"] = ["점포가 96개입니다."]
+        broken["not_recommended"][0]["evidence"][0]["path"] = "/missing"
         generate = Mock(return_value=broken)
         with self.assertRaises(DecisionContractError) as caught:
             await analyze(self.request, generate=generate)
@@ -335,12 +390,13 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         duplicate = copy.deepcopy(self.response)
         duplicate["not_recommended"][0]["category"] = {
             "major": "음식점업",
-            "middle": "중식 음식점업",
+            "middle": "한식 음식점업",
         }
         bad_path = copy.deepcopy(self.response)
-        bad_path["recommendations"][0]["evidence"][0]["path"] = "/missing"
         bad_index = copy.deepcopy(self.response)
-        bad_index["not_recommended"][0]["evidence"][0]["path"] = "/industries/-1"
+        for broken, path in ((bad_path, "/missing"), (bad_index, "/industries/-1")):
+            for item in broken["recommendations"] + broken["not_recommended"]:
+                item["evidence"][0]["path"] = path
         for response in (bad_score, duplicate, bad_path, bad_index):
             with self.subTest(response=response), self.assertRaises(ValueError):
                 await analyze(self.request, generate=Mock(return_value=response))
@@ -352,8 +408,12 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             scope=None,
             error={"code": "UPSTREAM_ERROR", "message": "조회 실패"},
         )
-        with self.assertRaises(ValueError):
-            await analyze(self.request, generate=self.generate)
+        result = await analyze(self.request, generate=self.generate)
+        self.assertEqual(self.generate.call_count, 2)
+        self.assertEqual(result.not_recommended, [])
+        self.assertIn(
+            "판정 근거 제외: 근거를 확인하지 못한 업종 (비알코올 음료점업)", result.limitations
+        )
 
     async def test_accepts_insufficient_data_without_inventing_recommendations(self):
         self.response.update(
