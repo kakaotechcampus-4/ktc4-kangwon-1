@@ -20,8 +20,7 @@ export default function VacancyInputPage() {
   // 바꿔 radius_m으로 보낸다.
   const [radius, setRadius] = useState('');
 
-  // 버튼이 공실 주소 카드 밖으로 나오면서(반경 입력 카드까지 아우르는
-  // 공통 액션이 되어) 제출 로직도 AddressInput에서 이 페이지로 옮겨왔다.
+  // 주소·반경 입력 카드를 아우르는 공통 버튼이라 제출 로직을 이 페이지에 둔다.
   // 분석 요청은 다음 화면(상가 정보 확인)의 확인 버튼에서 보내므로, 여기서는
   // 입력값만 저장하고 넘어간다.
   function handleSubmit() {

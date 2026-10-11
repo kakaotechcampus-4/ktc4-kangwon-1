@@ -1,4 +1,4 @@
-// 리포트 시안 전용 의미 색상. 기존 리포트에는 적용하지 않는다.
+// 리포트 화면(/report) 전용 의미 색상.
 export const reportPalette = {
   ink: '#172D32',
   navy: '#004F54',

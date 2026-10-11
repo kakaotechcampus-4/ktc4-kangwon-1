@@ -47,8 +47,8 @@ const recommendedNames = new Set(
   mockReportData.recommended.map((item) => item.name)
 );
 
-// 리포트가 다루는 업종은 추천 5 + 비추천 5 = 10개로 고정이다(RecommendationSection의
-// "TOP 5"/"BOTTOM 5" 배지와 동일한 전제). 개폐업 에이전트의 공통 업종 코드
+// 리포트가 다루는 업종은 추천 5 + 비추천 5 = 10개로 고정이다(최종판단 결과의
+// 추천·비추천 각각 최대 5개와 동일한 전제). 개폐업 에이전트의 공통 업종 코드
 // 75종 목록에 이름이 정확히 대응하지 않는 업종이 있으면(경쟁업체 탭의
 // "무인점포" 케이스와 동일한 성격의 문제) 이 숫자보다 적게 내려온다.
 const EXPECTED_INDUSTRY_COUNT = 10;

@@ -27,8 +27,8 @@ import FloatingPopulationSection from '@/components/report/FloatingPopulationSec
 import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
 import OpenCloseTrendSection from '@/components/report/OpenCloseTrendSection';
 import { colors } from '@/styles/tokens';
-import { reportPalette } from '@/styles/reportPrototype';
-import './prototype.css';
+import { reportPalette } from '@/styles/reportPalette';
+import './report.css';
 import { mockReportData } from '@/lib/mockData/report';
 import { mockProperty } from '@/lib/mockData/property';
 import type {
@@ -282,7 +282,7 @@ function extractBusinessLifecycleData(
   );
 }
 
-export default function ReportPrototypePage() {
+export default function ReportPage() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
   const [largeText, setLargeText] = useState(false);
@@ -425,7 +425,7 @@ export default function ReportPrototypePage() {
     >
       <Header />
       <div
-        className="report-prototype mx-auto max-w-[1360px] px-5 pb-20 pt-0 sm:px-8"
+        className="report-page mx-auto max-w-[1360px] px-5 pb-20 pt-0 sm:px-8"
         style={{ '--font-scale': largeText ? 1.2 : 1 } as CSSProperties}
       >
         <div className="report-intro">

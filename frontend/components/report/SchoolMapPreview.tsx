@@ -2,7 +2,7 @@
 
 import { School, Store } from 'lucide-react';
 
-// Supplied Kakao map screenshot is a prototype background; circles are illustrative.
+// 카카오맵 캡처를 예시 배경으로 쓰고, 반경 원은 설명용으로 그린다.
 export default function SchoolMapPreview({ absolute }: { absolute: boolean }) {
   // 첨부한 거리 측정 화면의 중심과 반경에 맞춰 지도와 원을 함께 배치합니다.
   const imageScale = absolute ? 200 / 406 : 0.5;
