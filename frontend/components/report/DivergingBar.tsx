@@ -20,6 +20,7 @@ const dmMono = DM_Mono({
  * <style jsx global>에 이 클래스들을 옮겨두면 그 파일이 마운트되지 않는 한
  * 스타일이 붙지 않는다.
  */
+
 const ABOVE_COLOR = colors.brand.dark;
 const BELOW_COLOR = 'var(--color-gray-400)';
 const SCALE_CAP = 1.5; // |value-1|이 이 값 이상이면 바가 꽉 찬 것으로 그린다.

@@ -1,3 +1,4 @@
+import { mockProperty } from '@/lib/mockData/property';
 /**
  * 상가 정보 확인(/building-confirm) 화면이 쓰는 건축물대장 조회.
  *
@@ -93,9 +94,9 @@ function facilityFromMainUse(
 
 // mock — 9/17 건축물대장 HUB 실호출 결과(성희프라자 4층)를 옮겨 둔 값
 const MOCK_REGISTRY = {
-  buildingName: '성희프라자',
-  floorLabel: '4층',
-  address: '위례광장로 199',
+  buildingName: mockProperty.buildingName,
+  floorLabel: mockProperty.floorUnit,
+  address: mockProperty.roadAddress,
   sourceNote: '9/17 실호출 결과를 예시로 넣었어요',
   title: {
     mainUse: '제2종근린생활시설',
@@ -103,7 +104,7 @@ const MOCK_REGISTRY = {
     floors: '지상 7층',
   },
   floor: { floorUse: '일반음식점' },
-  exclusiveArea: { exclusiveAreaM2: 275.49 },
+  exclusiveArea: { exclusiveAreaM2: mockProperty.exclusiveAreaM2 },
   sewage: { sewage: '하수종말처리장 연결' as SewageTreatment },
 };
 const MOCK_STEP_MS = 700;

@@ -20,7 +20,9 @@ import {
   type AnalysisStage,
   type AnalysisSummary,
   type ClarifyingQuestion,
+  type ClarifyingAnswers,
 } from '@/lib/mockData/analysisProgress';
+import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
 import { loadConfirmedBuilding, loadVacancyInput } from '@/lib/api/resultStore';
 import { useAnalysisProgressSimulation } from '@/lib/hooks/useAnalysisProgressSimulation';
 
@@ -82,7 +84,8 @@ const TONE_COLORS = {
   done: colors.brand.primary,
 } as const;
 
-const REPORT_PATH = '/report';
+// 분석 완료 후 이동할 리포트 화면. 기존 /report 페이지는 남겨 두고 새 리포트로 연결한다.
+const REPORT_PATH = '/report-prototype';
 // 1평 = 약 3.3058㎡
 const PYEONG_M2 = 3.3058;
 
@@ -90,7 +93,7 @@ export default function AnalysisProgressPage() {
   const router = useRouter();
   // TODO: mock 타이머 대신 실제 분석 완료 신호(폴링/웹소켓)로 stage를 바꾸고,
   // 완료 시 결과를 saveAnalysisResult()로 저장해 둔다. 저장된 결과가
-  // 없으면 /report는 mock 리포트를 보여준다.
+  // 없으면 리포트 화면은 mock 리포트를 보여준다.
   const { steps, stage, resume } = useAnalysisProgressSimulation(
     mockAnalysisProgress.steps
   );
@@ -104,6 +107,14 @@ export default function AnalysisProgressPage() {
   );
 
   useEffect(() => {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      new URLSearchParams(window.location.search).get('demoQuestions') ===
+        'alternative'
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuestions(demoClarifyingQuestions);
+    }
     const input = loadVacancyInput();
     if (!input) {
       return;
@@ -112,7 +123,6 @@ export default function AnalysisProgressPage() {
     const area = building?.exclusiveAreaM2.value ?? null;
     const radius = Number(input.radius.trim());
     // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSummary((prev) => ({
       ...prev,
       address: input.roadAddress,
@@ -142,10 +152,26 @@ export default function AnalysisProgressPage() {
     router.replace(REPORT_PATH);
   }
 
-  function handleAnswersSubmit(answers: Record<string, string>, note: string) {
+  function handleAnswersSubmit(answers: ClarifyingAnswers, note: string) {
     // mock 단계 — 실제 제출 API 없음. ClarifyingPanel이 이미 콘솔에 기록한다.
-    void answers;
-    void note;
+    sessionStorage.setItem(
+      'chaeum:clarifyingRecord',
+      JSON.stringify({
+        answers: questions
+          .filter((question) => answers[question.questionId])
+          .map((question) => {
+            const answer = answers[question.questionId];
+            return {
+              label: question.shortLabel,
+              answer:
+                question.options.find((option) => option.id === answer.optionId)
+                  ?.label ?? answer.optionId,
+              detail: answer.detail,
+            };
+          }),
+        note,
+      })
+    );
     resume();
   }
 

@@ -21,6 +21,7 @@ type ProgressTrackerProps = {
 
 // 단계 이름 뒤에 붙는 상태 문구 — "데이터 수집 완료", "추가 정보 확인 필요"처럼
 // 사용자가 라벨만 읽어도 어디까지 끝났는지 알 수 있게 한다.
+
 const STATUS_SUFFIX: Record<ProgressStepStatus, string> = {
   done: '완료',
   in_progress: '중',

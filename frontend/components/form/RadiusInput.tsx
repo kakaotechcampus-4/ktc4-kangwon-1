@@ -37,10 +37,8 @@ export default function RadiusInput({ value, onChange }: RadiusInputProps) {
         >
           분석 반경
         </label>
-        <div className="flex items-center gap-2">
-          {/* 주소 입력처럼 폭을 꽉 채우지 않는다 — 짧은 숫자 값이라
-              w-full이면 지나치게 길어 보인다(디자인 검토에서 확인). */}
-          <div className="w-40">
+        <div className="flex w-full items-center gap-2">
+          <div className="w-full max-w-56">
             <Input
               id="analysis-radius"
               inputMode="numeric"

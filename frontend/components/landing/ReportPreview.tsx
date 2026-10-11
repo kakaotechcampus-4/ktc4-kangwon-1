@@ -1,5 +1,7 @@
 'use client';
 
+import { mockProperty } from '@/lib/mockData/property';
+
 import { Outfit, DM_Mono } from 'next/font/google';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
@@ -72,10 +74,10 @@ export default function ReportPreview({
             <p
               className={`rp-address ${outfit.className} font-semibold text-white`}
             >
-              강원도 춘천시 후평동 234-5 · 2층
+              {mockProperty.fullAddress}
             </p>
             <p className="rp-address-sub pt-0.5 text-white/60">
-              전용 26평 · 월세 120만원 · 분석 2026.08.22
+              {mockProperty.areaLabel} · 분석 2026.08.22
             </p>
           </div>
           <Badge

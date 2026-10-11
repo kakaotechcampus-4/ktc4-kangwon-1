@@ -14,6 +14,7 @@ type Step = {
 };
 
 // 주소 입력 → 상가 정보 확인 → 분석 진행 → 리포트, 전체 4단계 흐름.
+
 const steps: Step[] = [
   { id: 'vacancy-input', number: '1', label: '주소 입력' },
   { id: 'building-confirm', number: '2', label: '상가 정보 확인' },

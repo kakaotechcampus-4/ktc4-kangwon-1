@@ -13,6 +13,7 @@ type BuildingSummaryHeaderProps = {
 };
 
 /** 확인 카드 상단 — 다크 헤더(건물명·층, 주소)와 읽기 전용 요약 4칸. */
+
 export default function BuildingSummaryHeader({
   building,
 }: BuildingSummaryHeaderProps) {

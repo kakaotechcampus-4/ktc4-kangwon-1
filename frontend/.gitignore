@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 로컬 컴파일 진단 캐시
+/.next-check/
+/.next-local-recovery/
+/.next-recovery-backup-*/
+/tmp/chum-next-check/

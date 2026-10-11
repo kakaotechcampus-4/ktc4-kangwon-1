@@ -439,6 +439,7 @@ function IndustryCompetitionCard({
   return (
     <div
       className="ca-industry-card"
+      data-recommended={recommended}
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
@@ -527,10 +528,12 @@ export default function CompetitorAnalysisSection({
   data = mockReportData.commercialArea as CommercialAreaData,
   recommendations,
   notRecommended,
+  reportLayout = false,
 }: {
   data?: CommercialAreaData;
   recommendations?: IndustryAssessment[];
   notRecommended?: IndustryAssessment[];
+  reportLayout?: boolean;
 }) {
   const visibility = getSectionVisibility(data.status);
 
@@ -548,30 +551,72 @@ export default function CompetitorAnalysisSection({
 
   return (
     <div className="ca-root flex w-full flex-col items-start">
-      <RadiusGrowthChart data={data} />
-      <div className="ca-major-diversity-row">
-        <div className="ca-major-category-col">
-          <MajorCategoryDonut data={data} />
-        </div>
-        <div className="ca-diversity-col">
-          <DiversityStat data={data} />
-        </div>
-      </div>
-      <FranchiseDonut data={data} />
-      <TopByCountBars data={data} />
-      <DistrictSpecializationBars data={data} />
-      <IndustryCompetitionGrid
-        data={data}
-        recommended={toCompetitionItems(
-          recommendations,
-          mockReportData.recommended
-        )}
-        notRecommended={toCompetitionItems(
-          notRecommended,
-          mockReportData.notRecommended
-        )}
-      />
+      {reportLayout ? (
+        <>
+          <IndustryCompetitionGrid
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+            notRecommended={toCompetitionItems(
+              notRecommended,
+              mockReportData.notRecommended
+            )}
+          />
 
+          <div className="market-landscape">
+            <h3 className="analysis-subheading">상권 전체의 구성</h3>
+            <p className="analysis-subcopy">
+              추천 업종의 경쟁 지표와 함께, 주변 상권이 어떤 업종으로
+              이루어졌는지 살펴보세요.
+            </p>
+            <div className="ca-major-diversity-row">
+              <div className="ca-major-category-col">
+                <MajorCategoryDonut data={data} />
+              </div>
+              <div className="ca-diversity-col">
+                <DiversityStat data={data} />
+              </div>
+            </div>
+            <div className="analysis-chart-pair">
+              <RadiusGrowthChart data={data} />
+              <FranchiseDonut data={data} />
+            </div>
+          </div>
+          <div className="analysis-chart-pair">
+            <TopByCountBars data={data} />
+            <DistrictSpecializationBars data={data} />
+          </div>
+        </>
+      ) : (
+        <>
+          {' '}
+          <RadiusGrowthChart data={data} />
+          <div className="ca-major-diversity-row">
+            <div className="ca-major-category-col">
+              <MajorCategoryDonut data={data} />
+            </div>
+            <div className="ca-diversity-col">
+              <DiversityStat data={data} />
+            </div>
+          </div>
+          <FranchiseDonut data={data} />
+          <TopByCountBars data={data} />
+          <DistrictSpecializationBars data={data} />
+          <IndustryCompetitionGrid
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+            notRecommended={toCompetitionItems(
+              notRecommended,
+              mockReportData.notRecommended
+            )}
+          />
+        </>
+      )}
       {shouldShowWarnings(data.status) && data.warnings.length > 0 && (
         <ul className="ca-warnings">
           {data.warnings.map((warning) => (

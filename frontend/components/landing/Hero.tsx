@@ -1,5 +1,7 @@
 'use client';
 
+import { mockProperty } from '@/lib/mockData/property';
+
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Outfit, DM_Mono } from 'next/font/google';
@@ -37,7 +39,7 @@ const infoCards: InfoCard[] = [
           className={`${outfit.className} text-[22px] font-bold`}
           style={{ color: colors.brand.dark }}
         >
-          26평
+          {mockProperty.exclusiveAreaM2}㎡
         </p>
       </>
     ),

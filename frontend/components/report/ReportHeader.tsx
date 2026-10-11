@@ -1,23 +1,10 @@
+import { mockProperty } from '@/lib/mockData/property';
 import Link from 'next/link';
 import { Outfit, DM_Mono } from 'next/font/google';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
 import { mockReportData } from '@/lib/mockData/report';
-
-/*
- * components/report/ReportHeader.tsx(v1 · v2 공용이던 원본)를 그대로 복제한
- * report-v2 전용 헤더다. components/report/*.tsx는 v1 리포트와 공유하는
- * 파일이라 이 세션 내내 지켜온 "절대 수정 금지" 원칙 때문에 원본을 직접
- * 고치지 않고, report-v2에서만 이 사본으로 바꿔 끼운다(app/report/page.tsx는
- * 여전히 원본 ReportHeader를 그대로 쓴다).
- *
- * 1차 MVP 공실 입력 폼은 "도로명 주소"와 "층/호수"만 받는다. 월세·보증금·
- * 관리비·공실 기간·주차 가능 여부·전용면적·전면폭은 사용자가 입력한 적이
- * 없는데 기존 컴포넌트가 실제 값처럼 하드코딩해 보여주고 있어, 폼이 받는
- * 값(층수)만 실제로 표시하고 나머지는 "미입력"으로 바꿨다. 카드 7개
- * 레이아웃(그리드 컬럼 수, 카드 자체)은 그대로 두고 값 표시 방식만 바꿨다.
- */
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -36,7 +23,7 @@ type InfoItem = {
   id: string;
   label: string;
   value: string;
-  filled: boolean; // 1차 MVP 폼이 실제로 받는 값인지. false면 "미입력"으로 표시한다.
+  filled: boolean;
   highlight?: boolean; // filled일 때만 의미가 있다(빈 값을 강조색으로 보여주면 혼란스럽다).
 };
 
@@ -45,154 +32,200 @@ export default function ReportHeader({
   floorUnit,
   parking,
   exclusiveArea,
+  radius,
+  facility,
+  sewage,
+  summaryOnly = false,
 }: {
   address?: string;
   floorUnit?: string;
   // 상가 정보 확인 화면에서 확인한 값 — 없으면 "미입력"으로 둔다.
   parking?: string;
   exclusiveArea?: string;
+  radius?: string;
+  facility?: string;
+  sewage?: string;
+  summaryOnly?: boolean;
 } = {}) {
   const displayAddress = address ?? mockReportData.address;
 
-  // DecisionResult.address는 도로명 주소 + 층/호수가 이미 하나의 문자열로
-  // 합쳐져 있다(AddressInput.tsx가 createAnalysis 호출 전에 합친다) —
-  // 백엔드가 층수를 따로 돌려주지 않는다. 그래서 address prop이 왔다는 것
-  // 자체를(=실제 분석 결과) "층수를 따로 모른다"는 신호로 쓴다. 이 경우
-  // floorUnit이 별도로 오지 않는 한 mockReportData.floor로 대신 채우지
-  // 않고, 다른 미입력 필드(월세·보증금 등)와 같은 원칙으로 "미입력" 처리한다.
-  // address도 없는 완전한 mock 화면(직접 /report 접속)에서만 기존처럼
-  // mockReportData.floor를 보여준다.
+  // 직접 리포트에 접속한 경우에만 목업 층 정보를 사용한다.
   const isRealData = address !== undefined;
   const floorValue =
     floorUnit ?? (isRealData ? undefined : mockReportData.floor);
 
+  // 층·호수는 정보 표에 표시하므로 주소 제목에서는 중복을 제거합니다.
+  const titleAddress =
+    floorValue && displayAddress.endsWith(` ${floorValue}`)
+      ? displayAddress.slice(0, -(floorValue.length + 1))
+      : displayAddress;
+
   const infoItems: InfoItem[] = [
-    { id: 'rent', label: '월세', value: '', filled: false },
-    { id: 'deposit', label: '보증금', value: '', filled: false },
-    { id: 'maintenance', label: '관리비', value: '', filled: false },
-    { id: 'vacancy', label: '공실 기간', value: '', filled: false },
-    {
-      id: 'parking',
-      label: '주차',
-      value: parking ?? '',
-      filled: parking !== undefined,
-    },
     {
       id: 'floor',
-      label: '층수',
+      label: '층 / 호수',
       value: floorValue ?? '',
-      filled: floorValue !== undefined,
+      filled: Boolean(floorValue),
     },
     {
       id: 'area',
       label: '전용면적',
-      value: exclusiveArea ?? '',
-      filled: exclusiveArea !== undefined,
+      value:
+        exclusiveArea ?? (isRealData ? '' : mockProperty.exclusiveAreaText),
+      filled: Boolean(exclusiveArea) || !isRealData,
+    },
+    {
+      id: 'parking',
+      label: '주차 가능 여부',
+      value: parking ?? '모름',
+      filled: true,
+    },
+    {
+      id: 'facility',
+      label: '근린생활시설',
+      value: facility ?? (isRealData ? '' : mockProperty.facility),
+      filled: Boolean(facility) || !isRealData,
+    },
+    {
+      id: 'sewage',
+      label: '오수정화시설',
+      value: sewage ?? (isRealData ? '' : mockProperty.sewage),
+      filled: Boolean(sewage) || !isRealData,
     },
   ];
 
   return (
     <div className="flex w-full flex-col items-start px-8 pt-10">
-      <Link
-        href="/"
-        className={`${dmMono.className} text-sm`}
-        style={{ color: colors.neutral.black }}
-      >
-        ← 리포트 목록으로
-      </Link>
-
-      <div className="flex w-full items-start justify-between pt-8">
-        <div className="flex flex-col items-start">
-          <p
-            className={`${dmMono.className} text-xs tracking-[1.68px] uppercase`}
-            style={{ color: colors.brand.primary }}
-          >
-            분석 기준일 {mockReportData.analyzedDate}
-          </p>
-          <h1
-            className={`${outfit.className} pt-2 text-34 font-bold`}
+      {!summaryOnly && (
+        <>
+          <Link
+            href="/"
+            className={`${dmMono.className} text-sm`}
             style={{ color: colors.neutral.black }}
           >
-            {displayAddress}
-          </h1>
-          {/*
-            원본은 이 줄에 "2층 · 전용 26평 · 전면폭 7.4m"를 전부 표시했다.
-            전용면적·전면폭은 MVP 폼이 안 받는 값이라, 부제 줄 같은 한 줄
-            요약 자리에 "미입력"을 두 번 나열하면 오히려 번잡해 보여서
-            (아래 stat 카드에 이미 각각 "미입력"으로 명확히 표시된다),
-            실제로 입력받는 "층수"만 남기기로 했다. 실제 분석 결과에서는
-            층수를 따로 몰라 floorValue가 없을 수 있는데, 그 경우 빈 줄을
-            보여주는 대신 이 줄 자체를 생략한다(아래 stat 카드의 "미입력"
-            표시로 충분하다).
-          */}
-          {floorValue && (
-            <p className={`${dmMono.className} pt-1 text-sm text-gray-500`}>
-              {floorValue}
-            </p>
-          )}
-        </div>
+            ← 리포트 목록으로
+          </Link>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="text-gray-600"
-            style={{ padding: '8px 16px' }}
-          >
-            ↓ 리포트 다운로드
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="text-gray-600"
-            style={{ padding: '8px 16px' }}
-          >
-            ⤴ 공유
-          </Button>
-        </div>
-      </div>
+          <div className="flex w-full items-start justify-between pt-8">
+            <div className="flex flex-col items-start">
+              <p
+                className={`${dmMono.className} text-xs tracking-[1.68px] uppercase`}
+                style={{ color: colors.brand.primary }}
+              >
+                분석 기준일 {mockReportData.analyzedDate}
+              </p>
+              <h1
+                className={`${outfit.className} pt-2 text-34 font-bold`}
+                style={{ color: colors.neutral.black }}
+              >
+                {titleAddress}
+              </h1>
+            </div>
 
-      <Card
-        className="mt-8 w-full"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-          padding: 0,
-          borderRadius: '12px',
-          borderWidth: '1px',
-          boxShadow: 'none',
-        }}
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="text-gray-600"
+                style={{ padding: '8px 16px' }}
+              >
+                ↓ 리포트 다운로드
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="text-gray-600"
+                style={{ padding: '8px 16px' }}
+              >
+                ⤴ 공유
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div
+        className={`grid w-full grid-cols-[minmax(0,1fr)_340px] items-stretch gap-6 ${summaryOnly ? '' : 'mt-8'}`}
       >
-        {infoItems.map(({ id, label, value, filled, highlight }, index) => (
-          <div
-            key={id}
-            className="flex flex-col items-start px-5 py-4"
-            style={
-              index > 0
-                ? { borderLeft: `1px solid ${colors.neutral.border}` }
-                : undefined
-            }
-          >
-            <p
-              className={`${dmMono.className} text-13 tracking-[2.1px] text-gray-400 uppercase`}
-            >
-              {label}
-            </p>
-            <p
-              className={`${outfit.className} pt-1.5 text-lg ${filled ? 'font-bold' : 'font-normal'}`}
+        <Card
+          className="grid w-full grid-cols-6 grid-rows-2 overflow-hidden"
+          style={{
+            padding: 0,
+            borderRadius: '12px',
+            borderWidth: '1px',
+            boxShadow: 'none',
+          }}
+        >
+          {infoItems.map(({ id, label, value, filled, highlight }, index) => (
+            <div
+              key={id}
+              className={`flex min-w-0 flex-col items-start justify-center px-6 py-4 ${index < 3 ? 'col-span-2' : 'col-span-3'}`}
               style={{
-                color: filled
-                  ? highlight
-                    ? colors.brand.dark
-                    : colors.neutral.black
-                  : 'var(--color-gray-400)',
+                borderLeft:
+                  index === 1 || index === 2 || index === 4
+                    ? `1px solid ${colors.neutral.border}`
+                    : undefined,
+                borderTop:
+                  index >= 3 ? `1px solid ${colors.neutral.border}` : undefined,
               }}
             >
-              {filled ? value : '미입력'}
-            </p>
-          </div>
-        ))}
-      </Card>
+              <p
+                className={`${dmMono.className} text-base tracking-[1px] text-gray-500`}
+              >
+                {label}
+              </p>
+              <p
+                className={`${outfit.className} break-words pt-2 text-xl ${filled ? 'font-bold' : 'font-normal'}`}
+                style={{
+                  color: filled
+                    ? highlight
+                      ? colors.brand.dark
+                      : colors.neutral.black
+                    : 'var(--color-gray-400)',
+                }}
+              >
+                {filled ? value : id === 'parking' ? '모름' : '미입력'}
+              </p>
+            </div>
+          ))}
+        </Card>
+        <div className="flex h-full flex-col">
+          <aside
+            className="relative flex h-full min-h-[224px] flex-col justify-center overflow-hidden rounded-2xl bg-[#004F54] px-7 py-7 text-white"
+            aria-label="사용자가 설정한 분석 범위"
+          >
+            <svg
+              className="pointer-events-none absolute -right-12 -top-8 h-64 w-64 text-white/15"
+              viewBox="0 0 240 240"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle
+                cx="120"
+                cy="120"
+                r="105"
+                stroke="currentColor"
+                strokeDasharray="5 6"
+              />
+              <circle cx="120" cy="120" r="72" stroke="currentColor" />
+              <circle cx="120" cy="120" r="38" stroke="currentColor" />
+              <circle cx="120" cy="120" r="6" fill="currentColor" />
+              <path d="M120 15v210M15 120h210" stroke="currentColor" />
+            </svg>
+            <div className="relative">
+              <p className="text-base font-semibold text-[#BDECE3]">
+                분석 범위
+              </p>
+              <p className="mt-7 text-sm text-white/80">상가 중심 반경</p>
+              <p
+                className={`${dmMono.className} mt-1 text-[52px] leading-tight font-medium tracking-tight`}
+              >
+                {radius ?? (isRealData ? '미입력' : `${mockProperty.radiusM}m`)}
+              </p>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

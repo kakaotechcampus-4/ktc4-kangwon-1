@@ -4,10 +4,14 @@ import { useEffect, useState } from 'react';
 import { DM_Mono } from 'next/font/google';
 import Header from '@/components/layout/Header';
 import ReportHeader from '@/components/report/ReportHeader';
+import SchoolRegulationMap from '@/components/report/SchoolRegulationMap';
 import RecommendationSection from '@/components/report/RecommendationSection';
 import AIAnalysisSummary from '@/components/report/AIAnalysisSummary';
-import DetailAnalysisTabs from '@/components/report/DetailAnalysisTabs';
+import DetailAnalysisSections from '@/components/report/DetailAnalysisSections';
 import Button from '@/components/ui/Button';
+import ReportFollowUp, {
+  type AnswerRecord,
+} from '@/components/report/ReportFollowUp';
 import { colors } from '@/styles/tokens';
 import { mockReportData } from '@/lib/mockData/report';
 import type {
@@ -24,6 +28,7 @@ import {
 import type { BuildingInfo } from '@/lib/api/building';
 import {
   PARKING_LABELS,
+  FACILITY_LABELS,
   formatArea,
 } from '@/components/building-confirm/labels';
 import type {
@@ -109,6 +114,10 @@ function extractBusinessLifecycleData(
 }
 
 export default function ReportPage() {
+  const [answerRecord, setAnswerRecord] = useState<{
+    answers: AnswerRecord[];
+    note: string;
+  }>({ answers: [], note: '' });
   const [analysisResult, setAnalysisResult] = useState<DecisionResult | null>(
     null
   );
@@ -125,6 +134,18 @@ export default function ReportPage() {
     setAnalysisResult(loadAnalysisResult());
     setVacancyInput(loadVacancyInput());
     setBuilding(loadConfirmedBuilding());
+    try {
+      const record = JSON.parse(
+        sessionStorage.getItem('chaeum:clarifyingRecord') ?? 'null'
+      );
+      if (record && Array.isArray(record.answers))
+        setAnswerRecord({
+          answers: record.answers,
+          note: typeof record.note === 'string' ? record.note : '',
+        });
+    } catch {
+      /* 저장 데이터가 손상되면 빈 확인 기록을 사용합니다. */
+    }
   }, []);
 
   const floatingPopulationData = analysisResult
@@ -152,9 +173,25 @@ export default function ReportPage() {
         .join(' ')
     : undefined;
   const headerAddress = analysisResult?.address ?? inputAddress;
-  const address = headerAddress ?? '춘천시 후평동 234-5';
+  const address = headerAddress ?? mockReportData.address;
+  const leastSuitable = analysisResult?.not_recommended.reduce<
+    IndustryAssessment | undefined
+  >(
+    (lowest, item) => (!lowest || item.score < lowest.score ? item : lowest),
+    undefined
+  );
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
+  const facilityValue = building?.facility.value;
+  const radiusText = vacancyInput?.radius.trim();
+  const radiusValue = radiusText ? Number(radiusText) : undefined;
+  const radiusLabel = !vacancyInput
+    ? undefined
+    : radiusValue !== undefined &&
+        Number.isInteger(radiusValue) &&
+        radiusValue > 0
+      ? `${radiusValue.toLocaleString('ko-KR')}m`
+      : undefined;
 
   return (
     <div
@@ -165,6 +202,9 @@ export default function ReportPage() {
       <ReportHeader
         address={headerAddress}
         floorUnit={vacancyInput?.floorUnit.trim() || undefined}
+        radius={radiusLabel}
+        facility={facilityValue ? FACILITY_LABELS[facilityValue] : undefined}
+        sewage={building?.sewage.value ?? undefined}
         parking={parkingValue ? PARKING_LABELS[parkingValue] : undefined}
         exclusiveArea={
           areaValue !== null && areaValue !== undefined
@@ -173,25 +213,39 @@ export default function ReportPage() {
         }
       />
 
+      <SchoolRegulationMap />
+
       <RecommendationSection
         recommendations={analysisResult?.recommendations}
         notRecommended={analysisResult?.not_recommended}
-      />
+      >
+        <AIAnalysisSummary
+          variant="reasons"
+          summary={analysisResult?.summary}
+          recommendedReasons={analysisResult?.recommendations[0]?.reasons}
+          recommendedCategoryName={
+            analysisResult?.recommendations[0]?.category.middle
+          }
+          notRecommendedReasons={leastSuitable?.reasons}
+          notRecommendedCategoryName={leastSuitable?.category.middle}
+        />
+      </RecommendationSection>
       <AIAnalysisSummary
+        variant="summary"
         summary={analysisResult?.summary}
         recommendedReasons={analysisResult?.recommendations[0]?.reasons}
         recommendedCategoryName={
           analysisResult?.recommendations[0]?.category.middle
         }
-        notRecommendedReasons={analysisResult?.not_recommended[0]?.reasons}
-        notRecommendedCategoryName={
-          analysisResult?.not_recommended[0]?.category.middle
-        }
+        notRecommendedReasons={leastSuitable?.reasons}
+        notRecommendedCategoryName={leastSuitable?.category.middle}
       />
-      <DetailAnalysisTabs
+      <DetailAnalysisSections
         floatingPopulation={
           analysisResult
             ? {
+                period: findAgent(analysisResult, 'floating_population')?.scope
+                  ?.period,
                 data: floatingPopulationData ?? undefined,
                 unavailable: !floatingPopulationData,
               }
@@ -200,6 +254,8 @@ export default function ReportPage() {
         competitor={
           analysisResult
             ? {
+                period: findAgent(analysisResult, 'commercial_area')?.scope
+                  ?.period,
                 data: competitorData ?? undefined,
                 unavailable: !competitorData,
                 recommendations: analysisResult.recommendations,
@@ -210,6 +266,8 @@ export default function ReportPage() {
         openClose={
           analysisResult
             ? {
+                period: findAgent(analysisResult, 'business_lifecycle')?.scope
+                  ?.period,
                 data: businessLifecycleData ?? undefined,
                 unavailable: !businessLifecycleData,
               }
@@ -217,6 +275,15 @@ export default function ReportPage() {
         }
       />
 
+      <ReportFollowUp
+        floorUnit={
+          vacancyInput?.floorUnit ||
+          (!analysisResult ? mockReportData.floor : undefined)
+        }
+        result={analysisResult}
+        building={building}
+        answers={answerRecord.answers}
+      />
       <div
         className="mx-8 mt-10 mb-10 flex items-center justify-between pt-6"
         style={{ borderTop: `1px solid ${colors.neutral.border}` }}

@@ -18,7 +18,7 @@ export default function SegmentedSelector<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex overflow-hidden rounded-lg border"
+      className="inline-grid w-fit max-w-full grid-flow-col auto-cols-fr self-start overflow-hidden rounded-lg border"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,

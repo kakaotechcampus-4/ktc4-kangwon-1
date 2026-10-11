@@ -1,5 +1,7 @@
 'use client';
 
+import { mockProperty } from '@/lib/mockData/property';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
@@ -81,13 +83,31 @@ export default function BuildingConfirmPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    // 개발 환경에서 조회 중 화면을 고정해 디자인을 확인한다.
+    if (
+      process.env.NODE_ENV === 'development' &&
+      new URLSearchParams(window.location.search).get('previewLoading') === '1'
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInput({
+        roadAddress: mockProperty.address,
+        floorUnit: mockProperty.floorUnit,
+        radius: String(mockProperty.radiusM),
+      });
+      setStatuses({
+        title: 'done',
+        floor: 'done',
+        exclusiveArea: 'loading',
+        sewage: 'pending',
+      });
+      return;
+    }
     // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
     const saved = loadVacancyInput();
     if (!saved) {
       router.replace('/vacancy-input');
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInput(saved);
 
     const controller = new AbortController();
@@ -137,7 +157,7 @@ export default function BuildingConfirmPage() {
   }
 
   async function handleConfirm() {
-    if (!input || !building) {
+    if (!input || !building || building.parking.value === null) {
       return;
     }
     // 확인한 건축물 정보는 화면 표시용으로만 남기고 분석 요청에는 싣지 않는다.
@@ -200,17 +220,11 @@ export default function BuildingConfirmPage() {
         <StepIndicator currentStep={2} />
 
         {!building ? (
-          <>
-            <PageTitle
-              title="건축물대장에서 상가 정보를 불러오고 있어요"
-              description={
-                input
-                  ? `${input.roadAddress} ${floorLabel} · 국토교통부 건축물대장 HUB`
-                  : '국토교통부 건축물대장 HUB'
-              }
-            />
-            <BuildingLoading statuses={statuses} floorLabel={floorLabel} />
-          </>
+          <BuildingLoading
+            statuses={statuses}
+            floorLabel={floorLabel}
+            address={input?.roadAddress}
+          />
         ) : (
           <>
             <PageTitle
@@ -260,21 +274,33 @@ export default function BuildingConfirmPage() {
                 />
 
                 <BuildingFieldRow
-                  label="주차 가능 여부"
+                  label="주차 가능 여부 (필수)"
                   field={building.parking}
                   format={(value) => PARKING_LABELS[value]}
                   editable={
                     isEditing || building.parking.registryValue === null
                   }
                   editor={
-                    <ParkingSelector
-                      value={building.parking.value}
-                      onChange={(value) =>
-                        updateBuilding({
-                          parking: editField(building.parking, value),
-                        })
-                      }
-                    />
+                    <div className="flex flex-col gap-2">
+                      <ParkingSelector
+                        value={building.parking.value}
+                        onChange={(value) =>
+                          updateBuilding({
+                            parking: editField(building.parking, value),
+                          })
+                        }
+                      />
+                      {building.parking.value === null && (
+                        <p
+                          id="parking-required-hint"
+                          className="text-sm leading-relaxed"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          주차 가능 여부를 선택해 주세요. 잘 모르시면 ‘모름’을
+                          선택할 수 있어요.
+                        </p>
+                      )}
+                    </div>
                   }
                 />
 
@@ -351,14 +377,19 @@ export default function BuildingConfirmPage() {
                     aria-pressed={isEditing}
                     onClick={() => setIsEditing((prev) => !prev)}
                   >
-                    {isEditing ? '수정 끝' : '고칠게요'}
+                    {isEditing ? '수정 완료' : '고칠게요'}
                   </Button>
                   <Button
                     type="button"
                     variant="primary"
                     className="min-h-[60px] disabled:cursor-not-allowed disabled:opacity-60"
                     style={{ fontSize: 'var(--text-base)' }}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || building.parking.value === null}
+                    aria-describedby={
+                      building.parking.value === null
+                        ? 'parking-required-hint'
+                        : undefined
+                    }
                     onClick={handleConfirm}
                   >
                     {isSubmitting

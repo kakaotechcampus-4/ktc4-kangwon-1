@@ -31,6 +31,7 @@ const dmMono = DM_Mono({
  * 유지한다(StatsRow.tsx에서 쓰는 방식과 동일). 이 파일이 직접 렌더링하는
  * 엘리먼트는 반대로 style jsx global 한 곳에서만 크기를 지정한다.
  */
+
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(
     (max - min) /
@@ -177,7 +178,13 @@ function RecommendBadge({ recommended }: { recommended: boolean }) {
 }
 
 /** 탭 맨 위 요약 카드 — summary/coverage/scoring_method를 문장으로 풀어 쓴다. */
-function CoverageSummary({ data }: { data: BusinessLifecycleData }) {
+function CoverageSummary({
+  data,
+  compactReference = false,
+}: {
+  data: BusinessLifecycleData;
+  compactReference?: boolean;
+}) {
   const { coverage, scoring_method: scoringMethod } = data;
 
   return (
@@ -194,15 +201,34 @@ function CoverageSummary({ data }: { data: BusinessLifecycleData }) {
           개는 판단 보류).
         </li>
         <li>
-          안정성 점수는 최근 1년 폐업률(
-          {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
-          %)·순증감률(
-          {Math.round(scoringMethod.weights.net_change_rate * 100)}
-          %)·회전율 안정성(
-          {Math.round(scoringMethod.weights.turnover_stability * 100)}
-          %)·폐업률 변화 추세(
-          {Math.round(scoringMethod.weights.close_rate_trend * 100)}
-          %)를 종합한 상대 점수입니다.
+          {compactReference ? (
+            <details className="report-calculation">
+              <summary>안정성 점수 계산 기준</summary>{' '}
+              <span>
+                안정성 점수는 최근 1년 폐업률(
+                {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
+                %)·순증감률(
+                {Math.round(scoringMethod.weights.net_change_rate * 100)}
+                %)·회전율 안정성(
+                {Math.round(scoringMethod.weights.turnover_stability * 100)}
+                %)·폐업률 변화 추세(
+                {Math.round(scoringMethod.weights.close_rate_trend * 100)}
+                %)를 종합한 상대 점수입니다.
+              </span>
+            </details>
+          ) : (
+            <span>
+              안정성 점수는 최근 1년 폐업률(
+              {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
+              %)·순증감률(
+              {Math.round(scoringMethod.weights.net_change_rate * 100)}
+              %)·회전율 안정성(
+              {Math.round(scoringMethod.weights.turnover_stability * 100)}
+              %)·폐업률 변화 추세(
+              {Math.round(scoringMethod.weights.close_rate_trend * 100)}
+              %)를 종합한 상대 점수입니다.
+            </span>
+          )}
         </li>
       </ul>
     </SectionCard>
@@ -405,7 +431,7 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
   return (
     <SectionCard
       title="개폐업 안정성"
-      description="업종을 선택하면 개폐업 지표를 종합한 안정성 점수를 보여줍니다."
+      description="개폐업 흐름을 종합한 상대 점수입니다. 앞의 상가·업종 적합도와 다른 평가이며, 성공 확률이 아닙니다."
     >
       <div className="oc-chip-row">
         {data.map((item) => {
@@ -612,9 +638,13 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
 export default function OpenCloseTrendSection({
   data = mockReportData.businessLifecycle,
   source = mockReportData.openCloseSource,
+  compactReference = false,
+  reportLayout = false,
 }: {
   data?: BusinessLifecycleData;
   source?: string;
+  reportLayout?: boolean;
+  compactReference?: boolean;
 }) {
   const industries = data.industries;
   const matchedShortfall = EXPECTED_INDUSTRY_COUNT - industries.length;
@@ -629,7 +659,7 @@ export default function OpenCloseTrendSection({
 
   return (
     <div className="oc-root flex w-full flex-col items-start">
-      <CoverageSummary data={data} />
+      <CoverageSummary data={data} compactReference={compactReference} />
 
       {matchedShortfall > 0 && (
         <p className="oc-mismatch-note">
@@ -641,21 +671,27 @@ export default function OpenCloseTrendSection({
 
       <StabilityGauge data={industries} />
       <StoreStatus data={industries} />
-      <MetricBarList
-        data={industries}
-        title="폐업률"
-        description="값이 높은 업종일수록 같은 상권에서 문을 닫는 비율이 높습니다."
-        unit="%"
-        pick={(item) => item.metrics.avg_close_rate ?? null}
-      />
-      <MetricBarList
-        data={industries}
-        title="회전율"
-        description="개업과 폐업이 함께 잦은 정도입니다. 높을수록 사업자 교체가 빈번합니다."
-        unit=""
-        pick={(item) => item.metrics.turnover_rate ?? null}
-      />
-
+      <div
+        className={
+          reportLayout ? 'analysis-chart-pair lifecycle-comparison' : 'contents'
+        }
+      >
+        {' '}
+        <MetricBarList
+          data={industries}
+          title="폐업률"
+          description="값이 높은 업종일수록 관측 기간의 폐업 비율이 높습니다. 점포 수가 적으면 몇 건의 변화에도 비율이 크게 달라질 수 있습니다."
+          unit="%"
+          pick={(item) => item.metrics.avg_close_rate ?? null}
+        />
+        <MetricBarList
+          data={industries}
+          title="회전율"
+          description="개업과 폐업이 함께 잦은 정도입니다. 높을수록 사업자 교체가 빈번합니다."
+          unit=""
+          pick={(item) => item.metrics.turnover_rate ?? null}
+        />
+      </div>
       <p className="oc-source text-gray-400">출처: {source}</p>
 
       {/*

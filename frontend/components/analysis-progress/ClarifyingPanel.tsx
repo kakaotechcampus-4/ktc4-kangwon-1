@@ -10,6 +10,8 @@ import { colors } from '@/styles/tokens';
 import type {
   AnalysisStage,
   ClarifyingQuestion,
+  ClarifyingAnswer,
+  ClarifyingAnswers,
   ProgressStep,
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
@@ -19,11 +21,21 @@ const dmMono = DM_Mono({
   weight: ['400', '500'],
 });
 
+function isAnswerComplete(
+  question: ClarifyingQuestion,
+  answer?: ClarifyingAnswer
+): boolean {
+  const option = question.options.find((item) => item.id === answer?.optionId);
+  return Boolean(
+    option && (!option.detailInput?.required || answer?.detail?.trim())
+  );
+}
+
 type ClarifyingPanelProps = {
   stage: AnalysisStage;
   steps: ProgressStep[];
   questions: ClarifyingQuestion[];
-  onSubmit: (answers: Record<string, string>, note: string) => void;
+  onSubmit: (answers: ClarifyingAnswers, note: string) => void;
   onViewReport: () => void;
 };
 
@@ -40,7 +52,7 @@ export default function ClarifyingPanel({
   onViewReport,
 }: ClarifyingPanelProps) {
   // 답변/입력값은 로컬 state로만 관리한다 — 실제 제출 API는 아직 없다.
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<ClarifyingAnswers>({});
   const [note, setNote] = useState('');
 
   if (stage === 'analyzing') {
@@ -59,16 +71,43 @@ export default function ClarifyingPanel({
     );
   }
 
-  const answeredCount = questions.filter(
-    (question) => answers[question.questionId]
+  const missingDetailQuestion = questions.find((question) => {
+    const answer = answers[question.questionId];
+    const option = question.options.find(
+      (item) => item.id === answer?.optionId
+    );
+    return option?.detailInput?.required && !answer?.detail?.trim();
+  });
+  const answeredCount = questions.filter((question) =>
+    isAnswerComplete(question, answers[question.questionId])
   ).length;
   const remaining = questions.length - answeredCount;
   const canSubmit = remaining === 0;
 
   function handleSubmit() {
+    if (!canSubmit) {
+      return;
+    }
+    const submittedAnswers: ClarifyingAnswers = {};
+    for (const question of questions) {
+      const answer = answers[question.questionId];
+      const option = question.options.find(
+        (item) => item.id === answer?.optionId
+      );
+      if (answer && option) {
+        const detail = option.detailInput ? answer.detail?.trim() : undefined;
+        submittedAnswers[question.questionId] = {
+          optionId: option.id,
+          ...(detail ? { detail } : {}),
+        };
+      }
+    }
     // mock 처리 — 실제 API 연동 없이 콘솔에만 기록한다.
-    console.log('[ClarifyingPanel] 답변 제출(mock):', { answers, note });
-    onSubmit(answers, note);
+    console.log('[ClarifyingPanel] 답변 제출(mock):', {
+      answers: submittedAnswers,
+      note,
+    });
+    onSubmit(submittedAnswers, note);
   }
 
   // 외곽 카드 없이 제목·진행률 → 질문 카드들 → 추가 입력 순으로 바로 놓는다.
@@ -102,11 +141,20 @@ export default function ClarifyingPanel({
             key={question.questionId}
             number={index + 1}
             question={question}
-            selected={answers[question.questionId]}
+            answer={answers[question.questionId]}
+            onDetailChange={(detail) =>
+              setAnswers((prev) => ({
+                ...prev,
+                [question.questionId]: { ...prev[question.questionId], detail },
+              }))
+            }
             onSelect={(option) =>
               setAnswers((prev) => ({
                 ...prev,
-                [question.questionId]: option,
+                [question.questionId]:
+                  prev[question.questionId]?.optionId === option
+                    ? prev[question.questionId]
+                    : { optionId: option },
               }))
             }
           />
@@ -152,7 +200,9 @@ export default function ClarifyingPanel({
         >
           {canSubmit
             ? '제출하면 답변을 반영해 최종 판단을 시작해요.'
-            : `남은 질문 ${remaining}개에 답하면 분석을 이어갈 수 있어요. 잘 모르시면 '모르겠어요'를 골라도 괜찮아요.`}
+            : missingDetailQuestion
+              ? `${missingDetailQuestion.shortLabel}의 추가 내용을 입력해 주세요.`
+              : `남은 질문 ${remaining}개에 답하면 분석을 이어갈 수 있어요.`}
         </p>
       </div>
     </section>
@@ -162,16 +212,22 @@ export default function ClarifyingPanel({
 function QuestionCard({
   number,
   question,
-  selected,
+  answer,
+  onDetailChange,
   onSelect,
 }: {
   number: number;
   question: ClarifyingQuestion;
-  selected?: string;
+  answer?: ClarifyingAnswer;
+  onDetailChange: (value: string) => void;
   onSelect: (option: string) => void;
 }) {
   const [isReasonOpen, setIsReasonOpen] = useState(false);
-  const isAnswered = Boolean(selected);
+  const selectedOption = question.options.find(
+    (option) => option.id === answer?.optionId
+  );
+  const detailInput = selectedOption?.detailInput;
+  const isAnswered = isAnswerComplete(question, answer);
   const reasonId = `reason-${question.questionId}`;
 
   return (
@@ -219,13 +275,13 @@ function QuestionCard({
 
       <div className="flex flex-wrap items-center gap-2.5 pl-11">
         {question.options.map((option) => {
-          const isSelected = selected === option;
+          const isSelected = answer?.optionId === option.id;
           return (
             <button
-              key={option}
+              key={option.id}
               type="button"
               aria-pressed={isSelected}
-              onClick={() => onSelect(option)}
+              onClick={() => onSelect(option.id)}
               className="min-h-[44px] rounded-lg border px-5 py-2.5 text-15"
               style={{
                 borderColor: isSelected
@@ -238,11 +294,39 @@ function QuestionCard({
                 fontWeight: isSelected ? 600 : 500,
               }}
             >
-              {option}
+              {option.label}
             </button>
           );
         })}
       </div>
+
+      {detailInput && (
+        <label className="flex flex-col gap-2 pl-11">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            {detailInput.label}{' '}
+            <span className="font-normal">
+              ({detailInput.required ? '필수' : '선택'})
+            </span>
+          </span>
+          <textarea
+            required={detailInput.required}
+            value={answer?.detail ?? ''}
+            onChange={(event) => onDetailChange(event.target.value)}
+            rows={3}
+            placeholder={detailInput.placeholder}
+            className="w-full resize-y rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400 focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              borderColor: colors.neutral.border,
+              backgroundColor: colors.neutral.white,
+              color: colors.text.primary,
+              outlineColor: colors.brand.primary,
+            }}
+          />
+        </label>
+      )}
 
       <div className="flex flex-col gap-2.5 pl-11">
         <button
@@ -278,6 +362,7 @@ function QuestionCard({
 
 // 분석 중 화면에서 보여줄 분석 항목 — 좌측 단계 라벨과 겹치지 않게
 // "무엇을 보고 있는지"를 짧은 말로 바꿔 쓴다.
+
 const ANALYSIS_FOCUS: { stepId: string; label: string }[] = [
   { stepId: 'commercial-area', label: '상권 경쟁도' },
   { stepId: 'floating-population', label: '유동인구 패턴' },
@@ -385,16 +470,23 @@ function ResumingPanel({
   onViewReport,
 }: {
   questions: ClarifyingQuestion[];
-  answers: Record<string, string>;
+  answers: ClarifyingAnswers;
   note: string;
   isCompleted: boolean;
   onViewReport: () => void;
 }) {
   const summaryRows = [
-    ...questions.map((question) => ({
-      label: question.shortLabel,
-      value: answers[question.questionId],
-    })),
+    ...questions.map((question) => {
+      const answer = answers[question.questionId];
+      const option = question.options.find(
+        (item) => item.id === answer?.optionId
+      );
+      const detail = option?.detailInput ? answer?.detail?.trim() : undefined;
+      return {
+        label: question.shortLabel,
+        value: detail ? `${option?.label}: ${detail}` : option?.label,
+      };
+    }),
     ...(note ? [{ label: '추가 조건', value: note }] : []),
   ];
 
