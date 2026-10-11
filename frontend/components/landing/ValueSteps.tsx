@@ -122,10 +122,9 @@ export default function ValueSteps() {
           );
         }
         .value-steps-headline {
-          --headline-fs: clamp(
-            26px,
-            calc(26px + (100vw - 375px) * 0.018711),
-            44px
+          --headline-fs: calc(
+            clamp(26px, calc(26px + (100vw - 375px) * 0.018711), 44px) *
+              var(--font-scale)
           );
           font-size: var(--headline-fs);
           line-height: calc(var(--headline-fs) * 1.13636);
@@ -134,21 +133,29 @@ export default function ValueSteps() {
           gap: clamp(16px, calc(16px + (100vw - 375px) * 0.04574), 60px);
         }
         .value-steps-number {
-          font-size: clamp(24px, calc(24px + (100vw - 375px) * 0.02495), 48px);
-        }
-        .value-steps-title {
-          font-size: clamp(18px, calc(18px + (100vw - 375px) * 0.01247), 30px);
-        }
-        .value-steps-desc {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px);
-          line-height: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.00883),
-            24.5px
+          font-size: calc(
+            clamp(24px, calc(24px + (100vw - 375px) * 0.02495), 48px) *
+              var(--font-scale)
           );
         }
+        .value-steps-title {
+          font-size: calc(
+            clamp(18px, calc(18px + (100vw - 375px) * 0.01247), 30px) *
+              var(--font-scale)
+          );
+        }
+        .value-steps-desc {
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px) *
+              var(--font-scale)
+          );
+          line-height: 1.54;
+        }
         .value-steps-arrow {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.00624), 18px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.00624), 18px) *
+              var(--font-scale)
+          );
           padding-inline: clamp(
             8px,
             calc(8px + (100vw - 375px) * 0.00832),

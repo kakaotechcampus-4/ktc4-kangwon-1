@@ -1,3 +1,4 @@
+import { mockProperty } from '@/lib/mockData/property';
 import type { ChangeEvent } from 'react';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -34,7 +35,7 @@ export default function AddressInput({
         <div className="flex flex-1 flex-col items-start gap-2">
           <label
             htmlFor="road-address"
-            className="text-[15px] font-medium text-gray-500"
+            className="text-15 font-medium text-gray-500"
           >
             도로명 주소
           </label>
@@ -44,13 +45,13 @@ export default function AddressInput({
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
               onRoadAddressChange(event.target.value)
             }
-            placeholder="서울특별시 관악구 봉천로 123"
+            placeholder={mockProperty.address}
           />
         </div>
         <div className="flex flex-1 flex-col items-start gap-2">
           <label
             htmlFor="floor-unit"
-            className="text-[15px] font-medium text-gray-500"
+            className="text-15 font-medium text-gray-500"
           >
             층 / 호수
           </label>
@@ -60,7 +61,7 @@ export default function AddressInput({
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
               onFloorUnitChange(event.target.value)
             }
-            placeholder="1층 101호"
+            placeholder={mockProperty.floorUnit}
           />
         </div>
       </div>

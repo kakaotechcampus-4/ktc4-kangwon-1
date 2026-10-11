@@ -39,9 +39,15 @@ export async function createAnalysis(
   // mock 기본값은 false — docs/API_CONTRACT.md에 명시된 서버 기본값과
   // 맞춘다. 개발 중 백엔드 키 없이 화면만 확인하려면 호출부에서 임시로
   // { mock: true }를 넘긴다.
-  options: { mock?: boolean } = {}
+  options: { mock?: boolean; radiusM?: number } = {}
 ): Promise<{ result: DecisionResult; requestId: string }> {
-  const { mock = false } = options;
+  const { mock = false, radiusM } = options;
+  if (
+    radiusM !== undefined &&
+    (!Number.isSafeInteger(radiusM) || radiusM <= 0)
+  ) {
+    throw new Error('분석 반경은 미터 단위의 양의 정수로 입력해 주세요.');
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -54,7 +60,11 @@ export async function createAnalysis(
     response = await fetch(`${API_BASE_URL}/api/v1/analyses?mock=${mock}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
+      // radius_m은 백엔드 요청 필드 제안이며, 서버의 수신·적용 연결이 필요하다.
+      body: JSON.stringify({
+        address,
+        ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
+      }),
       signal: controller.signal,
     });
   } catch (error) {
