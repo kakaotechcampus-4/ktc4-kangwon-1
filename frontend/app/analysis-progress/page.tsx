@@ -84,8 +84,7 @@ const TONE_COLORS = {
   done: colors.brand.primary,
 } as const;
 
-// 분석 완료 후 이동할 리포트 화면. 기존 /report 페이지는 남겨 두고 새 리포트로 연결한다.
-const REPORT_PATH = '/report-prototype';
+const REPORT_PATH = '/report';
 // 1평 = 약 3.3058㎡
 const PYEONG_M2 = 3.3058;
 

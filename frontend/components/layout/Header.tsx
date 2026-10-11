@@ -15,12 +15,7 @@ const navLinks = [
     href: '/vacancy-input',
     matchPaths: ['/vacancy-input', '/building-confirm', '/analysis-progress'],
   },
-  // 리포트 탭은 새 리포트(/report-prototype)로 연결하고, 기존 /report에서도 활성으로 둔다.
-  {
-    label: '리포트',
-    href: '/report-prototype',
-    matchPaths: ['/report-prototype', '/report'],
-  },
+  { label: '리포트', href: '/report', matchPaths: ['/report'] },
 ];
 
 const navAccentStyle = {
