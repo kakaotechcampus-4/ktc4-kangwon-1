@@ -1,13 +1,20 @@
 """요청별 모델 예산을 병렬 작업과 질문 재개에서 공유합니다."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 
+from app.logging import log_exception
+
+logger = logging.getLogger(__name__)
+
+
 MAX_CALLS = 24
+EVALUATED_MAX_CALLS = 64
 # 최종판단·교정 몫입니다. 전문가 호출은 이 몫을 쓰지 못합니다.
 FINAL_RESERVE = 2
 
@@ -34,7 +41,7 @@ class LLMBudget:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     def __post_init__(self):
-        if type(self.used) is not int or not 0 <= self.used <= self.limit <= MAX_CALLS:
+        if type(self.used) is not int or not 0 <= self.used <= self.limit <= EVALUATED_MAX_CALLS:
             raise ValueError("모델 호출 예산이 올바르지 않습니다.")
 
     @property
@@ -50,6 +57,7 @@ class LLMBudget:
             try:
                 await self.on_change(self.snapshot())
             except Exception as exc:
+                log_exception(logger, "모델 예산 저장 실패", exc)
                 raise BudgetStorageError("모델 호출 이력을 저장하지 못했습니다.") from exc
 
     async def reserve(self, role: str, *, final: bool, input_chars: int | None = None) -> int:

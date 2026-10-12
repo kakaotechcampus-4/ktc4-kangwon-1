@@ -211,6 +211,12 @@ def render(
     for row in sorted(seoul, key=lambda r: r["seoul_code"]):
         industry_to_seoul.setdefault(row["middle_code"], []).append(row["seoul_code"])
     to_seoul = [(repr(c), repr(tuple(v))) for c, v in sorted(industry_to_seoul.items())]
+    terms: dict[str, list[str]] = {code: [] for code in master}
+    for row in seoul:
+        includes = terms[row["middle_code"]]
+        for term in [row["seoul_name"], *row["evidence_small"].split(" / ")]:
+            if term and term not in includes:
+                includes.append(term)
 
     without = [
         (repr(c), repr(r["middle_name"]))
@@ -252,6 +258,12 @@ EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
 '''
 
     blocks = [
+        dict_block(
+            "INDUSTRY_TERMS",
+            "Final[dict[str, tuple[str, ...]]]",
+            [(repr(code), repr(tuple(values))) for code, values in sorted(terms.items())],
+            "중분류 코드 → 서울 업종명·포함 소분류 설명. 검색어 변환과 동종 판단에 사용합니다.",
+        ),
         dict_block(
             "INDUSTRIES",
             "Final[dict[str, str]]",

@@ -61,7 +61,7 @@ export default function ProblemCards() {
       >
         건물주는 이런 문제를 마주합니다.
       </h2>
-      <p className="pt-2 text-lg leading-[30px] text-gray-500">
+      <p className="pt-2 text-lg leading-[1.667] text-gray-500">
         상권만으로는 내 공실에 맞는 업종을 판단하기 어렵습니다.
       </p>
 
@@ -116,10 +116,9 @@ export default function ProblemCards() {
           계산해, 두 값이 항상 정확히 같은 비율로 함께 줄어든다.
         */
         .problem-headline {
-          --headline-fs: clamp(
-            26px,
-            calc(26px + (100vw - 375px) * 0.018711),
-            44px
+          --headline-fs: calc(
+            clamp(26px, calc(26px + (100vw - 375px) * 0.018711), 44px) *
+              var(--font-scale)
           );
           font-size: var(--headline-fs);
           line-height: calc(var(--headline-fs) * 1.13636);
@@ -139,22 +138,30 @@ export default function ProblemCards() {
           width: clamp(101px, calc(101px + (100vw - 375px) * 0.2474), 339px);
         }
         .problem-title {
-          font-size: clamp(14px, calc(14px + (100vw - 375px) * 0.00936), 23px);
-          line-height: clamp(20px, calc(20px + (100vw - 375px) * 0.0104), 30px);
+          font-size: calc(
+            clamp(14px, calc(14px + (100vw - 375px) * 0.00936), 23px) *
+              var(--font-scale)
+          );
+          line-height: 1.37;
         }
         .problem-desc {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px);
-          line-height: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.00722),
-            22.95px
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.00416), 15px) *
+              var(--font-scale)
           );
+          line-height: 1.49;
         }
         .problem-number {
-          font-size: clamp(9px, calc(9px + (100vw - 375px) * 0.00416), 13px);
+          font-size: calc(
+            clamp(9px, calc(9px + (100vw - 375px) * 0.00416), 13px) *
+              var(--font-scale)
+          );
         }
         .problem-badge {
-          font-size: clamp(7px, calc(7px + (100vw - 375px) * 0.00312), 10px);
+          font-size: calc(
+            clamp(7px, calc(7px + (100vw - 375px) * 0.00312), 10px) *
+              var(--font-scale)
+          );
         }
       `}</style>
     </div>

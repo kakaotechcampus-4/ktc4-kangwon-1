@@ -1,71 +1,60 @@
 """전문가 도구를 기존 읽기·보완·지도 실행에 연결합니다."""
 
-import asyncio
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypedDict
 
-from pydantic import Field, ValidationError, create_model
+from pydantic import Field
 
-from app.agents.map_analysis.agent import failed_observation
-from app.agents.specialists.tools import SpecialistTool, ToolArgumentError
-from app.evidence import scalar_records
-from app.llm.budget import BudgetStorageError
+from app.agents.orchestration.constants import DEFAULT_AGENT_TIMEOUT
+from app.agents.specialists.facts import build_facts
+from app.agents.specialists.tools import SpecialistTool, _tool
+from app.evidence import MAP_AGENT_ID, SourceIndex
 from app.schemas import (
-    FacilityCode,
+    AgentAnalysis,
     IndustryCode,
-    MapLookupPlan,
     MapObservation,
     MapQuery,
-    Schema,
+    SupplementEvent,
     SupplementPlan,
     SupplementRequest,
     Text,
 )
 
+from .map_tools import _map_tools
+from .map_tools import map_adoptable as map_adoptable
+from .map_tools import query_key as query_key
 from .supplement import execute_supplement
 
 
-def _tool(name, description, parameters, execute):
-    arguments = create_model(name + "Arguments", __base__=Schema, **parameters)
-
-    async def validated(raw):
-        try:
-            parsed = arguments.model_validate(raw).model_dump()
-        except ValidationError:
-            raise ToolArgumentError("도구 인자가 올바르지 않습니다.") from None
-        return await execute(parsed)
-
-    return SpecialistTool(
-        {
-            "type": "function",
-            "function": {
-                "name": name,
-                "description": description,
-                "parameters": arguments.model_json_schema(),
-            },
-        },
-        validated,
-    )
+class SpecialistChanges(TypedDict, total=False):
+    analysis: AgentAnalysis
+    feedback: list[str]
+    supplement_context: list[SupplementEvent]
+    map_observation: MapObservation
+    map_queries: list[MapQuery]
 
 
-def map_adoptable(previous: MapObservation | None, candidate: MapObservation) -> bool:
-    """기존 정상 검색이나 확정 매핑을 잃는 재조회는 채택하지 않습니다."""
-    if previous is None or previous.status == "error":
-        return True
-    current = {query_key(q.request): q for q in candidate.data.queries.values()}
-    return all(
-        q.status != "ok"
-        or (query_key(q.request) in current and current[query_key(q.request)].status == "ok")
-        for q in previous.data.queries.values()
-    ) and all(
-        place_id in candidate.data.places
-        and candidate.data.places[place_id].industry_code == place.industry_code
-        for place_id, place in previous.data.places.items()
-        if place.mapping_status == "mapped"
-    )
-
-
-def query_key(q: MapQuery) -> tuple:
-    return q.kind, q.industry_code, q.facility_code, q.query
+def merge_specialist_changes(state, changes: list[SpecialistChanges]) -> dict:
+    """병렬 전문가가 갱신한 자기 자료만 합치고 공통 피드백은 모두 보존합니다."""
+    result: dict[str, Any] = {}
+    replaced = {
+        change["analysis"].agent_id: change["analysis"]
+        for change in changes
+        if "analysis" in change
+    }
+    if replaced:
+        result["analyses"] = [replaced.get(item.agent_id, item) for item in state["analyses"]]
+    feedback = [item for change in changes for item in change.get("feedback", [])]
+    if feedback:
+        result["feedback"] = [*state.get("feedback", []), *feedback]
+    events = [item for change in changes for item in change.get("supplement_context", [])]
+    if events:
+        result["supplement_context"] = [*state.get("supplement_context", []), *events]
+    for change in changes:
+        if "map_observation" in change:
+            result["map_observation"] = change["map_observation"]
+        if "map_queries" in change:
+            result["map_queries"] = change["map_queries"]
+    return result
 
 
 def build_specialist_tools(
@@ -76,34 +65,38 @@ def build_specialist_tools(
     supplements,
     map_lookup,
     hooks,
-    context,
+    state,
     query=None,
-    operation_timeout=180.0,
-) -> dict[str, SpecialistTool]:
+    operation_timeout=DEFAULT_AGENT_TIMEOUT,
+) -> tuple[dict[str, SpecialistTool], SpecialistChanges]:
     """자료 소유자는 고정하고 모델이 요청·반경을 변경하지 못하게 합니다."""
-    if agent_id == "map_analysis":
-        return (
-            _map_tools(task, map_lookup, hooks, context, query, operation_timeout)
+    changes: SpecialistChanges = {}
+    analyses = list(analyses)
+    if agent_id == MAP_AGENT_ID:
+        tools = (
+            _map_tools(task, map_lookup, hooks, dict(state), query, operation_timeout, changes)
             if map_lookup
             else {}
         )
+        return tools, changes
 
     def source():
         return next(a for a in analyses if a.agent_id == agent_id)
 
     async def read(arguments, *, name):
         data = source().data
-        records = scalar_records(data, agent_id)
+        index = SourceIndex.build(data, agent_id)
+        records = list(index.records)
         all_records = records
         codes = arguments.get("codes", [arguments["code"]] if "code" in arguments else [])
         if codes:
-            records = [r for r in records if r["industry_code"] in codes]
+            records = [r for r in records if r.owner in codes]
         if name == "get_summary":
             records = [
                 r
                 for r in records
                 if not any(
-                    f"/{key}/" in r["path"]
+                    f"/{key}/" in r.path
                     for key in ("by_age", "by_time", "by_day", "quarters", "trade_areas")
                 )
             ]
@@ -111,35 +104,34 @@ def build_specialist_tools(
             points = data.get("trend", {}).get("quarters", [])
             indices = range(max(0, len(points) - arguments["quarters"]), len(points))
             prefixes = [f"/trend/quarters/{i}/" for i in indices]
-            records = [r for r in records if any(r["path"].startswith(p) for p in prefixes)]
+            records = [r for r in records if any(r.path.startswith(p) for p in prefixes)]
         elif name == "get_time_profile":
             block = "population" if arguments["segment"] == "floating" else arguments["segment"]
             records = [
                 r
                 for r in records
-                if r["path"].startswith(f"/{block}/")
-                and any(s in r["path"] for s in ("time", "peak", "unit"))
+                if r.path.startswith(f"/{block}/")
+                and any(s in r.path for s in ("time", "peak", "unit"))
             ]
         elif name == "compare_seoul":
             records = [
                 r
                 for r in records
-                if "/benchmark/" in r["path"]
-                and r["path"].rsplit("/", 1)[-1] == arguments["metric"]
+                if "/benchmark/" in r.path and r.path.rsplit("/", 1)[-1] == arguments["metric"]
             ]
         elif name == "get_radius_breakdown":
-            records = [r for r in records if r["path"].startswith("/by_radius/")]
-            radius_paths = {"/".join(r["path"].split("/")[:3]) + "/radius_m" for r in records}
-            records.extend(r for r in all_records if r["path"] in radius_paths)
+            records = [r for r in records if r.path.startswith("/by_radius/")]
+            radius_paths = {"/".join(r.path.split("/")[:3]) + "/radius_m" for r in records}
+            records.extend(r for r in all_records if r.path in radius_paths)
         elif name == "get_district_specialization":
             records = [
                 r
                 for r in records
-                if r["path"].startswith(("/district_", "/by_middle/"))
-                and ("district" in r["path"] or r["path"].endswith("/code"))
+                if r.path.startswith(("/district_", "/by_middle/"))
+                and ("district" in r.path or r.path.endswith("/code"))
             ]
         return {
-            "records": records,
+            "facts": build_facts(SourceIndex(index.owners, tuple(records), index.radii)),
             "scope": source().scope.model_dump() if source().scope else None,
             "warnings": source().warnings,
             "available": bool(records),
@@ -208,111 +200,13 @@ def build_specialist_tools(
             # 병렬 작업이 다른 전문가의 갱신을 덮어쓰지 않도록 자기 결과만 교체합니다.
             index = next(i for i, a in enumerate(analyses) if a.agent_id == agent_id)
             analyses[index] = next(a for a in updated if a.agent_id == agent_id)
-            context.setdefault("supplement_context", []).extend(events)
-            context.setdefault("feedback", []).extend(feedback)
+            changes["analysis"] = analyses[index]
+            changes.setdefault("supplement_context", []).extend(events)
+            changes.setdefault("feedback", []).extend(feedback)
             payload = await read(args, name="get_industry_metrics")
             payload["adopted"] = any(e.adopted for e in events)
             return payload
 
         args = {"codes": codes_field} if name == "fetch_quarter_details" else {}
         result[name] = _tool(name, tool.operation.description, args, refresh)
-    return result
-
-
-def _map_tools(task, lookup, hooks, context, question, timeout):
-    async def search(args, *, kind):
-        target = MapQuery(
-            kind=kind,
-            industry_code=args["code"] if kind == "industry" else None,
-            facility_code=args["code"] if kind == "infrastructure" else None,
-            query=args.get("query"),
-            why_needed=question.why_needed if question else "주변 정보 확인",
-            expected_impact=question.expected_impact if question else "후보 판단 검토",
-        )
-        previous = context.get("map_observation")
-        # 미채택 조회도 상한에 포함하며 재개 시 저장된 계획에서 복원합니다.
-        queries = list(
-            context.get(
-                "map_queries",
-                [q.request for q in previous.data.queries.values()] if previous else [],
-            )
-        )
-        existing = (
-            next(
-                (
-                    q
-                    for q in previous.data.queries.values()
-                    if query_key(q.request) == query_key(target)
-                ),
-                None,
-            )
-            if previous
-            else None
-        )
-        if existing and existing.status == "ok":
-            return {"data": previous.data.model_dump(mode="json"), "cached": True}
-        if query_key(target) not in {query_key(q) for q in queries}:
-            queries.append(target)
-        if len(queries) > 5:
-            return {"error": "요청당 지도 조회 대상은 최대 5개입니다."}
-        plan = MapLookupPlan(action="map_lookup", queries=queries)
-        if hooks.on_map_requested:
-            await hooks.on_map_requested(task.model_copy(deep=True), plan.model_copy(deep=True))
-        context["map_queries"] = queries
-        try:
-            async with asyncio.timeout(timeout):
-                raw = await lookup(task.model_copy(deep=True), plan.model_copy(deep=True))
-        except (ValueError, TypeError, BudgetStorageError):
-            raise
-        except Exception:
-            raw = failed_observation(task, plan, "MAP_FAILED")
-        observed = MapObservation.model_validate(raw)
-        if (
-            observed.request_id != task.request_id
-            or observed.site != task.site
-            or observed.radius_m != task.radius_m
-            or [q.request for q in observed.data.queries.values()] != plan.unique_queries()
-        ):
-            raise ValueError("지도 요청과 관측이 일치하지 않습니다.")
-        adopted = map_adoptable(previous, observed)
-        on_result = getattr(hooks, "on_map_result", None)
-        if on_result:
-            await on_result(observed.model_copy(deep=True), adopted)
-        elif hooks.on_map_completed:
-            await hooks.on_map_completed(observed.model_copy(deep=True))
-        if adopted:
-            context["map_observation"] = observed
-        return {
-            "data": context["map_observation"].data.model_dump(mode="json"),
-            "adopted": adopted,
-            **(
-                {"error": "지도 추가 자료를 확보하지 못했습니다."}
-                if not adopted or observed.status == "error"
-                else {}
-            ),
-        }
-
-    async def industry(args):
-        return await search(args, kind="industry")
-
-    async def facility(args):
-        return await search(args, kind="infrastructure")
-
-    return {
-        "search_industry": _tool(
-            "search_industry",
-            "공통 업종의 실제 주변 점포를 검색합니다. query는 공식 업종명이 아니라 "
-            "간판·지도에 쓰는 짧은 일상어(예: 세탁소, 커피, 편의점)입니다.",
-            {
-                "code": (IndustryCode, ...),
-                "query": (Annotated[str, Field(min_length=1, max_length=50)], ...),
-            },
-            industry,
-        ),
-        "search_facility": _tool(
-            "search_facility",
-            "주변 교통·시설을 검색합니다.",
-            {"code": (FacilityCode, ...)},
-            facility,
-        ),
-    }
+    return result, changes

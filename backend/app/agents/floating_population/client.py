@@ -110,12 +110,28 @@ class SeoulOpenDataClient:
             code = previous_quarter(code)
         codes.reverse()  # 오래된 순
 
-        pages = await asyncio.gather(
-            *(
+        tasks = [
+            asyncio.create_task(
                 self._fetch_all(self.settings.flpop_service, self.settings.flpop_max_pages, extra=c)
-                for c in codes
             )
-        )
+            for c in codes
+        ]
+        try:
+            pages = await asyncio.gather(*tasks)
+        except BaseException:
+            # 한 조회가 실패하거나 부모가 취소되어도 다른 조회를 닫힌 클라이언트에
+            # 남겨 두지 않습니다. 정리 중 재취소도 자식의 finally를 끊지 않습니다.
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            settled = asyncio.gather(*tasks, return_exceptions=True)
+            while not settled.done():
+                try:
+                    await asyncio.shield(settled)
+                except asyncio.CancelledError:
+                    continue
+            settled.result()
+            raise
         series: list[tuple[str, list[FlpopRecord]]] = []
         for c, rows in zip(codes, pages, strict=True):
             try:
@@ -168,6 +184,8 @@ class SeoulOpenDataClient:
         payload = await self._get(service, start, end, extra=extra)
         body = payload.get(service)
         if body is None:
+            if payload.get("RESULT", {}).get("CODE") == "INFO-200":
+                return {"RESULT": {"CODE": "INFO-200"}, "row": [], "list_total_count": 0}
             raise SeoulOpenApiError(f"응답에 '{service}' 키가 없습니다. 서비스명을 확인해 주세요.")
         code = body.get("RESULT", {}).get("CODE", "")
         if code and code not in ("INFO-000", "INFO-200"):

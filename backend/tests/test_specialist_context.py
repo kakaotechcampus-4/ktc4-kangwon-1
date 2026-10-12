@@ -112,6 +112,35 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(valid, [])
         self.assertEqual(len(warnings), 4)
 
+    def test_non_map_path_warnings_explain_safe_causes(self):
+        for path, code, reason in (
+            ("model-private-path", "I202", "형식"),
+            ("/missing-private-field", "I202", "없음"),
+            ("/by_middle/0/lq", "I201", "없음"),
+            ("/by_middle/1/count", None, "업종: 인용 없음 · 경로 I212"),
+            ("/by_middle/1/count", "I201", "업종: 인용 I201 · 경로 I212"),
+        ):
+            with self.subTest(path=path, code=code):
+                finding = self.finding("/by_middle/1/count", code=code)
+                finding.evidence[0] = finding.evidence[0].model_copy(update={"path": path})
+                valid, warnings = self.validate_findings(
+                    [finding], agent_id="commercial_area", data=self.data
+                )
+                self.assertEqual(valid, [])
+                self.assertEqual(warnings, [f"전문가 근거 제외: 1번 경로·업종 불일치({reason})"])
+
+    def test_path_warning_never_echoes_unrecognized_model_code(self):
+        finding = self.finding("/by_middle/1/count").model_copy(
+            update={"industry_code": "MODEL-PRIVATE-TEXT"}
+        )
+        valid, warnings = self.validate_findings(
+            [finding], agent_id="commercial_area", data=self.data
+        )
+        self.assertEqual(valid, [])
+        self.assertEqual(
+            warnings, ["전문가 근거 제외: 1번 경로·업종 불일치(업종: 인용 없음 · 경로 I212)"]
+        )
+
     def test_radius_metrics_keep_their_own_scope(self):
         industry = lookup.get("I212")
         slice_ = RadiusSlice(
@@ -171,6 +200,27 @@ class ContextTests(unittest.TestCase):
             )
             self.assertEqual(valid, [], claim)
 
+    def test_equipment_counts_are_not_age_band_labels(self):
+        for claim in ("시설999대", "시설 30대"):
+            with self.subTest(claim=claim):
+                valid, warnings = self.validate_findings(
+                    [self.finding("/by_middle/1/count", claim)],
+                    agent_id="commercial_area",
+                    data=self.data,
+                )
+                self.assertEqual(valid, [])
+                self.assertIn("맞지 않는 수", warnings[0])
+
+    def test_real_age_label_is_context_not_a_claimed_quantity(self):
+        finding = self.finding("/population/age_share/30", "30대 비중은 {0}", code=None)
+        valid, warnings = self.validate_findings(
+            [finding],
+            agent_id="floating_population",
+            data={"population": {"age_share": {"30": 0.3}}},
+        )
+        self.assertEqual(valid, [finding.model_copy(update={"claim": "30대 비중은 0.3"})])
+        self.assertEqual(warnings, [])
+
     def test_context_preserves_population_types_and_units(self):
         data = mock_floating_population_data()
         source = self.source.model_copy(update={"agent_id": "floating_population", "data": data})
@@ -216,6 +266,29 @@ class ContextTests(unittest.TestCase):
             data=data,
         )
         self.assertEqual([f.claim for f in valid], ["분기 평균 폐업 비율 3.5%"])
+
+    def test_lifecycle_net_change_accepts_store_count_unit(self):
+        # 19d96772 실행에서 12분기 순증감 "-6개소"가 단위 불일치로 버려진 회귀입니다.
+        data = mock_business_lifecycle_data()
+        data["industries"][0].update(industry_id="I210", industry_name=lookup.get("I210").name)
+        data["industries"][0]["metrics"].update(period_net_change=-6, recent_year_net_change=-4)
+        for leaf, claim in (
+            ("period_net_change", "순증감 {0}개소"),
+            ("recent_year_net_change", "순증감 {0}개"),
+        ):
+            valid, warnings = self.validate_findings(
+                [self.finding(f"/industries/0/metrics/{leaf}", claim, "I210")],
+                agent_id="business_lifecycle",
+                data=data,
+            )
+            self.assertEqual(len(valid), 1, warnings)
+        # 같은 숫자라도 인원 단위로 바꾸면 여전히 제외합니다.
+        valid, _ = self.validate_findings(
+            [self.finding("/industries/0/metrics/period_net_change", "순증감 {0}명", "I210")],
+            agent_id="business_lifecycle",
+            data=data,
+        )
+        self.assertEqual(valid, [])
 
     def test_fallback_includes_both_score_extremes(self):
         from app.agents.specialists.tools import fallback_brief

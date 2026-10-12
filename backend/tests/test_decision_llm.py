@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from llm_stream_fixture import stream_response
+
 from app.agents.decision.llm import generate_decision
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "decision"
@@ -66,7 +68,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         def respond(request):
             requests.append(json.loads(request.content))
             self.assertEqual(request.url.path, "/v1/chat/completions")
-            return httpx.Response(
+            return stream_response(
                 200,
                 json={
                     "id": "chatcmpl-test",
@@ -142,7 +144,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
                 **kwargs,
                 http_client=httpx.AsyncClient(
                     transport=httpx.MockTransport(
-                        lambda request: httpx.Response(200, json=response)
+                        lambda request: stream_response(200, json=response)
                     )
                 ),
             )
@@ -187,7 +189,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
                 **kwargs,
                 http_client=httpx.AsyncClient(
                     transport=httpx.MockTransport(
-                        lambda request: httpx.Response(200, json=response)
+                        lambda request: stream_response(200, json=response)
                     )
                 ),
             )

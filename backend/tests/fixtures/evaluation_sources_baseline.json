@@ -1,0 +1,83 @@
+{
+  "request_id": "test",
+  "address": "서울특별시 송파구 위례광장로 120 155호",
+  "analyses": [
+    {
+      "request_id": "test",
+      "agent_id": "floating_population",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "data": {
+        "description": "목업 유동인구 자료입니다.",
+        "daily_average": 18320,
+        "peak_hours": [
+          "12:00-13:00",
+          "18:00-20:00"
+        ],
+        "office_worker_share": 0.41,
+        "resident_share": 0.38
+      },
+      "error": null,
+      "warnings": []
+    },
+    {
+      "request_id": "test",
+      "agent_id": "business_lifecycle",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "data": {
+        "description": "목업 개폐업 자료입니다.",
+        "industries": [
+          {
+            "middle": "한식 음식점업",
+            "open_count": 12,
+            "close_count": 9
+          },
+          {
+            "middle": "비알코올 음료점업",
+            "open_count": 18,
+            "close_count": 16
+          }
+        ]
+      },
+      "error": null,
+      "warnings": []
+    },
+    {
+      "request_id": "test",
+      "agent_id": "commercial_area",
+      "status": "ok",
+      "scope": {
+        "area": "서울특별시 송파구 위례광장로 120 일대 반경 500m",
+        "period": "2026년 2분기"
+      },
+      "data": {
+        "description": "목업 상권 자료입니다.",
+        "store_total": 1241,
+        "by_middle": [
+          {
+            "code": "I201",
+            "name": "한식 음식점업",
+            "count": 96,
+            "lq": 1.24
+          },
+          {
+            "code": "I212",
+            "name": "비알코올 음료점업",
+            "count": 71,
+            "lq": 2.1
+          }
+        ]
+      },
+      "error": null,
+      "warnings": []
+    }
+  ],
+  "map_observation": null
+}

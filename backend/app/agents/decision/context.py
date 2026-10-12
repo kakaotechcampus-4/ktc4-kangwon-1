@@ -1,15 +1,17 @@
 """원자료에서 계산 없이 판정용 값·경로만 추립니다."""
 
 from app.evidence import (
+    MAP_AGENT_ID,
+    SourceIndex,
     industry_catalog,
+    map_citations,
     rate_basis,
     resolve_pointer,
-    scalar_records,
-    valid_map_path,
+    usable_analyses,
     validate_findings,
 )
 from app.industries.catalog import INDUSTRIES
-from app.schemas import AgentBrief, DecisionRequest, SpecialistAnswer
+from app.schemas import AgentBrief, DecisionRequest, MapData, SpecialistAnswer
 
 _METRICS = {
     "count",
@@ -48,20 +50,30 @@ _NEIGHBORHOOD = {
 def build_context(
     request: DecisionRequest, *, briefs: list[AgentBrief], answers: list[SpecialistAnswer]
 ) -> dict:
-    sources: dict[str, dict] = {
-        a.agent_id: a.data for a in request.analyses if a.status in {"ok", "partial"}
+    sources: dict[str, dict | MapData] = {
+        a.agent_id: a.data for a in usable_analyses(request.analyses)
     }
     if request.map_observation and request.map_observation.status != "error":
-        sources["map_analysis"] = request.map_observation.data.model_dump(mode="json")
+        sources[MAP_AGENT_ID] = request.map_observation.data
+    indexes = {
+        key: SourceIndex.build(data, key) for key, data in sources.items() if isinstance(data, dict)
+    }
+    return _build_context(request, briefs=briefs, answers=answers, sources=sources, indexes=indexes)
+
+
+def _build_context(request, *, briefs, answers, sources, indexes) -> dict:
     digest: dict[str, dict] = {
         code: {"code": code, "name": name, "metrics": []} for code, name in INDUSTRIES.items()
     }
-    neighborhood = []
+    neighborhood: list[dict] = []
     for agent_id, data in sources.items():
-        for record in scalar_records(data, agent_id):
-            owner = record.pop("industry_code")
-            path = record["path"]
-            entry = {"agent_id": agent_id, **record}
+        if isinstance(data, MapData):
+            rows = {r["path"]: r for group in map_citations(data).values() for r in group}
+            neighborhood.extend({"agent_id": agent_id, **r} for r in rows.values())
+            continue
+        for record in indexes[agent_id].records:
+            owner, path = record.owner, record.path
+            entry: dict = {"agent_id": agent_id, "path": path, "value": record.value}
             if owner in digest and path.rsplit("/", 1)[-1] in _METRICS and "/quarters/" not in path:
                 if path.startswith("/by_radius/"):
                     radius_path = "/".join(path.split("/")[:3]) + "/radius_m"
@@ -78,8 +90,6 @@ def build_context(
                 )
             ):
                 neighborhood.append(entry)
-            elif agent_id == "map_analysis" and valid_map_path(path, owner, data):
-                neighborhood.append(entry)
     safe_briefs: list[dict] = []
     safe_answers: list[dict] = []
     candidates: set[str] = set()
@@ -87,7 +97,14 @@ def build_context(
         for item in items:
             agent_id = item.agent_id if isinstance(item, AgentBrief) else item.query.agent_id
             findings, warnings = validate_findings(
-                item.findings, agent_id=agent_id, data=sources.get(agent_id, {}), render=False
+                item.findings,
+                agent_id=agent_id,
+                data=sources.get(agent_id, {}),
+                index=indexes.get(agent_id),
+                render=False,
+                radii={request.map_observation.radius_m}
+                if agent_id == MAP_AGENT_ID and request.map_observation
+                else None,
             )
             payload = item.model_dump(
                 mode="json", exclude={"analysis", "map_observation", "tool_calls"}
@@ -134,6 +151,20 @@ def build_context(
         "briefs": safe_briefs,
         "answers": safe_answers,
         "industry_evidence": [
-            row for row in industry_catalog(sources) if row["industry_code"] in candidates
+            row
+            for row in industry_catalog(
+                {k: v for k, v in sources.items() if isinstance(v, dict)}, indexes=indexes
+            )
+            if row["industry_code"] in candidates
+        ]
+        + [
+            {
+                "agent_id": MAP_AGENT_ID,
+                "industry_code": code,
+                "industry_name": INDUSTRIES[code],
+                "paths": [r["path"] for r in rows],
+            }
+            for code, rows in map_citations(sources.get(MAP_AGENT_ID, {})).items()
+            if code in candidates
         ],
     }

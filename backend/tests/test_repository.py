@@ -11,10 +11,75 @@ from unittest.mock import patch
 
 from app.db import repository as repo
 from app.db.connection import BACKEND_DIR, connect, initialize, resolve_path
-from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
+from app.schemas import (
+    AGENT_IDS,
+    EVALUATOR_IDS,
+    AgentAnalysis,
+    AgentError,
+    AnalysisTask,
+    DecisionResult,
+    Evaluation,
+    Scope,
+    Site,
+)
 
 
 class RepositoryTests(unittest.TestCase):
+    def test_failure_and_events_normalize_request_id(self):
+        for expected in (1, 2):
+            self.assertEqual(
+                repo.append_event(" request ", "test", "started", {}, db_path=self.path),
+                expected,
+            )
+        repo.fail_request(
+            " request ",
+            AgentError(code="ANALYSIS_FAILED", message="시험"),
+            diagnostics=[{"stage": "decision"}],
+            db_path=self.path,
+        )
+        self.assertEqual(len(repo.list_events("request", db_path=self.path)), 2)
+        self.assertEqual(len(repo.list_decision_failures("request", db_path=self.path)), 1)
+
+    def test_retry_normalizes_request_id(self):
+        with connect(self.path) as db:
+            db.execute("UPDATE analysis_requests SET radius_m=500")
+        repo.save_site(
+            AnalysisTask(
+                request_id="request",
+                site=Site(input_address="주소", road_address="주소", latitude=0, longitude=0),
+            ),
+            db_path=self.path,
+        )
+        for agent_id in AGENT_IDS:
+            repo.save_agent(
+                self.source.model_copy(update={"agent_id": agent_id}), db_path=self.path
+            )
+        repo.fail_request(
+            "request", AgentError(code="ANALYSIS_FAILED", message="시험"), db_path=self.path
+        )
+        failed_at = repo.get_request("request", db_path=self.path)["completed_at"]
+        repo.claim_decision_retry(" request ", failed_at, db_path=self.path)
+        self.assertEqual(repo.get_request("request", db_path=self.path)["status"], "running")
+        self.assertEqual(len(repo.list_decision_failures("request", db_path=self.path)), 1)
+
+    def test_execution_writers_reject_nonfinite_json_atomically(self):
+        with connect(self.path) as db:
+            db.execute("UPDATE analysis_requests SET execution_json=?", ('{"value":1e999}',))
+        evaluations = [
+            Evaluation(request_id="request", evaluator=role, source="model", verdict="agree")
+            for role in EVALUATOR_IDS
+        ]
+        for write in (
+            lambda: repo.update_execution_state("request", db_path=self.path),
+            lambda: repo.save_evaluation(self.result(), evaluations, db_path=self.path),
+        ):
+            with self.subTest(write=write), self.assertRaises(ValueError):
+                write()
+        self.assertIsNone(repo.get_evaluation("request", db_path=self.path))
+        self.assertEqual(
+            repo.get_request("request", db_path=self.path)["execution_json"], '{"value":1e999}'
+        )
+
     def test_parallel_initialization_preserves_schema_and_existing_data(self):
         for attempt in range(10):
             path = self.path.parent / f"parallel-{attempt}.sqlite3"

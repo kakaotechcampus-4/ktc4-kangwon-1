@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from .numeric import complete_sum, rounded
+
 RULES_VERSION = "flpop-type-v1"
 
 # 서울 전체 상권 평균 (2026Q2 · 1,648곳 · 13.2억 명 실측, 2026-09-09).
@@ -43,7 +45,7 @@ class TypeResult(BaseModel):
     reasons: list[str]
     # 판정에 쓴 숫자와 임계치를 함께 남긴다. 결정 에이전트가 한국어 문장이 아니라 값을
     # 인용해야 점수 계산과 근거 검증(Evidence.path)이 가능하다.
-    signals: dict[str, float] = {}
+    signals: dict[str, float | None] = {}
     thresholds: dict[str, float] = {}
     rules_version: str = RULES_VERSION
 
@@ -54,8 +56,8 @@ def _pct(v: float) -> str:
 
 def classify(
     *,
-    age_share: dict[str, float],
-    weekend_to_weekday: float,
+    age_share: dict[str, float | None],
+    weekend_to_weekday: float | None,
 ) -> TypeResult:
     """연령 비중과 주말/주중 비율로 유형을 판정한다.
 
@@ -65,15 +67,15 @@ def classify(
     """
     a10 = age_share["10"]
     a20 = age_share["20"]
-    a3040 = age_share["30"] + age_share["40"]
-    a5060 = age_share["50"] + age_share["60"]
+    a3040 = complete_sum([age_share["30"], age_share["40"]])
+    a5060 = complete_sum([age_share["50"], age_share["60"]])
 
     signals = {
-        "age_10": round(a10, 4),
-        "age_20": round(a20, 4),
-        "age_30_40": round(a3040, 4),
-        "age_50_60": round(a5060, 4),
-        "weekend_to_weekday": round(weekend_to_weekday, 4),
+        "age_10": rounded(a10, 4),
+        "age_20": rounded(a20, 4),
+        "age_30_40": rounded(a3040, 4),
+        "age_50_60": rounded(a5060, 4),
+        "weekend_to_weekday": rounded(weekend_to_weekday, 4),
     }
     thresholds = {
         "age_10_min": round(STUDENT_MIN, 4),
@@ -82,6 +84,14 @@ def classify(
         "age_50_60_min": round(RESIDENT_MIN, 4),
         "office_weekend_max": OFFICE_WEEKEND_MAX,
     }
+
+    if a10 is None or a20 is None or a3040 is None or a5060 is None or weekend_to_weekday is None:
+        return TypeResult(
+            label="판단 불가",
+            reasons=["인구 분포에 결측이 있어 유형 판정을 보류했습니다."],
+            signals=signals,
+            thresholds=thresholds,
+        )
 
     if a10 >= STUDENT_MIN:
         return TypeResult(

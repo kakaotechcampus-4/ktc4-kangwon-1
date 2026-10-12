@@ -8,10 +8,37 @@ from test_map_mapping import plan
 from test_questions import question
 
 from app.agents.map_analysis.agent import failed_observation
+from app.llm.budget import BudgetStorageError
 from app.mocks import mock_agents, mock_generate, mock_resolve
 
 
 class MapGraphTests(unittest.IsolatedAsyncioTestCase):
+    async def test_map_failure_contract(self):
+        for error in (
+            TimeoutError(),
+            RuntimeError("외부 실패"),
+            BudgetStorageError("저장 실패"),
+            ValueError("계약 오류"),
+            TypeError("계약 오류"),
+        ):
+
+            async def lookup(task, request, error=error):
+                raise error
+
+            generate = Mock(side_effect=[plan(), mock_generate("", "")])
+            with self.subTest(error=type(error).__name__):
+                if isinstance(error, (BudgetStorageError, ValueError, TypeError)):
+                    with self.assertRaises(type(error)):
+                        await self.run_flow(generate, lookup)
+                    self.assertEqual(generate.call_count, 1)
+                else:
+                    result = await self.run_flow(generate, lookup)
+                    code = "MAP_TIMEOUT" if isinstance(error, TimeoutError) else "MAP_FAILED"
+                    self.assertEqual(result.map_observation.status, "error")
+                    self.assertEqual(
+                        {q.error for q in result.map_observation.data.queries.values()}, {code}
+                    )
+
     async def test_both_orders_preserve_once_only_operations(self):
         from app.agents.orchestration.tools import SupplementTool
         from app.schemas import SupplementOperation, SupplementPlan

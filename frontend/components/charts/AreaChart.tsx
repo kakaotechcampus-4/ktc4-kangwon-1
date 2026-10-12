@@ -161,8 +161,7 @@ export default function AreaChart({
                 value: highlight.text,
                 position: 'insideTop',
                 fill: colors.accent.orange,
-                fontSize: 11,
-                fontWeight: 700,
+                style: { fontSize: 'var(--text-11)', fontWeight: 700 },
               }}
             />
           )}
@@ -173,7 +172,10 @@ export default function AreaChart({
             dataKey="label"
             axisLine={{ stroke: colors.neutral.border }}
             tickLine={false}
-            tick={{ fill: AXIS_TEXT_COLOR, fontSize: 11 }}
+            tick={{
+              fill: AXIS_TEXT_COLOR,
+              style: { fontSize: 'var(--text-11)' },
+            }}
             interval={0}
             padding={{ left: 0, right: 0 }}
           />
@@ -207,8 +209,7 @@ export default function AreaChart({
                 value: `${peak.value.toLocaleString()}${valueSuffix}`,
                 position: 'top',
                 fill: colors.brand.dark,
-                fontSize: 12,
-                fontWeight: 700,
+                style: { fontSize: 'var(--text-xs)', fontWeight: 700 },
               }}
             />
           ))}
@@ -269,11 +270,17 @@ export default function AreaChart({
       */}
       <style jsx global>{`
         .area-chart-point-label {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.000939), 12px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.000939), 12px) *
+              var(--font-scale)
+          );
           fill: var(--color-gray-500);
         }
         .area-chart-point-label-last {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.000939), 13px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.000939), 13px) *
+              var(--font-scale)
+          );
           font-weight: 700;
           fill: ${colors.brand.dark};
         }

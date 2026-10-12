@@ -3,22 +3,34 @@
 import asyncio
 import inspect
 import json
-import re
 from collections.abc import Awaitable, Callable
 from difflib import get_close_matches
 from importlib.resources import files
-from typing import Any, cast
+from typing import Any
 
 from app.agents.floating_population.selection import SELECTABLE
+from app.education_zone import EducationZoneScan
 from app.evidence import (
+    MAP_AGENT_ID,
     CitationError,
+    can_cite,
+    escape_pointer,
     index_paths,
     industry_catalog,
     render_cited,
-    resolve_pointer,
+    usable_analyses,
+)
+from app.execution.errors import (
+    DecisionExecutionError,
+    DecisionTimeoutError,
+    DecisionValidationExecutionError,
+    FailureDiagnostics,
+    remember_failure,
 )
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
+from app.industries.lookup import industry_terms
+from app.llm.budget import current_scope
 from app.schemas import (
     AGENT_IDS,
     AgentAnalysis,
@@ -26,6 +38,7 @@ from app.schemas import (
     DecisionContent,
     DecisionRequest,
     DecisionResult,
+    EvaluationLogEntry,
     LandlordAnswer,
     MapLookupPlan,
     MapObservation,
@@ -37,7 +50,8 @@ from app.schemas import (
     SupplementPlan,
 )
 
-from .llm import InvalidDecisionCategory, generate_decision, validate_content
+from .context import build_context
+from .llm import InvalidDecisionCategory, generate_decision, split_evaluation_log, validate_content
 
 GenerateDecision = Callable[
     [str, str],
@@ -53,7 +67,7 @@ GenerateDecision = Callable[
 ]
 
 
-class DecisionContractError(ValueError):
+class DecisionContractError(FailureDiagnostics, ValueError):
     """모델이 만든 값 대신 코드가 정한 검증 위치와 사유만 공개합니다."""
 
     code = "DECISION_CONTRACT_INVALID"
@@ -106,17 +120,24 @@ async def evaluate(
     question_fields: list[QuestionField] | None = None,
     user_answers: list[LandlordAnswer] | None = None,
     site: Site | None = None,
+    education_zones: EducationZoneScan | None = None,
     allow_map_lookup: bool = False,
     deliberation: dict | None = None,
+    evaluation: dict | None = None,
+    evaluation_log: list[EvaluationLogEntry] | None = None,
 ) -> DecisionResult | SupplementPlan | QuestionPlan | MapLookupPlan | ConsultPlan:
     """보완 가능 작업이 있을 때만 내부 보완 요청을 허용합니다."""
     request = DecisionRequest.model_validate(request)
+    if evaluation_log is not None:
+        evaluation_log.clear()
     sources: dict[str, AgentAnalysis] = {item.agent_id: item for item in request.analyses}
-    available = {key: item for key, item in sources.items() if item.status in {"ok", "partial"}}
+    available = {item.agent_id: item for item in usable_analyses(list(sources.values()))}
     observation = request.map_observation
     answers = [LandlordAnswer.model_validate(a) for a in user_answers or []]
     allowed_questions = set(question_fields or []) - {a.field for a in answers}
-    limitations = _collect_limitations(sources, available, observation, answers, feedback)
+    limitations = _collect_limitations(
+        sources, available, observation, answers, feedback, education_zones
+    )
     if deliberation is not None:
         limitations.extend(
             message
@@ -132,10 +153,12 @@ async def evaluate(
             allowed_questions,
             answers,
             site,
+            education_zones,
             feedback,
             supplement_context,
             allow_map_lookup,
             deliberation,
+            evaluation,
         )
         failures: list[dict[str, Any]] = []
         for attempt in range(2):
@@ -146,6 +169,9 @@ async def evaluate(
                 )
                 if inspect.isawaitable(produced):
                     produced = await produced
+                entries: list[EvaluationLogEntry] = []
+                if evaluation is not None:
+                    produced, entries = split_evaluation_log(produced, evaluation)
                 outcome = _parse_outcome(
                     produced,
                     final_only=bool(attempt),
@@ -162,6 +188,8 @@ async def evaluate(
                 _validate_categories(content)
                 _validate_evidence(content, visible, observation)
                 _render_numbers(content, request)
+                if evaluation_log is not None:
+                    evaluation_log.extend(entries)
                 break
             except (InvalidDecisionCategory, DecisionContractError) as error:
                 if isinstance(error, InvalidDecisionCategory):
@@ -199,9 +227,20 @@ async def evaluate(
                     "원본 값과 업종을 확인한 뒤 적절한 근거를 선택하거나 판단을 변경하세요. "
                     "유효한 근거가 부족하면 판단 범위를 줄이거나 no_data로 보류하세요."
                 )
-            except (Exception, asyncio.CancelledError) as exc:
+            except asyncio.CancelledError as exc:
                 if failures:
-                    cast(Any, exc).failures = failures
+                    remember_failure(exc, failures)
+                raise
+            except Exception as exc:
+                if failures:
+                    error_type = (
+                        DecisionTimeoutError
+                        if isinstance(exc, TimeoutError)
+                        else DecisionValidationExecutionError
+                        if isinstance(exc, ValueError)
+                        else DecisionExecutionError
+                    )
+                    raise error_type(exc, failures) from exc
                 raise
     else:
         limitations.extend(
@@ -249,26 +288,28 @@ def _correction_detail(
         return detail
     evidence = item.evidence[int(parts[3])]
     detail.update(agent_id=evidence.agent_id, invalid_path=evidence.path[:1000])
-    payload = json.loads(_decision_input(request))
-    data: Any = next(
-        (
-            s["data"]
-            for s in payload["analyses"]
-            if s["agent_id"] == evidence.agent_id and s["status"] in {"ok", "partial"}
-        ),
-        {},
-    )
-    if evidence.agent_id == "map_analysis" and request.map_observation:
-        data = request.map_observation.data.model_dump(mode="json")
     industry = lookup.find_by_name(item.category.middle)
-    indexed = index_paths(data, evidence.agent_id)
-    if evidence.agent_id == "map_analysis":
-        paths = [
-            p
-            for p in indexed
-            if _valid_map_evidence(p, item.category.middle, request.map_observation)
-        ]
+    if evidence.agent_id == MAP_AGENT_ID:
+        observation = request.map_observation
+        paths = []
+        if observation:
+            for section, fields in (
+                ("queries", ("total_count",)),
+                ("places", ("name", "distance_m")),
+                ("industries", ("sampled_count",)),
+            ):
+                for key in getattr(observation.data, section):
+                    for field in fields:
+                        path = f"/{section}/{escape_pointer(key)}/{field}"
+                        if _valid_map_evidence(path, item.category.middle, observation):
+                            paths.append(path)
     else:
+        payload = json.loads(_decision_input(request))
+        sources = usable_analyses(
+            [AgentAnalysis.model_validate(item) for item in payload["analyses"]]
+        )
+        data = next((source.data for source in sources if source.agent_id == evidence.agent_id), {})
+        indexed = index_paths(data, evidence.agent_id)
         # 업종 자료가 있으면 공통 메타데이터보다 해당 업종을 우선합니다.
         paths = [p for p, code in indexed.items() if industry and code == industry.code]
         if not paths:
@@ -345,7 +386,7 @@ def _validate_evidence(
     observation: MapObservation | None = None,
 ) -> None:
     """근거가 사용 가능한 자료의 실제 필드를 가리키는지 확인합니다."""
-    indexes = {agent_id: index_paths(source.data, agent_id) for agent_id, source in sources.items()}
+    indexes = {key: index_paths(source.data, key) for key, source in sources.items()}
     for index, item in enumerate(content.recommendations + content.not_recommended):
         field = (
             f"recommendations.{index}"
@@ -354,34 +395,21 @@ def _validate_evidence(
         )
         for evidence_index, evidence in enumerate(item.evidence):
             location = f"{field}.evidence.{evidence_index}"
-            if evidence.agent_id == "map_analysis":
+            if evidence.agent_id == MAP_AGENT_ID:
                 if not _valid_map_evidence(evidence.path, item.category.middle, observation):
                     raise DecisionContractError(location + ".path", "source_unavailable")
                 continue
             if evidence.agent_id not in sources:
                 raise DecisionContractError(location + ".agent_id", "source_unavailable")
-            path = evidence.path
-            if not path.startswith("/") or re.search(r"~(?![01])", path):
-                raise DecisionContractError(location + ".path", "evidence_path_invalid")
-            try:
-                value = resolve_pointer(sources[evidence.agent_id].data, path)
-            except (KeyError, IndexError, ValueError, TypeError):
-                raise DecisionContractError(location + ".path", "evidence_not_found") from None
-            if (
-                value is None
-                or isinstance(value, str)
-                and not value.strip()
-                or isinstance(value, (list, dict))
-                and not value
-            ):
-                raise DecisionContractError(location + ".path", "evidence_empty")
-            indexed = indexes[evidence.agent_id]
-            if path not in indexed:
-                raise DecisionContractError(location + ".path", "evidence_unavailable")
-            owner = indexed[path]
             industry = lookup.find_by_name(item.category.middle)
-            if owner is not None and (industry is None or owner != industry.code):
-                raise DecisionContractError(location + ".path", "evidence_industry_mismatch")
+            reason = can_cite(
+                sources[evidence.agent_id].data,
+                evidence.path,
+                industry.code if industry else None,
+                indexed=indexes[evidence.agent_id],
+            )
+            if reason:
+                raise DecisionContractError(location + ".path", reason)
 
 
 def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
@@ -412,17 +440,34 @@ def _render_numbers(content: DecisionContent, request: DecisionRequest) -> None:
 
 def _valid_map_evidence(path: str, industry_name: str, observation: MapObservation | None) -> bool:
     """지도 근거는 정상 조회의 허용 필드와 일치 업종만 인용합니다."""
-    from app.evidence import valid_map_path
-
     if observation is None or observation.status == "error":
         return False
     industry = lookup.find_by_name(industry_name)
-    return bool(industry and valid_map_path(path, industry.code, observation.data.model_dump()))
+    return bool(industry and can_cite(observation.data, path, industry.code) is None)
 
 
-def _collect_limitations(sources, available, observation, answers, feedback) -> list[str]:
+def _zone_limitations(zones) -> list[str]:
+    """보호구역 사실은 모델 문장과 무관하게 코드가 직접 한계에 남깁니다."""
+    if zones is None:
+        return []
+    if zones.status == "error":
+        return ["교육환경보호구역을 확인하지 못했습니다. 보호구역이 아니라는 뜻이 아닙니다."]
+    if not zones.zones:
+        return []
+    names = " · ".join(dict.fromkeys(zone.name for zone in zones.zones))
+    return [
+        f"교육환경보호구역({names})에 속합니다. 유흥주점·숙박업·노래연습장·PC방 등이 "
+        "제한되며, 절대보호구역은 금지, 상대보호구역은 심의 대상입니다. "
+        "최종 확인은 관할 교육지원청이 필요합니다."
+    ]
+
+
+def _collect_limitations(
+    sources, available, observation, answers, feedback, zones=None
+) -> list[str]:
     """원본의 실패·범위 차이·미확인 답변을 모읍니다."""
     limitations = list(feedback or [])
+    limitations.extend(_zone_limitations(zones))
     if observation is not None:
         limitations.extend(observation.warnings)
         if observation.status in {"error", "partial"}:
@@ -466,14 +511,23 @@ def _build_prompt(
     allowed_questions,
     answers,
     site,
+    education_zones,
     feedback,
     supplement_context,
     allow_map_lookup,
     deliberation=None,
+    evaluation=None,
 ):
     """모델에 노출할 자료와 허용 작업만 구성합니다."""
     observation = request.map_observation
     prompt = files(__package__).joinpath("prompt.md").read_text(encoding="utf-8")
+    if evaluation is not None:
+        prompt += "\n" + files(__package__).joinpath("evaluation_prompt.md").read_text(
+            encoding="utf-8"
+        )
+        prompt += "\nunreviewed는 코드 전용, 쓰지 말 것.\n" + json.dumps(
+            EvaluationLogEntry.model_json_schema(), ensure_ascii=False
+        )
     prompt += "\n\n## 공통 중분류 목록 (코드 | 대분류 공식명 | 중분류 공식명)\n"
     prompt += "\n".join(
         f"{code} | {INDUSTRY_MAJORS[code][1]} | {name}" for code, name in INDUSTRIES.items()
@@ -487,20 +541,7 @@ def _build_prompt(
         )
     else:
         prompt += "\n데이터 보완 요청은 금지됩니다."
-    payload = json.loads(_decision_input(request))
-    visible = {
-        item["agent_id"]: AgentAnalysis.model_validate(item)
-        for item in payload["analyses"]
-        if item["status"] in {"ok", "partial"}
-    }
-    payload["industry_evidence"] = industry_catalog(
-        {key: item.data for key, item in visible.items()}
-    )
     if deliberation is not None:
-        from app.llm.budget import current_scope
-
-        from .context import build_context
-
         payload = build_context(
             request, briefs=deliberation["briefs"], answers=deliberation["answers"]
         )
@@ -509,17 +550,31 @@ def _build_prompt(
         payload["consult_round"] = deliberation.get("consult_round", 0)
         budget = current_scope()[0]
         payload["limits"] = {
-            "remaining_consult_rounds": max(0, 2 - payload["consult_round"]),
+            "remaining_consult_rounds": deliberation.get(
+                "remaining_consult_rounds", max(0, 2 - payload["consult_round"])
+            ),
             "remaining_model_calls": budget.limit - budget.used if budget else None,
             "reserved_final_calls": 2,
         }
-        visible = {a.agent_id: a for a in request.analyses if a.status in {"ok", "partial"}}
+        visible = {a.agent_id: a for a in usable_analyses(request.analyses)}
         if payload["specialists"]:
             prompt += "\n멀티에이전트 모드: 부족한 정보는 ask_specialists로 전문가에게 묻습니다.\n"
             prompt += json.dumps(ConsultPlan.model_json_schema(), ensure_ascii=False)
         else:
             prompt += "\n전문가 추가 질문은 금지됩니다. 현재 자료로 판단하세요."
+    else:
+        payload = json.loads(_decision_input(request))
+        visible = {
+            item.agent_id: item
+            for item in usable_analyses(
+                [AgentAnalysis.model_validate(item) for item in payload["analyses"]]
+            )
+        }
+        payload["industry_evidence"] = industry_catalog(
+            {key: item.data for key, item in visible.items()}
+        )
     if allow_map_lookup and observation is None:
+        payload["industry_terms"] = {code: industry_terms(code) for code in INDUSTRIES}
         prompt += (
             "\n위 확인 도구 규칙에 해당하면 다음 JSON으로 지도 조회를 요청합니다:\n"
             + json.dumps(MapLookupPlan.model_json_schema(), ensure_ascii=False)
@@ -543,6 +598,8 @@ def _build_prompt(
         payload["user_answers"] = [a.model_dump(mode="json") for a in answers]
     if site is not None:
         payload["site"] = Site.model_validate(site).model_dump(mode="json")
+    if education_zones is not None:
+        payload["education_zones"] = education_zones.model_dump(mode="json")
     if operations:
         payload["supplement_operations"] = [item.model_dump() for item in operations]
     if feedback:
@@ -551,6 +608,8 @@ def _build_prompt(
         payload["supplement_context"] = [
             item.model_dump(mode="json", exclude={"analysis"}) for item in supplement_context
         ]
+    if evaluation is not None:
+        payload["evaluation"] = evaluation
     return prompt, payload, visible
 
 

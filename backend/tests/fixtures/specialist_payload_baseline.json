@@ -1,0 +1,58 @@
+{
+  "run": "59205f79d9874292b77c01c9535819a2",
+  "rows": [
+    {
+      "role": "brief.business_lifecycle",
+      "chars": 101522,
+      "json_bytes": 110403
+    },
+    {
+      "role": "brief.commercial_area",
+      "chars": 115104,
+      "json_bytes": 126792
+    },
+    {
+      "role": "brief.floating_population",
+      "chars": 9041,
+      "json_bytes": 11151
+    },
+    {
+      "role": "answer.business_lifecycle",
+      "chars": 221469,
+      "json_bytes": 230420
+    },
+    {
+      "role": "answer.commercial_area",
+      "chars": 115189,
+      "json_bytes": 127023
+    },
+    {
+      "role": "answer.map_analysis",
+      "chars": 24020,
+      "json_bytes": 27703
+    },
+    {
+      "role": "map_tool.1",
+      "chars": 4851,
+      "json_bytes": 5579
+    },
+    {
+      "role": "map_tool.2",
+      "chars": 11487,
+      "json_bytes": 13085
+    },
+    {
+      "role": "map_tool.3",
+      "chars": 17169,
+      "json_bytes": 19469
+    },
+    {
+      "role": "map_tool.4",
+      "chars": 23549,
+      "json_bytes": 26749
+    }
+  ],
+  "context_ms_median": 41.688,
+  "index_paths_calls": 11,
+  "source_index_builds": 0
+}

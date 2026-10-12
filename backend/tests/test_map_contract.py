@@ -38,7 +38,7 @@ class MapContractTests(unittest.TestCase):
             with self.subTest(update=update), self.assertRaises(ValidationError):
                 schemas.MapLookupPlan.model_validate(raw)
         raw = plan_data()
-        raw["queries"] *= 6
+        raw["queries"] *= 9
         with self.assertRaises(ValidationError):
             schemas.MapLookupPlan.model_validate(raw)
 

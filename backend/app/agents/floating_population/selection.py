@@ -36,15 +36,23 @@ def _selection_digest(data: FloatingPopulationData) -> str:
         },
         "radius_profile": {
             "단계": [p.radius_m for p in (rp.points if rp else [])],
-            "일평균": [round(p.daily_avg) for p in (rp.points if rp else [])],
-            "값이_0인_단계수": sum(1 for p in (rp.points if rp else []) if p.daily_avg <= 0),
+            "일평균": [
+                round(p.daily_avg) if p.daily_avg is not None else None
+                for p in (rp.points if rp else [])
+            ],
+            "값이_0인_단계수": sum(
+                1 for p in (rp.points if rp else []) if p.daily_avg is not None and p.daily_avg <= 0
+            ),
         },
         "trend": {
             "분기수": len(tr.quarters) if tr else 0,
             "방향": tr.direction if tr else None,
             "전분기_변화율": tr.qoq_change if tr else None,
             "전년동기_변화율": tr.yoy_change if tr else None,
-            "일평균_추이": [round(q.daily_avg) for q in (tr.quarters if tr else [])],
+            "일평균_추이": [
+                round(q.daily_avg) if q.daily_avg is not None else None
+                for q in (tr.quarters if tr else [])
+            ],
         },
     }
     return json.dumps(digest, ensure_ascii=False)

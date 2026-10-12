@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS agent_briefs (
 
 CREATE TABLE IF NOT EXISTS specialist_consults (
     request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
-    round INTEGER NOT NULL CHECK (typeof(round) = 'integer' AND round BETWEEN 1 AND 2),
+    round INTEGER NOT NULL CHECK (typeof(round) = 'integer' AND round BETWEEN 1 AND 6),
     agent_id TEXT NOT NULL CHECK (agent_id IN ('floating_population','business_lifecycle','commercial_area','map_analysis')),
     status TEXT NOT NULL CHECK (status IN ('answered','partial','unavailable')),
     answer_json TEXT NOT NULL CHECK (json_valid(answer_json)),
@@ -107,6 +107,31 @@ CREATE TABLE IF NOT EXISTS specialist_consults (
     CHECK (json_extract(answer_json, '$.round') IS round),
     CHECK (json_extract(answer_json, '$.query.agent_id') IS agent_id),
     CHECK (json_extract(answer_json, '$.status') IS status)
+);
+
+CREATE TABLE IF NOT EXISTS evaluation_drafts (
+    request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
+    draft_json TEXT NOT NULL CHECK (json_valid(draft_json)),
+    created_at TEXT NOT NULL,
+    CHECK (json_extract(draft_json, '$.request_id') IS request_id)
+);
+
+CREATE TABLE IF NOT EXISTS evaluations (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    evaluator_id TEXT NOT NULL CHECK (evaluator_id IN ('examiner','founder','customer','landlord_advocate')),
+    source TEXT NOT NULL CHECK (source IN ('model','failed')),
+    evaluation_json TEXT NOT NULL CHECK (json_valid(evaluation_json)),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (request_id, evaluator_id),
+    CHECK (json_extract(evaluation_json, '$.request_id') IS request_id),
+    CHECK (json_extract(evaluation_json, '$.evaluator') IS evaluator_id),
+    CHECK (json_extract(evaluation_json, '$.source') IS source)
+);
+
+CREATE TABLE IF NOT EXISTS evaluation_logs (
+    request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
+    log_json TEXT NOT NULL CHECK (json_valid(log_json) AND json_type(log_json) = 'array'),
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS decision_failures (
@@ -144,3 +169,6 @@ CREATE TABLE IF NOT EXISTS analysis_events (
     created_at TEXT NOT NULL,
     PRIMARY KEY (request_id, seq)
 );
+
+-- 요청별 보완 이력을 반복 조회하는 상세 화면을 위한 인덱스입니다.
+CREATE INDEX IF NOT EXISTS idx_supplement_events_request_id ON supplement_events(request_id);

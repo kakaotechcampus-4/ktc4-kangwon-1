@@ -13,11 +13,13 @@ type Step = {
   label: string;
 };
 
-// 공실 입력 → 분석 진행 → 리포트, 전체 3단계 흐름.
+// 주소 입력 → 상가 정보 확인 → 분석 진행 → 리포트, 전체 4단계 흐름.
+
 const steps: Step[] = [
-  { id: 'vacancy-input', number: '1', label: '공실 입력' },
-  { id: 'analysis-progress', number: '2', label: '분석 진행' },
-  { id: 'report', number: '3', label: '리포트' },
+  { id: 'vacancy-input', number: '1', label: '주소 입력' },
+  { id: 'building-confirm', number: '2', label: '상가 정보 확인' },
+  { id: 'analysis-progress', number: '3', label: '분석 진행' },
+  { id: 'report', number: '4', label: '리포트' },
 ];
 
 type StepIndicatorProps = {
@@ -37,7 +39,7 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
           <div key={step.id} className="flex items-center">
             <div className="flex items-center gap-2">
               <div
-                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-[15px] ${
+                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-15 ${
                   isEmphasized ? '' : 'text-gray-500'
                 }`}
                 style={{

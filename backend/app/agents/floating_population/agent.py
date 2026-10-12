@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 from collections.abc import Callable
 
@@ -30,7 +31,8 @@ from .config import Settings
 from .geo import _overlapping_areas
 from .interpret import interpret
 from .metrics import _aggregate, _benchmark, _radius_profile, _reliability, _trend
-from .models import PopulationRecord, period_ko, quarter_days
+from .models import PopulationRecord, missing_fields, period_ko, quarter_days
+from .numeric import complete_sum
 from .population import (
     RESIDENT_KIND,
     WORKER_KIND,
@@ -138,6 +140,8 @@ def _population_block[B: (ResidentPopulation, WorkerPopulation)](
             f"{label}는 {period_ko(quarter)} 자료가 없어 {period_ko(chosen)} 값을 썼습니다."
         )
     block = build(seoul, chosen, main_codes)
+    if any(missing_fields(row, households=label == "주거인구") for row in seoul):
+        warnings.append(f"{label} 자료에 결측 수치가 있어 관련 합계·비율은 null로 남겼습니다.")
     if block is None:
         warnings.append(f"반경과 겹치는 상권에 {label} 자료가 없습니다.")
     elif block.covered_trade_areas < block.trade_area_count:
@@ -235,10 +239,17 @@ async def analyze(
             f"겹치는 상권 {len(hits)}곳의 {period_ko(quarter)} 유동인구 자료가 없습니다",
         )
 
+    if all(
+        len(missing_fields(record))
+        == 3 + len(record.by_age) + len(record.by_time) + len(record.by_day)
+        for record in records
+    ):
+        return empty(period_ko(quarter), "유동인구 수치가 모두 결측이라 분석할 수 없습니다.")
+
     population = _aggregate(records, quarter)
     # 분기 합계는 내보내지 않지만 규모 백분위를 낼 때는 필요하다(서울 기준선이 분기 합계
     # 기준으로 측정돼 있다). 계산에만 쓰고 `data` 에는 싣지 않는다.
-    quarter_total = sum(r.total for r in records)
+    quarter_total = complete_sum(r.total for r in records)
     covered = len(records)
     type_result = classify(
         age_share=population.age_share,
@@ -248,6 +259,12 @@ async def analyze(
     trend = _trend(series, main_codes)
 
     warnings = list(BASE_WARNINGS)
+    incomplete = any(missing_fields(record) for _, rows in series for record in rows)
+    if incomplete:
+        warnings.append(
+            "유동인구 자료에 결측 수치가 있어 해당 합계·비율을 null로 남기고 "
+            "필요한 판정을 보류했습니다."
+        )
     unnamed = [a.trdar_cd for a, _ in hits if not a.trdar_cd_nm]
     if unnamed:
         warnings.append(f"상권명이 없어 코드로 표시한 상권이 있습니다: {', '.join(unnamed)}")
@@ -279,7 +296,7 @@ async def analyze(
             f"겹치는 상권 {len(hits)}곳 중 {covered}곳만 자료가 있어 그만큼만 집계했습니다."
         )
     # 상권이 하나면 분포가 그 상권 하나에 전적으로 좌우된다 — 결정 에이전트가 무게를 낮춰야 한다.
-    if covered == 1:
+    if covered == 1 and population.daily_avg is not None:
         warnings.append(
             f"반경 {radius}m 와 겹치는 상권이 1곳뿐이라(일평균 {population.daily_avg:,.0f}명) "
             "분포가 그 상권 하나에 좌우됩니다. 판정 신뢰도를 낮게 보십시오."
@@ -288,7 +305,14 @@ async def analyze(
     days = quarter_days(quarter)
     # 주거·직장인구는 API 가 아니라 패키지에 동봉한 스냅샷(data/*.csv)에서 읽는다 — 분기 필터가
     # 안 먹어 매번 약 73페이지를 받아야 했고, 값은 2~3년째 같다(population.py 참고).
-    resident_rows, worker_rows = _load(RESIDENT_KIND), _load(WORKER_KIND)
+    resident_rows, worker_rows = await asyncio.gather(
+        asyncio.to_thread(_load, RESIDENT_KIND), asyncio.to_thread(_load, WORKER_KIND)
+    )
+    incomplete = incomplete or any(
+        missing_fields(row, households=kind == RESIDENT_KIND)
+        for kind, rows in ((RESIDENT_KIND, resident_rows), (WORKER_KIND, worker_rows))
+        for row in rows or []
+    )
     resident, resident_seoul = _population_block(
         "주거인구", resident_rows, quarter, main_codes, resident_block, warnings
     )
@@ -367,7 +391,10 @@ async def analyze(
         # 확보" 다. 반경 안 상권에 주거인구가 원래 없는 것(시장·역)은 정상이라 ok + warnings.
         status=(
             "ok"
-            if covered == len(hits) and resident_rows is not None and worker_rows is not None
+            if covered == len(hits)
+            and resident_rows is not None
+            and worker_rows is not None
+            and not incomplete
             else "partial"
         ),
         scope=Scope(area=area_label, period=period_ko(quarter)),

@@ -14,6 +14,7 @@ import re
 from .catalog import (
     INDUSTRIES,
     INDUSTRY_MAJORS,
+    INDUSTRY_TERMS,
     INDUSTRY_TO_SEOUL,
     LEGACY70_TO_INDUSTRY,
     SEOUL_TO_INDUSTRY,
@@ -55,6 +56,17 @@ def get(code: str) -> Industry:
 
 def find(code: str) -> Industry | None:
     return get(code) if code in INDUSTRIES else None
+
+
+def industry_terms(code: str) -> dict:
+    """생성된 업종 설명을 읽습니다. 검색어 자체는 만들지 않습니다."""
+    industry = get(code)
+    return {
+        "code": code,
+        "name": industry.name,
+        "major": industry.major_name,
+        "includes": list(INDUSTRY_TERMS[code]),
+    }
 
 
 def find_by_name(name: str) -> Industry | None:

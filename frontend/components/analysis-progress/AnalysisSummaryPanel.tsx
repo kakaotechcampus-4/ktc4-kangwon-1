@@ -32,7 +32,7 @@ export default function AnalysisSummaryPanel({
     >
       <div className="flex items-center justify-between">
         <p
-          className="text-[15px] font-semibold"
+          className="text-15 font-semibold"
           style={{ color: colors.text.secondary }}
         >
           분석 대상
@@ -44,7 +44,7 @@ export default function AnalysisSummaryPanel({
           onClick={
             onEdit ?? (() => console.log('[AnalysisSummaryPanel] 수정(mock)'))
           }
-          className="flex items-center gap-1 text-[13px]"
+          className="flex items-center gap-1 text-13"
           style={{ color: colors.text.tertiary }}
         >
           <Pencil size={12} /> 수정
@@ -57,7 +57,7 @@ export default function AnalysisSummaryPanel({
         {rows.map((row) => (
           <div key={row.label} className="flex items-start gap-3">
             <dt
-              className="w-[68px] shrink-0 text-[13px] leading-relaxed"
+              className="w-[68px] shrink-0 text-13 leading-relaxed"
               style={{ color: colors.text.tertiary }}
             >
               {row.label}

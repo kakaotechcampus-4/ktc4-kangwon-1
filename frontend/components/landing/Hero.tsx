@@ -1,5 +1,7 @@
 'use client';
 
+import { mockProperty } from '@/lib/mockData/property';
+
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Outfit, DM_Mono } from 'next/font/google';
@@ -37,7 +39,7 @@ const infoCards: InfoCard[] = [
           className={`${outfit.className} text-[22px] font-bold`}
           style={{ color: colors.brand.dark }}
         >
-          26평
+          {mockProperty.exclusiveAreaM2}㎡
         </p>
       </>
     ),
@@ -171,7 +173,7 @@ export default function Hero() {
               style={{ backgroundColor: colors.brand.primary }}
             />
             <p
-              className={`${dmMono.className} whitespace-nowrap text-[12px]`}
+              className={`${dmMono.className} whitespace-nowrap text-xs`}
               style={{ color: colors.brand.primary }}
             >
               AI PROPTECH · POWERED BY DATA
@@ -179,7 +181,7 @@ export default function Hero() {
           </div>
 
           <h1
-            className={`hero-fluid-title ${outfit.className} pt-6 text-[32px] leading-[38px] font-extrabold`}
+            className={`hero-fluid-title ${outfit.className} pt-6 text-32 leading-[1.1875] font-extrabold`}
             style={{ color: colors.neutral.black }}
           >
             공실에 맞는 업종
@@ -189,7 +191,7 @@ export default function Hero() {
             </span>
           </h1>
 
-          <p className="max-w-[440px] pt-6 text-sm leading-[22px] text-gray-600 md:text-base md:leading-[24px] lg:text-lg lg:leading-[29.25px]">
+          <p className="max-w-[440px] pt-6 text-sm leading-[1.571] text-gray-600 md:text-base md:leading-normal lg:text-lg lg:leading-relaxed">
             도면·임대조건·상권 데이터를 함께 분석해
             <br />내 공간에 가장 적합한 업종을 추천합니다.
           </p>
@@ -214,7 +216,8 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="hero-fluid-illustration overflow-hidden md:shrink-0">
+        {/* 일러스트 위 미니 화면 글씨는 그림 비율에 맞춘 크기라 배율에서 뺀다. */}
+        <div className="hero-fluid-illustration overflow-hidden [--font-scale:1] md:shrink-0">
           <div className="hero-fluid-illustration-inner relative origin-top-left">
             <Image
               src="/images/hero-illustration.png"
@@ -307,8 +310,8 @@ export default function Hero() {
             width: 320px;
           }
           .hero-fluid-title {
-            font-size: 36px;
-            line-height: 40px;
+            font-size: var(--text-4xl);
+            line-height: var(--text-4xl--line-height);
           }
         }
 
@@ -335,16 +338,11 @@ export default function Hero() {
           }
 
           .hero-fluid-title {
-            font-size: clamp(
-              52px,
-              calc(52px + (100vw - 1024px) * 0.03846),
-              68px
+            font-size: calc(
+              clamp(52px, calc(52px + (100vw - 1024px) * 0.03846), 68px) *
+                var(--font-scale)
             );
-            line-height: clamp(
-              53px,
-              calc(53px + (100vw - 1024px) * 0.03846),
-              69px
-            );
+            line-height: 1.02;
             white-space: nowrap;
           }
         }

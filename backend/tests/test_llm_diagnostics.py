@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import httpx
 import openai
+from llm_stream_fixture import stream_response
 from openai.types.chat import ChatCompletionMessage
 
 from app.agents.decision.llm import generate_decision
@@ -62,7 +63,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                     **kwargs,
                     http_client=httpx.AsyncClient(
                         transport=httpx.MockTransport(
-                            lambda request: httpx.Response(200, json=response)
+                            lambda request: stream_response(200, json=response)
                         )
                     ),
                 )

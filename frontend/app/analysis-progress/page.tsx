@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
@@ -13,10 +14,16 @@ import ProgressTracker from '@/components/analysis-progress/ProgressTracker';
 import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
 import { colors } from '@/styles/tokens';
+import { formatArea } from '@/components/building-confirm/labels';
 import {
   mockAnalysisProgress,
   type AnalysisStage,
+  type AnalysisSummary,
+  type ClarifyingQuestion,
+  type ClarifyingAnswers,
 } from '@/lib/mockData/analysisProgress';
+import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
+import { loadConfirmedBuilding, loadVacancyInput } from '@/lib/api/resultStore';
 import { useAnalysisProgressSimulation } from '@/lib/hooks/useAnalysisProgressSimulation';
 
 // 화면 상단 문구는 stage 하나로만 정한다 — "분석 중"과 "확인 필요"가 동시에
@@ -78,15 +85,64 @@ const TONE_COLORS = {
 } as const;
 
 const REPORT_PATH = '/report';
+// 1평 = 약 3.3058㎡
+const PYEONG_M2 = 3.3058;
 
 export default function AnalysisProgressPage() {
   const router = useRouter();
   // TODO: mock 타이머 대신 실제 분석 완료 신호(폴링/웹소켓)로 stage를 바꾸고,
   // 완료 시 결과를 saveAnalysisResult()로 저장해 둔다. 저장된 결과가
-  // 없으면 /report는 mock 리포트를 보여준다.
+  // 없으면 리포트 화면은 mock 리포트를 보여준다.
   const { steps, stage, resume } = useAnalysisProgressSimulation(
     mockAnalysisProgress.steps
   );
+  // 앞 단계(주소 입력·상가 정보 확인)에서 받은 값이 있으면 그걸로 채우고,
+  // 이 화면에 바로 들어온 경우에만 mock 값을 쓴다.
+  const [summary, setSummary] = useState<AnalysisSummary>(
+    mockAnalysisProgress.summary
+  );
+  const [questions, setQuestions] = useState<ClarifyingQuestion[]>(
+    mockAnalysisProgress.questions
+  );
+
+  useEffect(() => {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      new URLSearchParams(window.location.search).get('demoQuestions') ===
+        'alternative'
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuestions(demoClarifyingQuestions);
+    }
+    const input = loadVacancyInput();
+    if (!input) {
+      return;
+    }
+    const building = loadConfirmedBuilding();
+    const area = building?.exclusiveAreaM2.value ?? null;
+    const radius = Number(input.radius.trim());
+    // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
+    setSummary((prev) => ({
+      ...prev,
+      address: input.roadAddress,
+      floorAndUnit: input.floorUnit.trim() || '—',
+      radiusM:
+        input.radius.trim() && Number.isInteger(radius) && radius > 0
+          ? radius
+          : prev.radiusM,
+      exclusiveAreaText:
+        area === null
+          ? '확인 안 됨'
+          : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
+    }));
+    // 상가 정보 확인에서 주차를 이미 답했으면(가능/불가) 같은 질문을 다시 하지 않는다.
+    const parking = building?.parking.value;
+    if (parking === 'possible' || parking === 'impossible') {
+      setQuestions((prev) =>
+        prev.filter((question) => question.questionId !== 'parking')
+      );
+    }
+  }, []);
 
   // 완료돼도 자동으로 넘기지 않고, 사용자가 "리포트 보기"를 눌렀을 때만
   // 이동한다. replace로 이동해 리포트에서 뒤로 가기를 눌러도 이미 끝난 진행
@@ -95,10 +151,26 @@ export default function AnalysisProgressPage() {
     router.replace(REPORT_PATH);
   }
 
-  function handleAnswersSubmit(answers: Record<string, string>, note: string) {
+  function handleAnswersSubmit(answers: ClarifyingAnswers, note: string) {
     // mock 단계 — 실제 제출 API 없음. ClarifyingPanel이 이미 콘솔에 기록한다.
-    void answers;
-    void note;
+    sessionStorage.setItem(
+      'chaeum:clarifyingRecord',
+      JSON.stringify({
+        answers: questions
+          .filter((question) => answers[question.questionId])
+          .map((question) => {
+            const answer = answers[question.questionId];
+            return {
+              label: question.shortLabel,
+              answer:
+                question.options.find((option) => option.id === answer.optionId)
+                  ?.label ?? answer.optionId,
+              detail: answer.detail,
+            };
+          }),
+        note,
+      })
+    );
     resume();
   }
 
@@ -113,12 +185,12 @@ export default function AnalysisProgressPage() {
       <Header />
 
       <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
-        <StepIndicator currentStep={2} />
+        <StepIndicator currentStep={3} />
 
         <div className="flex w-full items-start justify-between gap-6">
           <div className="flex flex-col items-start gap-3">
             <h1
-              className="text-[32px] leading-tight font-bold"
+              className="text-32 leading-tight font-bold"
               style={{ color: colors.text.primary }}
             >
               {copy.title}
@@ -143,7 +215,7 @@ export default function AnalysisProgressPage() {
             />
             <div className="flex flex-col gap-0.5">
               <p
-                className="text-[15px] font-semibold"
+                className="text-15 font-semibold"
                 style={{
                   color:
                     copy.tone === 'waiting'
@@ -153,10 +225,7 @@ export default function AnalysisProgressPage() {
               >
                 {copy.statusLabel}
               </p>
-              <p
-                className="text-[13px]"
-                style={{ color: colors.text.secondary }}
-              >
+              <p className="text-13" style={{ color: colors.text.secondary }}>
                 {copy.statusHint}
               </p>
             </div>
@@ -166,18 +235,15 @@ export default function AnalysisProgressPage() {
         {/* 데스크톱 3컬럼 기준(반응형은 이번 범위 밖). 중앙 재질문 영역이 가장
             넓고, 좌측 진행 현황·우측 분석 대상은 고정 폭 보조 영역이다. */}
         <div className="grid w-full grid-cols-[340px_minmax(0,1fr)_300px] items-start gap-6">
-          <ProgressTracker
-            steps={steps}
-            questionCount={mockAnalysisProgress.questions.length}
-          />
+          <ProgressTracker steps={steps} questionCount={questions.length} />
           <ClarifyingPanel
             stage={stage}
             steps={steps}
-            questions={mockAnalysisProgress.questions}
+            questions={questions}
             onSubmit={handleAnswersSubmit}
             onViewReport={goToReport}
           />
-          <AnalysisSummaryPanel summary={mockAnalysisProgress.summary} />
+          <AnalysisSummaryPanel summary={summary} />
         </div>
       </main>
     </div>

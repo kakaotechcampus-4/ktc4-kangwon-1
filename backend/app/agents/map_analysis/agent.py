@@ -16,7 +16,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.industries.catalog import CATALOG_VERSION
-from app.industries.lookup import get
+from app.industries.lookup import get, industry_terms
 from app.llm.budget import BudgetStorageError
 from app.schemas import (
     AnalysisTask,
@@ -30,7 +30,7 @@ from app.schemas import (
 
 from .client import MapApiError, PlaceClient
 from .config import Settings
-from .mapping import GenerateMapping, map_categories
+from .mapping import GenerateMapping, judge_matches
 
 # 카카오가 정한 18종 분류. 이름은 응답의 category_group_name 을 그대로 옮김
 #
@@ -131,7 +131,7 @@ async def observe(
     generate_mapping: GenerateMapping | None = None,
     mapping_cache_path: Path | None = None,
 ) -> MapObservation:
-    """원본 장소를 보존하고 조회 표본만 공통 업종으로 집계합니다."""
+    """원본 장소를 보존하고 질문 업종별 동종 표본을 집계합니다."""
     task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
     place_client = client or PlaceClient(settings or Settings.from_env())
     wanted = plan.unique_queries()
@@ -139,7 +139,11 @@ async def observe(
     def category(q):
         if q.facility_code:
             return q.facility_code
-        # 카카오 대응이 명확한 음식점·카페만 제한합니다. 다른 업종은 임의 배정하지 않습니다.
+        # 대응이 명확한 업종만 제한합니다. 교육 지원 서비스업(P107)은 제한하지 않습니다.
+        if q.industry_code in {"P105", "P106"}:
+            return "AC5"
+        if q.industry_code in {"Q101", "Q102"}:
+            return "HP8"
         if q.industry_code == "I212":
             return "CE7"
         return "FD6" if get(q.industry_code).major_code == "I2" else None
@@ -167,7 +171,6 @@ async def observe(
             await place_client.aclose()
     queries: dict[str, MapQueryResult] = {}
     places: dict[str, MapPlace] = {}
-    industry_ids: set[str] = set()
     conflicts: set[str] = set()
     warnings = ["지도 등록 정보의 첫 페이지 표본이며 실제 영업 점포 전수가 아닙니다."]
     degraded = False
@@ -211,8 +214,6 @@ async def observe(
                 places[pid] = place
             if pid not in ids:
                 ids.append(pid)
-            if q.kind == "industry":
-                industry_ids.add(pid)
         is_end = response["meta"].get("is_end")
         queries[f"q{i}"] = MapQueryResult(
             **base,
@@ -223,53 +224,67 @@ async def observe(
         )
     if degraded:
         warnings.append("형식이 잘못된 장소를 제외하고 유효한 장소만 보존했습니다.")
-    categories = {}
-    category_ids: dict[tuple[str, str], str] = {}
-    for pid in sorted(industry_ids - conflicts):
-        p = places[pid]
-        if not p.category_name.strip() and not p.category_code.strip():
+    pairs = {}
+    pair_ids: dict[tuple, str] = {}
+    targets = {}
+    for qid, query in queries.items():
+        if query.request.kind != "industry" or query.request.industry_code is None:
             continue
-        key = (p.category_name, p.category_code)
-        if key not in category_ids:
-            cid = f"c{len(category_ids) + 1}"
-            category_ids[key] = cid
-            categories[cid] = {"name": p.category_name, "code": p.category_code}
+        for pid in query.place_ids:
+            p = places[pid]
+            if pid in conflicts or not (p.category_name.strip() or p.category_code.strip()):
+                continue
+            broad = len(p.category_name.split(">")) <= 2
+            key = (
+                query.request.industry_code,
+                p.category_name,
+                p.category_code,
+                pid if broad else None,
+            )
+            if key not in pair_ids:
+                pair_id = f"p{len(pair_ids) + 1}"
+                pair_ids[key] = pair_id
+                pairs[pair_id] = {
+                    "target": industry_terms(query.request.industry_code),
+                    "category": {"name": p.category_name, "code": p.category_code},
+                    **({"place_names": [p.name]} if broad else {}),
+                }
+            targets[qid, pid] = pair_ids[key]
     try:
-        mappings = await map_categories(
-            categories, generate=generate_mapping, cache_path=mapping_cache_path
+        matches = await judge_matches(
+            pairs, generate=generate_mapping, cache_path=mapping_cache_path
         )
     except BudgetStorageError:
         raise
     except (RuntimeError, ValueError):
-        mappings = {}
+        matches = {}
+    if set(matches) != set(pairs):
+        warnings.append("동종 판단 실패: 원본 장소만 보존했습니다.")
         degraded = True
-        warnings.append("업종 매핑 실패: 원본 장소만 보존했습니다.")
-    for pid in industry_ids:
-        p = places[pid]
-        mapping = mappings.get(category_ids.get((p.category_name, p.category_code), ""))
-        changes: dict[str, Any]
-        if pid in conflicts:
-            changes = dict(mapping_status="ambiguous", reason="원본 분류 충돌")
-        elif mapping is None:
-            changes = dict(mapping_status="unmapped", reason="매핑 결과 없음")
-        else:
-            changes = dict(
-                mapping_status=mapping.status,
-                industry_code=mapping.industry_code,
-                mapping_method="llm",
-                reason=mapping.reason,
-            )
-        places[pid] = MapPlace.model_validate({**p.model_dump(), **changes})
-        degraded |= places[pid].mapping_status != "mapped"
-    unmapped_count = sum(places[pid].mapping_status != "mapped" for pid in industry_ids)
-    if unmapped_count:
+    groups: dict[str, set[str]] = {}
+    unclear = set()
+    for qid, query in queries.items():
+        if query.request.kind != "industry" or query.request.industry_code is None:
+            continue
+        for pid in query.place_ids:
+            judgement = matches.get(targets.get((qid, pid), ""))
+            match = judgement.status if judgement else "unclear"
+            query.matches[pid] = match
+            if match == "same":
+                groups.setdefault(query.request.industry_code, set()).add(pid)
+            elif match == "unclear":
+                unclear.add(pid)
+        counts = {
+            status: sum(value == status for value in query.matches.values())
+            for status in ("same", "different", "unclear")
+        }
         warnings.append(
-            f"업종 미확정 장소 {unmapped_count}곳은 원본만 보존하고 업종별 건수에서 제외했습니다."
+            f"검색어 {query.request.query}: 동종 {counts['same']}곳 · "
+            f"다른 업종 {counts['different']}곳 · 불확실 {counts['unclear']}곳"
         )
-    groups: dict[str, list[str]] = {}
-    for pid, p in places.items():
-        if p.industry_code:
-            groups.setdefault(p.industry_code, []).append(pid)
+    if unclear:
+        degraded = True
+        warnings.append(f"동종 여부 불확실 장소 {len(unclear)}곳은 업종별 건수에서 제외했습니다.")
     industries = {
         code: MapIndustry(
             name=get(code).name,

@@ -66,20 +66,24 @@ SCALE_PERCENTILES: dict[int, float] = {
 }
 
 
-def index(value: float, average: float) -> float:
+def index(value: float | None, average: float | None) -> float | None:
     """서울 평균 대비 배수. 1.0 이 평균, 1.2 면 평균의 1.2배."""
+    if value is None or average is None:
+        return None
     if average <= 0:
         return 0.0
     return round(value / average, 3)
 
 
-def scale_percentile(mean_per_area: float) -> int:
+def scale_percentile(mean_per_area: float | None) -> int | None:
     """상권 1곳당 유동인구 → 서울 상권 중 백분위(0~100).
 
     에이전트는 반경 안 상권 여러 곳을 합산하므로, 분포(상권 1곳 단위)와 기준을 맞추려면
     **상권 수로 나눈 평균**을 넣어야 한다. 합계를 그대로 넣으면 상권이 많은 지역이 무조건
     상위로 나온다.
     """
+    if mean_per_area is None:
+        return None
     boundaries = sorted(SCALE_PERCENTILES.items())
     if mean_per_area <= boundaries[0][1]:
         return boundaries[0][0]
@@ -94,7 +98,7 @@ def scale_percentile(mean_per_area: float) -> int:
     return 99
 
 
-def time_indices(time_per_hour_share: dict[str, float]) -> dict[str, float]:
+def time_indices(time_per_hour_share: dict[str, float | None]) -> dict[str, float | None]:
     """시간대별 시간당 비중 → 서울 평균 대비 배수."""
     return {
         band: index(time_per_hour_share[band], TIME_PER_HOUR_SHARE_AVG[band]) for band in TIME_BANDS

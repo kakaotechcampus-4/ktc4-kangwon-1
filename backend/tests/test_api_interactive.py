@@ -2,6 +2,7 @@
 
 import asyncio
 import tempfile
+import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -46,15 +47,11 @@ class InteractiveApiTests(unittest.TestCase):
         from app.services.analysis import resume_analysis
 
         waiting = self.start(allow_questions=True).json()
-        ready = asyncio.Event()
-        arrivals = 0
+        started, release = threading.Event(), threading.Event()
 
         async def synchronized(submission, **kwargs):
-            nonlocal arrivals
-            arrivals += 1
-            if arrivals == 2:
-                ready.set()
-            await asyncio.wait_for(ready.wait(), 5)
+            started.set()
+            await asyncio.to_thread(release.wait, 5)
             return await resume_analysis(submission, **kwargs)
 
         self.client.app.dependency_overrides[resume_runner] = lambda: synchronized
@@ -70,7 +67,14 @@ class InteractiveApiTests(unittest.TestCase):
             ).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(submit, ["1층", "2층"]))
+            first = pool.submit(submit, "1층")
+            try:
+                self.assertTrue(started.wait(5))
+                second = pool.submit(submit, "2층")
+                second_result = second.result(timeout=5)
+            finally:
+                release.set()
+            results = [first.result(timeout=5), second_result]
         self.assertEqual(sorted(results), [200, 409])
 
     def test_map_questions_answers_and_duplicate_submission(self):

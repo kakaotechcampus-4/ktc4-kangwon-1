@@ -3,7 +3,7 @@
 import os
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from importlib.resources import files
 from pathlib import Path
 from threading import Lock
@@ -65,9 +65,38 @@ def _initialize(path: Path) -> Path:
             if "catalog_version" not in columns:
                 connection.execute("ALTER TABLE analysis_requests ADD COLUMN catalog_version TEXT")
         _migrate_deliberation(connection, schema)
+        _migrate_evaluation_rounds(connection, schema)
     finally:
         connection.close()
     return path
+
+
+def _migrate_evaluation_rounds(connection: sqlite3.Connection, schema: str) -> None:
+    """기존 전문가 이력을 보존하며 평가 이후 네 라운드를 추가로 허용합니다."""
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        definition = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name='specialist_consults'"
+        ).fetchone()[0]
+        if "BETWEEN 1 AND 2" not in definition:
+            return
+        create = next(
+            s for s in schema.split(";") if "CREATE TABLE IF NOT EXISTS specialist_consults" in s
+        )
+        extras = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE tbl_name='specialist_consults' "
+            "AND type IN ('index','trigger') AND sql IS NOT NULL"
+        ).fetchall()
+        connection.execute(
+            create.replace("IF NOT EXISTS specialist_consults", "specialist_consults_new")
+        )
+        connection.execute("INSERT INTO specialist_consults_new SELECT * FROM specialist_consults")
+        connection.execute("DROP TABLE specialist_consults")
+        connection.execute("ALTER TABLE specialist_consults_new RENAME TO specialist_consults")
+        for (sql,) in extras:
+            connection.execute(sql)
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise sqlite3.IntegrityError("기존 전문가 이력의 외래키 검사가 실패했습니다.")
 
 
 def _migrate_waiting(connection: sqlite3.Connection, schema: str) -> None:
@@ -85,8 +114,14 @@ def _migrate_waiting(connection: sqlite3.Connection, schema: str) -> None:
                 "SELECT sql FROM sqlite_master WHERE tbl_name='analysis_requests' "
                 "AND type IN ('index','trigger') AND sql IS NOT NULL"
             ).fetchall()
-            create = schema.split(";", 1)[0].replace(
-                "CREATE TABLE IF NOT EXISTS analysis_requests", "CREATE TABLE analysis_requests_new"
+            # SQL의 주석·문자열·문장 순서는 SQLite 파서가 처리하게 합니다.
+            with closing(sqlite3.connect(":memory:")) as template:
+                template.executescript(schema)
+                create = template.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='analysis_requests'"
+                ).fetchone()[0]
+            create = create.replace(
+                "CREATE TABLE analysis_requests", "CREATE TABLE analysis_requests_new", 1
             )
             connection.execute(create)
             columns = ",".join(
