@@ -1,4 +1,10 @@
-import type { DecisionResult, StoredAnalysis } from '@/lib/api/types';
+import type {
+  AcceptedAnalysis,
+  AnalysisEvents,
+  AnswerSubmission,
+  DecisionResult,
+  StoredAnalysis,
+} from '@/lib/api/types';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -94,17 +100,93 @@ export async function createAnalysis(
 }
 
 export async function getAnalysis(requestId: string): Promise<StoredAnalysis> {
-  const response = await fetch(
+  return requestJson<StoredAnalysis>(
     `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}`
   );
+}
 
-  if (response.status === 404) {
-    throw new AnalysisApiError(404, '분석 요청을 찾을 수 없습니다.');
+// ---------------------------------------------------------------------------
+// 진행 화면용 비동기 흐름 (docs/API_CONTRACT.md "비동기 실행과 진행 이벤트")
+//   POST /analyses?wait=false → 202 → GET /events 폴링 → GET /analyses/{id}
+//   질문 대기면 POST /answers?wait=false → 다시 events 폴링
+// ---------------------------------------------------------------------------
+
+export type AnalysisRequestInput = {
+  address: string;
+  radiusM?: number;
+  allowQuestions?: boolean;
+};
+
+/**
+ * 분석 요청 본문. 백엔드 AnalysisRequest는 정의되지 않은 필드를 422로
+ * 거절하므로 여기서 정한 필드만 보낸다. 상가 정보 확인 화면의 주차·
+ * 근린생활시설·오수정화시설은 백엔드 필드가 생기면 이 함수에 추가한다.
+ */
+export function buildAnalysisRequestBody({
+  address,
+  radiusM,
+  allowQuestions = false,
+}: AnalysisRequestInput): Record<string, unknown> {
+  if (
+    radiusM !== undefined &&
+    (!Number.isSafeInteger(radiusM) || radiusM <= 0)
+  ) {
+    throw new Error('분석 반경은 미터 단위의 양의 정수로 입력해 주세요.');
   }
+  return {
+    address,
+    ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
+    ...(allowQuestions ? { allow_questions: true } : {}),
+  };
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
   if (!response.ok) {
-    const detail = await parseErrorDetail(response);
-    throw new AnalysisApiError(response.status, detail);
+    throw new AnalysisApiError(
+      response.status,
+      response.status === 404
+        ? '분석 요청을 찾을 수 없습니다.'
+        : await parseErrorDetail(response)
+    );
   }
+  return (await response.json()) as T;
+}
 
-  return (await response.json()) as StoredAnalysis;
+/** 분석을 백그라운드로 시작하고 request_id를 바로 받는다(202). */
+export async function startAnalysis(
+  input: AnalysisRequestInput
+): Promise<AcceptedAnalysis> {
+  return requestJson<AcceptedAnalysis>(
+    `${API_BASE_URL}/api/v1/analyses?wait=false`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildAnalysisRequestBody(input)),
+    }
+  );
+}
+
+/** after 이후의 진행 이벤트. 다음 호출에는 응답의 next_after를 넘긴다. */
+export async function getAnalysisEvents(
+  requestId: string,
+  after: number
+): Promise<AnalysisEvents> {
+  return requestJson<AnalysisEvents>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/events?after=${after}`
+  );
+}
+
+/** 질문 답변을 제출하고 최종판단을 백그라운드로 재개한다(202). */
+export async function submitAnswers(
+  submission: AnswerSubmission
+): Promise<AcceptedAnalysis> {
+  return requestJson<AcceptedAnalysis>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(submission.request_id)}/answers?wait=false`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(submission),
+    }
+  );
 }
