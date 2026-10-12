@@ -12,7 +12,8 @@
   max-width: 850px;
   letter-spacing: -0.045em;
   color: var(--rp-navy);
-  font-size: calc(clamp(32px, 3.3vw, 48px) * var(--font-scale));
+  /* 다른 단계 화면의 큰 제목(text-32)과 같은 기준 크기 */
+  font-size: calc(32px * var(--font-scale));
 }
 .report-page .report-chapter {
   border-bottom: 0;
@@ -601,6 +602,13 @@
 }
 .report-page :is(.fp-donut-legend-name, .ca-donut-legend-name) {
   white-space: normal !important;
+  /* 칸이 좁아도 업종 이름이 한 글자씩 쪼개지지 않게 최소 폭을 둔다. */
+  min-width: 4.5em !important;
+  word-break: keep-all;
+}
+/* 이름과 값이 한 줄에 다 들어가지 않으면 값을 다음 줄로 내린다. */
+.report-page :is(.fp-donut-legend-row, .ca-donut-legend-row) {
+  flex-wrap: wrap;
 }
 .report-page .oc-chip {
   min-height: 44px;

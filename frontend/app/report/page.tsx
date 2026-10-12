@@ -426,7 +426,14 @@ export default function ReportPage() {
       <Header />
       <div
         className="report-page mx-auto max-w-[1360px] px-5 pb-20 pt-0 sm:px-8"
-        style={{ '--font-scale': largeText ? 1.2 : 1 } as CSSProperties}
+        // 기본은 사이트 글씨 배율을 그대로 쓰고, "글씨 크게 보기"는 그 위에 1.2배를 곱한다.
+        style={
+          {
+            '--font-scale': largeText
+              ? 'calc(var(--site-font-scale) * 1.2)'
+              : 'var(--site-font-scale)',
+          } as CSSProperties
+        }
       >
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -452,7 +459,7 @@ export default function ReportPage() {
           <header className="report-masthead">
             <div>
               <p className="report-masthead-eyebrow">상가 분석</p>
-              <h1 className="report-cover-title text-[34px] font-bold leading-snug sm:text-[44px]">
+              <h1 className="report-cover-title font-bold leading-snug">
                 상가 업종 분석 리포트
               </h1>
             </div>

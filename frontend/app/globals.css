@@ -36,9 +36,12 @@ body {
  * 간격(padding·margin·gap)은 rem 기준이라 루트 글씨 크기는 건드리지 않고,
  * 아래 글씨 크기 토큰에만 배율을 곱한다.
  * 특정 영역만 배율에서 빼려면 그 요소에 [--font-scale:1]을 지정한다.
+ * 사이트 기본값은 --site-font-scale에 따로 두어, 리포트의 "글씨 크게 보기"처럼
+ * 영역 안에서 배율을 덮어쓸 때도 이 값을 기준으로 곱할 수 있게 한다.
  */
 :root {
-  --font-scale: 1.125;
+  --site-font-scale: 1.125;
+  --font-scale: var(--site-font-scale);
 }
 
 /*
