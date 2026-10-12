@@ -37,6 +37,11 @@ type ClarifyingPanelProps = {
   questions: ClarifyingQuestion[];
   onSubmit: (answers: ClarifyingAnswers, note: string) => void;
   onViewReport: () => void;
+  // 앞 단계에서 이미 받은 값으로 미리 채운 답(예: 층·전용면적). 질문이 바뀌면
+  // 부모가 key를 바꿔 이 값으로 다시 시작하게 한다.
+  initialAnswers?: ClarifyingAnswers;
+  // "추가로 알려주실 내용" 칸. 실제 백엔드는 이 값을 받을 필드가 없어 숨긴다.
+  showNote?: boolean;
 };
 
 /**
@@ -50,9 +55,12 @@ export default function ClarifyingPanel({
   questions,
   onSubmit,
   onViewReport,
+  initialAnswers,
+  showNote = true,
 }: ClarifyingPanelProps) {
-  // 답변/입력값은 로컬 state로만 관리한다 — 실제 제출 API는 아직 없다.
-  const [answers, setAnswers] = useState<ClarifyingAnswers>({});
+  const [answers, setAnswers] = useState<ClarifyingAnswers>(
+    initialAnswers ?? {}
+  );
   const [note, setNote] = useState('');
 
   if (stage === 'analyzing') {
@@ -161,26 +169,28 @@ export default function ClarifyingPanel({
         ))}
       </div>
 
-      <label className="flex flex-col gap-2">
-        <span
-          className="text-sm font-semibold"
-          style={{ color: colors.text.secondary }}
-        >
-          추가로 알려주실 내용 <span className="font-normal">(선택)</span>
-        </span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={2}
-          placeholder="예: 2층까지 함께 임대 가능해요"
-          className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
-          style={{
-            borderColor: colors.neutral.border,
-            backgroundColor: colors.neutral.white,
-            color: colors.text.primary,
-          }}
-        />
-      </label>
+      {showNote && (
+        <label className="flex flex-col gap-2">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            추가로 알려주실 내용 <span className="font-normal">(선택)</span>
+          </span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={2}
+            placeholder="예: 2층까지 함께 임대 가능해요"
+            className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
+            style={{
+              borderColor: colors.neutral.border,
+              backgroundColor: colors.neutral.white,
+              color: colors.text.primary,
+            }}
+          />
+        </label>
+      )}
 
       <div className="flex flex-col gap-2">
         <Button

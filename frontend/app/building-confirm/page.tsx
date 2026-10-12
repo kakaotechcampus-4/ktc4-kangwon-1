@@ -23,7 +23,7 @@ import {
   formatArea,
 } from '@/components/building-confirm/labels';
 import { colors } from '@/styles/tokens';
-import { createAnalysis } from '@/lib/api/analyses';
+import { startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   LOOKUP_ORDER,
@@ -40,7 +40,6 @@ import {
   clearAnalysisResult,
   clearRequestId,
   loadVacancyInput,
-  saveAnalysisResult,
   saveConfirmedBuilding,
   saveRequestId,
   type VacancyInput,
@@ -177,24 +176,17 @@ export default function BuildingConfirmPage() {
       const fullAddress = input.floorUnit.trim()
         ? `${input.roadAddress} ${input.floorUnit}`
         : input.roadAddress;
-      const { result, requestId } = await createAnalysis(fullAddress, {
+      // 분석을 백그라운드로 시작하고(202) 바로 진행 화면으로 간다. 진행 상황과
+      // 질문·결과는 진행 화면이 요청 ID로 받아 온다.
+      const { request_id: requestId } = await startAnalysis({
+        address: fullAddress,
         radiusM: parseRadius(input.radius),
+        allowQuestions: true,
       });
-
-      if (result.status === 'no_data') {
-        console.warn('[BuildingConfirmPage] no_data:', result.limitations);
-        alert(
-          [
-            '이 주소에서는 추천할 업종을 찾지 못했습니다.',
-            ...result.limitations,
-          ].join('\n')
-        );
-        return;
-      }
-
+      // 이전 분석 결과가 리포트에 섞이지 않게 지우고 새 요청 ID만 남긴다.
+      clearAnalysisResult();
       saveRequestId(requestId);
-      saveAnalysisResult(result);
-      router.push('/analysis-progress');
+      router.push(`/analysis-progress?id=${encodeURIComponent(requestId)}`);
     } catch (error) {
       console.error('[BuildingConfirmPage] 분석 요청 실패:', error);
       alert(
@@ -393,7 +385,7 @@ export default function BuildingConfirmPage() {
                     onClick={handleConfirm}
                   >
                     {isSubmitting
-                      ? '분석 요청 중… (최대 10분 정도 걸릴 수 있어요)'
+                      ? '분석을 시작하고 있어요…'
                       : '맞아요 · 이대로 분석하기'}
                   </Button>
                 </div>

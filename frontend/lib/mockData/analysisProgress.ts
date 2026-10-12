@@ -30,7 +30,8 @@ export type AnalysisStage =
   | 'analyzing' // 추가 질문이 생기기 전까지 분석 중
   | 'awaiting_input' // 정보가 부족해 사용자 답변을 기다리는 중
   | 'resuming' // 답변을 받아 최종 판단을 이어가는 중
-  | 'completed';
+  | 'completed'
+  | 'failed'; // 분석 실패(실제 백엔드 연결 시)
 
 export type ClarifyingOption = {
   id: string;
