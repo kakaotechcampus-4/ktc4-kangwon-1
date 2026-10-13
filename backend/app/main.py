@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
+from app.api.v1.building import router as building_router
 from app.api.v1.routes import health as api_health
 from app.config import load_environment
 from app.db import repository
@@ -64,6 +65,7 @@ def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = Tr
         expose_headers=["X-Request-ID"],
     )
     app.include_router(v1_router)
+    app.include_router(building_router)
 
     @app.get("/health", summary="상태 확인")
     async def health() -> dict[str, str]:
