@@ -347,7 +347,7 @@ events를 1초마다 폴링합니다. 백그라운드 동시 실행은 `ANALYSIS
 | `ELICE_API_KEY`, `ELICE_BASE_URL`, `ELICE_MODEL`                      | 공통 모델 연결                                                |
 | `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SECONDS`, `LLM_REASONING_EFFORT`       | 공통 모델 옵션. reasoning은 모델이 지원할 때만                |
 | `DECISION_LLM_*`                                                      | 판정관 모델                                                   |
-| `INDUSTRY_MAPPING_LLM_*`, `MAP_MAPPING_LLM_*`                         | 업종 매핑·지도 매핑 모델                                      |
+| `MAP_MAPPING_LLM_*`                                                   | 지도 업종 일치 판정 모델                                      |
 | `SPECIALIST_{전문가}_LLM_*`                                           | 전문가별 모델. 비우면 공통 값을 씀                            |
 | `ANALYSIS_MODE`                                                       | `single_decision`(기본) 또는 `multi_agent`                    |
 | `SQLITE_PATH`                                                         | DB 경로. 기본 `storage/chaeum.sqlite3`                        |

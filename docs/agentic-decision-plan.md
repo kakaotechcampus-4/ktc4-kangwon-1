@@ -329,6 +329,7 @@ GET /api/v1/analyses/{id}는 기존 envelope(status/site/result/error 등)를 �
 | 재수집·부모 snapshot | 동일 요청의 기초 자료 재수집·부모/자식 체인·채택 snapshot 선택·동일 조건 재계산 |
 | PR7 진행 이벤트 v2·프론트 | 9절 stage·실제 폴링·질문/재개·배지/구간/L 미검토 UI·v1/v2 adapter |
 | PR8 기존 경로 정리 | 신규 경로 실테스트 후 브리핑·전문가 되묻기·거대 context 신규 실행 제거. 과거 이력 reader 보존 |
+| 모델별 사용량 기록 | `app/llm/budget.py` 사용량 기록에 요청 모델명·응답 실제 모델명을 추가한다. 현재 모델명이 저장되지 않아 과거 실행의 사용 모델을 식별할 수 없음 |
 
 구현 PR은 ruff·format·mypy·unittest·catalog check, 프론트 PR은 format/lint/build를 검사한다. 실 API·유료 실행은 별도 승인 범위에서만 진행한다.
 
