@@ -166,6 +166,7 @@ def _build_input(
         industry = {
             "industry_id": str(row["service_id"]),
             "industry_name": str(row["service_name"]),
+            "zero_filled_sources": to_int(row.get("zero_filled_sources", 0)),
             "data_available": True,
             "score_available": True,
             "data_status": row["data_status"],
@@ -225,6 +226,7 @@ def _build_input(
             {
                 "industry_id": str(row["service_id"]),
                 "industry_name": str(row["service_name"]),
+                "zero_filled_sources": to_int(row.get("zero_filled_sources", 0)),
                 "data_available": bool(row["data_available"]),
                 "score_available": False,
                 "data_status": row["data_status"],

@@ -85,6 +85,7 @@ def _aggregate_rows(
         if key in unique and row != unique[key]:
             raise UpstreamDataError("같은 분기·상권·원본업종에 상충하는 중복 데이터가 있습니다.")
         unique[key] = row
+    response_quarters = {quarter for quarter, _, _ in unique}
 
     numeric = (
         "similr_induty_stor_co",
@@ -112,14 +113,18 @@ def _aggregate_rows(
         observed = groups.get(code, {})
         sources = INDUSTRY_TO_SEOUL.get(code, ())
         quarterly: dict[str, dict[str, float]] = {}
+        # 같은 원천도 빠진 분기마다 따로 세는 분기×원천 누락 건수입니다.
+        zero_filled_sources = 0
         for quarter in quarters:
             source_rows = observed.get(quarter, {})
-            # 일부 원천이 빠지면 업종 전체 합계라고 주장할 수 없습니다.
-            complete_sources = set(source_rows) == set(sources) and bool(sources)
+            # 2026-10 확인한 2026Q2 표본은 0 행 미제공: 응답 있는 분기의 누락=0 해석을 적용합니다.
+            quarter_available = quarter in response_quarters and bool(sources)
+            if quarter_available:
+                zero_filled_sources += len(set(sources) - set(source_rows))
             quarterly[quarter] = {
                 field: (
                     sum(row[field] for row in source_rows.values())
-                    if complete_sources
+                    if quarter_available
                     else float("nan")
                 )
                 for field in ("similr_induty_stor_co", "opbiz_stor_co", "clsbiz_stor_co")
@@ -143,6 +148,7 @@ def _aggregate_rows(
             details.append(
                 {
                     "industry_id": code,
+                    "zero_filled_sources": zero_filled_sources,
                     "store_counts": counts("similr_induty_stor_co"),
                     "opened_counts": counts("opbiz_stor_co"),
                     "closed_counts": counts("clsbiz_stor_co"),
@@ -168,7 +174,9 @@ def _aggregate_rows(
             total("clsbiz_stor_co", quarters[:4]),
             total("similr_induty_stor_co", quarters[:4]),
         )
-        complete = all(pd.notna(v) for values in quarterly.values() for v in values.values())
+        complete = bool(observed) and all(
+            pd.notna(v) for values in quarterly.values() for v in values.values()
+        )
         if code in UNSUPPORTED_SERVICE_INDUSTRIES:
             status, reason = "unsupported", "서울시 생활밀접업종 데이터에 직접 대응 업종 없음"
         elif not observed:
@@ -190,7 +198,8 @@ def _aggregate_rows(
                 "data_available": bool(observed),
                 "data_status": status,
                 "data_complete": complete,
-                "observed_quarters": len(observed),
+                "observed_quarters": len(response_quarters) if observed else 0,
+                "zero_filled_sources": zero_filled_sources,
                 "expected_source_count": len(sources),
                 "observed_source_rows": sum(len(values) for values in observed.values()),
                 "expected_source_rows": len(sources) * quarter_count,

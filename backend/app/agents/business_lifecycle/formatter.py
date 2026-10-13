@@ -60,6 +60,7 @@ def format_scored_industry(
     return {
         "industry_id": industry["industry_id"],
         "industry_name": industry["industry_name"],
+        "zero_filled_sources": industry.get("zero_filled_sources", 0),
         "score": industry["lifecycle_score"],
         "type": industry["type"],
         "citable": {"type": False, "evidence": False},
@@ -88,6 +89,7 @@ def format_unscored_industry(
     return {
         "industry_id": industry["industry_id"],
         "industry_name": industry["industry_name"],
+        "zero_filled_sources": industry.get("zero_filled_sources", 0),
         "score": None,
         "type": "판단 보류",
         "confidence": industry.get(
@@ -120,6 +122,11 @@ def build_warnings(
     """
 
     warnings: list[str] = [MAPPING_REVIEW_WARNING]
+    if any(industry.get("zero_filled_sources", 0) for industry in industries):
+        warnings.append(
+            "상권 응답이 있는 분기의 누락 원천을 0으로 처리했습니다. "
+            "업종별 zero_filled_sources는 분기×원천 보충 건수이며 실제 0 행 관측과 구분합니다."
+        )
 
     unscored_count = sum(1 for industry in industries if not industry["score_available"])
 

@@ -151,17 +151,14 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(frame.loc["I202", "data_status"], "missing")
         self.assertEqual(frame.loc["M107", "data_status"], "unsupported")
 
-    async def test_missing_source_or_quarter_cannot_claim_complete_score(self):
-        for rows in (
-            [r for r in raw_rows() if r["svc_induty_cd"] != "CS100005"],
-            [r for r in raw_rows() if r["stdr_yyqu_cd"] != "20242"],
-        ):
-            frame = await preprocess(rows)
-            self.assertIn("I210", set(frame.service_id))
-            row = frame.set_index("service_id").loc["I210"]
-            self.assertFalse(row.data_complete)
-            score = calculate_lifecycle_scores(frame, 4).set_index("service_id")
-            self.assertTrue(pd.isna(score.loc["I210", "lifecycle_score"]))
+    async def test_missing_area_quarter_cannot_claim_complete_score(self):
+        rows = [r for r in raw_rows() if r["stdr_yyqu_cd"] != "20242"]
+        frame = await preprocess(rows)
+        self.assertIn("I210", set(frame.service_id))
+        row = frame.set_index("service_id").loc["I210"]
+        self.assertFalse(row.data_complete)
+        score = calculate_lifecycle_scores(frame, 4).set_index("service_id")
+        self.assertTrue(pd.isna(score.loc["I210", "lifecycle_score"]))
 
     async def test_api_to_formatter_uses_canonical_51_codes_without_llm(self):
         def request_page(**kwargs):
@@ -230,18 +227,19 @@ class IndustryPipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["industries"], [])
             self.assertEqual(len(result["unavailable_industries"]), len(INDUSTRIES))
 
-    async def test_unavailable_input_keeps_coverage_and_observed_metrics(self):
+    async def test_zero_filled_input_keeps_observed_metrics_and_marks_inferred_sources(self):
         rows = [r for r in raw_rows() if r["svc_induty_cd"] != "CS100005"]
         with patch(
             "app.agents.business_lifecycle.preprocess.fetch_recent_store_data", return_value=rows
         ):
             result = await build_agent_input("3120240", "20244", 4)
-        unavailable = {i["industry_id"]: i for i in result["unavailable_industries"]}
-        self.assertIn("I210", unavailable)
-        row = unavailable["I210"]
-        self.assertEqual(row["data_status"], "incomplete")
-        self.assertFalse(row["data_complete"])
-        self.assertIsNone(row["metrics"]["latest_store_count"])
+        scored = {i["industry_id"]: i for i in result["industries"]}
+        self.assertIn("I210", scored)
+        row = scored["I210"]
+        self.assertEqual(row["data_status"], "observed")
+        self.assertTrue(row["data_complete"])
+        self.assertEqual(row["metrics"]["latest_store_count"], 90)
+        self.assertEqual(row["zero_filled_sources"], 4)
 
 
 class CommercialMasterTests(unittest.IsolatedAsyncioTestCase):
