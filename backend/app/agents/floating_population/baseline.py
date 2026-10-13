@@ -3,7 +3,10 @@
 "이 상권의 20대 비중 13%" 는 그 자체로는 높은지 낮은지 알 수 없다. 결정 에이전트가 점수를
 계산하고 근거 문장을 쓰려면 **서울 평균 대비 상대값**이 필요하다. 그 기준선을 여기 박아둔다.
 
-측정: 2026Q2 · 상권 1,648곳 · 총 1,321,890,016명 (2026-09-11, `tools-local/measure_baseline.py`)
+측정: 2026Q2 · 상권 1,648곳 · 총 1,321,890,016명 (기존 측정 2026-09-11)
+재측정: `backend/scripts/measure_flpop_baseline.py` (2026-10-13).
+가중 비중은 재현됐지만 기존 규모 백분위는 선형 보간 분위수와 달라 그대로 보존했습니다.
+새 시간대 규모 백분위는 상권별 시간대 통행량 / 분기 일수의 선형 보간 분위수입니다.
 
 **가중(합계) 기준이다** — 서울 전체 합계에서 비중을 낸 값이지, 상권별 비중의 평균이 아니다.
 두 방식은 다른 값이 나온다(예: 20대 가중 0.180 vs 비가중 0.163). `classify.SEOUL_AVG` 가
@@ -11,10 +14,12 @@
 서교동 여가상업형 재현), 지표도 같은 기준으로
 통일했다. 섞어 쓰면 지표와 유형 판정이 서로 다른 잣대를 쓰게 된다.
 
-분기 데이터가 갱신되면 `tools-local/measure_baseline.py` 를 다시 돌려 이 상수를 갱신한다.
+분기 데이터가 갱신되면 새 측정 스크립트의 출력과 기존 값을 검토한 뒤 갱신한다.
 """
 
 from __future__ import annotations
+
+import math
 
 from .models import TIME_BANDS
 
@@ -66,11 +71,157 @@ SCALE_PERCENTILES: dict[int, float] = {
 }
 
 
+# 2026Q2 재측정: 단일 시간대의 상권별 일평균 통행량(명/일), 선형 보간 분위수.
+TIME_BAND_DAILY_PERCENTILES: dict[str, dict[int, float]] = {
+    "00_06": {
+        5: 84.3,
+        10: 145.4,
+        15: 253.1,
+        20: 397.6,
+        25: 513.1,
+        30: 650.7,
+        35: 782.6,
+        40: 957.9,
+        45: 1153.1,
+        50: 1338.3,
+        55: 1585.6,
+        60: 1831.5,
+        65: 2134.4,
+        70: 2525.9,
+        75: 2970.1,
+        80: 3551.2,
+        85: 4187.4,
+        90: 5010.3,
+        95: 6459.6,
+    },
+    "06_11": {
+        5: 87.0,
+        10: 150.7,
+        15: 257.9,
+        20: 373.3,
+        25: 483.0,
+        30: 603.2,
+        35: 747.5,
+        40: 883.5,
+        45: 1057.0,
+        50: 1207.4,
+        55: 1402.1,
+        60: 1596.8,
+        65: 1844.9,
+        70: 2159.5,
+        75: 2456.9,
+        80: 2859.3,
+        85: 3382.1,
+        90: 4097.2,
+        95: 5202.0,
+    },
+    "11_14": {
+        5: 54.8,
+        10: 105.3,
+        15: 164.2,
+        20: 231.8,
+        25: 293.8,
+        30: 367.3,
+        35: 455.9,
+        40: 543.5,
+        45: 638.9,
+        50: 727.4,
+        55: 851.2,
+        60: 975.2,
+        65: 1128.3,
+        70: 1270.1,
+        75: 1470.8,
+        80: 1711.7,
+        85: 2019.2,
+        90: 2474.1,
+        95: 3381.6,
+    },
+    "14_17": {
+        5: 55.5,
+        10: 105.4,
+        15: 162.9,
+        20: 233.7,
+        25: 296.5,
+        30: 371.7,
+        35: 456.5,
+        40: 548.0,
+        45: 643.0,
+        50: 718.5,
+        55: 860.5,
+        60: 972.3,
+        65: 1118.8,
+        70: 1278.9,
+        75: 1470.4,
+        80: 1720.3,
+        85: 2053.6,
+        90: 2473.6,
+        95: 3404.1,
+    },
+    "17_21": {
+        5: 75.2,
+        10: 129.6,
+        15: 218.9,
+        20: 303.5,
+        25: 410.3,
+        30: 506.1,
+        35: 606.1,
+        40: 733.2,
+        45: 847.6,
+        50: 987.9,
+        55: 1132.1,
+        60: 1331.7,
+        65: 1521.2,
+        70: 1787.6,
+        75: 2040.3,
+        80: 2316.3,
+        85: 2765.0,
+        90: 3457.2,
+        95: 4475.7,
+    },
+    "21_24": {
+        5: 49.8,
+        10: 84.7,
+        15: 142.4,
+        20: 219.3,
+        25: 277.6,
+        30: 353.8,
+        35: 424.4,
+        40: 519.9,
+        45: 611.6,
+        50: 718.2,
+        55: 824.3,
+        60: 964.1,
+        65: 1112.7,
+        70: 1288.4,
+        75: 1506.2,
+        80: 1767.4,
+        85: 2070.2,
+        90: 2507.7,
+        95: 3257.1,
+    },
+}
+
+
 def index(value: float, average: float) -> float:
     """서울 평균 대비 배수. 1.0 이 평균, 1.2 면 평균의 1.2배."""
     if average <= 0:
         return 0.0
     return round(value / average, 3)
+
+
+def _percentile(value: float, thresholds: dict[int, float]) -> int:
+    """분위 경계 사이를 보간하며 기존 규모 백분위의 끝값 정책을 유지합니다."""
+    boundaries = sorted(thresholds.items())
+    if value <= boundaries[0][1]:
+        return boundaries[0][0]
+    prev_p, prev_v = boundaries[0]
+    for p, v in boundaries[1:]:
+        if value <= v:
+            span = v - prev_v
+            frac = (value - prev_v) / span if span else 0.0
+            return int(round(prev_p + frac * (p - prev_p)))
+        prev_p, prev_v = p, v
+    return 99
 
 
 def scale_percentile(mean_per_area: float) -> int:
@@ -80,18 +231,14 @@ def scale_percentile(mean_per_area: float) -> int:
     **상권 수로 나눈 평균**을 넣어야 한다. 합계를 그대로 넣으면 상권이 많은 지역이 무조건
     상위로 나온다.
     """
-    boundaries = sorted(SCALE_PERCENTILES.items())
-    if mean_per_area <= boundaries[0][1]:
-        return boundaries[0][0]
-    prev_p, prev_v = boundaries[0]
-    for p, v in boundaries[1:]:
-        if mean_per_area <= v:
-            # 두 경계 사이는 선형 보간
-            span = v - prev_v
-            frac = (mean_per_area - prev_v) / span if span else 0.0
-            return int(round(prev_p + frac * (p - prev_p)))
-        prev_p, prev_v = p, v
-    return 99
+    return _percentile(mean_per_area, SCALE_PERCENTILES)
+
+
+def time_band_percentile(band: str, daily_per_area: float) -> int:
+    """단일 시간대의 상권 1곳당 일평균 통행량(명/일)을 비교합니다."""
+    if not math.isfinite(daily_per_area) or daily_per_area < 0:
+        raise ValueError("통행량은 0 이상의 유한 수치여야 합니다.")
+    return _percentile(daily_per_area, TIME_BAND_DAILY_PERCENTILES[band])
 
 
 def time_indices(time_per_hour_share: dict[str, float]) -> dict[str, float]:
