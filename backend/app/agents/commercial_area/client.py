@@ -13,6 +13,8 @@ from weakref import WeakKeyDictionary
 
 import httpx
 
+from app.storage.raw import RawStorageError, capture_http, current_capture
+
 from .config import (
     SBIZ_BASE_URL,
     SBIZ_DISTRICT_OPERATION,
@@ -297,6 +299,13 @@ class StoreClient:
                 async with _request_limit(self.settings.max_concurrency):
                     response = await self._http().get(url, params=params)
                 self.calls_made += 1
+                await capture_http(
+                    "commercial_area",
+                    response,
+                    secrets=[self.settings.sbiz_service_key],
+                    page=str(page),
+                    args={"url": url, "operation": operation, "query": params},
+                )
                 if response.status_code in RETRY_STATUS_CODES:
                     wait_s = _retry_after_seconds(response) or wait_s
                     raise httpx.HTTPStatusError(
@@ -377,6 +386,8 @@ class StoreClient:
             async with asyncio.TaskGroup() as group:
                 for _ in range(min(last_page - 1, max(1, self.settings.max_concurrency))):
                     group.create_task(worker())
+        except* RawStorageError as storage_failures:
+            raise storage_failures.exceptions[0] from None
         except* SbizApiError as failures:
             raise failures.exceptions[0] from None
 
@@ -400,6 +411,17 @@ class StoreClient:
         if use_cache:
             cached = await asyncio.to_thread(_read_cache, path, self.settings.cache_ttl_hours)
             if cached is not None:
+                capture = current_capture()
+                if capture is not None:
+                    capture.incomplete("commercial_area:reduced_cache")
+                    await capture.record(
+                        source="commercial_area",
+                        source_type="api",
+                        args={"from_cache": True, "cache_key": cache_key},
+                        page="cache",
+                        status=None,
+                        payload={"rows": cached["items"], "meta": cached["meta"]},
+                    )
                 stores = await asyncio.to_thread(_to_stores, cached["items"])
                 return stores, {**cached["meta"], "from_cache": True}
 
@@ -448,6 +470,17 @@ class StoreClient:
         path = await asyncio.to_thread(_cache_path, self.settings, cache_key)
         cached = await asyncio.to_thread(_read_cache, path, self.settings.district_cache_ttl_hours)
         if cached is not None:
+            capture = current_capture()
+            if capture is not None:
+                capture.incomplete("commercial_area:reduced_cache")
+                await capture.record(
+                    source="commercial_area",
+                    source_type="api",
+                    args={"from_cache": True, "cache_key": cache_key},
+                    page="cache",
+                    status=None,
+                    payload={"rows": cached["items"], "meta": cached["meta"]},
+                )
             stores = await asyncio.to_thread(_to_stores, cached["items"])
             return stores, {**cached["meta"], "from_cache": True}
 

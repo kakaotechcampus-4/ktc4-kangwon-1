@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.logging import log_exception
 from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope, Site
+from app.storage.raw import RawStorageError, raise_storage_error
 
 from .area_resolver import (
     BusinessArea,
@@ -202,7 +203,7 @@ async def _analyze(
         )
     except FutureQuarterError as exc:
         return _error(task, "INVALID_INPUT", exc)
-    except ValidationError:
+    except (ValidationError, RawStorageError):
         raise
     except UpstreamDataError as exc:
         return _error(task, "UPSTREAM_ERROR", exc)
@@ -215,6 +216,7 @@ async def _analyze(
     except BusinessLifecycleFormatterError as exc:
         return _error(task, "BusinessLifecycleFormatterError", exc)
     except Exception as exc:
+        raise_storage_error(exc)
         log_exception(logger, "개폐업 분석 실패", exc)
         return _error(task, "AGENT_FAILED", exc)
 

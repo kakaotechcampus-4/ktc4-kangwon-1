@@ -172,3 +172,85 @@ CREATE TABLE IF NOT EXISTS analysis_events (
 
 -- 요청별 보완 이력을 반복 조회하는 상세 화면을 위한 인덱스입니다.
 CREATE INDEX IF NOT EXISTS idx_supplement_events_request_id ON supplement_events(request_id);
+
+
+-- 새 구조 PR2: 기존 테이블을 유지하며 요청당 원문 스냅샷 하나를 추가합니다.
+CREATE TABLE IF NOT EXISTS snapshots (
+    snapshot_id TEXT PRIMARY KEY NOT NULL,
+    request_id TEXT NOT NULL UNIQUE REFERENCES analysis_requests(request_id),
+    run_id TEXT NOT NULL,
+    base_source_manifest TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(base_source_manifest)),
+    completeness TEXT NOT NULL CHECK (completeness IN ('collecting','complete','partial')),
+    source_periods TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(source_periods)),
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS raw_responses (
+    response_id TEXT PRIMARY KEY NOT NULL,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    run_id TEXT NOT NULL,
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    source TEXT NOT NULL,
+    source_type TEXT NOT NULL CHECK (source_type IN ('api','file','user')),
+    request_args_json TEXT NOT NULL CHECK (json_valid(request_args_json)),
+    page TEXT NOT NULL,
+    http_status INTEGER,
+    response_json TEXT NOT NULL CHECK (json_valid(response_json)),
+    collected_at TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    group_key TEXT NOT NULL,
+    expected_rows INTEGER,
+    duplicate_of TEXT REFERENCES raw_responses(response_id),
+    FOREIGN KEY (request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS snapshot_request_pair ON snapshots(request_id,snapshot_id);
+CREATE INDEX IF NOT EXISTS raw_response_page ON raw_responses(snapshot_id,run_id,source,group_key,page);
+CREATE TABLE IF NOT EXISTS raw_rows (
+    raw_row_id TEXT PRIMARY KEY NOT NULL,
+    response_id TEXT NOT NULL REFERENCES raw_responses(response_id),
+    row_index INTEGER NOT NULL,
+    natural_key TEXT,
+    raw_json TEXT NOT NULL CHECK (json_valid(raw_json)),
+    duplicate_of TEXT REFERENCES raw_rows(raw_row_id),
+    UNIQUE(response_id,row_index)
+);
+
+-- 실행기가 바인딩하는 함수가 없거나 범위를 지정하지 않으면 행을 노출하지 않습니다.
+CREATE VIEW IF NOT EXISTS v_raw_stores AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.bizesId') AS store_id,
+       json_extract(r.raw_json,'$.indsMclsCd') AS middle_code,
+       json_extract(r.raw_json,'$.indsSclsCd') AS small_code,
+       json_extract(r.raw_json,'$.lat') AS latitude,
+       json_extract(r.raw_json,'$.lon') AS longitude
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='commercial_area' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+CREATE VIEW IF NOT EXISTS v_raw_lifecycle AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
+       json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code,
+       json_extract(r.raw_json,'$.SVC_INDUTY_CD') AS seoul_industry_code,
+       json_extract(r.raw_json,'$.SIMILR_INDUTY_STOR_CO') AS store_count,
+       json_extract(r.raw_json,'$.OPBIZ_STOR_CO') AS opening_count,
+       json_extract(r.raw_json,'$.CLSBIZ_STOR_CO') AS closing_count
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='business_lifecycle' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+CREATE VIEW IF NOT EXISTS v_raw_floating AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
+       json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='floating_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+CREATE VIEW IF NOT EXISTS v_raw_resident AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
+       json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='resident_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+CREATE VIEW IF NOT EXISTS v_raw_worker AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
+       json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='worker_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+
+CREATE INDEX IF NOT EXISTS raw_row_natural_key ON raw_rows(natural_key);

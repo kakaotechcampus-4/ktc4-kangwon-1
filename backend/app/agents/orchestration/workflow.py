@@ -33,6 +33,7 @@ from app.schemas import (
     SupplementOperation,
     validate_radius,
 )
+from app.storage.raw import RawStorageError, current_capture, raise_storage_error
 
 from . import tools
 
@@ -175,9 +176,10 @@ async def run_agents(
         try:
             async with asyncio.timeout(agent_timeout) as deadline:
                 result = await agents[agent_id](task)
-        except ValidationError:
+        except (ValidationError, RawStorageError):
             raise
         except Exception as exc:
+            raise_storage_error(exc)
             log_exception(logger, "분석 에이전트 실행 실패: %s", exc, agent_id)
             result = _crash_to_analysis(task, agent_id)
             if isinstance(exc, TimeoutError) and deadline.expired():
@@ -186,6 +188,9 @@ async def run_agents(
                 )
         # 계약 오류와 저장 실패는 분석 함수의 실행 오류로 바꾸지 않습니다.
         analysis = AgentAnalysis.model_validate(result)
+        capture = current_capture()
+        if capture is not None and analysis.status in {"error", "partial", "no_data"}:
+            capture.incomplete(agent_id + ":" + analysis.status)
         if analysis.agent_id != agent_id or analysis.request_id != task.request_id:
             raise ValueError("분석 결과의 요청 ID 또는 에이전트 ID가 일치하지 않습니다.")
         if analysis.data:
@@ -194,7 +199,11 @@ async def run_agents(
             await on_analysis_completed(analysis)
         return analysis
 
-    return await collect(run_one(key) for key in agents)
+    analyses = await collect(run_one(key) for key in agents)
+    capture = current_capture()
+    if capture is not None:
+        await capture.finish()
+    return analyses
 
 
 async def collect(coroutines):

@@ -27,6 +27,8 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(resolve_path(db_path).as_uri() + "?mode=rw", uri=True, timeout=5)
     try:
         connection.row_factory = sqlite3.Row
+        connection.create_function("raw_request_id", 0, lambda: None)
+        connection.create_function("raw_snapshot_id", 0, lambda: None)
         connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             yield connection

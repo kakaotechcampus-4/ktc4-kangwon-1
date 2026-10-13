@@ -76,6 +76,7 @@ from app.services.generators import build_evaluator_generators, build_specialist
 from app.services.persistence import _emit, _settle, _storage_hooks
 from app.services.settings import ExecutionSettings, validate_timeout
 from app.storage.contracts import AnalysisRepositoryProtocol
+from app.storage.raw import capture_scope, current_capture
 
 logger = logging.getLogger(__name__)
 
@@ -464,6 +465,13 @@ async def _saved_evaluation(bundle, path):
 
 @asynccontextmanager
 async def _execution_scope(request_id, path, time_limit, *, active=lambda: True):
+    async with capture_scope(request_id, path):
+        async with _execution_budget_scope(request_id, path, time_limit, active=active) as flush:
+            yield flush
+
+
+@asynccontextmanager
+async def _execution_budget_scope(request_id, path, time_limit, *, active=lambda: True):
     """사람의 대기 시간은 제외하고 요청의 호출·활성 시간 예산을 이어 씁니다."""
     row = await asyncio.to_thread(repository.get_request, request_id, db_path=path)
     saved: ExecutionState = json.loads(row["execution_json"])
@@ -545,7 +553,10 @@ def build_resume_state(bundle: ResumeBundle, *, retry: bool = False) -> GraphSta
 async def _complete(
     result, flush, path, source_attempts, *, storage: AnalysisRepositoryProtocol | None = None
 ):
-    """예산 저장을 끝낸 뒤 그 실행이 사용한 분석 차수로 완료합니다."""
+    """원문·예산 저장을 끝낸 뒤 사용한 분석 차수로 완료합니다."""
+    capture = current_capture()
+    if capture is not None:
+        await capture.finish()
     await flush()
     storage = storage if storage is not None else SqliteAnalysisRepository(path)
     await _settle(

@@ -15,6 +15,7 @@ from app.schemas import (
     SupplementEvent,
     SupplementPlan,
 )
+from app.storage.raw import RawStorageError, raise_storage_error
 
 from .tools import SupplementTool
 
@@ -81,10 +82,11 @@ async def execute_supplement(
                 produced = await tool.execute(
                     task.model_copy(deep=True), previous.model_copy(deep=True)
                 )
-        except ValidationError:
+        except (ValidationError, RawStorageError):
             await emit("failed", "보완 결과 계약 검증에 실패했습니다.")
             raise
         except Exception as exc:
+            raise_storage_error(exc)
             log_exception(logger, "보완 외부 호출 실패", exc)
             produced = AgentAnalysis(
                 request_id=task.request_id,

@@ -85,6 +85,7 @@ async def request_page(
             )
     return await request_json(
         http,
+        capture_source="business_lifecycle",
         base_url=SEOUL_API_BASE_URL,
         api_key=api_key,
         service=SERVICE_NAME,

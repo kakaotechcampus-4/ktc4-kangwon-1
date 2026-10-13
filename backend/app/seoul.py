@@ -2,6 +2,8 @@
 
 import httpx
 
+from app.storage.raw import capture_http
+
 
 class SeoulOpenApiError(RuntimeError):
     """키나 원문 응답을 노출하지 않는 서울 API 오류입니다."""
@@ -27,12 +29,28 @@ async def request_json(
     start: int,
     end: int,
     extra: str | None = None,
+    capture_source: str | None = None,
 ) -> dict:
     url = f"{base_url.rstrip('/')}/{api_key}/json/{service}/{start}/{end}/"
     if extra:
         url += extra.strip("/") + "/"
     try:
         response = await http.get(url)
+        if capture_source is not None:
+            await capture_http(
+                capture_source,
+                response,
+                secrets=[api_key],
+                page=f"{start}:{end}",
+                args={
+                    "url": url,
+                    "service": service,
+                    "extra": extra or "",
+                    "start": start,
+                    "end": end,
+                    "probe": start == end,
+                },
+            )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):

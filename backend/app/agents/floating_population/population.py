@@ -22,7 +22,11 @@ from __future__ import annotations
 
 import csv
 import functools
+import hashlib
+import io
 from pathlib import Path
+
+from app.storage.raw import current_capture
 
 from .baseline import index
 from .models import AGE_BANDS, FlpopRecord, PopulationRecord, period_ko
@@ -71,6 +75,8 @@ def load_snapshot(kind: str, path: Path | None = None) -> list[PopulationRecord]
     다시 파싱하면 이벤트 루프를 약 30ms 막는다(세 에이전트가 병렬로 도는 동안). 읽기에 실패한
     결과는 캐시되지 않으므로 파일을 넣으면 다음 요청부터 바로 반영된다.
     """
+    if path is None and current_capture() is not None:
+        return _read(kind, SNAPSHOT_PATHS[kind])
     if path is None:
         return list(_bundled(kind))
     return _read(kind, path)
@@ -82,8 +88,23 @@ def _bundled(kind: str) -> tuple[PopulationRecord, ...]:
 
 
 def _read(kind: str, path: Path) -> list[PopulationRecord]:
-    with path.open(encoding="utf-8-sig", newline="") as f:
-        return [PopulationRecord.from_api_row(row, kind) for row in csv.DictReader(f)]
+    data = path.read_bytes()
+    rows = list(csv.DictReader(io.StringIO(data.decode("utf-8-sig"))))
+    capture = current_capture()
+    if capture is not None:
+        capture.record_sync(
+            source="resident_population" if kind == RESIDENT_KIND else "worker_population",
+            source_type="file",
+            args={
+                "file_name": path.name,
+                "file_hash": hashlib.sha256(data).hexdigest(),
+                "quarter": max((r.get("STDR_YYQU_CD", "") for r in rows), default=""),
+            },
+            page="file",
+            status=None,
+            payload={"rows": rows},
+        )
+    return [PopulationRecord.from_api_row(row, kind) for row in rows]
 
 
 def _age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
