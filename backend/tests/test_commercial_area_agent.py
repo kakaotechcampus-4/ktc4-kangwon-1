@@ -550,7 +550,7 @@ class ClientBehaviourTests(unittest.IsolatedAsyncioTestCase):
                 "indsLclsCd": "I2",
                 "indsLclsNm": "음식점업",
                 "indsMclsCd": "I201",
-                "indsMclsNm": "한식 음식점업",
+                "indsMclsNm": "한식 음식점",
                 "signguCd": "11710",
                 "signguNm": "송파구",
                 "lat": "37.5",

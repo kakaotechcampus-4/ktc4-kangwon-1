@@ -73,9 +73,9 @@ def fake_pipeline(
             },
         },
         "coverage": {
-            "target_industries": 75,
+            "target_industries": len(INDUSTRIES),
             "scored_industries": 1,
-            "unscored_industries": 74,
+            "unscored_industries": len(INDUSTRIES) - 1,
         },
         "scoring_method": {
             "score_type": "relative",
@@ -85,7 +85,7 @@ def fake_pipeline(
         "industry_scores": [
             {
                 "industry_id": "I201",
-                "industry_name": "한식 음식점업",
+                "industry_name": "한식 음식점",
                 "lifecycle_score": 71.5,
                 "type": "성장·안정형",
                 "confidence": "high",
@@ -157,7 +157,7 @@ class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.scope.area, "개롱역 (3120240)")
         self.assertEqual(result.scope.period, "20221~20244 (12개 분기)")
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
-        self.assertEqual(len(result.data["industries"]), 75)
+        self.assertEqual(len(result.data["industries"]), len(INDUSTRIES))
         unavailable = next(
             industry for industry in result.data["industries"] if industry["industry_id"] == "I202"
         )
@@ -313,7 +313,7 @@ class BusinessAreaResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.data["metadata"]["area_code"], "3120240")
         self.assertEqual(result.data["metadata"]["area_name"], "개롱역")
         self.assertEqual(result.data["metadata"]["area_resolver"]["method"], "env_override")
-        self.assertEqual(len(result.data["industries"]), 75)
+        self.assertEqual(len(result.data["industries"]), len(INDUSTRIES))
 
 
 if __name__ == "__main__":

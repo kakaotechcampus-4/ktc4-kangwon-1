@@ -140,9 +140,9 @@ async def observe(
         if q.facility_code:
             return q.facility_code
         # 대응이 명확한 업종만 제한합니다. 교육 지원 서비스업(P107)은 제한하지 않습니다.
-        if q.industry_code in {"P105", "P106"}:
+        if q.industry_code == "P105":
             return "AC5"
-        if q.industry_code in {"Q101", "Q102"}:
+        if q.industry_code == "Q102":
             return "HP8"
         if q.industry_code == "I212":
             return "CE7"

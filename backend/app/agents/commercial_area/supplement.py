@@ -7,6 +7,7 @@ from app.schemas import AgentAnalysis, AnalysisTask
 
 from .client import StoreClient
 from .config import Settings
+from .industries import incomplete_split_codes, map_stores
 from .metrics import _ratio_against, count_by_middle
 
 
@@ -56,9 +57,14 @@ async def supplement(
         await client.aclose()
     if meta.get("truncated") or not stores or meta.get("radius_m") not in candidates:
         raise ValueError("완전한 주변 비교 자료를 확보하지 못했습니다.")
-    counts = dict(count_by_middle(stores))
+    missing = incomplete_split_codes(stores)
+    counts = dict(count_by_middle(map_stores(stores)))
     result = previous.model_copy(deep=True)
     data = previous.model_dump()["data"]
+    for row in data["by_middle"]:
+        mask = row.get("citable")
+        if mask is False or isinstance(mask, dict) and mask.get("lq") is False:
+            missing.add(row["code"])
     result.data["supplement_lq"] = {
         "analysis_radius_m": task.radius_m,
         "baseline_radius_m": meta["radius_m"],
@@ -69,7 +75,10 @@ async def supplement(
         "industries": [
             {
                 "industry_id": row["code"],
-                "citable": {"lq": row["count"] >= settings.min_count_for_specialization},
+                "citable": {
+                    "lq": row["count"] >= settings.min_count_for_specialization
+                    and row["code"] not in missing
+                },
                 "lq": _ratio_against(
                     row["count"],
                     data["store_total"],

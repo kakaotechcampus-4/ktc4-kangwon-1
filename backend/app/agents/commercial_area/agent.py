@@ -12,7 +12,7 @@ from app.schemas import AgentAnalysis, AgentError, AgentId, AnalysisTask, Scope
 from .client import SbizApiError, StoreClient
 from .config import Settings
 from .franchise import build_franchise, load_brands
-from .industries import load_middle_master
+from .industries import incomplete_split_codes, load_middle_master, map_stores
 from .metrics import (
     build_district_specialization,
     build_diversity,
@@ -108,9 +108,11 @@ async def analyze(
                 "페이지 상한에 걸려 집계가 일부 누락됐습니다."
             )
 
-        known_codes = {entry.code for entry in master}
-        mapped_count = sum(store.middle_code in known_codes for store in stores)
-        unmapped_count = len(stores) - mapped_count
+        raw_count = len(stores)
+        local_split_missing = incomplete_split_codes(stores)
+        stores = map_stores(stores, master)
+        mapped_count = len(stores)
+        unmapped_count = raw_count - mapped_count
         if unmapped_count:
             degraded = True
             warnings.append(
@@ -119,6 +121,8 @@ async def analyze(
             )
 
         baseline_counts = None
+        split_lq_missing = set(local_split_missing)
+        split_district_missing = set(local_split_missing)
         lq_retryable = False
         candidates = tuple(r for r in settings.lq_radius_candidates if r > radius)
         requested_baseline = next(
@@ -134,6 +138,15 @@ async def analyze(
                 candidates,
                 grid_m=settings.lq_cache_grid_m,
             )
+            split_lq_missing.update(incomplete_split_codes(baseline_stores))
+            baseline_raw_count = len(baseline_stores)
+            baseline_stores = map_stores(baseline_stores, master)
+            if baseline_raw_count != len(baseline_stores):
+                degraded = True
+                warnings.append(
+                    f"주변 비교 자료의 미매핑 점포 {baseline_raw_count - len(baseline_stores)}건을 "
+                    "제외했습니다."
+                )
             baseline_counts = dict(count_by_middle(baseline_stores))
             baseline = LqBaseline(
                 requested_radius_m=requested_baseline,
@@ -166,6 +179,15 @@ async def analyze(
         if district_code:
             try:
                 district_stores, district_meta = await client.stores_in_district(district_code)
+                split_district_missing.update(incomplete_split_codes(district_stores))
+                district_raw_count = len(district_stores)
+                district_stores = map_stores(district_stores, master)
+                if district_raw_count != len(district_stores):
+                    degraded = True
+                    warnings.append(
+                        "자치구 비교 자료의 미매핑 점포 "
+                        f"{district_raw_count - len(district_stores)}건을 제외했습니다."
+                    )
                 district_counts = dict(count_by_middle(district_stores))
                 district_baseline = DistrictBaseline(
                     signgu_code=district_code,
@@ -189,6 +211,17 @@ async def analyze(
 
         major_rows = build_major_rows(stores, radius, master)
         middle_rows = build_middle_rows(stores, radius, master, baseline_counts, district_counts)
+        for row in middle_rows:
+            if row.code in split_lq_missing:
+                row.lq = None
+            if row.code in split_district_missing:
+                row.lq_district = None
+        if split_lq_missing or split_district_missing:
+            degraded = True
+            warnings.append(
+                "소분류 기준선 부족으로 분할 업종의 LQ 근거를 차단했습니다: "
+                + ", ".join(sorted(split_lq_missing | split_district_missing))
+            )
 
         franchise = None
         brands = await load_brands(settings)
@@ -223,6 +256,7 @@ async def analyze(
             settings,
             baseline_counts,
             baseline.applied_radius_m,
+            split_lq_missing,
         )
 
         payload = CommercialAreaData(
@@ -265,6 +299,12 @@ async def analyze(
         for row in data["by_middle"]:
             if row["count"] < settings.min_count_for_specialization:
                 row["citable"] = {"lq": False, "lq_district": False}
+            if row["code"] in split_lq_missing:
+                row.setdefault("citable", {})["lq"] = False
+                row["lq"] = None
+            if row["code"] in split_district_missing:
+                row.setdefault("citable", {})["lq_district"] = False
+                row["lq_district"] = None
         data["lq_retryable"] = lq_retryable
         data["taxonomy"] = dict(TAXONOMY)
         data["coverage"] = {

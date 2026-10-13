@@ -640,7 +640,7 @@ class DecisionPopulationIntegrationTests(_AnalyzeFixture):
                 "summary": "연결 시험용 판단",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점"},
                         "score": 60,
                         "reasons": ["시험용 인구 자료를 참고했습니다."],
                         "evidence": [

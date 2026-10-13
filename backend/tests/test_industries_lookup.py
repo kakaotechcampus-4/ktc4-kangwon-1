@@ -10,7 +10,7 @@ class NameNormalizationTests(unittest.TestCase):
     def test_team_vocabularies_resolve_to_one_industry(self):
         # 지금 팀 안에서 갈려 있는 세 표기. 이게 합쳐지는 게 이 모듈의 존재 이유다.
         found = [
-            lookup.find_by_name(name) for name in ("한식음식점", "한식 음식점업", "한식음식점업")
+            lookup.find_by_name(name) for name in ("한식음식점", "한식 음식점", "한식음식점업")
         ]
         self.assertTrue(all(found))
         self.assertEqual({industry.code for industry in found}, {"I201"})
@@ -48,7 +48,7 @@ class Legacy70Tests(unittest.TestCase):
     def test_industry_without_seoul_route_is_still_reachable(self):
         # 개폐업이 서울시 자료로는 못 만든다고 한 업종. 우리 자료로 이어진다.
         codes = [industry.code for industry in lookup.from_legacy70(43)]
-        self.assertEqual(codes, ["Q101", "Q104"])
+        self.assertEqual(codes, [])
 
     def test_unknown_legacy_id_returns_empty(self):
         self.assertEqual(lookup.from_legacy70(999), ())
@@ -59,7 +59,7 @@ class CategoryBridgeTests(unittest.TestCase):
         major, middle = lookup.as_category("I201")
         category = Category(major=major, middle=middle)
         self.assertEqual(category.major, "음식점업")
-        self.assertEqual(category.middle, "한식 음식점업")
+        self.assertEqual(category.middle, "한식 음식점")
 
     def test_every_industry_produces_a_valid_category(self):
         from app.industries.catalog import INDUSTRIES

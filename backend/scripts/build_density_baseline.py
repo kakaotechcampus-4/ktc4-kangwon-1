@@ -36,6 +36,7 @@ from app.agents.commercial_area.config import (  # noqa: E402
     Settings,
     load_dotenv_if_present,
 )
+from app.agents.commercial_area.industries import map_stores  # noqa: E402
 from app.agents.commercial_area.trade_areas import load_trade_areas  # noqa: E402
 
 SAMPLE_PATH = (
@@ -112,7 +113,7 @@ async def sample(settings: Settings, limit: int | None) -> None:
                 failures += 1
                 print(f"  [{index}/{len(todo)}] {area.name} 실패 — {exc.message}")
                 continue
-            count = sum(1 for s in stores if s.major_name in RESTAURANT_MAJOR_NAMES)
+            count = sum(1 for s in map_stores(stores) if s.major_name in RESTAURANT_MAJOR_NAMES)
             append(
                 {
                     "code": area.code,

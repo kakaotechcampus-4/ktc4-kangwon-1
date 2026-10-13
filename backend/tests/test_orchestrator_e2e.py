@@ -84,7 +84,7 @@ def generate_from_commercial_area(system_prompt, input_json):
         "summary": "한식이 가장 많고 커피·음료가 뒤를 잇습니다.",
         "recommendations": [
             {
-                "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                "category": {"major": "음식점업", "middle": "한식 음식점"},
                 "score": 61,
                 "reasons": ["반경 안 점포 구성에서 한식 비중이 가장 큽니다."],
                 "evidence": [{"agent_id": "commercial_area", "path": "/store_total"}],
@@ -107,8 +107,8 @@ class MockPipelineTests(unittest.IsolatedAsyncioTestCase):
         DecisionResult.model_validate(result.model_dump())
         self.assertEqual(result.agent_id, "decision")
         self.assertEqual(len(result.source_analyses), 3)
-        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점업")
-        self.assertEqual(result.not_recommended[0].category.middle, "비알코올 음료점업")
+        self.assertEqual(result.recommendations[0].category.middle, "한식 음식점")
+        self.assertEqual(result.not_recommended[0].category.middle, "카페·비알코올 음료점")
 
     async def test_one_broken_agent_does_not_stop_the_rest(self):
         async def broken(task):

@@ -116,7 +116,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.generate.assert_called_once()
         self.assertEqual(result.request_id, "sample-001")
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.recommendations[0].category.middle, "중식 음식점업")
+        self.assertEqual(result.recommendations[0].category.middle, "중식 음식점")
         self.assertEqual(result.source_analyses[0].data, self.request["analyses"][0]["data"])
         prompt, payload = self.generate.call_args.args
         self.assertIn("성공 확률", prompt)
@@ -176,7 +176,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         duplicate = copy.deepcopy(self.response)
         duplicate["not_recommended"][0]["category"] = {
             "major": "음식점업",
-            "middle": "중식 음식점업",
+            "middle": "중식 음식점",
         }
         bad_path = copy.deepcopy(self.response)
         bad_path["recommendations"][0]["evidence"][0]["path"] = "/missing"
@@ -214,7 +214,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             warnings=["해당 기간의 유효한 자료가 없습니다."],
         )
         self.response["recommendations"][0]["evidence"] = [
-            {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점업"}
+            {"agent_id": "commercial_area", "path": "/industry_counts/중식 음식점"}
         ]
         result = await analyze(self.request, generate=self.generate)
         self.assertEqual(result.status, "partial")

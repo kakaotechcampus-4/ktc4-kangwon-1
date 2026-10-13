@@ -359,6 +359,7 @@ def build_radius_slices(
     settings: Settings,
     baseline_counts: dict[str, int] | None = None,
     baseline_radius_m: int | None = None,
+    blocked_lq_codes: set[str] | None = None,
 ) -> list[RadiusSlice]:
     radii = sorted(
         {r for r in settings.breakdown_radii if r <= settings.analysis_radius_m}
@@ -370,6 +371,9 @@ def build_radius_slices(
     for radius_m in radii:
         subset = stores_within(stores, center_lat, center_lon, radius_m)
         rows = build_middle_rows(subset, radius_m, master, baseline_counts)
+        for row in rows:
+            if row.code in (blocked_lq_codes or ()):
+                row.lq = None
         total = len(subset)
         absent_count = sum(1 for r in rows if r.count == 0)
 

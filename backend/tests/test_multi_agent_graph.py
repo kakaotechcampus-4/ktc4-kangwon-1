@@ -9,6 +9,7 @@ from test_specialist_agent import tool_message
 
 from app.agents.orchestration.graph import RunHooks, run_graph
 from app.evidence import scalar_records
+from app.industries.catalog import INDUSTRIES
 from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.schemas import AGENT_IDS
 
@@ -93,7 +94,9 @@ class MultiGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([a.round for a in answers], [1, 2])
         self.assertEqual(result.source_analyses[2].data["store_total"], 1241)
         self.assertTrue(
-            all("analyses" not in p and len(p["industry_digest"]) == 75 for p in inputs)
+            all(
+                "analyses" not in p and len(p["industry_digest"]) == len(INDUSTRIES) for p in inputs
+            )
         )
         self.assertEqual(len(inputs[-1]["answers"]), 2)
 

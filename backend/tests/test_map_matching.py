@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from test_map_mapping import plan, task
 
+from app.industries.catalog import INDUSTRIES
 from app.industries.lookup import get
 from app.schemas import MapLookupPlan, MapObservation
 
@@ -103,12 +104,12 @@ class MatchingContractTests(unittest.TestCase):
         from app.industries import lookup
 
         terms = lookup.industry_terms("P105")
-        self.assertEqual(terms["name"], "일반 교육기관")
+        self.assertEqual(terms["name"], "학원·교육기관")
         self.assertIn("일반교습학원", terms["includes"])
         self.assertEqual(len(terms["includes"]), len(set(terms["includes"])))
         terms["includes"].clear()
         self.assertTrue(lookup.industry_terms("P105")["includes"])
-        self.assertEqual(lookup.industry_terms("Q101")["includes"], [])
+        self.assertEqual(lookup.industry_terms("M107")["includes"], [])
 
     def test_shared_place_and_old_observation_are_valid(self):
         from app.evidence import valid_map_path
@@ -269,7 +270,9 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
 
             def generate(prompt, raw, allowed=allowed):
                 payload = json.loads(raw)
-                self.assertEqual(len(payload.get("industry_terms", {})), 75 if allowed else 0)
+                self.assertEqual(
+                    len(payload.get("industry_terms", {})), len(INDUSTRIES) if allowed else 0
+                )
                 return mock_generate(prompt, raw)
 
             await evaluate(request, allow_map_lookup=allowed, generate=generate)

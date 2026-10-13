@@ -15,8 +15,8 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_category_is_corrected_at_both_model_boundaries(self):
         for category in (
             {"code": "I299"},
-            {"code": "I201", "major": "음식점업", "middle": "한식 음식점업 "},
-            {"code": "I201", "major": "다른 분류", "middle": "한식 음식점업"},
+            {"code": "I201", "major": "음식점업", "middle": "한식 음식점 "},
+            {"code": "I201", "major": "다른 분류", "middle": "한식 음식점"},
         ):
             for real_model in (False, True):
                 bad = self.response("/industries/1/metrics/net")
@@ -140,7 +140,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         row = format_scored_industry(
             {
                 "industry_id": "I201",
-                "industry_name": "한식 음식점업",
+                "industry_name": "한식 음식점",
                 "lifecycle_score": 60,
                 "type": "성장",
                 "confidence": "high",
@@ -169,10 +169,10 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         self.source = next(s for s in self.request.analyses if s.agent_id == "business_lifecycle")
         self.source.data = {
             "industries": [
-                {"industry_id": "S209", "industry_name": "세탁업", "metrics": {"net": 3}},
+                {"industry_id": "S209", "industry_name": "세탁", "metrics": {"net": 3}},
                 {
                     "industry_id": "I201",
-                    "industry_name": "한식 음식점업",
+                    "industry_name": "한식 음식점",
                     "data_available": True,
                     "metrics": {"net": 0, "missing": None},
                 },
@@ -253,7 +253,7 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_or_conflicting_identity_is_not_shared_evidence(self):
         for changes in (
             {"industry_id": "unknown"},
-            {"industry_name": "세탁업"},
+            {"industry_name": "세탁"},
             {"confidence": "none"},
         ):
             original = self.source.data["industries"][1].copy()

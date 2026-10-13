@@ -3,6 +3,7 @@
 import importlib.util
 import unittest
 
+from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, DecisionRequest, Finding, Scope, Site
 
 
@@ -34,7 +35,7 @@ class ContextTests(unittest.TestCase):
         request = DecisionRequest(request_id="r", address="주소", analyses=[self.source])
         context = self.build_context(request, briefs=[], answers=[])
         rows = {row["code"]: row for row in context["industry_digest"]}
-        self.assertEqual(len(rows), 75)
+        self.assertEqual(len(rows), len(INDUSTRIES))
         metrics = rows["I201"]["metrics"]
         self.assertTrue(any(m["path"] == "/by_middle/0/count" and m["value"] == 0 for m in metrics))
         self.assertFalse(any(m["path"].endswith("/lq") for m in metrics))
@@ -226,7 +227,7 @@ class ContextTests(unittest.TestCase):
         source = self.source.model_copy(update={"agent_id": "business_lifecycle", "data": data})
         brief = fallback_brief(AnalysisTask(request_id="r", site=mock_site()), source)
         paths = {ref.path for f in brief.findings for ref in f.evidence}
-        self.assertIn("/industries/74/score", paths)
+        self.assertIn(f"/industries/{len(INDUSTRIES) - 1}/score", paths)
         self.assertIn("/industries/0/score", paths)
 
     def test_fallback_has_real_paths_and_is_not_model_output(self):

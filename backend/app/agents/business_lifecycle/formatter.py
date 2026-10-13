@@ -241,12 +241,12 @@ def format_for_mediator(
     industries.sort(key=lambda item: item["industry_id"])
 
     # ========================================================
-    # 4. 공통 75개 Master 검증
+    # 4. 공통 51개 Master 검증
     # ========================================================
 
     if len(industries) != EXPECTED_INDUSTRY_COUNT:
         raise BusinessLifecycleFormatterError(
-            f"Business Lifecycle 결과의 업종 수가 75개가 아닙니다. 현재={len(industries)}"
+            f"Business Lifecycle 결과의 업종 수가 51개가 아닙니다. 현재={len(industries)}"
         )
 
     industry_ids = [industry["industry_id"] for industry in industries]
@@ -264,7 +264,7 @@ def format_for_mediator(
         extra_ids = sorted(actual_ids - expected_ids)
 
         raise BusinessLifecycleFormatterError(
-            f"75개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
+            f"51개 Master industry_id가 일치하지 않습니다. 누락={missing_ids}, 추가={extra_ids}"
         )
 
     # ========================================================

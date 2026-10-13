@@ -20,7 +20,7 @@ ITEM = {
     "indsLclsCd": "I2",
     "indsLclsNm": "음식점업",
     "indsMclsCd": "I201",
-    "indsMclsNm": "한식 음식점업",
+    "indsMclsNm": "한식 음식점",
     "indsSclsCd": "I20101",
     "indsSclsNm": "백반",
     "lat": "37.5",

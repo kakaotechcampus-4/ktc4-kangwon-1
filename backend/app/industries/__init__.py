@@ -1,4 +1,4 @@
-"""팀 공통 업종 어휘 — 소상공인 상권업종 중분류 75종.
+"""팀 공통 업종 어휘 — 서비스 51종.
 
 세 에이전트가 같은 업종을 가리킬 코드가 없어서 만들었다. 경쟁업체는 중분류 코드(`I201`),
 개폐업은 자체 정수 1~70, 결정은 자유 문자열을 쓰고 있었고, 그래서 같은 한식이
@@ -16,16 +16,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .catalog import CATALOG_VERSION, EXPECTED_INDUSTRY_COUNT
+from .catalog import CATALOG_VERSION, EXPECTED_INDUSTRY_COUNT, UNREVIEWED_MAPPING_COUNT
 from .models import Industry
 
-MAPPING_REVIEW_WARNING = "서울시 업종 연결 중 53건은 모델 판정이며 사람 검수가 완료되지 않았습니다."
+MAPPING_REVIEW_WARNING = (
+    f"서울시 업종 연결 중 {UNREVIEWED_MAPPING_COUNT}건은 모델 판정이며 "
+    "사람 검수가 완료되지 않았습니다."
+)
 TAXONOMY = {
-    "id": "sbiz-middle-75",
+    "id": "service-51",
     "version": CATALOG_VERSION,
     "industry_count": EXPECTED_INDUSTRY_COUNT,
     "seoul_mapping_review": "pending",
-    "unreviewed_mapping_count": 53,
+    "unreviewed_mapping_count": UNREVIEWED_MAPPING_COUNT,
 }
 
 PACKAGE_DIR = Path(__file__).resolve().parent

@@ -18,6 +18,7 @@ from test_orchestrator_e2e import MASTER, sample_stores
 
 from app.agents.business_lifecycle.area_resolver import BusinessAreaNoDataError
 from app.agents.orchestration import build_react_agents, workflow
+from app.industries.catalog import INDUSTRIES
 from app.schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 floating = importlib.import_module("app.agents.floating_population.agent")
@@ -205,7 +206,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "summary": "대역 자료로 연결을 검증했습니다.",
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "중식 음식점업"},
+                        "category": {"major": "음식점업", "middle": "중식 음식점"},
                         "score": 60,
                         "reasons": ["유동과 점포 집계를 확인했습니다."],
                         "risks": [],
@@ -301,7 +302,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
                 "limitations": [],
                 "recommendations": [
                     {
-                        "category": {"major": "음식점업", "middle": "기타 간이 음식점업"},
+                        "category": {"major": "음식점업", "middle": "간이 음식점"},
                         "score": 60,
                         "reasons": ["각 분석 원본 확인"],
                         "risks": [],
@@ -330,7 +331,7 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 all(item.status in {"ok", "partial"} for item in result.source_analyses)
             )
-            self.assertEqual(len(result.source_analyses[1].data["industries"]), 75)
+            self.assertEqual(len(result.source_analyses[1].data["industries"]), len(INDUSTRIES))
             snack = next(
                 item
                 for item in result.source_analyses[1].data["industries"]

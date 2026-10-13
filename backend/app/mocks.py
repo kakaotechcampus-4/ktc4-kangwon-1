@@ -69,8 +69,8 @@ async def _business_lifecycle(task: AnalysisTask) -> AgentAnalysis:
         {
             "description": "목업 개폐업 자료입니다.",
             "industries": [
-                {"middle": "한식 음식점업", "open_count": 12, "close_count": 9},
-                {"middle": "비알코올 음료점업", "open_count": 18, "close_count": 16},
+                {"middle": "한식 음식점", "open_count": 12, "close_count": 9},
+                {"middle": "카페·비알코올 음료점", "open_count": 18, "close_count": 16},
             ],
         },
     )
@@ -84,8 +84,8 @@ async def _commercial_area(task: AnalysisTask) -> AgentAnalysis:
             "description": "목업 상권 자료입니다.",
             "store_total": 1241,
             "by_middle": [
-                {"code": "I201", "name": "한식 음식점업", "count": 96, "lq": 1.24},
-                {"code": "I212", "name": "비알코올 음료점업", "count": 71, "lq": 2.10},
+                {"code": "I201", "name": "한식 음식점", "count": 96, "lq": 1.24},
+                {"code": "I212", "name": "카페·비알코올 음료점", "count": 71, "lq": 2.10},
             ],
         },
     )
@@ -107,7 +107,7 @@ def mock_generate(system_prompt: str, input_json: str) -> dict[str, Any]:
         "summary": "점심 직장인 수요가 뚜렷하고 커피·음료는 이미 포화에 가깝습니다.",
         "recommendations": [
             {
-                "category": {"major": "음식점업", "middle": "한식 음식점업"},
+                "category": {"major": "음식점업", "middle": "한식 음식점"},
                 "score": 72,
                 "reasons": ["직장인 비중이 41%로 점심 수요를 기대할 수 있습니다."],
                 "evidence": [
@@ -119,7 +119,7 @@ def mock_generate(system_prompt: str, input_json: str) -> dict[str, Any]:
         ],
         "not_recommended": [
             {
-                "category": {"major": "음식점업", "middle": "비알코올 음료점업"},
+                "category": {"major": "음식점업", "middle": "카페·비알코올 음료점"},
                 "score": 28,
                 "reasons": ["주변 대비 2.1배로 이미 몰려 있고 폐업도 16건입니다."],
                 "evidence": [
