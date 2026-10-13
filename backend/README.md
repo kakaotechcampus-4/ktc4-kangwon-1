@@ -331,6 +331,7 @@ API 문서: <http://127.0.0.1:8000/docs>
 | `GET /api/v1/analyses/{request_id}` | 상태·주소·Site·결과·오류 조회. multi_agent 요청은 선택형 `deliberation` 포함 |
 | `POST /api/v1/analyses/{request_id}/answers` | 저장된 질문에 답하고 최종판단부터 재개. `?wait=false` 지원 |
 | `POST /api/v1/analyses/{request_id}/retry-decision` | 저장된 자료로 실패한 판단만 재시도 |
+| `GET /api/v1/building-registry?address=` | 건축물대장 표제부·층별개요·호실·오수정화시설 조회. 상가 정보 확인 화면용이며 저장하지 않음. `?mock=true` 지원 |
 | `GET /health` | 서버 상태 확인 |
 
 기본 POST는 분석이 끝날 때까지 기다립니다(보통 40~110초). 진행 화면은 `?wait=false`로 시작하고
@@ -363,6 +364,7 @@ python validation_tool/run.py --offline-multi --radius-m 300
 | 변수 | 용도 |
 | --- | --- |
 | `GEOCODING_API_KEY` | 카카오 REST API (주소 검색·지도 조회) |
+| `BUILDING_REGISTRY_API_KEY` | 건축HUB 건축물대장 (상가 정보 확인 화면) |
 | `FLOATING_POPULATION_API_KEY` | 서울시 유동인구 |
 | `BUSINESS_LIFECYCLE_API_KEY` | 서울시 개폐업 |
 | `BUSINESS_LIFECYCLE_BASE_QUARTER`, `BUSINESS_LIFECYCLE_QUARTER_COUNT` | 개폐업 기준 분기·기간 |
