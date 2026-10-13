@@ -50,16 +50,16 @@
 | --- | ---: | --- | --- | --- |
 | D1 | 10 | floating_population: `/benchmark/time_per_hour_index/{band}`, `/population/by_time/{band}`, `/reliability/covered_trade_areas`, `/period_code`; 종일형 `/benchmark/mean_daily_per_trade_area` | 일반형: min(r 등급, 시간대 규모 p 등급). 종일형: 전체 규모 p 등급만. `10 × 등급 / 4` | 무관은 not_applicable. 원값·유효 상권 수·해당 패턴의 기준선 부족은 unknown. 복합 분포는 PATTERN_DAILY_PERCENTILES로 준비됨; 채점 경로 연결은 **새 계산 필요** |
 | D2 | 10 | floating_population: `/benchmark/weekend_index`, 보조 확인 `/population/by_day/{day}` | 주말형은 r=weekend_index; 주중형은 r=1/weekend_index. 공통 r 구간 | 승인된 업종별 요일 프로필이 없으면 unknown. 주중 역수의 분모 0·null은 unknown. 요일 무관을 승인한 업종만 not_applicable |
-| D3 | 10 | floating_population: `/benchmark/age_index/{age}`, `/resident/benchmark/age_index/{age}`, `/worker/benchmark/age_index/{age}` | 업종 프로필이 지정한 한 모집단·연령 구간의 r. 공통 r 구간; 여러 연령 합산 지수는 **새 계산 필요** | 인구 종류·연령 프로필 미승인, 해당 자료 null이면 unknown. 유동·상주·직장 인구 합산 금지 |
+| D3 | 10 | floating_population: `/benchmark/age_index/{age}`, `/resident/benchmark/age_index/{age}`, `/worker/benchmark/age_index/{age}` | 업종 프로필이 지정한 한 모집단·연령 구간의 r. 공통 r 구간; 여러 연령 합산 지수는 **새 계산 필요** | 빈 모집단은 D3 not_applicable. 적용 업종에서 해당 자료 null이면 unknown. 유동·상주·직장 인구 합산 금지 |
 | D4 | 10 | floating_population: `/trend/yoy_change`, `/trend/quarters/{j}/period_code`, `/trend/quarters/{j}/trade_area_count` | g=100×yoy_change. 입력 0.05는 +5%이며 공통 g 구간 적용 | 전년 동기 없음·동일 상권 집합 검증 불가·기준 기간 불일치는 unknown. qoq_change·direction으로 대체 금지 |
-| C1 | 15 | commercial_area: `/by_middle/{i}/count`, `/by_middle/{i}/density_per_km2`, `/radius_m`, `/coverage/unmapped_store_count` | 권고 q=해당 업종 밀도/같은 반경의 서울 표본 중앙값. q<0.5→4; 0.5~0.8→3; 0.8~1.2→2; 1.2~1.5→1; ≥1.5→0 | 업종별 서울 밀도 기준선·정규화 q는 **새 계산 필요**. 기준 중앙값 0·표본 불충분·불완전 집계·미승인 구간은 unknown |
+| C1 | 15 | commercial_area: `/by_middle/{i}/count`, `/by_middle/{i}/density_per_km2`, `/radius_m`, `/coverage/unmapped_store_count` | 권고 q=해당 업종 밀도/같은 반경의 서울 표본 중앙값. q<0.5→4; 0.5~0.8→3; 0.8~1.2→2; 1.2~1.5→1; ≥1.5→0 | 업종별 서울 밀도 기준선은 commercial_area/baseline.py에 반영; 정규화 q 연결은 **새 계산 필요**. 기준 중앙값 <0.01·표본 불충분·불완전 집계·미승인 구간은 unknown |
 | C2 | 0 | commercial_area: `/by_middle/{i}/lq`, `/by_middle/{i}/lq_district`, `/trade_areas/{j}/kind`, 해당 행 citable | 채점 없음. 집적 상황과 해석의 대안·위험만 설명 | 분할 기준선 없음·작은 표본·citable=false면 숫자 인용 차단. LQ 높음=좋음/나쁨으로 자동 판정 금지 |
 | C3 | 0 | commercial_area: `/franchise/by_middle/{i}/ratio`, `/franchise/method`, `/franchise/confidence`; 지도 동종 분류 | 채점 없음. 관측 경쟁 구성만 설명 | null·불확실 분류는 미확인. 프랜차이즈 비율만으로 차별화 가능성을 확정하지 않음 |
-| C4 | 15 | MapObservation.data: `/queries/q1/request/facility_code`, `/queries/q1/status`, `/queries/q1/has_more`, `/queries/q1/place_ids`, `/places/{id}/category_code`, `/places/{id}/distance_m` | 권고 t=필요 시설까지 확인된 최근접 직선거리/업종별 최대 허용거리 dmax. t≤0.25→4; ≤0.50→3; ≤0.75→2; ≤1→1; >1→0. 필수 시설 여러 개면 최저 등급 | 시설 프로필·dmax·최근접 거리 집계는 **새 설정/계산 필요**. 실패·거리 null·검색 범위 부족은 unknown. 필요 시설 없음이 승인된 업종만 not_applicable |
-| S1 | 7.5 | business_lifecycle: `/industries/{i}/metrics/recent_year_close_rate`, 공통 표본 경로는 아래 참조 | 최근 최대 4분기의 가중 분기 평균 폐업률. 낮을수록 높은 p 등급 | 평균 점포 수<20 또는 적격 비교 업종<10이면 unknown; 기간·분모·매핑 미충족도 unknown |
-| S2 | 7.5 | business_lifecycle: `/industries/{i}/metrics/net_change_rate` | 전체 분석기간의 가중 분기 평균 순증감률. 높을수록 높은 p 등급 | S 공통 조건. 매출 성장률로 해석하지 않음 |
-| S3 | 7.5 | business_lifecycle: `/industries/{i}/metrics/turnover_rate` | 낮은 교체 부담에 높은 p 등급 | S 공통 조건. 낮은 회전율을 수요 활성화로 해석하지 않음 |
-| S4 | 7.5 | business_lifecycle: `/industries/{i}/metrics/close_rate_trend`, `/industries/{i}/metrics/oldest_year_close_rate`, `/metadata/quarter_count` | 최근 최대 4분기 폐업률−처음 최대 4분기 폐업률. 낮을수록 높은 p 등급 | S 공통 조건. 과거·최근가 같은 비교창이면 unknown; 4분기 자료의 0 변화는 개선 근거가 아님 |
+| C4 | 15 | MapObservation.data: `/queries/q1/request/facility_code`, `/queries/q1/status`, `/queries/q1/has_more`, `/queries/q1/place_ids`, `/places/{id}/category_code`, `/places/{id}/distance_m` | 권고 t=필요 시설까지 확인된 최근접 직선거리/업종별 최대 허용거리 dmax. t≤0.25→4; ≤0.50→3; ≤0.75→2; ≤1→1; >1→0. 필수 시설 여러 개면 최저 등급 | 시설 프로필·dmax 승인 완료; 최근접 거리 집계·연결은 **새 계산 필요**. 실패·거리 null·검색 범위 부족은 unknown. 필요 시설 없음이 승인된 업종만 not_applicable |
+| S1 | 7.5 | business_lifecycle: `/industries/{i}/metrics/recent_year_close_rate`, 공통 표본 경로는 아래 참조 | 최근 4분기 폐업률/서울 같은 업종 최근 4분기 폐업률=r. 낮을수록 높은 역방향 r 등급 | 기간 점포 노출량<40(잠정)이면 unknown; 기간·분모·매핑 미충족도 unknown |
+| S2 | 7.5 | business_lifecycle: `/industries/{i}/metrics/net_change_rate` | r=1+(상권 순증감률−서울 순증감률)/서울 회전율. 높을수록 유리한 공통 r 등급 | S 공통 조건. 매출 성장률로 해석하지 않음 |
+| S3 | 7.5 | business_lifecycle: `/industries/{i}/metrics/turnover_rate` | 회전율/서울 같은 업종 회전율=r. 낮을수록 높은 역방향 r 등급 | S 공통 조건. 낮은 회전율을 수요 활성화로 해석하지 않음 |
+| S4 | 7.5 | business_lifecycle: `/industries/{i}/metrics/close_rate_trend`, `/industries/{i}/metrics/oldest_year_close_rate`, `/metadata/quarter_count` | r=(상권 최근 폐업률/과거 폐업률)/(서울 최근 폐업률/과거 폐업률). 낮을수록 유리한 역방향 r 등급 | S 공통 조건. 과거·최근 4분기 창이 하나라도 겹치면 unknown; 최소 8분기 필요 |
 | G | 0 | decision payload: `/education_zones/status`, `/education_zones/zones/{j}/name`, `/education_zones/queried_at` | 아래 규제 표의 금지/조건부/해당 없음. 조회 실패·구역 종류 미확인은 unknown | 고시 구역을 읽기만 함. 점수로 금지를 상쇄하지 않음 |
 
 `q` 구간은 반열린 구간으로 0.5≤q<0.8, 0.8≤q<1.2, 1.2≤q<1.5다. C1·C4 구간은 **권고안이며 사용자 확인 전 미승인**이다. 점포 0은 경쟁 부담 0 관측일 수 있지만 수요 존재나 사업 기회를 증명하지 않는다.
@@ -114,36 +114,42 @@
 
 ## D2·D3·D4 프로필과 자료 조건
 
-D2 평일형/주말형/무관과 D3의 모집단·연령 프로필은 industry_profile.csv에 검토용 초안으로 추가했다. 기존 시간대의 `reviewed=true`와 별도로 새 열은 모두 `reviewed_v2=false`다. 새 프로필의 사용자 승인 전 채점은 unknown이며 모델이 상식으로 채우지 않는다. D2 주중 역수와 D3 복합 연령 지수는 고정 규칙으로 코드가 계산해야 한다.
+D2·D3 새 열은 51행 모두 reviewed_v2=true로 사용자 승인됐다. 원칙 B: I201·I202·I203·I204·I210은 고객층·요일의 유불리를 업종 전체에 고정하지 않는다. day_pattern=무관으로 D2 not_applicable, target_population·target_age_bands를 비워 D3 not_applicable이다. D1 시간대 패턴은 보존한다. 모집단이 빈 값 또는 "—"인 업종도 D3 not_applicable이다. 나머지는 기존 제안을 승인했으며 confidence는 실측 확신이 아니라 제안 당시 근거 강도로 유지한다.
 
-D4 `/trend/yoy_change`는 변화 비율이다. 5분기 이상과 전년 동기의 같은 상권 집합이 필요하다. 현재 기본 trend_quarters는 4여서 전년 동기 값이 없을 수 있다. `/trend/direction`은 qoq로 대체될 수 있어 D4에 쓰지 않는다. `/trend/quarters/{j}/trade_area_count`가 같다는 사실만으로 구성 상권이 같다고 증명하지 못한다. 동일 상권 집합 검증 근거가 없으면 unknown으로 남긴다.
+D4는 floating_population 내부 기본 trend_quarters=5로 바꿨다. 전년 같은 분기의 **관측된 상권 코드 집합**이 최신과 일치할 때만 /trend/yoy_change를 계산한다. 집합 불일치는 null과 warnings를 남긴다. 상권 수가 같은 경우에도 코드가 다르면 비교하지 않는다. qoq_change·direction은 설명용으로 남지만 D4 대체 입력으로 쓰지 않는다. 변화율은 분기 총량이 아닌 일평균 기준이며 API 실제 요청 수 증가는 페이지 수·캐시·누락 응답에 따라 달라질 수 있다.
 
 ## C1·C4 사용자 확인 권고안
 
 | 항목 | 권고안 | 대안·차이 |
 | --- | --- | --- |
 | C1 정규화 | 같은 반경·기간·51업종 매핑으로 수집한 서울 비교 지점들의 업종별 점포 밀도 중앙값 대비 q. 제안 경계 0.5/0.8/1.2/1.5 | 유동 1만 명당 점포 수. 수요를 분모에 넣지만 점포 반경과 공식 상권 통행 집합이 달라 직접 나누기 어렵고 D1 규모와 중복될 수 있음 |
-| C4 프로필 | 별도 업종 프로필에 시설 적용 여부·필수 시설 코드·최대 직선거리 dmax·다중 시설 결합 규칙 초안 필요 | 시설을 우선 설명·위험만으로 다루고 C4를 unknown으로 유지. 임의 시설·거리로 점수 채우지 않음 |
+| C4 프로필 | 승인 프로필의 시설 종류·허용거리와 원칙 A 적용. 다중 시설은 기존 최저 등급 권고 유지 | 시설을 우선 설명·위험만으로 다루고 C4를 unknown으로 유지. 임의 시설·거리로 점수 채우지 않음 |
 | C4 구간 | t=d/dmax의 0.25/0.50/0.75/1.00 경계, 필수 시설 여러 개면 최저 등급 | 업종별 거리 등급을 직접 등록. 세밀하지만 51업종 전체 기준 검수가 필요 |
 | 복합 시간대 | 지정 시간대 합계의 상권별 일평균 분포 새 측정 | 단일 밴드 등급 평균 후 내림. 빠르지만 합계 규모 백분위와 동일하지 않음 |
 
-C1의 서울 기준선은 현재 없다. 음식점 전체 밀도 baseline과 LQ를 업종별 서울 밀도 중앙값으로 대체하지 않는다. 중앙값 0인 희소 업종은 다른 승인 기준선 없이 채점하지 않는다. 다른 지역에 서울 분포를 적용하지 않는다.
+C1 서울 기준선은 `backend/app/agents/commercial_area/baseline.py`의 `SEOUL_INDUSTRY_DENSITY_PERCENTILES`(51업종·5~95 분위수)와 `industry_percentile(code, density)`에 반영했다. 기존 음식점 전체 밀도 상수는 보존한다. q의 분모는 해당 업종 표의 [50]이다. 중앙값 <0.01개/km²이면 C1 unknown(현재 S202만 해당)이며 점포 0이라는 이유로 자동 최고점 처리하지 않는다. 0.01은 출력 반올림 단위에 맞춘 사실상 0 경계로, 더 넓은 희소 기준은 시험 채점 후 검토한다. 대상 위치의 점포 0이라도 서울 중앙값이 유효하면 q=0 관측은 가능하다. 서울 밖은 이 기준을 적용하지 않는다.
 
-C4 초안 열은 `required_facilities`, `max_distance_m`이며 각 열에 confidence·rationale을 붙였다. 한 행의 시설들이 같은 max_distance_m를 공유하는 검토용 초안이다. 시설 공란은 rationale의 C4 not_applicable 제안과 판단 보류를 사람이 구분해야 하며 공란만으로 미적용을 확정하지 않는다. 이번 작업은 서비스용 프로필 로더·채점 엔진을 추가하지 않는다. 시설 코드는 현재 MapQuery의 FacilityCode와 대응해야 한다. 적용 예로 학원의 학교(SC4)·통근 업종의 지하철(SW8) 등을 검토할 수 있으나 아직 업종별 필수 조건으로 승인된 것은 아니다.
+C4 원칙 A: D1 통행 규모와 중복되는 역(SW8) 연결을 제거하고 I101만 역·관광 예외를 유지한다. 승인된 연결은 G215→HP8 300m; P105·R102·G213→SC4 500m; G218→CT1·AT4 500m; G202·S203·S204·N109→PK6 500m; I101→SW8·AT4 500m이다. 그 외 업종은 required_facilities와 max_distance_m를 비워 C4 not_applicable로 확정한다. 한 행의 모든 시설은 같은 허용거리를 사용한다. 프로필 로더·채점 엔진은 추가하지 않았다.
 
 지도 거리는 직선거리다. 검색 범위는 `MapObservation.radius_m`, 조회 상태·표본 제한은 MapData의 queries로 확인한다. 관측된 시설의 확인된 거리는 쓸 수 있지만 검색 0건을 시설 부재로 확정하지 않는다. 미분류 장소를 이름만 보고 필요한 시설로 추정하지 않는다.
 
-## S1~S4의 표본·비교 집합
+## S1~S4 서울 같은 업종 비교
 
-공통 실제 경로는 `/industries/{i}/metrics/avg_store_count`, `/industries/{i}/metrics/observed_quarters`, `/industries/{i}/data_complete`, `/industries/{i}/score_available`, `/metadata/quarter_count`다. 반환 행의 업종 코드와 매핑 검토·비율 분모도 확인한다.
+상권 내 업종 간 백분위와 "비교 업종 10개" 조건은 삭제한다. **분석기간 점포 수 합계(노출량) ≥40**(잠정), 완전한 기간, 유효 분모·매핑을 요구한다. 기존 avg_store_count×metadata.quarter_count로 노출량을 계산할 수 있으나 런타임 채점 연결은 새 계산 필요다. 개폐업 내부 종합 score·component_scores는 새 S 점수로 재사용하지 않는다.
 
-평균 점포 수<20 또는 적격 비교 업종<10이면 **S1~S4 unknown**이다. 완전한 분석기간과 필요한 지표의 유효 분모를 요구한다. 수축 추정은 하지 않는다. 비교 집합은 실행별 고정된 전체 적격 업종으로 만들고 후보 Top 5만 골라 상대 순위를 매기지 않는다. 동률은 average rank를 사용하며 낮을수록 유리한 S1·S3·S4는 역방향 순위, 높은 것이 유리한 S2는 정방향 순위로 p를 산출한다.
+서울 기준값은 `backend/app/agents/business_lifecycle/baseline.py`의 `SEOUL_INDUSTRY_LIFECYCLE_BASELINE`이다. 측정 스크립트는 `backend/scripts/measure_lifecycle_baseline.py`. 공식 [점포-서울시 OA-22174](https://data.seoul.go.kr/dataList/OA-22174/S/1/datasetView.do), 서비스 **VwsmMegaStorW**, 2026-10-13 측정: 전체 2,200행·HTTP 3회·탐색/재시도 없음. 기본 분석과 맞춘 **2023Q3~2026Q2 12분기**만 골라 기존 _aggregate_rows를 그대로 사용했다. 건수를 합산한 뒤 비율을 계산하고, 응답 분기의 누락 원천만 0 보충한다. 전체 분기 응답 부재는 결측이다. 45개 서울 연결 서비스 업종 모두 data_complete=true이며 원문은 커밋하지 않는다.
 
-현재 내부 `component_scores`는 input_builder까지만 있고 최종 formatter의 AgentAnalysis.data에는 없다. 현재 `/coverage/scored_industries`는 기존 채점 코드(최소 비교 2개)의 개수이므로 v0.2 비교 업종 수를 대신하지 못한다. 표본 20·비교 업종 10 조건으로 만든 **적격 비교 업종 수와 지표별 p는 새 계산 필요**다. 개폐업 종합 `/industries/{i}/score`는 S1~S4의 p나 최종 점수로 재사용하지 않는다.
+S1은 최근 4분기 폐업률, S2·S3은 전체 12분기 순증감률·회전율이다. 대상과 서울의 기준 종료 분기·분석 길이가 같아야 한다. 다른 기간이면 재측정한 상수가 필요하며 기존 값으로 대신하지 않는다. S1·S3 r=상권 지표/서울 같은 업종 지표는 낮을수록 좋다. **잠정 역방향 r 등급**은 <0.80→4, <0.95→3, <1.05→2, <1.20→1, ≥1.20→0이다. S2는 확정된 정규화 지수에 정방향 r 구간(0.80/0.95/1.05/1.20)을 사용한다. 서울 분모 0·null, 부족 노출량·불완전 관측은 unknown이다.
 
-서울시 자료가 없는 **I207·M107·M114·N109·S201·S208**은 S 전부 unknown이다. 미지원은 운영 금지나 0점의 근거가 아니다.
+S4는 처음 4분기와 최근 4분기가 겹치면 unknown이다. **최소 8분기**가 필요하며 기본 12분기에서는 2023Q3~2024Q2 대 2025Q3~2026Q2로 비교창이 분리된다. 변화는 퍼센트포인트이며 부호 있는 값이다.
 
-`/industries/{i}/zero_filled_sources > 0`이면 근거에 **누락 원천 0 보충**과 건수를 남긴다. 이는 분기×원천 보충 슬롯 수이며 실제 0 행 관측과 다르다. 보충 자체로 가점·감점을 하지 않으며 실제 null·상권 분기 전체 부재는 결측으로 유지한다.
+### 확정: S2·S4 지수와 기간별 표본
+
+- S2 = `1+(상권 순증감률−서울 순증감률)/서울 회전율`. 서울 회전율 0·null이면 unknown. 음수 순증감에서도 방향을 보존하며 높은 지수가 유리하다. 공통 정방향 r 구간을 쓴다.
+- S4 = `(상권 최근 폐업률/상권 과거 폐업률)/(서울 최근 폐업률/서울 과거 폐업률)`. 상권 과거 폐업률 0이면 unknown. 서울 과거·최근 폐업률 0·null도 유효한 비율을 만들 수 없어 unknown이다. 공통 역방향 r 구간을 쓴다.
+- S2·S4는 **처음 4분기·최근 4분기 각각 점포 노출량 ≥40**(잠정)을 요구한다. 한 기간이라도 미달하면 unknown이다. 비교창은 겹치면 안 되며 최소 8분기가 필요하다.
+
+서울 자료가 없는 I207·M107·M114·N109·S201·S208은 S 전부 unknown이다. zero_filled_sources>0은 근거에 "누락 원천 0 보충"과 분기×원천 건수를 남기되 별도 가감점하지 않는다.
 
 ## G — 교육환경보호구역 규칙
 
@@ -194,7 +200,7 @@ C4 초안 열은 `required_facilities`, `max_distance_m`이며 각 열에 confid
 | D4 | yoy_change·분기 코드·상권 수 | 전년 동기 자료 부족 시 과거 자료 확보, 비교 상권 집합 일치 검증 근거 |
 | C1 | 업종별 count·density_per_km2·radius_m | 동일 반경의 서울 업종별 밀도 중앙값 분포·정규화 q·승인된 구간 |
 | C4 | 지도 시설 분류·거리·조회 상태 | 시설·dmax 초안의 사용자 승인·최근접 거리 집계·충분한 검색 범위 확인 |
-| S1~S4 | 원지표·avg_store_count·data_complete | v0.2 표본 조건에 따른 적격 비교 업종 수·유리한 방향의 지표별 p |
+| S1~S4 | 원지표·avg_store_count·data_complete | 노출량 ≥40·동일 업종 서울 기준의 r; 확정 S2·S4 지수·기간별 노출량 계산 필요 |
 
 종일형의 **전체 일평균 규모 기준선은 0단계에서 추가 완료**했으므로 새 계산 필요 목록에서 제외한다. 다만 현재 실행 코드에 D1 채점 경로를 연결하지 않았다. 위에서 이름을 제안한 파생값은 기존 AgentAnalysis.data JSON Pointer로 가장하지 않는다.
 
@@ -202,7 +208,7 @@ C4 초안 열은 `required_facilities`, `max_distance_m`이며 각 열에 confid
 
 ### 업종 프로필 초안
 
-`time_profile.csv`를 `industry_profile.csv`로 이름을 바꿨다. 기존 시간대 열·confidence·reviewed=true는 보존했다. 새 열은 day_pattern, target_population, target_age_bands, required_facilities, max_distance_m이며 각각 `_confidence`·`_rationale`을 추가했다. 새 열의 승인 플래그는 reviewed_v2=false다. 공란은 근거를 읽고 사용자 검토가 필요한 상태이며 모델이나 로더가 임의로 채우지 않는다.
+`time_profile.csv`를 `industry_profile.csv`로 이름을 바꿨다. 기존 시간대 열·confidence·reviewed=true는 보존했다. 새 열은 day_pattern, target_population, target_age_bands, required_facilities, max_distance_m이며 각각 `_confidence`·`_rationale`을 추가했다. 새 열의 승인 플래그는 후속 사용자 결정에 따라 reviewed_v2=true다. 후속 결정에 따른 모집단·시설 공란은 각각 D3·C4 not_applicable이며 모델이나 로더가 임의로 채우지 않는다.
 
 C4 시설 코드는 실제 MapQuery·지도 에이전트가 처리하는 SC4(학교), SW8(지하철), PK6(주차장), HP8(병원), CT1(문화시설), AT4(관광명소)만 초안에 사용했다. 임의 오피스·아파트 시설 코드는 추가하지 않았다. 거리 300m/500m는 실측 성공 경계가 아닌 검토용 정책값이다. 예약형 또는 차량형이라는 이유만으로 D2·D3를 자동 미적용하지 않는다.
 
@@ -232,13 +238,13 @@ python scripts/build_density_baseline.py --industries --seoul-csv "D:/data/서�
 
 파일 기준 분기는 사용자가 해당 파일 시점에 맞춰 지정한다. CSV의 한글 열을 기존 API 파서 입력으로 변환한 뒤 `map_stores`(소분류 우선)를 사용한다. 기존 1,650개 중심·반경 500m에서 개/km² 밀도의 5~95 백분위(5 간격)를 계산한다. 격자로 후보를 좁히고 실제 거리로 판정한다. 잘못된 열·좌표·중복 점포는 오류로 멈추며, 소분류가 없어 나눌 수 없는 업종은 해당 지점의 기준선에서 제외하고 표본 수를 출력한다.
 
-계산 표본만 무시 경로 `backend/cache/industry_density_sample.csv`에 매 실행 새로 저장한다. 상수 코드 조각에 원천·파일 기준 분기·단위·카탈로그 버전 주석을 출력한다. 기존 음식점 상수는 보존하며 업종별 상수를 자동 적용하지 않는다. 1,650개 완전 표본이 아니면 불완전으로 표시하고 종료 코드 1을 반환한다. **C1 API 호출은 0회이며, 실제 파일 측정은 아직 하지 않았다.**
+계산 표본만 무시 경로 `backend/cache/industry_density_sample.csv`에 매 실행 새로 저장한다. 상수 코드 조각에 원천·파일 기준 분기·단위·카탈로그 버전 주석을 출력한다. 기존 음식점 상수는 보존하며 업종별 상수를 자동 적용하지 않는다. 1,650개 완전 표본이 아니면 불완전으로 표시하고 종료 코드 1을 반환한다. **C1 API 호출은 0회이며, 사용자 파일 실행으로 2026Q2 1,650곳·분할 누락 0인 결과를 확인해 상수에 반영했다.**
 
 ### D4·S 확인 결과 — 코드 수정 없음
 
-현재 기본 trend_quarters=4이며 목업·예제에는 20253·20254·20261·20262만 있다. 2026Q2의 전년 동기는 2025Q2(20252)이므로 **1분기 더, 총 5분기**가 필요하다. _trend는 그 분기가 실제로 있으면 yoy_change를 계산하지만 현재 목업 값은 null이다. 추가 수집·설정 변경은 하지 않았다. 상권 집합 일치 확인은 별도로 필요하다.
+이전 준비 단계의 기본 trend_quarters=4이며 목업·예제에는 20253·20254·20261·20262만 있다. 2026Q2의 전년 동기는 2025Q2(20252)이므로 **1분기 더, 총 5분기**가 필요하다. _trend는 그 분기가 실제로 있으면 yoy_change를 계산하지만 현재 목업 값은 null이다. 후속 작업에서 기본 5분기와 관측 상권 집합 검증을 반영했다. 실제 API를 통한 D4 추가 측정은 하지 않았다.
 
-고정 원자료 `test_industry_pipeline.raw_rows()`를 전처리하면 평균 점포 20개 이상·완전 관측·필요 지표 유효 조건에 I201(20개)·I210(100개) 2업종이 해당한다. 비교 업종 2<10이므로 **최종 S 조건 충족 0업종**이다. 4분기만 있어 S4는 과거·최근 창도 동일하다. 현재 서비스 목업 2업종(I201·I212)은 avg_store_count가 없어 평균 표본 조건을 확인할 수 없으므로 **확인된 충족 0업종**이며 unknown이다. 관측값 누락을 점포 0으로 바꾸지 않았다.
+고정 원자료 `test_industry_pipeline.raw_rows()`를 전처리하면 평균 점포 20개 이상·완전 관측·필요 지표 유효 조건에 I201(20개)·I210(100개) 2업종이 해당한다. 비교 업종 2<10이므로 **이전 조건의 S 충족은 0업종**이었다. 후속 결정에서 비교 업종 조건은 제거했다. 4분기만 있어 S4는 과거·최근 창도 동일하다. 현재 서비스 목업 2업종(I201·I212)은 avg_store_count가 없어 평균 표본 조건을 확인할 수 없으므로 **확인된 충족 0업종**이며 unknown이다. 관측값 누락을 점포 0으로 바꾸지 않았다.
 
 ## 변경 이력
 

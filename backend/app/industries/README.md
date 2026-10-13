@@ -64,7 +64,7 @@
 - `data/small_to_industry.csv`: G213·G215의 9개 소분류를 명시합니다. 소분류 코드·이름은 저장소의 `examples/schema_compare/upjong_small_official.csv`에 있는 2023-02-28 자료로 확인했습니다.
 - `data/seoul_to_industry.csv`: 기존 99개 행을 보존하고 90개만 연결합니다. 제외 9개는 빈 코드와 사유를 남깁니다.
 - `data/legacy70_to_industry.csv`: 과거 70업종의 연결표입니다. 제외 항목은 빈 코드, 합병으로 중복된 연결은 하나만 남깁니다. 과거 점수를 복제하거나 평균하지 않습니다.
-- `data/industry_profile.csv`: 51개 업종의 기존 시간대는 `reviewed=true`, 새 D2·D3·C4 열은 `reviewed_v2=false`인 사람 검토용 초안입니다. 서비스에서는 아직 읽지 않습니다.
+- `data/industry_profile.csv`: 51개 업종의 기존 시간대는 `reviewed=true`, 새 D2·D3·C4 열은 사용자 결정에 따라 51행 모두 `reviewed_v2=true`로 승인됐습니다. 서비스에서는 아직 읽지 않습니다.
 - `catalog.py`: 위 네 분류 CSV에서 생성합니다. 생성물을 직접 수정하지 않습니다. CSV는 UTF-8 BOM 형식입니다.
 
 ```powershell
