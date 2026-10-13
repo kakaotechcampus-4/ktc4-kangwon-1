@@ -53,8 +53,7 @@ test-results/
 cache/
 *.log
 
-# 개인 검증 도구·자동화 작업 기록
-/validation_tool/
+# 자동화 작업 기록
 /.playwright-mcp/
 /.superpowers/
 

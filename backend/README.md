@@ -24,10 +24,10 @@ LLM은 코드가 계산한 값을 읽고 판단·설명하며, 모든 근거는 
 
 ## 실행 모드
 
-| 모드 | 흐름 | 상태 |
-| --- | --- | --- |
-| `single_decision` | 세 분석 → 판정관이 한 번에 종합. 필요하면 보완·지도·질문 1회씩 | **기본값** |
-| `multi_agent` | 세 분석 → 전문가 브리핑 → 판정관이 전문가에게 되물은 뒤 종합 | 선택. 평가 중 |
+| 모드              | 흐름                                                           | 상태          |
+| ----------------- | -------------------------------------------------------------- | ------------- |
+| `single_decision` | 세 분석 → 판정관이 한 번에 종합. 필요하면 보완·지도·질문 1회씩 | **기본값**    |
+| `multi_agent`     | 세 분석 → 전문가 브리핑 → 판정관이 전문가에게 되물은 뒤 종합   | 선택. 평가 중 |
 
 `backend/.env`의 한 줄로 정합니다. 서버가 켜질 때 한 번 읽으므로 바꾼 뒤에는 서버를 재시작합니다.
 
@@ -44,20 +44,20 @@ ANALYSIS_MODE=multi_agent
 
 ### 평가자 사용 설정
 
-| 환경변수 | 기본 | 설명 |
-| --- | --- | --- |
-| `BRIEFING_ENABLED` | 미설정 | `true`/`false` 또는 `1`/`0`, 대소문자 무관. `ANALYSIS_MODE`보다 우선하며 충돌 시 경고 |
-| `EVALUATORS_ENABLED` | `false` | 심사자·예비 창업자·동네 손님·임대인 대변인이 초안을 한 번 평가 |
-| `EVALUATOR_LLM_MODEL`·`API_KEY`·`BASE_URL` | 공통 설정 | 실제 이름은 각각 `EVALUATOR_LLM_` 접두어를 사용 |
-| `EVALUATOR_LLM_MAX_TOKENS`·`REASONING_EFFORT`·`TIMEOUT_SECONDS` | 공통 설정 | 미설정이면 `ELICE_*`·`LLM_*` 값 사용 |
-| `ANALYSIS_TIMEOUT_SECONDS` | 평가자 꺼짐 600초, 켜짐 1200초 | 명시한 값이 기본값보다 우선 |
+| 환경변수                                                        | 기본                           | 설명                                                                                  |
+| --------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------- |
+| `BRIEFING_ENABLED`                                              | 미설정                         | `true`/`false` 또는 `1`/`0`, 대소문자 무관. `ANALYSIS_MODE`보다 우선하며 충돌 시 경고 |
+| `EVALUATORS_ENABLED`                                            | `false`                        | 심사자·예비 창업자·동네 손님·임대인 대변인이 초안을 한 번 평가                        |
+| `EVALUATOR_LLM_MODEL`·`API_KEY`·`BASE_URL`                      | 공통 설정                      | 실제 이름은 각각 `EVALUATOR_LLM_` 접두어를 사용                                       |
+| `EVALUATOR_LLM_MAX_TOKENS`·`REASONING_EFFORT`·`TIMEOUT_SECONDS` | 공통 설정                      | 미설정이면 `ELICE_*`·`LLM_*` 값 사용                                                  |
+| `ANALYSIS_TIMEOUT_SECONDS`                                      | 평가자 꺼짐 600초, 켜짐 1200초 | 명시한 값이 기본값보다 우선                                                           |
 
-| 브리핑 | 평가자 | 구성 |
-| --- | --- | --- |
-| 꺼짐 | 꺼짐 | 단독 판정 |
-| 켜짐 | 꺼짐 | 브리핑 후 판정 |
-| 꺼짐 | 켜짐 | 단독 초안 → 평가자 4명 → 지적별 반영 후 최종판단 |
-| 켜짐 | 켜짐 | 브리핑·되묻기 → 초안 → 평가자 4명 → 추가 확인·최종판단 |
+| 브리핑 | 평가자 | 구성                                                   |
+| ------ | ------ | ------------------------------------------------------ |
+| 꺼짐   | 꺼짐   | 단독 판정                                              |
+| 켜짐   | 꺼짐   | 브리핑 후 판정                                         |
+| 꺼짐   | 켜짐   | 단독 초안 → 평가자 4명 → 지적별 반영 후 최종판단       |
+| 켜짐   | 켜짐   | 브리핑·되묻기 → 초안 → 평가자 4명 → 추가 확인·최종판단 |
 
 평가자 사용 시 모델 호출 상한은 **64회**, 브리핑 되묻기는 **초안 최대 2라운드 + 평가 후 별도 4라운드**입니다.
 평가자 4회와 최종판단·교정 2회의 몫을 전문가 배분에서 보호합니다. 한도는 최대치이며 항상 소진하지 않습니다.
@@ -75,17 +75,17 @@ ANALYSIS_MODE=multi_agent
 `services/analysis.py`의 `execute_analysis()`가 입력을 검증하고 `agents/orchestration/graph.py`의 `run_graph()`를 호출합니다.
 순서는 고정 엣지로 정하고, 최종판단 결과에 따라서만 분기합니다. 순서를 고르는 오케스트레이터 LLM은 없습니다.
 
-| 노드 | 역할 | 모드 |
-| --- | --- | --- |
-| `prepare_address` | 주소 변환, `AnalysisTask` 생성, Site 저장 | 공통 |
-| `run_analyses` | 세 분석 병렬 실행, 개별 결과 저장 | 공통 |
-| `write_briefs` | 세 전문가 브리핑 병렬 작성 | multi_agent |
-| `evaluate_decision` | 최종판단. 결과에 따라 종료 또는 아래 노드로 이동 | 공통 |
-| `evaluate_draft` | 평가자 4명 병렬 평가 후 최종판단으로 이동 | 평가자 사용 시 |
-| `execute_supplement` | 등록된 부분 작업(보완)만 실행하고 재판단 | single_decision |
-| `execute_map` | 같은 좌표·반경으로 지도 검색 후 재판단 | single_decision |
-| `consult` | 판정관 질문을 전문가에게 보내고 답변을 모아 재판단 | multi_agent |
-| `ask_user` | 임대인 질문 저장 후 대기 | 공통 |
+| 노드                 | 역할                                               | 모드            |
+| -------------------- | -------------------------------------------------- | --------------- |
+| `prepare_address`    | 주소 변환, `AnalysisTask` 생성, Site 저장          | 공통            |
+| `run_analyses`       | 세 분석 병렬 실행, 개별 결과 저장                  | 공통            |
+| `write_briefs`       | 세 전문가 브리핑 병렬 작성                         | multi_agent     |
+| `evaluate_decision`  | 최종판단. 결과에 따라 종료 또는 아래 노드로 이동   | 공통            |
+| `evaluate_draft`     | 평가자 4명 병렬 평가 후 최종판단으로 이동          | 평가자 사용 시  |
+| `execute_supplement` | 등록된 부분 작업(보완)만 실행하고 재판단           | single_decision |
+| `execute_map`        | 같은 좌표·반경으로 지도 검색 후 재판단             | single_decision |
+| `consult`            | 판정관 질문을 전문가에게 보내고 답변을 모아 재판단 | multi_agent     |
+| `ask_user`           | 임대인 질문 저장 후 대기                           | 공통            |
 
 - 그래프 상태는 요청별 메모리에 둡니다. 질문 대기 지점만 SQLite에 저장하고, 답변이 오면 최종판단부터 재개합니다.
   최초 분석·브리핑은 다시 실행하지 않습니다. 실행 중 강제 종료의 자동 복구는 지원하지 않습니다.
@@ -93,15 +93,15 @@ ANALYSIS_MODE=multi_agent
 
 ### 한도
 
-| 항목 | single_decision | multi_agent |
-| --- | --- | --- |
-| 보완 | 1라운드 | 전문가가 자기 도구로 실행 |
-| 지도 조회 | 1배치·최대 8개 검색 | 지도 전문가가 실행 |
-| 전문가 되묻기 | 없음 | 최대 2라운드, 라운드당 3명, 전문가당 질문 1개 |
-| 임대인 질문 | 1회·최대 3항목 | 1회·최대 3항목. 답변 뒤에는 되묻기만 가능 |
-| 판정 출력 교정 | 1회 | 1회 |
-| 모델 호출 | 판정·교정·지도 매핑 | 요청당 24회(`llm/budget.py`의 `MAX_CALLS`). 마지막 2회는 최종판단·교정 몫 |
-| 전체 시간 | 600초(질문 대기 제외) | 600초(질문 대기 제외) |
+| 항목           | single_decision       | multi_agent                                                               |
+| -------------- | --------------------- | ------------------------------------------------------------------------- |
+| 보완           | 1라운드               | 전문가가 자기 도구로 실행                                                 |
+| 지도 조회      | 1배치·최대 8개 검색   | 지도 전문가가 실행                                                        |
+| 전문가 되묻기  | 없음                  | 최대 2라운드, 라운드당 3명, 전문가당 질문 1개                             |
+| 임대인 질문    | 1회·최대 3항목        | 1회·최대 3항목. 답변 뒤에는 되묻기만 가능                                 |
+| 판정 출력 교정 | 1회                   | 1회                                                                       |
+| 모델 호출      | 판정·교정·지도 매핑   | 요청당 24회(`llm/budget.py`의 `MAX_CALLS`). 마지막 2회는 최종판단·교정 몫 |
+| 전체 시간      | 600초(질문 대기 제외) | 600초(질문 대기 제외)                                                     |
 
 ## 폴더 구성
 
@@ -141,12 +141,10 @@ backend/
 
 ## 에이전트별 역할
 
-이미지는 이전 구조의 설명 자료입니다. 정확한 입출력은 [schemas.py](app/schemas.py), 동작은 현재 코드를 기준으로 확인합니다.
+입출력은 [schemas.py](app/schemas.py), 동작은 현재 코드를 기준으로 확인합니다.
 
 <details>
 <summary>오케스트레이션 — 순서 통제와 결과 수집</summary>
-
-![오케스트레이터 구조](../docs/agent/오케스트라.png)
 
 - `graph.py`: 노드·고정 엣지·선택 분기. `workflow.py`: `prepare_task()`, `run_agents()`, 보완 도구 등록표.
 - `supplement.py`: 보완 작업 실행. `consult.py`: 전문가별 도구 정의와 지도 관측 채택 규칙.
@@ -157,8 +155,6 @@ backend/
 <details>
 <summary>유동인구 — 규모·시간대·추세 계산</summary>
 
-![유동인구 에이전트 구조](../docs/agent/유동인구.png)
-
 - `agent.py`의 `analyze()`가 진입점입니다. `metrics.py`: 집계·기준선·추세·반경·신뢰도. `geo.py`: 상권 겹침 판정.
 - 공통 수요 자료입니다. 75개 업종으로 인구를 임의 배분하지 않습니다.
 - 유동(명/일), 상주, 직장 인구는 모집단이 달라 더하지 않습니다.
@@ -167,8 +163,6 @@ backend/
 
 <details>
 <summary>개폐업 — 업종 매핑·추이·상대 점수</summary>
-
-![개폐업 에이전트 구조](../docs/agent/개폐업.png)
 
 - `agent.py`의 `analyze()`가 진입점입니다. 서울 API는 비동기로, SHP 읽기는 스레드로 격리합니다.
 - `input_builder.py` → `preprocess.py` → `scoring.py` → `formatter.py`. 내부 LLM 호출은 없습니다.
@@ -179,8 +173,6 @@ backend/
 
 <details>
 <summary>상권 — 점포 분포·경쟁 계산</summary>
-
-![상권 에이전트 구조](../docs/agent/상권.png)
 
 - `agent.py`의 `analyze()`가 점포 조회·지표 계산·요약을 연결합니다. 요약은 `summary.py`의 규칙으로 만듭니다.
 - 공통 중분류로 점포를 집계하고, 매핑되지 않은 점포는 따로 표시합니다.
@@ -217,19 +209,17 @@ backend/
 - 주장마다 경로·업종·숫자를 코드가 검증합니다. 틀린 주장은 그 주장만 빼고, 남는 주장이 없으면 원자료 요약으로 대체합니다.
 - 브리핑 문장은 판정관에게 주는 안내입니다. 판정관은 원자료 경로만 근거로 인용합니다.
 
-| 전문가 | 쓸 수 있는 도구 |
-| --- | --- |
-| `floating_population` | 인구 요약, 분기 추세, 시간대, 서울 비교 |
-| `business_lifecycle` | 업종 지표·업종 비교, 분기 상세 재조회(`fetch_quarter_details`) |
-| `commercial_area` | 업종별 점포 수, 반경별 구성, 자치구 특화, 비교 상권 재조회(`retry_lq_baseline`) |
-| `map_analysis` | 주변 동종 점포 검색, 주변 시설 검색 |
+| 전문가                | 쓸 수 있는 도구                                                                 |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `floating_population` | 인구 요약, 분기 추세, 시간대, 서울 비교                                         |
+| `business_lifecycle`  | 업종 지표·업종 비교, 분기 상세 재조회(`fetch_quarter_details`)                  |
+| `commercial_area`     | 업종별 점포 수, 반경별 구성, 자치구 특화, 비교 상권 재조회(`retry_lq_baseline`) |
+| `map_analysis`        | 주변 동종 점포 검색, 주변 시설 검색                                             |
 
 </details>
 
 <details>
 <summary>최종판단(판정관) — 추천·비추천과 근거 검증</summary>
-
-![최종판단 에이전트 구조](../docs/agent/최종판단.png)
 
 - `agent.py`의 `evaluate()`가 최종 결과 또는 다음 행동(보완·지도·되묻기·질문)을 반환합니다.
 - `prompt.md`: 판단 지침. multi_agent 입력은 `context.py`의 `build_context()`가 코드로 만듭니다.
@@ -247,9 +237,9 @@ backend/
 판정관이 판단에 꼭 필요한 정보가 부족하다고 볼 때만 등록된 부분 작업을 한 라운드 실행합니다.
 HTTP 실제 실행은 `build_supplement_tools()`로 두 작업을 등록합니다. 인구 보완은 없습니다.
 
-| 작업 | 수행 범위 | 추가 근거 |
-| --- | --- | --- |
-| `retry_lq_baseline` | 최초 주변 비교 조회가 실패했을 때 주변 자료만 재조회 | 상권 `data.supplement_lq` |
+| 작업                    | 수행 범위                                                      | 추가 근거                         |
+| ----------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `retry_lq_baseline`     | 최초 주변 비교 조회가 실패했을 때 주변 자료만 재조회           | 상권 `data.supplement_lq`         |
 | `fetch_quarter_details` | 같은 상권·기간의 최대 12분기 원자료 조회. 점수·LLM 재실행 없음 | 개폐업 `data.supplement_quarters` |
 
 - 판정관은 작업명·판단 질문·부족한 정보·필요 이유·예상 영향만 적습니다. 주소·반경·인자는 바꿀 수 없습니다.
@@ -275,11 +265,11 @@ HTTP 요청의 `allow_questions=true`일 때만 질문할 수 있습니다. 대�
 
 반경은 기본 500m이며 양의 정수만 받습니다. 세 분석에 같은 값이 전달되지만 실제 자료 범위는 서로 다릅니다.
 
-| 분석 | 실제 범위 |
-| --- | --- |
-| 상권 | 요청 반경 안의 점포 |
-| 개폐업 | 주소가 속한 서울시 상권 폴리곤. `data.metadata.radius_applied=false` |
-| 인구 | 요청 반경과 겹치는 상권 전체. 반경 밖까지 포함할 수 있어 warnings로 알림 |
+| 분석   | 실제 범위                                                                |
+| ------ | ------------------------------------------------------------------------ |
+| 상권   | 요청 반경 안의 점포                                                      |
+| 개폐업 | 주소가 속한 서울시 상권 폴리곤. `data.metadata.radius_applied=false`     |
+| 인구   | 요청 반경과 겹치는 상권 전체. 반경 밖까지 포함할 수 있어 warnings로 알림 |
 
 `analysis_requests.radius_m`은 요청 조건이지 실제 적용 범위가 아닙니다. 서울 음식점 백분위는 500m 요청에만 계산합니다.
 
@@ -298,12 +288,12 @@ Conda 환경이 없으면 먼저 `conda create -n chaeum python=3.12`로 만듭�
 
 ## 실행 방법
 
-| 실행 방식 | 데이터 | LLM | 확인 범위 |
-| --- | --- | --- | --- |
-| `examples/run_orchestration.py --mock --offline` | 분석 결과 목업 | 대역 | 흐름·계약·DB 저장 |
-| `examples/run_orchestration.py --mock` | 분석 결과 목업 | 실제 | 최종판단 모델 연결 |
-| `examples/run_api_mock.py` | API 원본 응답 목업 | 실제 | 유동인구·상권 전처리와 모델 연결 |
-| HTTP 서버 실제 모드 | 실제 API | 실제 | 주소부터 분석·저장까지 |
+| 실행 방식                                        | 데이터             | LLM  | 확인 범위                        |
+| ------------------------------------------------ | ------------------ | ---- | -------------------------------- |
+| `examples/run_orchestration.py --mock --offline` | 분석 결과 목업     | 대역 | 흐름·계약·DB 저장                |
+| `examples/run_orchestration.py --mock`           | 분석 결과 목업     | 실제 | 최종판단 모델 연결               |
+| `examples/run_api_mock.py`                       | API 원본 응답 목업 | 실제 | 유동인구·상권 전처리와 모델 연결 |
+| HTTP 서버 실제 모드                              | 실제 API           | 실제 | 주소부터 분석·저장까지           |
 
 ```powershell
 # 외부 호출 없음. 가상 주소 자료라 실제 입지 판단에는 쓸 수 없습니다.
@@ -323,14 +313,14 @@ python -m uvicorn app.main:create_app --factory --reload
 
 API 문서: <http://127.0.0.1:8000/docs>
 
-| 경로 | 동작 |
-| --- | --- |
-| `POST /api/v1/analyses` | `address`, 선택 `radius_m`·`allow_questions`·`with_map`을 받아 분석·저장 후 결과 반환. `?wait=false`면 202와 `request_id`만 바로 반환 |
-| `GET /api/v1/analyses/{request_id}/events?after=N` | 진행 이벤트(단계 시작·완료) 폴링. 진행 화면용 |
-| `GET /api/v1/analyses/{request_id}` | 상태·주소·Site·결과·오류 조회. multi_agent 요청은 선택형 `deliberation` 포함 |
-| `POST /api/v1/analyses/{request_id}/answers` | 저장된 질문에 답하고 최종판단부터 재개. `?wait=false` 지원 |
-| `POST /api/v1/analyses/{request_id}/retry-decision` | 저장된 자료로 실패한 판단만 재시도 |
-| `GET /health` | 서버 상태 확인 |
+| 경로                                                | 동작                                                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/analyses`                             | `address`, 선택 `radius_m`·`allow_questions`·`with_map`을 받아 분석·저장 후 결과 반환. `?wait=false`면 202와 `request_id`만 바로 반환 |
+| `GET /api/v1/analyses/{request_id}/events?after=N`  | 진행 이벤트(단계 시작·완료) 폴링. 진행 화면용                                                                                         |
+| `GET /api/v1/analyses/{request_id}`                 | 상태·주소·Site·결과·오류 조회. multi_agent 요청은 선택형 `deliberation` 포함                                                          |
+| `POST /api/v1/analyses/{request_id}/answers`        | 저장된 질문에 답하고 최종판단부터 재개. `?wait=false` 지원                                                                            |
+| `POST /api/v1/analyses/{request_id}/retry-decision` | 저장된 자료로 실패한 판단만 재시도                                                                                                    |
+| `GET /health`                                       | 서버 상태 확인                                                                                                                        |
 
 기본 POST는 분석이 끝날 때까지 기다립니다(보통 40~110초). 진행 화면은 `?wait=false`로 시작하고
 events를 1초마다 폴링합니다. 백그라운드 동시 실행은 `ANALYSIS_MAX_CONCURRENCY`개까지이고, 넘으면 429입니다.
@@ -338,49 +328,32 @@ events를 1초마다 폴링합니다. 백그라운드 동시 실행은 `ANALYSIS
 진행 이벤트는 그래프의 `RunHooks.on_step`이 남기며, 저장에 실패해도 분석은 계속합니다(표시용 보조 자료).
 응답 형식은 [API 계약](../docs/API_CONTRACT.md)이 기준입니다.
 
-### 검증 도구 (로컬, Git 제외)
-
-`validation_tool/`이 있으면 루트에서 서비스를 직접 호출해 실제 분석과 단계별 trace를 남길 수 있습니다.
-
-```powershell
-python validation_tool/run.py --address "서울특별시 송파구 오금로 404" --radius-m 500 --with-map
-
-# multi_agent로 한 번만 실행
-$env:ANALYSIS_MODE = "multi_agent"
-python validation_tool/run.py --address "서울특별시 송파구 오금로 404" --radius-m 500 --with-map
-
-# 외부 호출 없이 되묻기·질문 대기까지 확인
-python validation_tool/run.py --offline-multi --radius-m 300
-```
-
-`SSL_CERT_FILE`·`SSL_CERT_DIR`이 없는 파일을 가리키면 주소 조회가 곧바로 `UPSTREAM_FAILED`로 끝납니다. 두 변수를 비우고 다시 실행합니다.
-
 ## 환경설정
 
 `.env`가 없으면 [.env.example](.env.example)을 복사해 만들고 값을 채웁니다. 실제 키는 커밋하지 않습니다.
 
-| 변수 | 용도 |
-| --- | --- |
-| `GEOCODING_API_KEY` | 카카오 REST API (주소 검색·지도 조회) |
-| `FLOATING_POPULATION_API_KEY` | 서울시 유동인구 |
-| `BUSINESS_LIFECYCLE_API_KEY` | 서울시 개폐업 |
-| `BUSINESS_LIFECYCLE_BASE_QUARTER`, `BUSINESS_LIFECYCLE_QUARTER_COUNT` | 개폐업 기준 분기·기간 |
-| `BUSINESS_LIFECYCLE_AREA_SHP_PATH` | 개폐업 상권영역 SHP 경로 재정의 |
-| `BUSINESS_LIFECYCLE_AREA_CODE`, `BUSINESS_LIFECYCLE_AREA_NAME` | 상권 강제 지정. 남아 있으면 주소와 다른 상권을 분석할 수 있음 |
-| `COMMERCIAL_AREA_API_KEY`, `SBIZ_MAX_CONCURRENCY` | 소상공인 상가정보, 동시 요청 수 |
-| `FRANCHISE_API_KEY` | 공정위 브랜드 정보 |
-| `MAP_ANALYSIS_MAX_CONCURRENCY` | 지도 검색 동시 요청 수 |
-| `ELICE_API_KEY`, `ELICE_BASE_URL`, `ELICE_MODEL` | 공통 모델 연결 |
-| `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SECONDS`, `LLM_REASONING_EFFORT` | 공통 모델 옵션. reasoning은 모델이 지원할 때만 |
-| `DECISION_LLM_*` | 판정관 모델 |
-| `INDUSTRY_MAPPING_LLM_*`, `MAP_MAPPING_LLM_*` | 업종 매핑·지도 매핑 모델 |
-| `SPECIALIST_{전문가}_LLM_*` | 전문가별 모델. 비우면 공통 값을 씀 |
-| `ANALYSIS_MODE` | `single_decision`(기본) 또는 `multi_agent` |
-| `SQLITE_PATH` | DB 경로. 기본 `storage/chaeum.sqlite3` |
-| `ANALYSIS_AGENT_TIMEOUT_SECONDS` | 개별 분석 제한시간, 기본 180초 |
-| `ANALYSIS_TIMEOUT_SECONDS` | 전체 실행 제한시간, 기본 600초 |
-| `ANALYSIS_MAX_CONCURRENCY` | `wait=false` 백그라운드 동시 분석 수, 기본 2 |
-| `CORS_ALLOW_ORIGINS`, `MOCK_MODE` | HTTP 서버 설정 |
+| 변수                                                                  | 용도                                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `GEOCODING_API_KEY`                                                   | 카카오 REST API (주소 검색·지도 조회)                         |
+| `FLOATING_POPULATION_API_KEY`                                         | 서울시 유동인구                                               |
+| `BUSINESS_LIFECYCLE_API_KEY`                                          | 서울시 개폐업                                                 |
+| `BUSINESS_LIFECYCLE_BASE_QUARTER`, `BUSINESS_LIFECYCLE_QUARTER_COUNT` | 개폐업 기준 분기·기간                                         |
+| `BUSINESS_LIFECYCLE_AREA_SHP_PATH`                                    | 개폐업 상권영역 SHP 경로 재정의                               |
+| `BUSINESS_LIFECYCLE_AREA_CODE`, `BUSINESS_LIFECYCLE_AREA_NAME`        | 상권 강제 지정. 남아 있으면 주소와 다른 상권을 분석할 수 있음 |
+| `COMMERCIAL_AREA_API_KEY`, `SBIZ_MAX_CONCURRENCY`                     | 소상공인 상가정보, 동시 요청 수                               |
+| `FRANCHISE_API_KEY`                                                   | 공정위 브랜드 정보                                            |
+| `MAP_ANALYSIS_MAX_CONCURRENCY`                                        | 지도 검색 동시 요청 수                                        |
+| `ELICE_API_KEY`, `ELICE_BASE_URL`, `ELICE_MODEL`                      | 공통 모델 연결                                                |
+| `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SECONDS`, `LLM_REASONING_EFFORT`       | 공통 모델 옵션. reasoning은 모델이 지원할 때만                |
+| `DECISION_LLM_*`                                                      | 판정관 모델                                                   |
+| `INDUSTRY_MAPPING_LLM_*`, `MAP_MAPPING_LLM_*`                         | 업종 매핑·지도 매핑 모델                                      |
+| `SPECIALIST_{전문가}_LLM_*`                                           | 전문가별 모델. 비우면 공통 값을 씀                            |
+| `ANALYSIS_MODE`                                                       | `single_decision`(기본) 또는 `multi_agent`                    |
+| `SQLITE_PATH`                                                         | DB 경로. 기본 `storage/chaeum.sqlite3`                        |
+| `ANALYSIS_AGENT_TIMEOUT_SECONDS`                                      | 개별 분석 제한시간, 기본 180초                                |
+| `ANALYSIS_TIMEOUT_SECONDS`                                            | 전체 실행 제한시간, 기본 600초                                |
+| `ANALYSIS_MAX_CONCURRENCY`                                            | `wait=false` 백그라운드 동시 분석 수, 기본 2                  |
+| `CORS_ALLOW_ORIGINS`, `MOCK_MODE`                                     | HTTP 서버 설정                                                |
 
 모델 설정 우선순위는 **직접 주입 → 역할별 값 → 공통 값 → 코드 기본값**입니다.
 도구 호출·JSON 출력·reasoning 지원 여부는 선택한 모델로 확인해야 합니다.
@@ -391,18 +364,18 @@ python validation_tool/run.py --offline-multi --radius-m 300
 
 SQLite 상대 경로는 실행 위치와 관계없이 `backend/` 기준입니다.
 
-| 테이블 | 저장 내용 |
-| --- | --- |
-| `analysis_requests` | 요청 주소·반경·모드·Site·상태·최종 결과 스냅샷·실패 사유·실행 상태(예산 등) |
-| `agent_results` | 세 분석의 요청별·차수별 결과. 보완 결과는 `attempt=2` |
-| `decision_results` | 최종판단 이력과 참조한 분석 차수 |
-| `decision_failures` | 최종판단 실패 기록과 교정 진단 |
-| `supplement_events` | 보완 요청·처리 이력 |
-| `map_observations` | 지도 조회 요청·결과·채택 여부(차수별) |
-| `question_sessions` | 임대인 질문·답변·재개 스냅샷 |
-| `agent_briefs` | 전문가 브리핑 (multi_agent) |
-| `specialist_consults` | 전문가 되묻기 답변과 상태 (multi_agent) |
-| `analysis_events` | 진행 화면용 단계 이벤트(요약만). 판단 근거가 아님 |
+| 테이블                | 저장 내용                                                                   |
+| --------------------- | --------------------------------------------------------------------------- |
+| `analysis_requests`   | 요청 주소·반경·모드·Site·상태·최종 결과 스냅샷·실패 사유·실행 상태(예산 등) |
+| `agent_results`       | 세 분석의 요청별·차수별 결과. 보완 결과는 `attempt=2`                       |
+| `decision_results`    | 최종판단 이력과 참조한 분석 차수                                            |
+| `decision_failures`   | 최종판단 실패 기록과 교정 진단                                              |
+| `supplement_events`   | 보완 요청·처리 이력                                                         |
+| `map_observations`    | 지도 조회 요청·결과·채택 여부(차수별)                                       |
+| `question_sessions`   | 임대인 질문·답변·재개 스냅샷                                                |
+| `agent_briefs`        | 전문가 브리핑 (multi_agent)                                                 |
+| `specialist_consults` | 전문가 되묻기 답변과 상태 (multi_agent)                                     |
+| `analysis_events`     | 진행 화면용 단계 이벤트(요약만). 판단 근거가 아님                           |
 
 - 요청 상태: `pending → running → completed / failed`, 질문 중에는 `waiting_for_input`.
 - 분석 상태: `ok / partial / no_data / error`. 최종 결과가 `partial`·`no_data`여도 정상 저장되면 요청은 `completed`입니다.
@@ -418,20 +391,6 @@ SQLite 상대 경로는 실행 위치와 관계없이 `backend/` 기준입니다
 - 원본은 `industries/data/*.csv`, 생성물은 `catalog.py`입니다. 생성물을 직접 고치지 않습니다.
 - 서울시 업종 매핑 99건 중 모델 판정 53건은 아직 사람 검수가 필요합니다.
 - 자료 없음·매핑 불가·실제 0을 구분하고, 비율은 가능한 한 원시 분자·분모에서 다시 계산합니다.
-
-## 실측 (2026-09-29)
-
-반경 500m, 지도 포함, 같은 모델, 주소 3곳 각 1회 순차 실행입니다.
-
-| 주소 | single_decision | multi_agent | 모델 호출 |
-| --- | --- | --- | --- |
-| 송파 오금로 404 | 45.0초 | 104.1초 | 2 → 15 |
-| 강남 테헤란로 123 | 79.6초 | 75.1초 | 3 → 12 |
-| 성동 아차산로 83 | 40.1초 | 76.7초 | 1 → 12 |
-
-- multi_agent는 3곳 모두 전문가에게 되물었고 브리핑 3개를 모두 모델이 작성했습니다.
-- 평균 1.55배 느리고, 추천 결과가 주소마다 달라집니다. 어느 쪽이 나은지는 팀 블라인드 평가로 정합니다.
-- 1회 측정이라 기본 모드는 아직 `single_decision`입니다. 구현·측정 기록은 [진행 기록](../docs/multi-agent-progress.md)에 있습니다.
 
 ## 남은 과제
 
@@ -456,12 +415,10 @@ multi_agent만 확인하려면 `python -m unittest discover -s tests -p "test_mu
 
 ## 참고 문서
 
-| 문서 | 내용 |
-| --- | --- |
-| [schemas.py](app/schemas.py) | 공통 입출력 계약 |
-| [schema.sql](app/db/schema.sql) | DB 테이블 정의 |
-| [API 계약](../docs/API_CONTRACT.md) | 프론트엔드와 주고받는 형태 |
-| [기술 결정](../docs/TECH_DECISIONS.md) | 구조를 이렇게 정한 이유 |
-| [멀티에이전트 설계](../docs/multi-agent-design.md) · [진행 기록](../docs/multi-agent-progress.md) | multi_agent 설계와 구현·측정 기록 |
-| [질문 설계](../docs/mvp19-questions-design.md) · [지도 설계](../docs/mvp19-map-design.md) | 선택 기능 설계 |
-| [팀 작업 기준](../AGENTS.md) | 이 저장소에서 일하는 방법 |
+| 문서                                   | 내용                       |
+| -------------------------------------- | -------------------------- |
+| [schemas.py](app/schemas.py)           | 공통 입출력 계약           |
+| [schema.sql](app/db/schema.sql)        | DB 테이블 정의             |
+| [API 계약](../docs/API_CONTRACT.md)    | 프론트엔드와 주고받는 형태 |
+| [기술 결정](../docs/TECH_DECISIONS.md) | 구조를 이렇게 정한 이유    |
+| [팀 작업 기준](../AGENTS.md)           | 이 저장소에서 일하는 방법  |

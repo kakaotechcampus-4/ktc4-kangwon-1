@@ -24,14 +24,14 @@
 
 ## 결과 해석
 
-| 필드 | 의미 |
-| --- | --- |
-| queries.total_count | 카카오 검색 결과 건수. 실제 영업 점포 전수가 아님 |
-| queries.matches | 질문 업종 기준 장소별 same·different·unclear. 시설·옛 기록은 빈 값 |
-| queries.place_ids | 반환된 조회 표본. 다른 검색과 중복될 수 있음 |
-| places | 장소 ID로 중복 제거한 원본. mapping_*·industry_code는 옛 기록 호환용 |
-| industries.sampled_count | 질문 업종의 동종 표본 수. 전체 점포 수가 아님 |
-| queried_at | UTC 조회 시각. 분기 통계 기준일과 다름 |
+| 필드                     | 의미                                                                 |
+| ------------------------ | -------------------------------------------------------------------- |
+| queries.total_count      | 카카오 검색 결과 건수. 실제 영업 점포 전수가 아님                    |
+| queries.matches          | 질문 업종 기준 장소별 same·different·unclear. 시설·옛 기록은 빈 값   |
+| queries.place_ids        | 반환된 조회 표본. 다른 검색과 중복될 수 있음                         |
+| places                   | 장소 ID로 중복 제거한 원본. mapping_*·industry_code는 옛 기록 호환용 |
+| industries.sampled_count | 질문 업종의 동종 표본 수. 전체 점포 수가 아님                        |
+| queried_at               | UTC 조회 시각. 분기 통계 기준일과 다름                               |
 
 관측 근거는 `map_analysis` 출처와 관측 data 내부 경로로 인용한다.
 다른 업종·불확실 장소도 원본은 보존하며 동종 표본 수에서만 제외한다.
@@ -51,5 +51,5 @@
 키·모델 원문 오류는 관측에 저장하지 않는다. API 오류와 정상 0건은 구분한다.
 시설 예제는 `python examples/run_map_analysis.py --address "서울 송파구 오금로 404" --query 지하철역`이다.
 업종 키워드는 `--industry-code I212 --query 커피`처럼 공통 코드를 함께 전달하며 실제 동종 판단 LLM 비용이 발생할 수 있다.
-전체 옵션은 `python examples/run_map_analysis.py --help`,
-전체 대역 검증은 루트의 `python validation_tool/run.py --offline-map`으로 실행한다.
+전체 옵션은 `python examples/run_map_analysis.py --help`로 확인한다.
+대역 검증은 백엔드에서 `python -m unittest discover -s tests -p "test_map*.py"`로 실행한다.
