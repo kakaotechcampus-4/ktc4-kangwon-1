@@ -255,7 +255,7 @@ ReviewIssue={issue_id,industry_code|null,target:fact/score/L/claim/condition,kin
 
 ## 7. 보고서 출력 계약
 
-ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments,L_records,review_resolutions}. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 registry·v0.8 scores로 계산해 DecisionResult에 붙인다.
+ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments,L_records}. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 registry·v0.8 scores로 계산해 DecisionResult에 붙인다.
 
 | 필드 | DecisionResult 서버 출력 |
 | --- | --- |

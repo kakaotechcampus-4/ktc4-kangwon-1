@@ -85,7 +85,15 @@ class AgenticContractsTests(unittest.TestCase):
             c.MapSearchInput(industry_code="G206", radius_m=500)
 
     def test_report_has_no_scores(self):
-        for key in ("score", "code_points", "L_points", "badge", "value", "number"):
+        for key in (
+            "score",
+            "code_points",
+            "L_points",
+            "badge",
+            "value",
+            "number",
+            "review_resolutions",
+        ):
             with self.subTest(key=key), self.assertRaises(ValidationError):
                 c.ReportProposal.model_validate({key: 1})
         candidate = {

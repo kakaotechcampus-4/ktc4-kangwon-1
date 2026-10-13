@@ -440,7 +440,6 @@ class ReportProposal(Schema):
     excluded_candidates: list[Candidate] = Field(default_factory=list, max_length=5)
     limitations_segments: list[FactSegment] = Field(default_factory=list)
     L_records: list[LRecord] = Field(default_factory=list, max_length=12)
-    review_resolutions: list[ReviewResolution] = Field(default_factory=list, max_length=16)
 
 
 class SubmitDraftInput(Schema):
