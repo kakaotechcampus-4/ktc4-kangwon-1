@@ -26,7 +26,7 @@ class IndustryProfilePreparationTests(unittest.TestCase):
         self.assertEqual({r["industry_code"]: r["industry_name"] for r in rows}, INDUSTRIES)
         for row in rows:
             self.assertEqual(row["reviewed"], "true")
-            self.assertIn(row["reviewed_v2"], {"true", "false"})
+            self.assertEqual(row["reviewed_v2"], "true")
             self.assertIn(row["day_pattern"], {"평일형", "주말형", "무관", ""})
             self.assertIn(row["target_population"], {"유동", "상주", "직장", ""})
             ages = row["target_age_bands"].split(";") if row["target_age_bands"] else []
@@ -88,3 +88,15 @@ class IndustryProfilePreparationTests(unittest.TestCase):
         self.assertEqual(percentile_table([n / area_km2(500) for n in counts])[9], 0.64)
         self.assertTrue(all(row["reference_date"] == "20262" for row in rows))
         self.assertEqual(json.loads(rows[0]["counts"])["G215"], 0)
+
+    def test_industry_density_baseline_reuses_interpolation(self):
+        from app.agents.commercial_area.baseline import (
+            SEOUL_INDUSTRY_DENSITY_PERCENTILES,
+            industry_percentile,
+        )
+
+        self.assertEqual(set(SEOUL_INDUSTRY_DENSITY_PERCENTILES), set(INDUSTRIES))
+        bounds = SEOUL_INDUSTRY_DENSITY_PERCENTILES["I201"]
+        self.assertEqual(industry_percentile("I201", (bounds[40] + bounds[45]) / 2), 42.5)
+        self.assertIsNone(industry_percentile("S202", 0))
+        self.assertIsNone(industry_percentile("I201", float("nan")))
