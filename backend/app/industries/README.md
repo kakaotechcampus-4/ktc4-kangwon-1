@@ -64,7 +64,7 @@
 - `data/small_to_industry.csv`: G213·G215의 9개 소분류를 명시합니다. 소분류 코드·이름은 저장소의 `examples/schema_compare/upjong_small_official.csv`에 있는 2023-02-28 자료로 확인했습니다.
 - `data/seoul_to_industry.csv`: 기존 99개 행을 보존하고 90개만 연결합니다. 제외 9개는 빈 코드와 사유를 남깁니다.
 - `data/legacy70_to_industry.csv`: 과거 70업종의 연결표입니다. 제외 항목은 빈 코드, 합병으로 중복된 연결은 하나만 남깁니다. 과거 점수를 복제하거나 평균하지 않습니다.
-- `data/time_profile.csv`: 51개 행 모두 `reviewed=false`. 합병 구성의 패턴이 다르거나 분할 대상이면 시간대 지정을 보류합니다. 서비스에서는 아직 읽지 않습니다.
+- `data/industry_profile.csv`: 51개 업종의 기존 시간대는 `reviewed=true`, 새 D2·D3·C4 열은 `reviewed_v2=false`인 사람 검토용 초안입니다. 서비스에서는 아직 읽지 않습니다.
 - `catalog.py`: 위 네 분류 CSV에서 생성합니다. 생성물을 직접 수정하지 않습니다. CSV는 UTF-8 BOM 형식입니다.
 
 ```powershell
@@ -103,3 +103,5 @@ python scripts/build_industry_catalog.py --check
 `tests/test_industry_pipeline.py`의 고정 개폐업 원자료는 4분기 점포 노출 합계 480개소·개업 0개소·폐업 40개소입니다. 제외 원천 건수는 0이므로 점포·폐업 제외 비중은 각각 0%, 개업 비중은 분모 0으로 계산하지 않습니다. 소분류 분할 테스트의 5개 가상 점포 중 음반/비디오물 1개와 소분류 미확인 1개는 제외됩니다(각 20%).
 
 기존 실행의 색인 테스트 원자료는 보존했습니다. 서비스 체계에서 제외되거나 업종명이 일치하지 않는 과거 항목의 인용을 차단하도록 예상 색인만 갱신했습니다. 과거 집계 자료의 원시 소분류가 없으므로 51업종으로 정확하게 재분배한 결과라고 주장하지 않습니다.
+
+- C1 51업종 밀도 기준선은 `scripts/build_density_baseline.py --industries --seoul-csv <저장소 밖 서울 CSV> --quarter <YYYYQ>`로 준비합니다. 공공데이터포털 「소상공인시장진흥공단_상가(상권)정보」의 서울 UTF-8 파일을 사용하며 API를 호출하지 않습니다. 1,650개 중심·500m·개/km²는 기존 방식과 같습니다. 출력 주석에 파일 기준 분기를 남기며 원문·계산 표본을 커밋하지 않습니다.

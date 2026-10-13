@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import math
 import sys
 from pathlib import Path
@@ -79,7 +80,11 @@ def quantiles(values: list[float]) -> dict[int, float]:
     return {p: round(float(series.quantile(p / 100)), 1) for p in PERCENTILES}
 
 
-def measure(records: list[FlpopRecord], quarter: str) -> dict[str, Any]:
+def measure(
+    records: list[FlpopRecord],
+    quarter: str,
+    patterns: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, Any]:
     if not records or len({r.trdar_cd for r in records}) != len(records):
         raise ValueError("상권 자료가 비었거나 중복되었습니다.")
     for row in records:
@@ -104,12 +109,29 @@ def measure(records: list[FlpopRecord], quarter: str) -> dict[str, Any]:
         or sum(sum(r.by_day[d] for d in DAYS[:5]) for r in records) <= 0
     ):
         raise ValueError("기준 분포의 분모가 0입니다.")
+    patterns = patterns or {}
+    if any(
+        not bands or len(set(bands)) != len(bands) or not set(bands) <= set(TIME_BANDS)
+        for bands in patterns.values()
+    ):
+        raise ValueError("패턴에 잘못된 시간대가 있습니다.")
     population = _aggregate(records, quarter)
     return {
         "AGE_SHARE_AVG": population.age_share,
         "TIME_PER_HOUR_SHARE_AVG": population.time_per_hour_share,
         "WEEKEND_TO_WEEKDAY_AVG": population.weekend_to_weekday_ratio,
         "SCALE_PERCENTILES": quantiles([r.total for r in records]),
+        "DAILY_TOTAL_PERCENTILES": quantiles([r.total / quarter_days(quarter) for r in records]),
+        "PATTERN_DAILY_PERCENTILES": {
+            name: quantiles(
+                [sum(r.by_time[band] for band in bands) / quarter_days(quarter) for r in records]
+            )
+            for name, bands in patterns.items()
+        },
+        "PATTERN_TIME_PER_HOUR_SHARE_AVG": {
+            name: round(sum(population.time_per_hour_share[band] for band in bands), 4)
+            for name, bands in patterns.items()
+        },
         "TIME_BAND_DAILY_PERCENTILES": {
             band: quantiles([r.by_time[band] / quarter_days(quarter) for r in records])
             for band in TIME_BANDS
@@ -136,7 +158,26 @@ def reference_matches(result: dict[str, Any]) -> dict[str, bool]:
     return matches
 
 
+def read_patterns() -> dict[str, tuple[str, ...]]:
+    """측정 스크립트에서만 승인된 시간대 열을 읽습니다. 새 프로필 열은 사용하지 않습니다."""
+    path = Path(__file__).resolve().parents[1] / "app/industries/data/industry_profile.csv"
+    patterns: dict[str, tuple[str, ...]] = {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row["reviewed"] != "true":
+                raise ValueError("시간대 검토가 완료되지 않은 업종이 있습니다.")
+            name = row["pattern"]
+            if name == "무관":
+                continue
+            bands = tuple(row["primary_bands"].split(";"))
+            if name in patterns and patterns[name] != bands:
+                raise ValueError("같은 패턴의 시간대가 서로 다릅니다.")
+            patterns[name] = bands
+    return patterns
+
+
 async def run(quarter: str | None) -> None:
+    patterns = read_patterns()
     async with BaselineClient() as client:
         latest = quarter or await client.latest_quarter()
         current = await client.fetch_quarter(latest)
@@ -145,8 +186,8 @@ async def run(quarter: str | None) -> None:
             if latest == REFERENCE_QUARTER
             else await client.fetch_quarter(REFERENCE_QUARTER)
         )
-    reference_result = measure(reference, REFERENCE_QUARTER)
-    result = reference_result if latest == REFERENCE_QUARTER else measure(current, latest)
+    reference_result = measure(reference, REFERENCE_QUARTER, patterns)
+    result = reference_result if latest == REFERENCE_QUARTER else measure(current, latest, patterns)
     print("# 측정값은 검토용입니다. 이 스크립트는 파일이나 운영 상수를 수정하지 않습니다.")
     print(f"MEASURED_QUARTER = {latest!r}")
     print(f"TRADE_AREA_COUNT = {len(current)}")
@@ -156,6 +197,18 @@ async def run(quarter: str | None) -> None:
     for name, value in result.items():
         print(f"{name} = {pformat(value, sort_dicts=False)}")
     print(f"REFERENCE_MEASUREMENTS = {pformat(reference_result, sort_dicts=False)}")
+    if latest == REFERENCE_QUARTER:
+        comparison = {
+            p: {
+                "legacy_quarter_total": baseline.SCALE_PERCENTILES[p],
+                "daily_times_days": round(value * quarter_days(latest), 1),
+                "difference": round(
+                    value * quarter_days(latest) - baseline.SCALE_PERCENTILES[p], 1
+                ),
+            }
+            for p, value in result["DAILY_TOTAL_PERCENTILES"].items()
+        }
+        print(f"DAILY_TOTAL_VS_LEGACY = {pformat(comparison, sort_dicts=False)}")
 
 
 def main() -> int:
