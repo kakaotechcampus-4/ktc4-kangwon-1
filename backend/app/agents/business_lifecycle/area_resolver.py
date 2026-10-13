@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import struct
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
@@ -32,6 +32,8 @@ class BusinessArea:
     x: float
     y: float
     warning: str = ""
+    selection_method: str = "포함"
+    selection_distance_m: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -49,7 +51,7 @@ class DbfField:
 
 
 class BusinessAreaNoDataError(RuntimeError):
-    """해당 좌표를 포함하는 서울시 상권 polygon이 없습니다."""
+    """포함 상권과 300m 이내 최근접 상권이 모두 없습니다."""
 
 
 class BusinessAreaResolverError(RuntimeError):
@@ -57,7 +59,7 @@ class BusinessAreaResolverError(RuntimeError):
 
 
 def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
-    """서울시 공식 상권영역 SHP에서 입력 좌표가 포함된 상권을 찾습니다."""
+    """포함 상권 우선, 없으면 경계가 300m 이내인 최근접 상권을 찾습니다."""
     settings = settings or Settings.from_env()
     target_x, target_y = to_epsg5181(site.latitude, site.longitude)
     features = load_shape_features(settings.area_shape_path)
@@ -68,19 +70,70 @@ def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
         and polygon_contains_point(feature.rings, target_x, target_y)
     ]
 
-    if not matches:
-        raise BusinessAreaNoDataError(
-            "입력 좌표를 포함하는 서울시 공식 상권영역 polygon을 찾지 못했습니다. "
-            "상권영역 SHP 파일과 좌표계(EPSG:5181)를 확인해 주세요."
+    distance = 0.0
+    method = "포함"
+    if matches:
+        feature = min(matches, key=_feature_area)
+    else:
+        nearest = [
+            (polygon_distance_m(f.rings, target_x, target_y), f)
+            for f in features
+            if _bbox_contains(
+                (f.bbox[0] - 300, f.bbox[1] - 300, f.bbox[2] + 300, f.bbox[3] + 300),
+                target_x,
+                target_y,
+            )
+        ]
+        nearest = [(d, f) for d, f in nearest if d <= 300]
+        if not nearest:
+            raise BusinessAreaNoDataError(
+                "입력 좌표를 포함하거나 경계가 300m 이내인 서울시 상권이 없습니다."
+            )
+        distance, feature = min(
+            nearest,
+            key=lambda item: (
+                item[0],
+                _feature_area(item[1]),
+                str(item[1].attributes.get("TRDAR_CD")),
+            ),
         )
+        method = "최근접"
 
-    feature = min(matches, key=_feature_area)
     area = _feature_to_business_area(feature, target_x, target_y)
     if area is None:
         raise BusinessAreaResolverError(
             "좌표가 포함된 상권 polygon에 TRDAR_CD 또는 TRDAR_CD_NM 속성이 없습니다."
         )
-    return area
+    return replace(
+        area,
+        selection_method=method,
+        selection_distance_m=round(distance, 2),
+        warning=(
+            " ".join(
+                text
+                for text in (
+                    area.warning,
+                    f"상권 선택={method}, 경계 거리={distance:.2f}m. "
+                    "최근접 상권은 주소를 포함하지 않는 주변 상권입니다.",
+                )
+                if text
+            )
+            if method == "최근접"
+            else area.warning
+        ),
+    )
+
+
+def polygon_distance_m(rings: Sequence[Ring], x: float, y: float) -> float:
+    """EPSG:5181에서 입력점과 폴리곤 경계 선분의 최소 거리(m)."""
+    distances = []
+    for ring in rings:
+        for (x1, y1), (x2, y2) in zip(ring, ring[1:], strict=False):
+            dx, dy = x2 - x1, y2 - y1
+            length2 = dx * dx + dy * dy
+            t = min(1.0, max(0.0, ((x - x1) * dx + (y - y1) * dy) / length2)) if length2 else 0.0
+            distances.append(math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)))
+    return min(distances, default=float("inf"))
 
 
 def required_shape_paths(path: Path) -> list[Path]:
