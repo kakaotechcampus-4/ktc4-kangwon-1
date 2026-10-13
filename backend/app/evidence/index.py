@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from app.agents.data_models import industry_owners
 from app.industries import lookup
 from app.schemas import AgentAnalysis, MapData
 
@@ -62,7 +63,8 @@ class SourceIndex:
     radii: frozenset[Decimal]
 
     @classmethod
-    def build(cls, data: dict[str, Any]) -> "SourceIndex":
+    def build(cls, data: dict[str, Any], agent_id: str | None = None) -> "SourceIndex":
+        typed_owners = industry_owners(agent_id, data) if agent_id is not None else None
         paths: dict[str, str | None] = {}
         records: list[SourceRecord] = []
         radii: set[Decimal] = set()
@@ -89,7 +91,9 @@ class SourceIndex:
             scoped = owner is not None
             policy = value.get("citable") if isinstance(value, dict) else None
             if isinstance(value, dict):
-                identified = _industry(value, path)
+                identified = (
+                    typed_owners.get(path) if typed_owners is not None else _industry(value, path)
+                )
                 if identified is not None:
                     blocked = blocked or owner is not None and owner != identified
                     owner, scoped = identified, True
@@ -160,9 +164,9 @@ class SourceIndex:
         return cls(paths, tuple(records), frozenset(radii))
 
 
-def index_paths(data: dict[str, Any]) -> dict[str, str | None]:
+def index_paths(data: dict[str, Any], agent_id: str | None = None) -> dict[str, str | None]:
     """인용 경로와 소유 업종을 반환하는 호환 헬퍼입니다."""
-    return SourceIndex.build(data).owners
+    return SourceIndex.build(data, agent_id).owners
 
 
 def industry_catalog(
@@ -172,7 +176,7 @@ def industry_catalog(
     entries = []
     for agent_id, data in sources.items():
         groups: dict[str, list[str]] = {}
-        index = indexes[agent_id] if indexes is not None else SourceIndex.build(data)
+        index = indexes[agent_id] if indexes is not None else SourceIndex.build(data, agent_id)
         for path, code in index.owners.items():
             if code:
                 groups.setdefault(code, []).append(path)
@@ -188,11 +192,11 @@ def industry_catalog(
     return entries
 
 
-def scalar_records(data: dict) -> list[dict]:
+def scalar_records(data: dict, agent_id: str | None = None) -> list[dict]:
     """숫자·문자열 값만 원본 경로와 묶습니다. 객체 전체를 요약에 복제하지 않습니다."""
     return [
         {"path": r.path, "value": r.value, "industry_code": r.owner}
-        for r in SourceIndex.build(data).records
+        for r in SourceIndex.build(data, agent_id).records
     ]
 
 

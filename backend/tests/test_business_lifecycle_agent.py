@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from typing import Any
 from unittest.mock import patch
+
+from pydantic import ValidationError
 
 from app.agents.business_lifecycle.agent import (
     AGENT_ID,
@@ -19,6 +22,7 @@ from app.agents.business_lifecycle.area_resolver import (
 )
 from app.agents.business_lifecycle.client import SeoulOpenAPINoDataError
 from app.agents.business_lifecycle.config import Settings
+from app.agents.business_lifecycle.schemas import BusinessLifecycleData
 from app.industries.catalog import INDUSTRIES
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
@@ -109,6 +113,20 @@ def fake_pipeline(
 
 
 class BusinessLifecycleAgentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_formatted_data_matches_model_and_rejects_renamed_key(self):
+        result = await analyze(
+            task(),
+            settings=Settings(base_quarter_override="20244"),
+            area_resolver=fake_area,
+            run_pipeline=fake_pipeline,
+        )
+        restored = json.loads(json.dumps(result.data, ensure_ascii=False))
+        BusinessLifecycleData.model_validate(restored)
+        row = dict(restored["industries"][0])
+        row["upjong_code"] = row.pop("industry_id")
+        with self.assertRaises(ValidationError):
+            BusinessLifecycleData.model_validate({**restored, "industries": [row]})
+
     async def test_radius_is_recorded_but_does_not_change_polygon(self):
         results = []
         for radius in (300, 700):

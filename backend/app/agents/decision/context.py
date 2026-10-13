@@ -56,8 +56,12 @@ def build_context(
     if request.map_observation and request.map_observation.status != "error":
         sources[MAP_AGENT_ID] = request.map_observation.data
     indexes = {
-        key: SourceIndex.build(data) for key, data in sources.items() if isinstance(data, dict)
+        key: SourceIndex.build(data, key) for key, data in sources.items() if isinstance(data, dict)
     }
+    return _build_context(request, briefs=briefs, answers=answers, sources=sources, indexes=indexes)
+
+
+def _build_context(request, *, briefs, answers, sources, indexes) -> dict:
     digest: dict[str, dict] = {
         code: {"code": code, "name": name, "metrics": []} for code, name in INDUSTRIES.items()
     }
@@ -97,6 +101,7 @@ def build_context(
                 agent_id=agent_id,
                 data=sources.get(agent_id, {}),
                 index=indexes.get(agent_id),
+                render=False,
                 radii={request.map_observation.radius_m}
                 if agent_id == MAP_AGENT_ID and request.map_observation
                 else None,

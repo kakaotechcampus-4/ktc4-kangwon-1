@@ -12,6 +12,7 @@ from app.agents.business_lifecycle.config import Settings as LifecycleSettings
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.evidence import index_paths
 from app.industries.catalog import INDUSTRY_TO_SEOUL
+from app.mocks import mock_business_lifecycle_data, mock_commercial_area_data
 from app.schemas import AgentAnalysis, AnalysisTask, Site
 
 
@@ -43,10 +44,13 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
         previous = self.previous(
             "commercial_area",
             {
+                **mock_commercial_area_data(),
                 "radius_m": 300,
                 "store_total": 10,
                 "lq_retryable": True,
-                "by_middle": [{"code": "I201", "count": 4, "lq": None}],
+                "by_middle": [
+                    {**mock_commercial_area_data()["by_middle"][0], "count": 4, "lq": None}
+                ],
             },
         )
         from test_commercial_area_agent import sample_stores
@@ -72,7 +76,9 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
             result.data["supplement_lq"]["industries"][0]["lq"], 0.6667, places=4
         )
         self.assertTrue(module.accept(previous, result))
-        self.assertNotIn("/supplement_lq/industries/0/lq", index_paths(result.data))
+        self.assertNotIn(
+            "/supplement_lq/industries/0/lq", index_paths(result.data, "commercial_area")
+        )
         self.assertEqual(result.status, "partial")
         self.assertEqual(result.scope, previous.scope)
         client.aclose.assert_awaited_once()
@@ -80,18 +86,21 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
         previous.data["by_middle"][0]["count"] = 5
         with patch.object(module, "StoreClient", return_value=client):
             boundary = await module.supplement(self.task, previous, settings=CommercialSettings())
-        self.assertIn("/supplement_lq/industries/0/lq", index_paths(boundary.data))
+        self.assertIn(
+            "/supplement_lq/industries/0/lq", index_paths(boundary.data, "commercial_area")
+        )
 
     async def test_quarter_details_keep_zero_missing_and_scores_separate(self):
         module = importlib.import_module("app.agents.business_lifecycle.supplement")
         previous = self.previous(
             "business_lifecycle",
             {
+                **mock_business_lifecycle_data(),
                 "metadata": {"area_code": "test-area", "base_quarter": "20244", "quarter_count": 4},
                 "industries": [
                     {
-                        "industry_id": "I201",
-                        "score": 72,
+                        **mock_business_lifecycle_data()["industries"][0],
+                        "score": 72.0,
                         "confidence": "none",
                         "metrics": {"period_open_count": None, "period_close_count": None},
                     }
@@ -125,7 +134,8 @@ class RealSupplementTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(entry["confidence"], "none")
         self.assertNotIn(
-            "/supplement_quarters/industries/0/closed_counts/3", index_paths(result.data)
+            "/supplement_quarters/industries/0/closed_counts/3",
+            index_paths(result.data, "business_lifecycle"),
         )
         changed = result.model_copy(deep=True)
         changed.data["supplement_quarters"]["industries"][0]["confidence"] = "high"

@@ -23,4 +23,96 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* 클래스가 없는 텍스트도 배율을 따르게 한다. */
+  font-size: var(--text-base);
+}
+
+/*
+ * 글씨 크기 배율 — 이 값 하나만 바꾸면 전체 글씨 크기가 같이 바뀐다.
+ * 타깃 사용자(50대 이상 임대인)의 가독성을 위해 1.125배로 시작한다.
+ * 간격(padding·margin·gap)은 rem 기준이라 루트 글씨 크기는 건드리지 않고,
+ * 아래 글씨 크기 토큰에만 배율을 곱한다.
+ * 특정 영역만 배율에서 빼려면 그 요소에 [--font-scale:1]을 지정한다.
+ */
+:root {
+  --font-scale: 1.125;
+}
+
+/*
+ * 타입 스케일 — inline이라 각 클래스에 calc(...)가 직접 들어가서, 영역별로
+ * --font-scale을 덮어쓰면 그 안의 클래스에도 적용된다. (CSS에서 var(--text-*)로
+ * 참조한 값은 :root 기준으로 정해져 영역별 덮어쓰기가 적용되지 않는다.)
+ *
+ * - Tailwind 기본 이름(xs~9xl)은 기본 크기 그대로 두고 배율만 곱한다.
+ * - 기본 이름 사이에 없는 크기는 배율 1일 때의 px 값을 이름으로 쓴다(text-13 등).
+ * - 줄 높이는 단위 없는 비율이라 글씨 크기를 따라 같이 커진다. 새로 만든 크기의
+ *   줄 높이는 기존 화면에서 쓰던 px 줄 높이와 같은 비율로 잡았다.
+ */
+@theme inline {
+  --text-9: calc(9px * var(--font-scale));
+  --text-9--line-height: 1.3333;
+  --text-10: calc(10px * var(--font-scale));
+  --text-10--line-height: 1.4;
+  --text-11: calc(11px * var(--font-scale));
+  --text-11--line-height: 1.4545;
+  --text-xs: calc(0.75rem * var(--font-scale));
+  --text-xs--line-height: 1.3333;
+  --text-13: calc(13px * var(--font-scale));
+  --text-13--line-height: 1.5385;
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-sm--line-height: 1.4286;
+  --text-15: calc(15px * var(--font-scale));
+  --text-15--line-height: 1.5;
+  --text-base: calc(1rem * var(--font-scale));
+  --text-base--line-height: 1.5;
+  --text-17: calc(17px * var(--font-scale));
+  --text-17--line-height: 1.4118;
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-lg--line-height: 1.5556;
+  --text-xl: calc(1.25rem * var(--font-scale));
+  --text-xl--line-height: 1.4;
+  --text-22: calc(22px * var(--font-scale));
+  --text-22--line-height: 1.3636;
+  --text-23: calc(23px * var(--font-scale));
+  --text-23--line-height: 1.2;
+  --text-2xl: calc(1.5rem * var(--font-scale));
+  --text-2xl--line-height: 1.3333;
+  --text-25: calc(25px * var(--font-scale));
+  --text-25--line-height: 1.28;
+  --text-27: calc(27px * var(--font-scale));
+  --text-27--line-height: 1.2593;
+  --text-3xl: calc(1.875rem * var(--font-scale));
+  --text-3xl--line-height: 1.2;
+  --text-32: calc(32px * var(--font-scale));
+  --text-32--line-height: 1.25;
+  --text-34: calc(34px * var(--font-scale));
+  --text-34--line-height: 1.1765;
+  --text-4xl: calc(2.25rem * var(--font-scale));
+  --text-4xl--line-height: 1.1111;
+  --text-44: calc(44px * var(--font-scale));
+  --text-44--line-height: 1.1364;
+  --text-5xl: calc(3rem * var(--font-scale));
+  --text-5xl--line-height: 1;
+  --text-6xl: calc(3.75rem * var(--font-scale));
+  --text-6xl--line-height: 1;
+  --text-7xl: calc(4.5rem * var(--font-scale));
+  --text-7xl--line-height: 1;
+  --text-8xl: calc(6rem * var(--font-scale));
+  --text-8xl--line-height: 1;
+  --text-9xl: calc(8rem * var(--font-scale));
+  --text-9xl--line-height: 1;
+}
+
+/* 진행률을 알 수 없는 구간의 막대 — 분석 진행 화면의 "분석 재개" 상태에서 쓴다. */
+@theme {
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
+  }
 }

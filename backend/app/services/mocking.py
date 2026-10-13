@@ -2,8 +2,16 @@
 
 from typing import Any, Literal
 
-from app.api.v1.mock import evaluator, interactive_decision, map_observation, specialist
-from app.mocks import mock_agents, mock_generate, mock_resolve
+from app.mocks import (
+    evaluator,
+    interactive_decision,
+    map_observation,
+    mock_agents,
+    mock_generate,
+    mock_resolve,
+    specialist,
+    zone_scan,
+)
 from app.schemas import AGENT_IDS, EVALUATOR_IDS
 
 
@@ -21,6 +29,7 @@ def mock_dependencies(
         "generate_specialists": dict.fromkeys((*AGENT_IDS, "map_analysis"), specialist),
         "generate_evaluators": dict.fromkeys(EVALUATOR_IDS, evaluator),
         "map_lookup": map_observation if with_map or phase == "resume" else None,
+        "find_zones": zone_scan,
         "supplements": [],
     }
     if phase == "retry":

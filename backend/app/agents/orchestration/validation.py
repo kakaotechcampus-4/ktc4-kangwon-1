@@ -23,6 +23,11 @@ def validate_map_lookup(map_lookup):
         raise ValueError("지도 조회 함수가 필요합니다.")
 
 
+def validate_zone_lookup(find_zones):
+    if find_zones is not None and not callable(find_zones):
+        raise ValueError("교육환경보호구역 조회 함수가 필요합니다.")
+
+
 def validate_allow_questions(allow_questions):
     if type(allow_questions) is not bool:
         raise ValueError("질문 허용 여부는 참 또는 거짓이어야 합니다.")

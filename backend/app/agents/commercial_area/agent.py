@@ -23,7 +23,15 @@ from .metrics import (
     count_by_middle,
     haversine_m,
 )
-from .schemas import CommercialAreaData, DistrictBaseline, LqBaseline, Source, Summary
+from .schemas import (
+    CommercialAreaData,
+    DistrictBaseline,
+    LqBaseline,
+    RadiusNote,
+    Source,
+    StoreCoverage,
+    Summary,
+)
 from .sources import (
     SBIZ_PERIOD,
     SBIZ_REFERENCE_DATE,
@@ -214,8 +222,10 @@ async def analyze(
         for row in middle_rows:
             if row.code in split_lq_missing:
                 row.lq = None
+                row.citable = {**(row.citable or {}), "lq": False}
             if row.code in split_district_missing:
                 row.lq_district = None
+                row.citable = {**(row.citable or {}), "lq_district": False}
         if split_lq_missing or split_district_missing:
             degraded = True
             warnings.append(
@@ -259,6 +269,19 @@ async def analyze(
             split_lq_missing,
         )
 
+        middle_rows = [
+            row.model_copy(update={"citable": {"lq": False, "lq_district": False}})
+            if row.count < settings.min_count_for_specialization
+            else row
+            for row in middle_rows
+        ]
+        summary = Summary(
+            overall=f"반경 {radius}m에서 조회한 점포는 {len(stores)}개입니다.",
+            radius_notes=[
+                RadiusNote(radius_m=row.radius_m, text=f"조회 점포 {row.store_total}개입니다.")
+                for row in radius_slices
+            ],
+        )
         payload = CommercialAreaData(
             description=build_description(
                 settings,
@@ -291,40 +314,18 @@ async def analyze(
                 Source(name=s.name, url=s.url, license=s.license, period=s.period)
                 for s in build_sources(settings, with_franchise=franchise is not None)
             ],
+            summary=summary,
+            summary_text=render_summary_text(summary.model_dump()),
+            # 생성 문장과 음식점 전체 밀도는 개별 업종 추천의 직접 근거가 아닙니다.
+            citable={"summary": False, "summary_text": False, "restaurant_density": False},
+            lq_retryable=lq_retryable,
+            taxonomy=dict(TAXONOMY),
+            coverage=StoreCoverage(
+                mapped_store_count=mapped_count, unmapped_store_count=unmapped_count
+            ),
         )
 
         data = payload.model_dump()
-        # 생성 문장과 음식점 전체 밀도는 개별 업종 추천의 직접 근거가 아닙니다.
-        data["citable"] = {"summary": False, "summary_text": False, "restaurant_density": False}
-        for row in data["by_middle"]:
-            if row["count"] < settings.min_count_for_specialization:
-                row["citable"] = {"lq": False, "lq_district": False}
-            if row["code"] in split_lq_missing:
-                row.setdefault("citable", {})["lq"] = False
-                row["lq"] = None
-            if row["code"] in split_district_missing:
-                row.setdefault("citable", {})["lq_district"] = False
-                row["lq_district"] = None
-        data["lq_retryable"] = lq_retryable
-        data["taxonomy"] = dict(TAXONOMY)
-        data["coverage"] = {
-            "mapped_store_count": mapped_count,
-            "unmapped_store_count": unmapped_count,
-        }
-        summary = Summary.model_validate(
-            {
-                "overall": f"반경 {radius}m에서 조회한 점포는 {len(stores)}개입니다.",
-                "radius_notes": [
-                    {
-                        "radius_m": row["radius_m"],
-                        "text": f"조회 점포 {row['store_total']}개입니다.",
-                    }
-                    for row in data["by_radius"]
-                ],
-            }
-        ).model_dump()
-        data["summary"] = summary
-        data["summary_text"] = render_summary_text(summary)
 
         return AgentAnalysis(
             request_id=task.request_id,

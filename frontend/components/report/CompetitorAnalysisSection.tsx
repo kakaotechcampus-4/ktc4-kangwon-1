@@ -35,6 +35,11 @@ const fluid = (min: number, max: number) =>
     1065
   ).toFixed(6)}), ${max}px)`;
 
+// 글씨 크기 전용 — fluid() 값에 글씨 배율(--font-scale)을 곱한다. fluid()는
+// 간격·폭에도 쓰이므로 함수 자체에는 배율을 넣지 않는다.
+const fluidFont = (min: number, max: number) =>
+  `calc(${fluid(min, max)} * var(--font-scale))`;
+
 /**
  * status에 따라 전체 섹션을 그릴지, 안내 문구만 보여줄지 결정한다.
  * no_data/error는 백엔드 스키마상 data가 비어 있는 상태를 뜻하므로
@@ -434,6 +439,7 @@ function IndustryCompetitionCard({
   return (
     <div
       className="ca-industry-card"
+      data-recommended={recommended}
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
@@ -455,7 +461,7 @@ function IndustryCompetitionCard({
             fontFamily: 'inherit',
             textTransform: 'none',
             letterSpacing: 'normal',
-            fontSize: fluid(9, 11),
+            fontSize: fluidFont(9, 11),
           }}
         >
           {recommended ? '추천' : '비추천'}
@@ -522,10 +528,12 @@ export default function CompetitorAnalysisSection({
   data = mockReportData.commercialArea as CommercialAreaData,
   recommendations,
   notRecommended,
+  reportLayout = false,
 }: {
   data?: CommercialAreaData;
   recommendations?: IndustryAssessment[];
   notRecommended?: IndustryAssessment[];
+  reportLayout?: boolean;
 }) {
   const visibility = getSectionVisibility(data.status);
 
@@ -543,30 +551,72 @@ export default function CompetitorAnalysisSection({
 
   return (
     <div className="ca-root flex w-full flex-col items-start">
-      <RadiusGrowthChart data={data} />
-      <div className="ca-major-diversity-row">
-        <div className="ca-major-category-col">
-          <MajorCategoryDonut data={data} />
-        </div>
-        <div className="ca-diversity-col">
-          <DiversityStat data={data} />
-        </div>
-      </div>
-      <FranchiseDonut data={data} />
-      <TopByCountBars data={data} />
-      <DistrictSpecializationBars data={data} />
-      <IndustryCompetitionGrid
-        data={data}
-        recommended={toCompetitionItems(
-          recommendations,
-          mockReportData.recommended
-        )}
-        notRecommended={toCompetitionItems(
-          notRecommended,
-          mockReportData.notRecommended
-        )}
-      />
+      {reportLayout ? (
+        <>
+          <IndustryCompetitionGrid
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+            notRecommended={toCompetitionItems(
+              notRecommended,
+              mockReportData.notRecommended
+            )}
+          />
 
+          <div className="market-landscape">
+            <h3 className="analysis-subheading">상권 전체의 구성</h3>
+            <p className="analysis-subcopy">
+              추천 업종의 경쟁 지표와 함께, 주변 상권이 어떤 업종으로
+              이루어졌는지 살펴보세요.
+            </p>
+            <div className="ca-major-diversity-row">
+              <div className="ca-major-category-col">
+                <MajorCategoryDonut data={data} />
+              </div>
+              <div className="ca-diversity-col">
+                <DiversityStat data={data} />
+              </div>
+            </div>
+            <div className="analysis-chart-pair">
+              <RadiusGrowthChart data={data} />
+              <FranchiseDonut data={data} />
+            </div>
+          </div>
+          <div className="analysis-chart-pair">
+            <TopByCountBars data={data} />
+            <DistrictSpecializationBars data={data} />
+          </div>
+        </>
+      ) : (
+        <>
+          {' '}
+          <RadiusGrowthChart data={data} />
+          <div className="ca-major-diversity-row">
+            <div className="ca-major-category-col">
+              <MajorCategoryDonut data={data} />
+            </div>
+            <div className="ca-diversity-col">
+              <DiversityStat data={data} />
+            </div>
+          </div>
+          <FranchiseDonut data={data} />
+          <TopByCountBars data={data} />
+          <DistrictSpecializationBars data={data} />
+          <IndustryCompetitionGrid
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+            notRecommended={toCompetitionItems(
+              notRecommended,
+              mockReportData.notRecommended
+            )}
+          />
+        </>
+      )}
       {shouldShowWarnings(data.status) && data.warnings.length > 0 && (
         <ul className="ca-warnings">
           {data.warnings.map((warning) => (
@@ -626,10 +676,16 @@ export default function CompetitorAnalysisSection({
           gap: 2px;
         }
         .ca-card-title {
-          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
+          font-size: calc(
+            clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px) *
+              var(--font-scale)
+          );
         }
         .ca-card-desc {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           line-height: 1.5;
         }
         .ca-card-body {
@@ -731,7 +787,10 @@ export default function CompetitorAnalysisSection({
           flex: 0 0 auto;
         }
         .ca-donut-legend-name {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -740,7 +799,10 @@ export default function CompetitorAnalysisSection({
           min-width: 0;
         }
         .ca-donut-legend-value {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           flex: 0 0 auto;
           white-space: nowrap;
@@ -767,21 +829,33 @@ export default function CompetitorAnalysisSection({
         }
         .ca-diversity-value {
           font-weight: 700;
-          font-size: clamp(28px, calc(28px + (100vw - 375px) * 0.007512), 40px);
+          font-size: calc(
+            clamp(28px, calc(28px + (100vw - 375px) * 0.007512), 40px) *
+              var(--font-scale)
+          );
         }
         .ca-diversity-unit {
-          font-size: clamp(14px, calc(14px + (100vw - 375px) * 0.001878), 16px);
+          font-size: calc(
+            clamp(14px, calc(14px + (100vw - 375px) * 0.001878), 16px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
           margin-left: 4px;
         }
         .ca-diversity-caption {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
         }
 
         /* ---- 프랜차이즈 caveat ---- */
         .ca-franchise-caveat {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           line-height: 1.5;
         }
@@ -808,7 +882,10 @@ export default function CompetitorAnalysisSection({
         .ca-bar-label {
           grid-column: 1;
           grid-row: 1 / span 2;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -829,7 +906,10 @@ export default function CompetitorAnalysisSection({
         .ca-bar-note {
           grid-column: 2;
           grid-row: 2;
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
         }
 
@@ -855,13 +935,16 @@ export default function CompetitorAnalysisSection({
           position: absolute;
           top: -2px;
           left: 4px;
-          font-size: 10px;
+          font-size: var(--text-10);
           color: var(--color-gray-400);
           white-space: nowrap;
         }
 
         .ca-empty-note {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           padding-block: 8px;
         }
@@ -896,10 +979,16 @@ export default function CompetitorAnalysisSection({
           gap: 8px;
         }
         .ca-industry-name {
-          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px);
+          font-size: calc(
+            clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px) *
+              var(--font-scale)
+          );
         }
         .ca-industry-counts {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
         }
         .ca-industry-counts strong {
@@ -916,13 +1005,19 @@ export default function CompetitorAnalysisSection({
           flex-direction: column;
           gap: 2px;
           width: 100%;
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           padding-top: 4px;
         }
 
         .ca-source {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
           line-height: 1.6;
         }

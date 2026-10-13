@@ -31,18 +31,24 @@ const dmMono = DM_Mono({
  * 유지한다(StatsRow.tsx에서 쓰는 방식과 동일). 이 파일이 직접 렌더링하는
  * 엘리먼트는 반대로 style jsx global 한 곳에서만 크기를 지정한다.
  */
+
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(
     (max - min) /
     1065
   ).toFixed(6)}), ${max}px)`;
 
+// 글씨 크기 전용 — fluid() 값에 글씨 배율(--font-scale)을 곱한다. fluid()는
+// 간격·폭에도 쓰이므로 함수 자체에는 배율을 넣지 않는다.
+const fluidFont = (min: number, max: number) =>
+  `calc(${fluid(min, max)} * var(--font-scale))`;
+
 const recommendedNames = new Set(
   mockReportData.recommended.map((item) => item.name)
 );
 
-// 리포트가 다루는 업종은 추천 5 + 비추천 5 = 10개로 고정이다(RecommendationSection의
-// "TOP 5"/"BOTTOM 5" 배지와 동일한 전제). 개폐업 에이전트의 공통 업종 코드
+// 리포트가 다루는 업종은 추천 5 + 비추천 5 = 10개로 고정이다(최종판단 결과의
+// 추천·비추천 각각 최대 5개와 동일한 전제). 개폐업 에이전트의 공통 업종 코드
 // 75종 목록에 이름이 정확히 대응하지 않는 업종이 있으면(경쟁업체 탭의
 // "무인점포" 케이스와 동일한 성격의 문제) 이 숫자보다 적게 내려온다.
 const EXPECTED_INDUSTRY_COUNT = 10;
@@ -162,7 +168,7 @@ function RecommendBadge({ recommended }: { recommended: boolean }) {
         fontFamily: 'inherit',
         textTransform: 'none',
         letterSpacing: 'normal',
-        fontSize: fluid(9, 11),
+        fontSize: fluidFont(9, 11),
         paddingInline: fluid(5, 8),
       }}
     >
@@ -172,7 +178,13 @@ function RecommendBadge({ recommended }: { recommended: boolean }) {
 }
 
 /** 탭 맨 위 요약 카드 — summary/coverage/scoring_method를 문장으로 풀어 쓴다. */
-function CoverageSummary({ data }: { data: BusinessLifecycleData }) {
+function CoverageSummary({
+  data,
+  compactReference = false,
+}: {
+  data: BusinessLifecycleData;
+  compactReference?: boolean;
+}) {
   const { coverage, scoring_method: scoringMethod } = data;
 
   return (
@@ -189,15 +201,34 @@ function CoverageSummary({ data }: { data: BusinessLifecycleData }) {
           개는 판단 보류).
         </li>
         <li>
-          안정성 점수는 최근 1년 폐업률(
-          {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
-          %)·순증감률(
-          {Math.round(scoringMethod.weights.net_change_rate * 100)}
-          %)·회전율 안정성(
-          {Math.round(scoringMethod.weights.turnover_stability * 100)}
-          %)·폐업률 변화 추세(
-          {Math.round(scoringMethod.weights.close_rate_trend * 100)}
-          %)를 종합한 상대 점수입니다.
+          {compactReference ? (
+            <details className="report-calculation">
+              <summary>안정성 점수 계산 기준</summary>{' '}
+              <span>
+                안정성 점수는 최근 1년 폐업률(
+                {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
+                %)·순증감률(
+                {Math.round(scoringMethod.weights.net_change_rate * 100)}
+                %)·회전율 안정성(
+                {Math.round(scoringMethod.weights.turnover_stability * 100)}
+                %)·폐업률 변화 추세(
+                {Math.round(scoringMethod.weights.close_rate_trend * 100)}
+                %)를 종합한 상대 점수입니다.
+              </span>
+            </details>
+          ) : (
+            <span>
+              안정성 점수는 최근 1년 폐업률(
+              {Math.round(scoringMethod.weights.recent_year_close_rate * 100)}
+              %)·순증감률(
+              {Math.round(scoringMethod.weights.net_change_rate * 100)}
+              %)·회전율 안정성(
+              {Math.round(scoringMethod.weights.turnover_stability * 100)}
+              %)·폐업률 변화 추세(
+              {Math.round(scoringMethod.weights.close_rate_trend * 100)}
+              %)를 종합한 상대 점수입니다.
+            </span>
+          )}
         </li>
       </ul>
     </SectionCard>
@@ -400,7 +431,7 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
   return (
     <SectionCard
       title="개폐업 안정성"
-      description="업종을 선택하면 개폐업 지표를 종합한 안정성 점수를 보여줍니다."
+      description="개폐업 흐름을 종합한 상대 점수입니다. 앞의 상가·업종 적합도와 다른 평가이며, 성공 확률이 아닙니다."
     >
       <div className="oc-chip-row">
         {data.map((item) => {
@@ -509,7 +540,7 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
                 fontFamily: 'inherit',
                 textTransform: 'none',
                 letterSpacing: 'normal',
-                fontSize: fluid(10, 12),
+                fontSize: fluidFont(10, 12),
               }}
             >
               {band.label}
@@ -521,7 +552,7 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
                 fontFamily: 'inherit',
                 textTransform: 'none',
                 letterSpacing: 'normal',
-                fontSize: fluid(10, 12),
+                fontSize: fluidFont(10, 12),
               }}
             >
               {selected.type}
@@ -533,7 +564,7 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
                 fontFamily: 'inherit',
                 textTransform: 'none',
                 letterSpacing: 'normal',
-                fontSize: fluid(10, 12),
+                fontSize: fluidFont(10, 12),
               }}
             >
               신뢰도 {confidenceLabels[selected.confidence]}
@@ -607,9 +638,13 @@ function StabilityGauge({ data }: { data: BusinessLifecycleIndustryResult[] }) {
 export default function OpenCloseTrendSection({
   data = mockReportData.businessLifecycle,
   source = mockReportData.openCloseSource,
+  compactReference = false,
+  reportLayout = false,
 }: {
   data?: BusinessLifecycleData;
   source?: string;
+  reportLayout?: boolean;
+  compactReference?: boolean;
 }) {
   const industries = data.industries;
   const matchedShortfall = EXPECTED_INDUSTRY_COUNT - industries.length;
@@ -624,7 +659,7 @@ export default function OpenCloseTrendSection({
 
   return (
     <div className="oc-root flex w-full flex-col items-start">
-      <CoverageSummary data={data} />
+      <CoverageSummary data={data} compactReference={compactReference} />
 
       {matchedShortfall > 0 && (
         <p className="oc-mismatch-note">
@@ -636,21 +671,27 @@ export default function OpenCloseTrendSection({
 
       <StabilityGauge data={industries} />
       <StoreStatus data={industries} />
-      <MetricBarList
-        data={industries}
-        title="폐업률"
-        description="값이 높은 업종일수록 같은 상권에서 문을 닫는 비율이 높습니다."
-        unit="%"
-        pick={(item) => item.metrics.avg_close_rate ?? null}
-      />
-      <MetricBarList
-        data={industries}
-        title="회전율"
-        description="개업과 폐업이 함께 잦은 정도입니다. 높을수록 사업자 교체가 빈번합니다."
-        unit=""
-        pick={(item) => item.metrics.turnover_rate ?? null}
-      />
-
+      <div
+        className={
+          reportLayout ? 'analysis-chart-pair lifecycle-comparison' : 'contents'
+        }
+      >
+        {' '}
+        <MetricBarList
+          data={industries}
+          title="폐업률"
+          description="값이 높은 업종일수록 관측 기간의 폐업 비율이 높습니다. 점포 수가 적으면 몇 건의 변화에도 비율이 크게 달라질 수 있습니다."
+          unit="%"
+          pick={(item) => item.metrics.avg_close_rate ?? null}
+        />
+        <MetricBarList
+          data={industries}
+          title="회전율"
+          description="개업과 폐업이 함께 잦은 정도입니다. 높을수록 사업자 교체가 빈번합니다."
+          unit=""
+          pick={(item) => item.metrics.turnover_rate ?? null}
+        />
+      </div>
       <p className="oc-source text-gray-400">출처: {source}</p>
 
       {/*
@@ -699,10 +740,16 @@ export default function OpenCloseTrendSection({
           gap: 2px;
         }
         .oc-card-title {
-          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
+          font-size: calc(
+            clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px) *
+              var(--font-scale)
+          );
         }
         .oc-card-desc {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           line-height: 1.5;
         }
         .oc-card-body {
@@ -727,19 +774,28 @@ export default function OpenCloseTrendSection({
           list-style: disc;
           padding-left: 18px;
           color: var(--color-gray-600);
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px) *
+              var(--font-scale)
+          );
           line-height: 1.6;
         }
 
         .oc-mismatch-note {
           width: 100%;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           line-height: 1.5;
         }
 
         .oc-empty-note {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           padding-block: 8px;
           line-height: 1.6;
@@ -802,7 +858,10 @@ export default function OpenCloseTrendSection({
         .oc-store-nodata {
           grid-column: 1 / -1;
           grid-row: 2;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
         }
         .oc-store-head {
@@ -815,7 +874,10 @@ export default function OpenCloseTrendSection({
           (이 프로젝트의 다른 컴포넌트들도 전부 색을 명시해 이 문제를 피한다.)
         */
         .oc-store-name {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px) *
+              var(--font-scale)
+          );
           font-weight: 600;
           color: ${colors.neutral.black};
           overflow: hidden;
@@ -823,11 +885,17 @@ export default function OpenCloseTrendSection({
           white-space: nowrap;
         }
         .oc-num {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
         }
         .oc-cell-label {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
           flex: 0 0 auto;
           width: 34px;
@@ -842,7 +910,10 @@ export default function OpenCloseTrendSection({
           text-align: right;
         }
         .oc-store-net-cell {
-          font-size: clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.002817), 15px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-400);
         }
 
@@ -856,10 +927,9 @@ export default function OpenCloseTrendSection({
           .oc-store-head {
             display: grid;
             color: var(--color-gray-400);
-            font-size: clamp(
-              10px,
-              calc(10px + (100vw - 375px) * 0.001878),
-              12px
+            font-size: calc(
+              clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+                var(--font-scale)
             );
             padding-block: 8px;
           }
@@ -909,7 +979,10 @@ export default function OpenCloseTrendSection({
           );
         }
         .oc-bar-label {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
           overflow: hidden;
           text-overflow: ellipsis;
@@ -919,7 +992,10 @@ export default function OpenCloseTrendSection({
           min-width: 0;
         }
         .oc-bar-value {
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.002817), 14px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
           text-align: right;
         }
@@ -929,7 +1005,10 @@ export default function OpenCloseTrendSection({
           gap: 12px;
           padding-top: 10px;
           color: var(--color-gray-400);
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
         }
         .oc-legend-item {
           display: inline-flex;
@@ -960,7 +1039,10 @@ export default function OpenCloseTrendSection({
             background-color 0.15s ease,
             border-color 0.15s ease;
           color: var(--color-gray-500);
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           padding-inline: clamp(
             10px,
             calc(10px + (100vw - 375px) * 0.003756),
@@ -994,7 +1076,10 @@ export default function OpenCloseTrendSection({
           gap: 8px;
         }
         .oc-gauge-name {
-          font-size: clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px);
+          font-size: calc(
+            clamp(15px, calc(15px + (100vw - 375px) * 0.003756), 19px) *
+              var(--font-scale)
+          );
         }
         .oc-gauge-badges {
           display: flex;
@@ -1014,15 +1099,24 @@ export default function OpenCloseTrendSection({
         }
         .oc-gauge-stats dt {
           color: var(--color-gray-400);
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
         }
         .oc-gauge-stats dd {
-          font-size: clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px);
+          font-size: calc(
+            clamp(13px, calc(13px + (100vw - 375px) * 0.002817), 16px) *
+              var(--font-scale)
+          );
           color: ${colors.neutral.black};
         }
         .oc-gauge-trend {
           width: 100%;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: var(--color-gray-500);
           line-height: 1.5;
         }
@@ -1034,19 +1128,28 @@ export default function OpenCloseTrendSection({
           list-style: disc;
           padding-left: 16px;
           color: var(--color-gray-500);
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           line-height: 1.5;
           padding-top: 4px;
         }
         .oc-gauge-warning {
           width: 100%;
-          font-size: clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px);
+          font-size: calc(
+            clamp(11px, calc(11px + (100vw - 375px) * 0.001878), 13px) *
+              var(--font-scale)
+          );
           color: ${colors.accent.orange};
           line-height: 1.5;
         }
 
         .oc-source {
-          font-size: clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px);
+          font-size: calc(
+            clamp(10px, calc(10px + (100vw - 375px) * 0.001878), 12px) *
+              var(--font-scale)
+          );
         }
       `}</style>
     </div>

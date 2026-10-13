@@ -244,6 +244,7 @@ POST /api/v1/analyses/{id}/answers?wait=false → 202, 다시 events 폴링
 | stage | event | detail | 화면 문구 예 |
 | --- | --- | --- | --- |
 | `address` | started · completed | `road_address` | 주소를 확인하고 있어요 |
+| `education_zone` | started · completed | `status`(ok·error), `zones` 수 | 학교 주변인지 확인하고 있어요 |
 | `floating_population` · `business_lifecycle` · `commercial_area` | started · completed | `status`(ok·partial·no_data·error) | 유동인구 / 개폐업 / 주변 상권을 계산하고 있어요 |
 | `brief.{전문가}` | started · completed | `source`(model·fallback), `findings` 수 | 인구 전문가가 자료를 요약하고 있어요 (multi_agent만) |
 | `decision` | started · completed | `action`: final · ask_specialists · supplement · map_lookup · ask_user | 판정관이 종합하고 있어요 |
@@ -298,6 +299,12 @@ async function follow(id: string, onEvent: (e: AnalysisEvent) => void) {
 **3. `recommendations`와 `not_recommended`는 각각 최대 5개**입니다.
 정렬은 서버가 합니다(추천은 점수 내림차순, 비추천은 오름차순).
 1차 MVP 리포트는 앞의 3개(Top 3 / Worst 3)만 씁니다.
+
+**3-1. `limitations`에 교육환경보호구역 사실이 들어올 수 있습니다.**
+주소 확정 직후 V-World로 좌표가 고시된 보호구역에 드는지 한 번 조회합니다(거리 계산이 아닙니다).
+구역에 들면 구역명과 제한 업종 안내가 **코드가 넣은 문장으로** `limitations`에 들어가고 결과는 `partial`이 됩니다.
+조회에 실패하면 "확인하지 못했습니다"가 들어옵니다 — **보호구역이 아니라는 뜻이 아닙니다.**
+업종을 거르지는 않습니다. 추천 목록은 그대로입니다.
 
 **4. `evidence.path`는 JSON Pointer입니다.**
 `source_analyses`에서 같은 `agent_id`를 찾아 그 `data`를 그 경로로 따라가면 실제 숫자가 나옵니다.

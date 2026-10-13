@@ -9,7 +9,7 @@ from app.agents.orchestration.constants import (
 )
 from app.agents.orchestration.consult import merge_specialist_changes
 from app.agents.orchestration.deps import GraphDeps
-from app.agents.orchestration.state import GraphState
+from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.agents.orchestration.workflow import collect
 from app.agents.specialists.agent import answer_query, write_brief
 from app.schemas import (
@@ -40,7 +40,7 @@ def current_data(state, agent_id, changes):
     )
 
 
-async def write_briefs(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def write_briefs(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     async def one(source):
         assert deps.generate_specialists is not None
         await deps.step("brief." + source.agent_id, "started")
@@ -70,7 +70,7 @@ async def write_briefs(state: GraphState, *, deps: GraphDeps) -> GraphState:
     }
 
 
-async def consult(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def consult(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     plan = state["outcome"]
     if not isinstance(plan, ConsultPlan) or not remaining_rounds(state):
         raise ValueError("전문가 되묻기 한도를 초과했습니다.")

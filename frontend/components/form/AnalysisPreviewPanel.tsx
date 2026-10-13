@@ -10,28 +10,37 @@ type PreviewItem = {
   description: string;
 };
 
-const previewItems: PreviewItem[] = [
-  {
-    id: 'competitors',
-    dotColor: colors.status.recommend,
-    title: '경쟁업체 개수',
-    description: '반경 500m 내 동일 업종 수 자동 계산',
-  },
-  {
-    id: 'foot-traffic',
-    dotColor: colors.brand.dark,
-    title: '유동인구 분포',
-    description: '시간대·연령대별 유동인구 데이터 연동',
-  },
-  {
-    id: 'open-close',
-    dotColor: colors.status.notRecommend,
-    title: '개폐업 현황',
-    description: '유사 업종 최근 개업·폐업 추이 확인',
-  },
-];
+type AnalysisPreviewPanelProps = {
+  radius?: string;
+};
 
-export default function AnalysisPreviewPanel() {
+export default function AnalysisPreviewPanel({
+  radius,
+}: AnalysisPreviewPanelProps) {
+  // 반경 입력이 비어 있으면 기존 문구 그대로 500m를 예시로 보여준다.
+  const displayRadius = radius?.trim() ? radius : '500';
+
+  const previewItems: PreviewItem[] = [
+    {
+      id: 'competitors',
+      dotColor: colors.status.recommend,
+      title: '경쟁업체 개수',
+      description: `반경 ${displayRadius}m 내 동일 업종 수 자동 계산`,
+    },
+    {
+      id: 'foot-traffic',
+      dotColor: colors.brand.dark,
+      title: '유동인구 분포',
+      description: '시간대·연령대별 유동인구 데이터 연동',
+    },
+    {
+      id: 'open-close',
+      dotColor: colors.status.notRecommend,
+      title: '개폐업 현황',
+      description: '유사 업종 최근 개업·폐업 추이 확인',
+    },
+  ];
+
   return (
     <Card
       className="analysis-preview-card shrink-0 gap-4"
@@ -112,19 +121,19 @@ export default function AnalysisPreviewPanel() {
           padding-inline: 24px;
         }
         .analysis-preview-title {
-          font-size: 17px;
+          font-size: var(--text-17);
         }
         .analysis-preview-subtitle {
-          font-size: 12px;
+          font-size: var(--text-xs);
         }
         .analysis-preview-badge {
-          font-size: 11px;
+          font-size: var(--text-11);
         }
         .analysis-preview-item-title {
-          font-size: 14px;
+          font-size: var(--text-sm);
         }
         .analysis-preview-item-desc {
-          font-size: 12px;
+          font-size: var(--text-xs);
         }
 
         @media (min-width: 768px) {
@@ -146,34 +155,33 @@ export default function AnalysisPreviewPanel() {
             );
           }
           .analysis-preview-title {
-            font-size: clamp(
-              14px,
-              calc(14px + (100vw - 768px) * 0.011719),
-              17px
+            font-size: calc(
+              clamp(14px, calc(14px + (100vw - 768px) * 0.011719), 17px) *
+                var(--font-scale)
             );
           }
           .analysis-preview-subtitle {
-            font-size: clamp(
-              10px,
-              calc(10px + (100vw - 768px) * 0.007812),
-              12px
+            font-size: calc(
+              clamp(10px, calc(10px + (100vw - 768px) * 0.007812), 12px) *
+                var(--font-scale)
             );
           }
           .analysis-preview-badge {
-            font-size: clamp(9px, calc(9px + (100vw - 768px) * 0.007812), 11px);
+            font-size: calc(
+              clamp(9px, calc(9px + (100vw - 768px) * 0.007812), 11px) *
+                var(--font-scale)
+            );
           }
           .analysis-preview-item-title {
-            font-size: clamp(
-              12px,
-              calc(12px + (100vw - 768px) * 0.007812),
-              14px
+            font-size: calc(
+              clamp(12px, calc(12px + (100vw - 768px) * 0.007812), 14px) *
+                var(--font-scale)
             );
           }
           .analysis-preview-item-desc {
-            font-size: clamp(
-              10px,
-              calc(10px + (100vw - 768px) * 0.007812),
-              12px
+            font-size: calc(
+              clamp(10px, calc(10px + (100vw - 768px) * 0.007812), 12px) *
+                var(--font-scale)
             );
           }
         }

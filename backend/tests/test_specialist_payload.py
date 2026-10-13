@@ -9,7 +9,8 @@ from unittest.mock import patch
 from app.agents.decision.context import build_context
 from app.agents.specialists.agent import answer_query, write_brief
 from app.evidence import SourceIndex, can_cite, index_paths, scalar_records
-from app.evidence.findings import _radii
+from app.industries import TAXONOMY, lookup
+from app.industries.catalog import INDUSTRY_SOURCE_MIDDLES, SPLIT_MIDDLES
 from app.mocks import mock_site
 from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest, SpecialistQuery
 from scripts.measure_payloads import capture_payload
@@ -23,6 +24,33 @@ def baseline_cases():
     )["cases"]
 
 
+def typed_analysis(case):
+    """색인 전용 가상 필드는 그대로 보존하되 실제 모델 입력에는 넣지 않습니다."""
+    analysis = AgentAnalysis.model_validate(case["analysis"])
+    analysis.data.pop("index_rule_cases", None)
+
+    def current_rows(value):
+        if isinstance(value, list):
+            return [row for item in value if (row := current_rows(item)) is not None]
+        if not isinstance(value, dict):
+            return value
+        code = value.get("industry_id", value.get("code") if "count" in value else None)
+        if code is not None:
+            industry = lookup.find(code)
+            # 과거 합병·분할 집계는 새 업종의 완전한 자료로 바꿀 수 없어 제외합니다.
+            if industry is None or len(INDUSTRY_SOURCE_MIDDLES[code]) > 1 or code in SPLIT_MIDDLES:
+                return None
+            name_key = "industry_name" if "industry_id" in value else "name"
+            value[name_key] = industry.name
+        return {key: current_rows(item) for key, item in value.items()}
+
+    # 고정 원문은 그대로 두고 타입 검증 가능한 현재 업종의 부분 자료만 사용합니다.
+    analysis.data = current_rows(analysis.data)
+    if "taxonomy" in analysis.data:
+        analysis.data["taxonomy"] = dict(TAXONOMY)
+    return analysis
+
+
 class IndexBaselineTests(unittest.TestCase):
     def test_four_sources_match_fixed_index_baselines(self):
         for case in baseline_cases():
@@ -30,7 +58,7 @@ class IndexBaselineTests(unittest.TestCase):
                 data = case["analysis"]["data"] if "analysis" in case else case["data"]
                 self.assertEqual(index_paths(data), case["owners"])
                 self.assertEqual(scalar_records(data), case["records"])
-                self.assertEqual(_radii(data), {Decimal(r) for r in case["radii"]})
+                self.assertEqual(SourceIndex.build(data).radii, {Decimal(r) for r in case["radii"]})
 
 
 class PayloadBaselineTests(unittest.IsolatedAsyncioTestCase):
@@ -38,7 +66,7 @@ class PayloadBaselineTests(unittest.IsolatedAsyncioTestCase):
         for case in baseline_cases():
             if "analysis" not in case:
                 continue
-            analysis = AgentAnalysis.model_validate(case["analysis"])
+            analysis = typed_analysis(case)
             task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
             payload = await capture_payload(write_brief, task, analysis, tools={})
             limit = 1.1 if analysis.agent_id == "floating_population" else 0.5
@@ -69,9 +97,7 @@ class SourceIndexTests(unittest.TestCase):
     def test_context_builds_each_source_once_even_with_briefs(self):
         from app.evidence import SourceIndex
 
-        analyses = [
-            AgentAnalysis.model_validate(c["analysis"]) for c in baseline_cases() if "analysis" in c
-        ]
+        analyses = [typed_analysis(c) for c in baseline_cases() if "analysis" in c]
         request = DecisionRequest(
             request_id=analyses[0].request_id, address="검증 주소", analyses=analyses
         )
@@ -118,7 +144,7 @@ class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.specialists.facts import build_facts
 
         case = next(c for c in baseline_cases() if c["name"] == "commercial_area")
-        analysis = AgentAnalysis.model_validate(case["analysis"])
+        analysis = typed_analysis(case)
         task = AnalysisTask(request_id=analysis.request_id, site=mock_site(), radius_m=500)
         for codes in (["I201"], []):
             query = SpecialistQuery(
@@ -133,7 +159,7 @@ class QueryFactsTests(unittest.IsolatedAsyncioTestCase):
                     answer_query, task, query, 1, analysis=analysis, observation=None, tools={}
                 )
             )
-            all_facts = build_facts(SourceIndex.build(analysis.data))
+            all_facts = build_facts(SourceIndex.build(analysis.data, analysis.agent_id))
             self.assertEqual(payload["facts"]["shared"], all_facts["shared"])
             self.assertEqual(
                 payload["facts"]["industries"], {c: all_facts["industries"][c] for c in codes}

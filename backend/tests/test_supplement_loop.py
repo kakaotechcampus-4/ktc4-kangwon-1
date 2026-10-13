@@ -16,10 +16,18 @@ from app.agents.orchestration.workflow import prepare_task, run_agents
 from app.db import repository
 from app.db.connection import connect, initialize
 from app.llm.config import LLMSettings
-from app.mocks import mock_agents, mock_generate, mock_resolve
+from app.mocks import (
+    mock_agents,
+    mock_floating_population_data,
+    mock_generate,
+    mock_resolve,
+)
 from app.schemas import SupplementOperation, SupplementPlan
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
+
+ORIGINAL = mock_floating_population_data()["population"]["daily_avg"]
+UPDATED = ORIGINAL + 1000
 
 
 class SupplementTests(unittest.IsolatedAsyncioTestCase):
@@ -35,7 +43,7 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
 
     async def supplement(self, task, previous):
         self.calls.append((task.request_id, task.radius_m))
-        previous.data["office_worker_share"] = 0.5
+        previous.data["population"]["daily_avg"] = UPDATED
         return previous
 
     def tool(self, execute=None, eligible=None):
@@ -89,7 +97,7 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("직장인", context["request"]["decision_question"])
         self.assertTrue(context["adopted"])
         self.assertNotIn("analysis", context)
-        self.assertEqual(result.source_analyses[0].data["office_worker_share"], 0.5)
+        self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], UPDATED)
         rows = repository.list_agent_results("test", db_path=self.path)
         self.assertEqual(len(rows), 4)
         original = next(
@@ -97,7 +105,7 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
             for r in rows
             if r["agent_id"] == "floating_population" and r["attempt"] == 1
         )
-        self.assertEqual(original["data"]["office_worker_share"], 0.41)
+        self.assertEqual(original["data"]["population"]["daily_avg"], ORIGINAL)
         decision = repository.list_decision_results("test", db_path=self.path)[0]
         self.assertEqual(
             json.loads(decision["source_attempts_json"]),
@@ -132,8 +140,8 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
                 on_event=emit,
                 operation_timeout=1,
             )
-        self.assertEqual(updated[0].data["office_worker_share"], 0.5)
-        self.assertEqual(original[0].data["office_worker_share"], 0.41)
+        self.assertEqual(updated[0].data["population"]["daily_avg"], UPDATED)
+        self.assertEqual(original[0].data["population"]["daily_avg"], ORIGINAL)
         self.assertEqual(updated[1:], original[1:])
         self.assertEqual(feedback, [])
         self.assertEqual([event.status for event in events], ["requested", "succeeded"])
@@ -145,7 +153,7 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError("비밀키는 기록하지 않음")
 
         result = await self.run_service(supplements=[self.tool(execute=fail)])
-        self.assertEqual(result.source_analyses[0].data["office_worker_share"], 0.41)
+        self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], ORIGINAL)
         self.assertEqual(result.status, "partial")
         self.assertTrue(any("보완" in text for text in result.limitations))
         rows = repository.list_supplement_events("test", db_path=self.path)
@@ -259,7 +267,7 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.Event().wait()
 
         result = await self.run_service(supplements=[self.tool(execute=slow)], agent_timeout=0.05)
-        self.assertEqual(result.source_analyses[0].data["office_worker_share"], 0.41)
+        self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], ORIGINAL)
         event = json.loads(
             repository.list_supplement_events("test", db_path=self.path)[-1]["event_json"]
         )
@@ -296,11 +304,11 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
     async def test_partial_candidate_does_not_replace_usable_source(self):
         async def partial_result(task, previous):
             previous.status = "partial"
-            previous.data = {"only_one_field": 1}
+            previous.data["population"]["daily_avg"] = UPDATED
             return previous
 
         result = await self.run_service(supplements=[self.tool(execute=partial_result)])
-        self.assertIn("office_worker_share", result.source_analyses[0].data)
+        self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], ORIGINAL)
         rows = repository.list_agent_results("test", db_path=self.path)
         self.assertEqual(len(rows), 4)
         event = json.loads(
@@ -328,19 +336,32 @@ class SupplementTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_verified_addition_adopts_without_changing_original(self):
+        summary = mock_floating_population_data()["population_summary"]
+        agents = mock_agents()
+        original = agents["floating_population"]
+
+        async def without_summary(task):
+            analysis = await original(task)
+            analysis.data.pop("population_summary")
+            return analysis
+
+        agents["floating_population"] = without_summary
+
         async def added(task, previous):
-            previous.data["detail"] = {"observed": 0}
+            previous.data["population_summary"] = summary
             return previous
 
-        tool = replace(self.tool(execute=added), accept=lambda old, new: "detail" in new.data)
-        result = await self.run_service(supplements=[tool])
-        self.assertEqual(result.source_analyses[0].data["detail"], {"observed": 0})
+        tool = replace(
+            self.tool(execute=added), accept=lambda old, new: "population_summary" in new.data
+        )
+        result = await self.run_service(supplements=[tool], agents=agents)
+        self.assertEqual(result.source_analyses[0].data["population_summary"], summary)
         self.assertTrue(self.inputs[1]["supplement_context"][0]["adopted"])
 
     async def test_addition_cannot_overwrite_original_even_when_callback_accepts(self):
         tool = replace(self.tool(), accept=lambda old, new: True)
         result = await self.run_service(supplements=[tool])
-        self.assertEqual(result.source_analyses[0].data["office_worker_share"], 0.41)
+        self.assertEqual(result.source_analyses[0].data["population"]["daily_avg"], ORIGINAL)
         self.assertFalse(self.inputs[1]["supplement_context"][0]["adopted"])
 
     async def test_llm_parser_accepts_internal_plan(self):

@@ -1,69 +1,9 @@
-"""저장소와 서비스가 공유하는 재개 자료의 내부 타입입니다."""
+"""저장 타입의 기존 import 경로를 유지합니다."""
 
-from typing import Any, TypedDict
-
-from app.schemas import (
-    AgentBrief,
-    AnalysisMode,
-    AnalysisTask,
-    DecisionRequest,
-    LandlordAnswer,
-    MapQuery,
-    Site,
-    SpecialistAnswer,
-    SupplementEvent,
-)
-
-
-class ExecutionCapabilities(TypedDict, total=False):
-    evaluators: bool
-    map: bool
-    supplements: list[list[str]]
-
-
-class ExecutionState(TypedDict, total=False):
-    capabilities: ExecutionCapabilities
-    budget: dict[str, Any]
-    elapsed_seconds: float
-    time_limit: float
-    evaluation_skipped: str
-    evaluation_start_round: int
-
-
-class DeliberationState(TypedDict):
-    briefs: list[AgentBrief]
-    specialist_answers: list[SpecialistAnswer]
-    map_queries: list[MapQuery]
-    consult_round: int
-    map_attempt: int | None
-    execution: ExecutionState
-
-
-class ResumeBundle(DeliberationState):
-    request: DecisionRequest
-    site: Site
-    answers: list[LandlordAnswer]
-    feedback: list[str]
-    supplement_context: list[SupplementEvent]
-    source_attempts: dict[str, int]
-    task: AnalysisTask
-    analysis_mode: AnalysisMode
-
-
-class DecisionFailure(TypedDict):
-    failed_at: str
-    error: dict[str, Any]
-    diagnostics: list[dict[str, Any]]
-
-
-class AnalysisEvent(TypedDict):
-    seq: int
-    at: str
-    stage: str
-    event: str
-    detail: dict[str, Any]
-
-
-class MapLookupState(TypedDict):
-    status: str
-    observation: dict[str, Any] | None
+from app.storage.models import AnalysisEvent as AnalysisEvent
+from app.storage.models import DecisionFailure as DecisionFailure
+from app.storage.models import DeliberationState as DeliberationState
+from app.storage.models import ExecutionCapabilities as ExecutionCapabilities
+from app.storage.models import ExecutionState as ExecutionState
+from app.storage.models import MapLookupState as MapLookupState
+from app.storage.models import ResumeBundle as ResumeBundle

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from app.agents.evaluators.agent import evaluate_draft
+from app.agents.evaluators.agent import _evaluate_prepared, prepare_evaluation_inputs
 from app.agents.orchestration.deps import GraphDeps
-from app.agents.orchestration.state import GraphState
+from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.agents.orchestration.workflow import collect
 from app.schemas import (
     EVALUATOR_IDS,
@@ -14,7 +14,7 @@ from app.schemas import (
 )
 
 
-async def evaluate_draft_node(state: GraphState, *, deps: GraphDeps) -> GraphState:
+async def evaluate_draft_node(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
     draft = state["outcome"]
     assert isinstance(draft, DecisionResult)
     request = DecisionRequest(
@@ -35,16 +35,16 @@ async def evaluate_draft_node(state: GraphState, *, deps: GraphDeps) -> GraphSta
     if deps.allow_questions:
         allowed.append("ask_user")
 
+    prepared = prepare_evaluation_inputs(request, draft, allowed)
+
     async def one(role):
         assert deps.generate_evaluators is not None
         await deps.step("evaluate." + role, "started")
-        result = await evaluate_draft(
+        result = await _evaluate_prepared(
             role,
-            request,
-            draft,
+            prepared,
             generate=deps.generate_evaluators[role],
-            allowed=allowed,
-            timeout=deps.agent_timeout,
+            timeout_seconds=deps.agent_timeout,
         )
         await deps.step(
             "evaluate." + role,

@@ -23,7 +23,7 @@ MAPPING_REVIEW_WARNING = (
     f"서울시 업종 연결 중 {UNREVIEWED_MAPPING_COUNT}건은 모델 판정이며 "
     "사람 검수가 완료되지 않았습니다."
 )
-TAXONOMY = {
+TAXONOMY: dict[str, str | int] = {
     "id": "service-51",
     "version": CATALOG_VERSION,
     "industry_count": EXPECTED_INDUSTRY_COUNT,

@@ -4,7 +4,10 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
+from app.agents.commercial_area.schemas import CategoryRank, RadiusSlice, SliceExplanations
 from app.agents.orchestration.graph import RunHooks, run_graph
+from app.industries import lookup
+from app.mocks import mock_commercial_area_data
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
 
@@ -35,3 +38,43 @@ async def run_service(address, *, site=None, settings=None, **kwargs):
 
             kwargs["resolve"] = resolve
         return await execute_analysis(address, settings=config, **kwargs)
+
+
+def lq_supplement(baseline_store_total=9000):
+    return {
+        "analysis_radius_m": 500,
+        "baseline_radius_m": 2000,
+        "baseline_store_total": baseline_store_total,
+        "checked_at": "2026-10-03T00:00:00+00:00",
+        "industries": [
+            {"industry_id": row["code"], "citable": {"lq": True}, "lq": row["lq"]}
+            for row in mock_commercial_area_data()["by_middle"]
+        ],
+        "note": "시험 보완",
+    }
+
+
+def radius_slice(code="I201", count=7, radius_m=100):
+    return RadiusSlice(
+        radius_m=radius_m,
+        store_total=40,
+        category_count=10,
+        absent_category_count=65,
+        top_by_count=[
+            CategoryRank(
+                rank=1,
+                code=code,
+                name=lookup.get(code).name,
+                count=count,
+                density_per_km2=222.8,
+                note="반경 안 최다",
+            )
+        ],
+        explanations=SliceExplanations(
+            store_total="점포",
+            top="최다",
+            bottom="최소",
+            concentration="집중",
+            specialization="특화",
+        ),
+    ).model_dump()

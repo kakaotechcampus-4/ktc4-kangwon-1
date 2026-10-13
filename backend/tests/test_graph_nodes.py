@@ -21,10 +21,13 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
             radius_m=300,
             request_id="node-test",
             step=AsyncMock(),
+            find_zones=None,
             hooks=RunHooks(on_task_prepared=saved),
         )
         result = await prepare_address({}, deps=deps)
         self.assertEqual(result["task"].site, site)
+        # 조회 함수를 등록하지 않은 실행에는 보호구역 자료가 붙지 않습니다.
+        self.assertNotIn("education_zones", result)
         saved.assert_awaited_once_with(result["task"])
         self.assertEqual(deps.step.await_args_list[-1].args, ("address", "completed"))
 

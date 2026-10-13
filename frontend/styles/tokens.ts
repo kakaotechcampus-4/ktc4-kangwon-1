@@ -16,4 +16,12 @@ export const colors = {
   accent: {
     orange: '#FC881D',
   },
+  // 글자 색 단계 — 읽어야 하는 글은 secondary까지만 쓰고, placeholder는
+  // 입력 안내나 중요도가 아주 낮은 정보에만 쓴다.
+  text: {
+    primary: '#111827',
+    secondary: '#4B5563',
+    tertiary: '#6B7280',
+    placeholder: '#9CA3AF',
+  },
 } as const;

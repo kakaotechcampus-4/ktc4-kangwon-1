@@ -1,4 +1,5 @@
 import { DM_Mono } from 'next/font/google';
+import { Check } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 
 const dmMono = DM_Mono({
@@ -12,9 +13,13 @@ type Step = {
   label: string;
 };
 
+// 주소 입력 → 상가 정보 확인 → 분석 진행 → 리포트, 전체 4단계 흐름.
+
 const steps: Step[] = [
-  { id: 'vacancy-input', number: '1', label: '공실 입력' },
-  { id: 'report', number: '2', label: '리포트' },
+  { id: 'vacancy-input', number: '1', label: '주소 입력' },
+  { id: 'building-confirm', number: '2', label: '상가 정보 확인' },
+  { id: 'analysis-progress', number: '3', label: '분석 진행' },
+  { id: 'report', number: '4', label: '리포트' },
 ];
 
 type StepIndicatorProps = {
@@ -26,27 +31,37 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
     <div className="flex items-center py-4">
       {steps.map((step, index) => {
         const stepNumber = index + 1;
-        const active = stepNumber === currentStep;
+        const isDone = stepNumber < currentStep;
+        const isActive = stepNumber === currentStep;
+        const isEmphasized = isDone || isActive;
 
         return (
           <div key={step.id} className="flex items-center">
             <div className="flex items-center gap-2">
               <div
-                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-[15px] ${
-                  active ? '' : 'text-gray-500'
+                className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-15 ${
+                  isEmphasized ? '' : 'text-gray-500'
                 }`}
                 style={{
-                  backgroundColor: active
+                  backgroundColor: isEmphasized
                     ? colors.brand.dark
                     : colors.neutral.border,
-                  color: active ? colors.neutral.white : undefined,
+                  color: isEmphasized ? colors.neutral.white : undefined,
                 }}
               >
-                {step.number}
+                {isDone ? <Check size={14} strokeWidth={2.5} /> : step.number}
               </div>
               <p
-                className={`text-base ${active ? 'font-medium' : 'font-normal text-gray-500'}`}
-                style={active ? { color: colors.brand.dark } : undefined}
+                className={`text-base ${isEmphasized ? 'font-medium' : 'font-normal text-gray-500'}`}
+                style={
+                  isEmphasized
+                    ? {
+                        color: isActive
+                          ? colors.brand.dark
+                          : colors.neutral.black,
+                      }
+                    : undefined
+                }
               >
                 {step.label}
               </p>

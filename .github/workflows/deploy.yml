@@ -1,0 +1,129 @@
+name: 배포
+
+# develop 에 머지되면 자동으로 배포합니다.
+# 하는 일은 넷뿐입니다: AWS 인증 → 압축 → S3 업로드 → EC2 에 실행 명령.
+# 실제 배포 작업은 EC2 안에서 도는 deploy/deploy.sh 가 합니다.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # OIDC. 빠지면 AWS 인증이 실패합니다
+  contents: read
+
+# 배포가 동시에 두 번 돌면 포트 전환이 엉킵니다. 한 번에 하나만 실행합니다.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: ktc4-kangwon-1-deploy
+  INSTANCE_ID: i-0b839b95bd991dcd0
+
+jobs:
+  # 깨진 코드가 서버로 나가지 않게, 배포 전에 같은 검사를 돌립니다.
+  test:
+    name: 검사
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: python -m unittest discover -s tests
+
+  deploy:
+    name: 배포
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS 인증 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/ktc-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 릴리스 압축
+        id: pack
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          # 서버에 필요한 것만 담습니다. cache·storage·.env 는 git 에 없어 자동으로 빠집니다.
+          git archive --format=tar.gz --output="$SHA.tar.gz" HEAD backend deploy
+          ls -lh "$SHA.tar.gz"
+
+      - name: S3 업로드
+        run: aws s3 cp "${{ steps.pack.outputs.sha }}.tar.gz" "s3://$S3_BUCKET/releases/${{ steps.pack.outputs.sha }}.tar.gz"
+
+      - name: EC2 에 배포 명령
+        id: send
+        run: |
+          SHA=${{ steps.pack.outputs.sha }}
+          # deploy.sh 는 압축 안에 있으므로, 먼저 꺼낸 뒤 실행합니다.
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $SHA" \
+            --timeout-seconds 900 \
+            --parameters commands="[
+              \"set -e\",
+              \"rm -rf /tmp/chaeum-boot && mkdir -p /tmp/chaeum-boot\",
+              \"aws s3 cp s3://$S3_BUCKET/releases/$SHA.tar.gz /tmp/chaeum-boot/r.tar.gz --region $AWS_REGION\",
+              \"tar -xzf /tmp/chaeum-boot/r.tar.gz -C /tmp/chaeum-boot deploy\",
+              \"bash /tmp/chaeum-boot/deploy/deploy.sh $SHA $S3_BUCKET\"
+            ]" \
+            --query Command.CommandId --output text)
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM 명령 ID: $CMD_ID"
+
+      - name: 배포 결과 확인
+        run: |
+          CMD_ID=${{ steps.send.outputs.cmd_id }}
+          # send-command 는 던지고 끝납니다. 결과를 직접 물어보지 않으면
+          # 배포가 실패해도 이 워크플로는 성공으로 끝나 버립니다.
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 10
+          done
+
+          echo "── 서버 출력 ──"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text || true
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "── 오류 ──"
+            aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query StandardErrorContent --output text || true
+            echo "::error::배포 실패 ($STATUS). 구 버전이 그대로 서비스 중입니다."
+            exit 1
+          fi
+
+      - name: 서비스 응답 확인
+        run: |
+          for _ in $(seq 1 10); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' https://kangwon-1-chaeum.duckdns.org/health || echo 000)
+            [ "$CODE" = "200" ] && { echo "서비스 정상 (200)"; exit 0; }
+            sleep 3
+          done
+          echo "::error::배포는 끝났지만 외부 응답이 200이 아닙니다"
+          exit 1

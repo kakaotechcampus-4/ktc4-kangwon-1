@@ -139,7 +139,7 @@ async def observe(
     def category(q):
         if q.facility_code:
             return q.facility_code
-        # 대응이 명확한 업종만 제한합니다. 교육 지원 서비스업(P107)은 제한하지 않습니다.
+        # 대응이 명확한 교육·의원 업종에만 카카오 분류를 제한합니다.
         if q.industry_code == "P105":
             return "AC5"
         if q.industry_code == "Q102":

@@ -59,7 +59,7 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
             analyses=[await f(task) for f in mock_agents().values()],
         )
         broken = mock_generate("", "")
-        broken["recommendations"][0]["evidence"][0]["path"] = "/daily_average_typo"
+        broken["recommendations"][0]["evidence"][0]["path"] = "/by_middle/0/cout"
         calls = []
 
         def generate(prompt, payload):
@@ -69,8 +69,8 @@ class DecisionRetryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(DecisionContractError) as caught:
             await evaluate(request, generate=generate)
         correction = calls[1]["correction"]
-        self.assertEqual(correction["invalid_path"], "/daily_average_typo")
-        self.assertIn("/daily_average", [c["path"] for c in correction["candidates"]])
+        self.assertEqual(correction["invalid_path"], "/by_middle/0/cout")
+        self.assertIn("/by_middle/0/count", [c["path"] for c in correction["candidates"]])
         self.assertEqual(len(caught.exception.failures), 2)
 
     async def test_retry_preserves_sources_and_failure_history(self):

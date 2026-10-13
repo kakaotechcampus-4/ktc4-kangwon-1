@@ -8,12 +8,13 @@ from app.db.types import (
     DeliberationState,
     ExecutionState,
 )
+from app.execution import policy
+from app.execution.validation import validate_execution_state
 from app.schemas import (
     AgentBrief,
     MapLookupPlan,
     SpecialistAnswer,
 )
-from app.services import execution_policy as policy
 
 from .common import _dumps, _now, _require_running, _text
 
@@ -33,6 +34,7 @@ def update_execution_state(
         db.execute("BEGIN IMMEDIATE")
         row = _require_running(db, request_id)
         state: ExecutionState = json.loads(row["execution_json"])
+        validate_execution_state(state)
         policy.update_execution(
             state,
             budget=budget,
@@ -133,6 +135,8 @@ def _deliberation(db, request_id) -> DeliberationState:
     ):
         for query in MapLookupPlan.model_validate_json(saved[0]).unique_queries():
             attempted[(query.kind, query.industry_code, query.facility_code, query.query)] = query
+    execution: ExecutionState = json.loads(row[0]) if row else {}
+    validate_execution_state(execution)
     return {
         "briefs": briefs,
         "specialist_answers": answers,
@@ -142,7 +146,7 @@ def _deliberation(db, request_id) -> DeliberationState:
             "SELECT MAX(attempt) FROM map_observations WHERE request_id=? AND adopted=1",
             (request_id,),
         ).fetchone()[0],
-        "execution": json.loads(row[0]) if row else {},
+        "execution": execution,
     }
 
 

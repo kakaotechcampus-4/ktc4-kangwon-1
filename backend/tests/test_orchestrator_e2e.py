@@ -18,8 +18,8 @@ from app.mocks import mock_agents, mock_generate, mock_site
 from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope
 
 MASTER = [
-    MiddleCode(code="I201", name="한식", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I212", name="커피/음료", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I201", name="한식 음식점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I212", name="카페·비알코올 음료점", major_code="I2", major_name="음식점업"),
 ]
 
 

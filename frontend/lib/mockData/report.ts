@@ -1,3 +1,4 @@
+import { mockProperty } from '@/lib/mockData/property';
 export interface RecommendedIndustry {
   rank: number;
   name: string;
@@ -389,16 +390,16 @@ export interface FloatingPopulationData {
 }
 
 export const mockReportData = {
-  address: '강원도 춘천시 후평동 234-5',
-  floor: '2층',
-  area: '전용 26평',
+  address: mockProperty.fullAddress,
+  floor: mockProperty.floorUnit,
+  area: mockProperty.areaLabel,
   rent: '월세 120만원',
   analyzedDate: '2026.08.22',
 
   aiConclusion: {
     industry: '네일·뷰티',
     reason:
-      '전면폭 7.4m와 양호한 급·배수 조건이 뷰티 서비스업에 최적입니다. 반경 500m 내 동일 업종 경쟁점이 1개에 불과해 시장 진입 여건이 우수하며, 주변 주거 인구 비율이 높아 고정 고객 확보 가능성이 높습니다.',
+      '목업 평가에서는 네일·뷰티를 우선 검토합니다. 동종 점포 수와 주거생활형 인구 구성을 참고하되, 4층 접근성과 시설 조건은 별도 확인이 필요합니다.',
   },
 
   recommended: [
@@ -406,31 +407,31 @@ export const mockReportData = {
       rank: 1,
       name: '네일·뷰티',
       score: 92,
-      tags: ['공간 구조 적합', '급·배수 활용 가능', '경쟁 강도 낮음'],
+      tags: ['동종 점포 1개', '최근 1년 폐업률 하락', '3년간 점포 11곳 증가'],
     },
     {
       rank: 2,
       name: '무인점포',
       score: 87,
-      tags: ['24시간 운영 가능', '관리 인력 최소화', '소규모 면적 효율'],
+      tags: ['비교할 경쟁 자료 부족'],
     },
     {
       rank: 3,
       name: '소형 스튜디오',
       score: 82,
-      tags: ['독립 출입 적합', '주거 인구 수요', '방음 조건 양호'],
+      tags: ['3년: 개업 9곳 · 폐업 4곳', '동종 점포 2개'],
     },
     {
       rank: 4,
       name: '코인세탁실',
       score: 78,
-      tags: ['무인 운영 가능', '설비 투자 회수 빠름', '24시간 이용 수요'],
+      tags: ['동종 점포 3개', '개폐업 자료 미제공'],
     },
     {
       rank: 5,
       name: '반려동물 미용',
       score: 73,
-      tags: ['소형 평수 적합', '1인 운영 가능', '주거 인구 수요 부합'],
+      tags: ['3년간 점포 수 유지', '주거생활형 상권'],
     },
   ] as RecommendedIndustry[],
 
@@ -439,31 +440,31 @@ export const mockReportData = {
       rank: 1,
       name: '고깃집',
       score: 31,
-      tags: ['환기시설 부족', '배기 덕트 필요', '설비 공사 비용'],
+      tags: ['3년간 점포 11곳 감소', '최근 1년 폐업률 상승', '동종 점포 9개'],
     },
     {
       rank: 2,
       name: '대형 카페',
       score: 38,
-      tags: ['면적 부족', '전력 용량 한계', '주차 불가'],
+      tags: ['점포 교체가 잦은 업종', '동종 점포 12개'],
     },
     {
       rank: 3,
       name: '베이커리',
       score: 44,
-      tags: ['오븐 설비 공사', '전력 증설 필요', '환기 개선 필요'],
+      tags: ['3년: 개업 9곳 · 폐업 15곳', '최근 1년 폐업률 상승'],
     },
     {
       rank: 4,
-      name: '노래방',
+      name: '필라테스',
       score: 27,
-      tags: ['방음 공사 필수', '심야 소음 민원 우려', '초기 인테리어 비용 큼'],
+      tags: ['비교할 경쟁 자료 부족'],
     },
     {
       rank: 5,
       name: '헬스장',
       score: 24,
-      tags: ['층고 부족', '전용 면적 협소', '장비 하중 보강 필요'],
+      tags: ['9분기: 개업 5곳 · 폐업 6곳', '개폐업 자료 신뢰도 낮음'],
     },
   ] as RecommendedIndustry[],
 
@@ -526,7 +527,7 @@ export const mockReportData = {
   // 일부러 넣어뒀다 — 실제 응답도 75개 중 19개가 이 상태다.
   businessLifecycle: {
     summary:
-      '네일·뷰티·소형 스튜디오는 개업이 활발하고 최근 폐업률도 낮아 안정적이며, 고깃집·노래방·베이커리는 폐업이 빠르게 늘고 폐업률도 과거보다 상승해 위험 신호가 뚜렷합니다.',
+      '네일·뷰티·소형 스튜디오는 개업이 활발하고 최근 폐업률도 낮아 안정적이며, 고깃집·베이커리는 폐업이 빠르게 늘고 폐업률도 과거보다 상승해 위험 신호가 뚜렷합니다.',
     coverage: {
       target_industries: 75,
       scored_industries: 56,
@@ -802,42 +803,6 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'R208',
-        industry_name: '노래방',
-        score: 24.6,
-        type: '쇠퇴·위험형',
-        confidence: 'medium',
-        data_available: true,
-        score_available: true,
-        data_status: 'observed',
-        data_complete: true,
-        metrics: {
-          observed_quarters: 12,
-          latest_store_count: 10,
-          avg_store_count: 12.9,
-          period_open_count: 4,
-          period_close_count: 15,
-          period_net_change: -11,
-          avg_open_rate: 10.3,
-          avg_close_rate: 38.8,
-          net_change_rate: -28.5,
-          turnover_rate: 49.1,
-          recent_year_open_count: 1,
-          recent_year_close_count: 6,
-          recent_year_net_change: -5,
-          recent_year_close_rate: 46.5,
-          recent_year_net_change_rate: -38.8,
-          oldest_year_close_rate: 30.0,
-          close_rate_trend: 16.5,
-        },
-        evidence: [
-          '최근 3년 동안 개업 4건, 폐업 15건으로 순증감은 -11건입니다.',
-          '최근 1년 폐업률은 46.5%로, 3년 전 30.0%보다 높아졌습니다.',
-          '개업률과 폐업률을 합한 회전율은 49.1%입니다.',
-        ],
-        warning: null,
-      },
-      {
         industry_id: 'R206',
         industry_name: '헬스장',
         score: 41.2,
@@ -1088,7 +1053,7 @@ export const mockReportData = {
     } as CommercialAreaLqBaseline,
 
     districtBaseline: {
-      signguName: '춘천시',
+      signguName: mockProperty.district,
     } as CommercialAreaDistrictBaseline,
 
     districtSpecialization: [
@@ -1098,7 +1063,7 @@ export const mockReportData = {
         name: '이용 및 미용업',
         count: 34,
         timesVsSurroundings: 2.8,
-        note: '춘천시 전체보다 2.8배 많습니다',
+        note: '송파구 전체보다 2.8배 많습니다',
       },
       {
         rank: 2,
@@ -1106,7 +1071,7 @@ export const mockReportData = {
         name: '반려동물 관련 서비스업',
         count: 9,
         timesVsSurroundings: 2.4,
-        note: '춘천시 전체보다 2.4배 많습니다',
+        note: '송파구 전체보다 2.4배 많습니다',
       },
       {
         rank: 3,
@@ -1114,7 +1079,7 @@ export const mockReportData = {
         name: '한식 음식점업',
         count: 31,
         timesVsSurroundings: 1.9,
-        note: '춘천시 전체보다 1.9배 많습니다',
+        note: '송파구 전체보다 1.9배 많습니다',
       },
       {
         rank: 4,
@@ -1122,7 +1087,7 @@ export const mockReportData = {
         name: '비알코올 음료점업',
         count: 15,
         timesVsSurroundings: 1.7,
-        note: '춘천시 전체보다 1.7배 많습니다',
+        note: '송파구 전체보다 1.7배 많습니다',
       },
       {
         rank: 5,
@@ -1130,7 +1095,7 @@ export const mockReportData = {
         name: '세탁업',
         count: 12,
         timesVsSurroundings: 1.6,
-        note: '춘천시 전체보다 1.6배 많습니다',
+        note: '송파구 전체보다 1.6배 많습니다',
       },
       {
         rank: 6,
@@ -1138,7 +1103,7 @@ export const mockReportData = {
         name: '의원',
         count: 19,
         timesVsSurroundings: 1.5,
-        note: '춘천시 전체보다 1.5배 많습니다',
+        note: '송파구 전체보다 1.5배 많습니다',
       },
       {
         rank: 7,
@@ -1146,7 +1111,7 @@ export const mockReportData = {
         name: '기타 교육기관',
         count: 11,
         timesVsSurroundings: 1.4,
-        note: '춘천시 전체보다 1.4배 많습니다',
+        note: '송파구 전체보다 1.4배 많습니다',
       },
       {
         rank: 8,
@@ -1154,7 +1119,7 @@ export const mockReportData = {
         name: '체인화 편의점',
         count: 17,
         timesVsSurroundings: 1.3,
-        note: '춘천시 전체보다 1.3배 많습니다',
+        note: '송파구 전체보다 1.3배 많습니다',
       },
       {
         rank: 9,
@@ -1162,7 +1127,7 @@ export const mockReportData = {
         name: '기타 간이 음식점업',
         count: 28,
         timesVsSurroundings: 1.2,
-        note: '춘천시 전체보다 1.2배 많습니다',
+        note: '송파구 전체보다 1.2배 많습니다',
       },
       {
         rank: 10,
@@ -1170,7 +1135,7 @@ export const mockReportData = {
         name: '부동산 중개 및 대리업',
         count: 22,
         timesVsSurroundings: 1.1,
-        note: '춘천시 전체보다 1.1배 많습니다',
+        note: '송파구 전체보다 1.1배 많습니다',
       },
     ] as CommercialAreaSpecializationRank[],
 
@@ -1238,15 +1203,6 @@ export const mockReportData = {
         lqDistrict: 0.88,
       },
       {
-        code: 'R208',
-        name: '노래연습장 운영업',
-        sameTypeCount: 0,
-        diffTypeCount: 342,
-        // 이 반경엔 노래방이 0개라 배수가 실제로 0.0 — null(비교 불가)과 다르다.
-        lq: 0.0,
-        lqDistrict: 0.0,
-      },
-      {
         code: 'R206',
         name: '체력단련시설 운영업',
         sameTypeCount: 1,
@@ -1270,12 +1226,12 @@ export const mockReportData = {
     radius_m: 500,
 
     trade_areas: [
-      { name: '후평동먹자골목', kind: '골목상권' },
-      { name: '후평시장', kind: '전통시장' },
-      { name: '온의로상권', kind: '발달상권' },
-      { name: '후평2동행정복지센터앞', kind: '골목상권' },
-      { name: '강원대학교후문', kind: '골목상권' },
-      { name: '후평공단입구', kind: '골목상권' },
+      { name: '위례광장로 일대 (예시)', kind: '골목상권' },
+      { name: '위례중앙광장 일대 (예시)', kind: '발달상권' },
+      { name: '위례상업시설 일대 (예시)', kind: '발달상권' },
+      { name: '위례동 주거지 일대 (예시)', kind: '골목상권' },
+      { name: '장지동 상업시설 일대 (예시)', kind: '골목상권' },
+      { name: '위례광장로 주변 도로 (예시)', kind: '골목상권' },
     ] as FloatingPopulationTradeArea[],
 
     population: {
@@ -1381,13 +1337,13 @@ export const mockReportData = {
 
   aiAnalysisSummary: {
     exclusionReason:
-      '고깃집·헬스장·노래방은 환기 덕트, 층고, 방음 등 별도 설비 공사가 필요한 업종입니다. 이 공간은 전용 26평의 2층 상가로 급·배수 확장이나 층고 보강에 제약이 있어 초기 공사 비용이 크게 늘어날 가능성이 높습니다. 대형 카페 역시 전력 용량과 좌석 면적이 부족해 동일한 이유로 우선순위에서 제외했습니다.',
+      '목업의 비추천 업종은 헬스장·고깃집·대형 카페·베이커리입니다. 이들 업종의 개폐업 자료에서는 관측 기간 순증감이 음수로 나타납니다. 이는 참고 지표이며 입점 불가 판정이 아닙니다. 환기·방음·하중·전력 조건은 아직 확인되지 않았습니다.',
     recommendationReason:
-      '네일·뷰티는 반경 500m 내 동일 업종 경쟁점이 1개에 불과하고, 전면폭 7.4m와 기존 급·배수 조건을 그대로 활용할 수 있어 별도 설비 공사 없이 바로 입점이 가능합니다. 유동인구 데이터상 20·30대 여성 비중이 높은 시간대(10:00–20:00)와 영업시간이 겹치는 점도 긍정적입니다.',
+      '목업 적합도 평가의 1위는 네일·뷰티입니다. 반경 500m의 동종 점포는 1개로 집계돼 있고 유동인구는 주거생활형으로 분류됩니다. 경쟁점 수만으로 수요를 확정할 수 없으며, 4층 접근성과 실제 시설 조건을 확인해야 합니다.',
     favorableConditions:
-      '보증금과 월세가 낮은 소규모 공실일수록 초기 설비 투자가 적은 업종(무인점포, 코인세탁실)의 회수 기간이 짧아집니다. 반대로 주거 인구 비율이 높고 반복 방문 수요가 꾸준한 상권에서는 네일·뷰티, 반려동물 미용처럼 고정 고객 기반이 중요한 서비스업이 특히 유리합니다.',
+      '유동인구 자료에서는 40·50대가 합계 46%를 차지합니다. 이 구성은 고객층을 검토하는 참고 자료이며, 해당 인구가 실제 4층 매장을 방문한다는 의미는 아닙니다.',
     synergyTips:
-      '네일·뷰티 매장을 주력으로 하되 한쪽 공간에 무인 결제형 스낵·음료 코너를 함께 두면 대기 고객의 체류 시간을 수익으로 전환할 수 있습니다. 영업시간 외 새벽·심야에는 코인세탁실처럼 무인으로 운영되는 업종과 공간을 나눠 쓰는 방식도 고정비 분산에 효과적입니다.',
+      '엘리베이터, 간판 노출, 급·배수와 전력 용량, 공사 허용 범위를 확인하세요. 현재 면적·층수 외 시설 조건과 임대 조건만으로 수익성이나 투자 회수 기간을 판단할 수 없습니다.',
   },
 };
 
@@ -1406,7 +1362,6 @@ export const RECOMMENDED_NAME_TO_MIDDLE_CODE: Record<string, string> = {
   고깃집: 'I201',
   '대형 카페': 'I212',
   베이커리: 'I211',
-  노래방: 'R208',
   헬스장: 'R206',
 };
 

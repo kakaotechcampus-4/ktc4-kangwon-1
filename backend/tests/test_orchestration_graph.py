@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 from langchain_core.callbacks import AsyncCallbackHandler
 from langgraph.graph import StateGraph
-from orchestration_support import run_flow
+from orchestration_support import lq_supplement, run_flow
 
 from app.agents.orchestration.tools import SupplementTool
 from app.mocks import mock_agents, mock_generate, mock_resolve
@@ -75,7 +75,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
 
         async def execute(task, previous):
             calls.append((task.request_id, task.radius_m))
-            previous.data["detail"] = 0
+            previous.data["supplement_lq"] = lq_supplement(0)
             return previous
 
         tool = SupplementTool(
@@ -102,7 +102,7 @@ class GraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, [("graph-test", 300)])
         self.assertEqual(len(inputs), 2)
         self.assertNotIn("supplement_operations", inputs[1])
-        self.assertEqual(result.source_analyses[2].data["detail"], 0)
+        self.assertEqual(result.source_analyses[2].data["supplement_lq"]["baseline_store_total"], 0)
 
     async def test_callback_failure_waits_for_started_analyses(self):
         finished = []

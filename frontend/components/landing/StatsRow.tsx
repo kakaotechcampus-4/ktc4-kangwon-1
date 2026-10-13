@@ -52,6 +52,11 @@ const fluid = (min: number, max: number) =>
     672
   ).toFixed(5)}), ${max}px)`;
 
+// 글씨 크기 전용 — fluid() 값에 글씨 배율(--font-scale)을 곱한다. fluid()는
+// 간격·폭에도 쓰이므로 함수 자체에는 배율을 넣지 않는다.
+const fluidFont = (min: number, max: number) =>
+  `calc(${fluid(min, max)} * var(--font-scale))`;
+
 export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
   return (
     <div
@@ -84,8 +89,8 @@ export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
               <p
                 className="text-gray-400 uppercase"
                 style={{
-                  fontSize: fluid(10, 14),
-                  lineHeight: fluid(15, 21),
+                  fontSize: fluidFont(10, 14),
+                  lineHeight: 1.5,
                   letterSpacing: fluid(1.2, 1.96),
                 }}
               >
@@ -97,15 +102,15 @@ export default function StatsRow({ stats = defaultStats }: StatsRowProps) {
                   className="font-bold"
                   style={{
                     color: accentColor,
-                    fontSize: fluid(22, 35),
-                    lineHeight: fluid(33, 52.5),
+                    fontSize: fluidFont(22, 35),
+                    lineHeight: 1.5,
                   }}
                 >
                   {value}
                 </span>
                 <span
                   className="font-medium text-gray-400"
-                  style={{ fontSize: fluid(10, 14) }}
+                  style={{ fontSize: fluidFont(10, 14) }}
                 >
                   {unit}
                 </span>

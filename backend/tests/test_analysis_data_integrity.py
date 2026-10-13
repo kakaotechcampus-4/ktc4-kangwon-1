@@ -301,7 +301,9 @@ class CommercialClientTests(unittest.IsolatedAsyncioTestCase):
 
 class CommercialCalculationTests(unittest.TestCase):
     def test_specialization_without_baseline_radius_does_not_invent_zero_metres(self):
-        master = [MiddleCode(code="I201", name="한식", major_code="I2", major_name="음식점업")]
+        master = [
+            MiddleCode(code="I201", name="한식 음식점업", major_code="I2", major_name="음식점업")
+        ]
         stores = [
             Store(
                 store_id=str(index),
