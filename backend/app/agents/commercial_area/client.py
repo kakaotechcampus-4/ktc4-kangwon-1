@@ -7,13 +7,14 @@ import json
 import math
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from weakref import WeakKeyDictionary
 
 import httpx
 
-from app.storage.raw import RawStorageError, capture_http, current_capture
+from app.storage.raw import RawStorageError, capture_http, current_capture, scrub
 
 from .config import (
     SBIZ_BASE_URL,
@@ -28,22 +29,7 @@ NODATA_RESULT_CODES = {"03"}
 NODATA_KEYWORDS = ("NODATA", "NO_DATA", "데이터없음", "데이터가_없")
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DEFAULT_RETRY_BACKOFF_S = 1.5
-STORE_CACHE_FIELDS = (
-    "bizesId",
-    "bizesNm",
-    "brchNm",
-    "indsLclsCd",
-    "indsLclsNm",
-    "indsMclsCd",
-    "indsMclsNm",
-    "indsSclsCd",
-    "indsSclsNm",
-    "lat",
-    "lon",
-    "rdnmAdr",
-    "signguCd",
-    "signguNm",
-)
+RAW_CACHE_VERSION = 2
 
 
 class SbizApiError(Exception):
@@ -62,7 +48,7 @@ class NoDataError(SbizApiError):
 
 
 def _cache_path(settings: Settings, key: str) -> Path:
-    return settings.cache_dir / f"{key}.json"
+    return settings.cache_dir / f"raw-v{RAW_CACHE_VERSION}_{key}.json"
 
 
 def _read_cache(path: Path, ttl_hours: int) -> Any | None:
@@ -70,30 +56,65 @@ def _read_cache(path: Path, ttl_hours: int) -> Any | None:
         if not path.exists() or time.time() - path.stat().st_mtime > ttl_hours * 3600:
             return None
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        if not isinstance(payload, dict) or payload.get("version") != RAW_CACHE_VERSION:
             return None
-        if not all(isinstance(item, dict) for item in payload["items"]):
+        if (
+            not isinstance(payload.get("meta"), dict)
+            or not isinstance(payload.get("pages"), list)
+            or not payload["pages"]
+        ):
             return None
-        if not isinstance(payload.get("meta"), dict):
+        items = []
+        for page in payload["pages"]:
+            if (
+                not isinstance(page, dict)
+                or not isinstance(page.get("payload"), dict)
+                or not isinstance(page.get("request_args"), dict)
+                or not isinstance(page.get("collected_at"), str)
+            ):
+                return None
+            _check_header(page["payload"])
+            items.extend(_extract_items(page["payload"])[0])
+        if len(items) != payload["meta"].get("fetched"):
             return None
-        return payload
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return {**payload, "items": items}
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError, SbizApiError, TypeError, KeyError):
         return None
 
 
 def _write_cache(path: Path, payload: Any) -> None:
+    if not payload["pages"]:
+        return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        compact = {
-            "items": [
-                {key: row[key] for key in STORE_CACHE_FIELDS if key in row}
-                for row in payload["items"]
-            ],
-            "meta": payload["meta"],
-        }
-        path.write_text(json.dumps(compact, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(
+                {"version": RAW_CACHE_VERSION, "pages": payload["pages"], "meta": payload["meta"]},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
     except OSError:
         pass
+
+
+async def _capture_cache(cached, cache_key):
+    capture = current_capture()
+    if capture is not None:
+        for page in cached["pages"]:
+            await capture.record(
+                source="commercial_area",
+                source_type="api",
+                args={
+                    **page["request_args"],
+                    "cache_hit": True,
+                    "cache_key": cache_key,
+                    "original_collected_at": page["collected_at"],
+                },
+                page=page["page"],
+                status=page["http_status"],
+                payload=page["payload"],
+            )
 
 
 def snap_to_grid(value: float, grid_m: int) -> float:
@@ -395,6 +416,33 @@ class StoreClient:
             items.extend(results[page])
         return items, total_count
 
+    async def _collect_raw(self, fetch_page, max_pages, operation, query):
+        pages = []
+
+        async def fetch(page):
+            payload = await fetch_page(page)
+            pages.append(
+                {
+                    "page": str(page),
+                    "http_status": 200,
+                    "collected_at": datetime.now(UTC).isoformat(),
+                    "request_args": {
+                        "operation": operation,
+                        "query": {
+                            **query,
+                            "type": "json",
+                            "numOfRows": self.settings.page_size,
+                            "pageNo": page,
+                        },
+                    },
+                    "payload": scrub(payload, [self.settings.sbiz_service_key]),
+                }
+            )
+            return payload
+
+        items, total = await self._collect_pages(fetch, max_pages)
+        return items, total, sorted(pages, key=lambda p: int(p["page"]))
+
     async def stores_in_radius(
         self,
         lat: float,
@@ -411,23 +459,15 @@ class StoreClient:
         if use_cache:
             cached = await asyncio.to_thread(_read_cache, path, self.settings.cache_ttl_hours)
             if cached is not None:
-                capture = current_capture()
-                if capture is not None:
-                    capture.incomplete("commercial_area:reduced_cache")
-                    await capture.record(
-                        source="commercial_area",
-                        source_type="api",
-                        args={"from_cache": True, "cache_key": cache_key},
-                        page="cache",
-                        status=None,
-                        payload={"rows": cached["items"], "meta": cached["meta"]},
-                    )
+                await _capture_cache(cached, cache_key)
                 stores = await asyncio.to_thread(_to_stores, cached["items"])
                 return stores, {**cached["meta"], "from_cache": True}
 
-        items, total_count = await self._collect_pages(
+        items, total_count, pages = await self._collect_raw(
             lambda page: self._request_page(cache_lat, cache_lon, radius_m, page),
             self.settings.max_pages,
+            SBIZ_RADIUS_OPERATION,
+            {"radius": radius_m, "cx": cache_lon, "cy": cache_lat},
         )
 
         meta = {
@@ -439,7 +479,7 @@ class StoreClient:
             "from_cache": False,
         }
         if use_cache:
-            await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
+            await asyncio.to_thread(_write_cache, path, {"pages": pages, "meta": meta})
 
         stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta
@@ -470,23 +510,15 @@ class StoreClient:
         path = await asyncio.to_thread(_cache_path, self.settings, cache_key)
         cached = await asyncio.to_thread(_read_cache, path, self.settings.district_cache_ttl_hours)
         if cached is not None:
-            capture = current_capture()
-            if capture is not None:
-                capture.incomplete("commercial_area:reduced_cache")
-                await capture.record(
-                    source="commercial_area",
-                    source_type="api",
-                    args={"from_cache": True, "cache_key": cache_key},
-                    page="cache",
-                    status=None,
-                    payload={"rows": cached["items"], "meta": cached["meta"]},
-                )
+            await _capture_cache(cached, cache_key)
             stores = await asyncio.to_thread(_to_stores, cached["items"])
             return stores, {**cached["meta"], "from_cache": True}
 
-        items, total_count = await self._collect_pages(
+        items, total_count, pages = await self._collect_raw(
             lambda page: self._request_district_page(signgu_cd, page),
             self.settings.district_max_pages,
+            SBIZ_DISTRICT_OPERATION,
+            {"divId": "signguCd", "key": signgu_cd},
         )
 
         meta = {
@@ -497,7 +529,7 @@ class StoreClient:
             "reference_date": await asyncio.to_thread(reference_date_of, items),
             "from_cache": False,
         }
-        await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
+        await asyncio.to_thread(_write_cache, path, {"pages": pages, "meta": meta})
 
         stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta

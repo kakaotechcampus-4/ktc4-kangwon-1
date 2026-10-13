@@ -159,7 +159,19 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
     if args.get("probe"):
         expected = None
     grouping = {
-        k: v for k, v in args.items() if k not in {"url", "start", "end", "page", "headers"}
+        k: v
+        for k, v in args.items()
+        if k
+        not in {
+            "url",
+            "start",
+            "end",
+            "page",
+            "headers",
+            "cache_hit",
+            "original_collected_at",
+            "cache_key",
+        }
     }
     query = grouping.get("query")
     if isinstance(query, dict):
