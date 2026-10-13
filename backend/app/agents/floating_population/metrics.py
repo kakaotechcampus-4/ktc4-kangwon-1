@@ -100,7 +100,11 @@ def _benchmark(
     )
 
 
-def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) -> Trend:
+def _trend(
+    series: list[tuple[str, list[FlpopRecord]]],
+    main_codes: set[str],
+    warnings: list[str] | None = None,
+) -> Trend:
     """분기별 추세. 최신 1개 분기만 보던 단면 분석의 한계를 푼다.
 
     **같은 상권 집합으로 분기마다 다시 합산한다.** 반경 판정은 상권영역(시점 없는 현재
@@ -112,11 +116,13 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
     최대 2% 의 가짜 증감이 섞인다.
     """
     points_by_quarter: dict[str, QuarterPoint] = {}
+    codes_by_quarter: dict[str, set[str]] = {}
     latest_quarter = max((quarter for quarter, _ in series), default=None)
     for quarter, records in series:
         rs = [r for r in records if r.trdar_cd in main_codes]
         if not rs:
             continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
+        codes_by_quarter[quarter] = {r.trdar_cd for r in rs}
         pop = _aggregate(rs, quarter)
         points_by_quarter[quarter] = QuarterPoint(
             period_code=quarter,
@@ -143,7 +149,12 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
         points_by_quarter.get(previous_quarter(latest_quarter, 4)) if latest_quarter else None
     )
     qoq = change(latest.daily_avg, previous.daily_avg) if latest and previous else None
-    yoy = change(latest.daily_avg, previous_year.daily_avg) if latest and previous_year else None
+    yoy = None
+    if latest and previous_year:
+        if codes_by_quarter[latest.period_code] == codes_by_quarter[previous_year.period_code]:
+            yoy = change(latest.daily_avg, previous_year.daily_avg)
+        elif warnings is not None:
+            warnings.append("전년 동기의 관측 상권 집합이 달라 yoy_change를 null로 남겼습니다.")
 
     # 전년 동기가 있으면 그걸로 본다 — 계절성이 빠져서 판단에 낫다.
     basis = yoy if yoy is not None else qoq

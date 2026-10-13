@@ -256,9 +256,8 @@ async def analyze(
         weekend_to_weekday=population.weekend_to_weekday_ratio,
     )
     reliability = _reliability(len(hits), covered)
-    trend = _trend(series, main_codes)
-
     warnings = list(BASE_WARNINGS)
+    trend = _trend(series, main_codes, warnings)
     incomplete = any(missing_fields(record) for _, rows in series for record in rows)
     if incomplete:
         warnings.append(

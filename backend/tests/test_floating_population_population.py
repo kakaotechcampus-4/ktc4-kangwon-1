@@ -406,6 +406,45 @@ class _AnalyzeFixture(unittest.IsolatedAsyncioTestCase):
 
 
 class AnalyzeWithPopulationTests(_AnalyzeFixture):
+    async def test_yoy_uses_five_quarters_and_same_area_set(self):
+        self.use_snapshots(self.resident, self.worker)
+        series = [
+            (
+                q,
+                [
+                    _flpop("A", daily).model_copy(update={"stdr_yyqu_cd": q}),
+                    _flpop("B", daily).model_copy(update={"stdr_yyqu_cd": q}),
+                ],
+            )
+            for q, daily in [
+                ("20252", 1000),
+                ("20253", 1000),
+                ("20254", 1000),
+                ("20261", 1000),
+                ("20262", 1200),
+            ]
+        ]
+        client = self.fake_client(series)
+        result = await agent.analyze(
+            AnalysisTask(request_id="yoy", site=self.site, radius_m=500),
+            settings=Settings(api_key="test-key"),
+            client=client,
+            select=_no_selection,
+        )
+        self.assertEqual(Settings().trend_quarters, 5)
+        self.assertEqual(result.data["trend"]["yoy_change"], 0.2)
+        self.assertEqual(client.fetch_flpop_series.await_args.args[1], 5)
+
+    async def test_yoy_area_set_mismatch_is_null_with_warning(self):
+        self.use_snapshots(self.resident, self.worker)
+        series = [
+            ("20252", [_flpop("A", 1000).model_copy(update={"stdr_yyqu_cd": "20252"})]),
+            ("20262", [_flpop("B", 1200)]),
+        ]
+        result = await self.run_analyze(self.fake_client(series))
+        self.assertIsNone(result.data["trend"]["yoy_change"])
+        self.assertTrue(any("전년 동기" in w and "상권 집합" in w for w in result.warnings))
+
     async def test_custom_selection_programming_error_is_not_hidden(self):
         self.use_snapshots(self.resident, self.worker)
 

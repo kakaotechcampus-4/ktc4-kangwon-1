@@ -55,7 +55,7 @@ def interpret(data: FloatingPopulationData) -> list[Finding]:
         )
     trend = data.trend
     if trend is not None:
-        # 기본 4개 분기에서는 전년 동기가 없어 yoy_change 가 늘 null 이다 → 직전 분기로 물러선다.
+        # 전년 동기 결측·상권 집합 불일치 때 설명문은 직전 분기로 물러선다. D4 채점 대체는 아니다.
         if trend.yoy_change is not None:
             change, basis, path = trend.yoy_change, "전년 같은 분기", "/trend/yoy_change"
         elif trend.qoq_change is not None:
