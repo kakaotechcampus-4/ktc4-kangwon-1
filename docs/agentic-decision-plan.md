@@ -1,9 +1,9 @@
-# Agentic decision 구조 설계안 v0.2
+# Agentic decision 구조 설계안 v0.3
 
-작성: 2026-10-13 · 개정: 2026-10-14 · 대상: perf/decision · 상태: 검토 반영·1차 구현 계약안, 코드 미적용.
+작성: 2026-10-13 · 개정: 2026-10-14 · 설계 작업: perf/decision · 구현 통합 브랜치: feat/agentic-decision · 상태: 단일 모드 전환 결정, 코드 미적용.
 기준: [채점표 v0.8](decision-prompt-rubric.md)의 **확정 규칙**. 로드맵: 51업종 완료 → 채점표 완료 → **3 구조 설계** → 4 구조 구현 → 5 decision 프롬프트 → 6 평가자 4명 → 7 실테스트·효율화.
 
-사용자가 확정한 흐름·SQL 방식·fact_id·L 역할은 고정한다. 아래 스키마·도구 명칭과 권한은 계약 PR 합의 대상이다. 초기 예산·CSV 원천·평가 실패 제공 정책은 사용자 결정으로 확정했으며 실테스트 후 조정한다. 이번에는 승인된 Sonnet 게이트웨이 확인만 최초 1회·재시도 1회 시도했다. 그 밖의 외부 API·LLM 호출은 없다.
+사용자가 확정한 흐름·SQL 방식·fact_id·L 역할은 고정한다. schemas.py의 팀 공통 계약 교체는 PR1에서 팀 합의한다. 도구 계약은 app/agents/agentic/contracts.py로 분리한다. 초기 예산·CSV 원천·평가 실패 제공 정책은 사용자 결정으로 확정했으며 실테스트 후 조정한다. v0.3 개정은 문서만 수정하며 외부 API·LLM 호출은 없다. 5절 연결 확인은 과거 실행 기록이다.
 
 ## 1. 한 장 요약
 
@@ -23,7 +23,7 @@
                   ↓ 같은 읽기 도구로 독립 검토 → 구조화 피드백
              decision: 수용·일부·기각 기록 → 최종 제출
                   ↓ 코드가 점수·숫자·배지·Top 5 검증/렌더링
-             SQLite 최종 저장 → 기존 GET/진행 이벤트 + v2 결과
+             SQLite 최종 저장 → 새 DecisionResult GET/진행 이벤트 → 새 리포트 화면
 ```
 
 | 지금 | 목표 | 현재 근거 |
@@ -38,32 +38,46 @@
 
 ### 현재 코드 분류
 
-'삭제'는 새 경로 검증 뒤 신규 실행에서 제거한다는 뜻이다. 과거 DB·GET·질문 재개 호환 코드를 동시에 지우지 않는다.
+새 구조는 유일한 실행 경로다. PR7 전환 시 기존 모드·근거·저장 결과를 폐기하며 과거 결과·질문 세션을 읽는 코드는 만들지 않는다. 평가자 4명은 항상 실행한다. 개발 비용은 MOCK_MODE와 예산 상한으로 관리한다.
 
-| 구분 | 현재 코드·위치 | 제안 |
+| 구분 | 현재 코드·위치 | 단일 모드 전환 범위 |
 | --- | --- | --- |
-| 재사용 | `backend/app/agents/orchestration/graph.py:40` | LangGraph·병렬 분석·대기/재개 유지, 그래프 연결은 새 단계로 교체 |
-| 교체 | `backend/app/agents/orchestration/deps.py:50`, `state.py:43` | GraphDeps에 조회/저장 포트·actor별 예산, state는 스냅샷·draft·review 참조 중심 |
-| 재사용/확장 | `backend/app/execution/policy.py:38`, `backend/app/services/execution_policy.py:1`, `backend/app/llm/budget.py:16` | 기존 정책 호환 경로와 예약 호출·저장 오류 전파 유지, 도구/토큰/실제 HTTP 한도 추가 |
-| 교체 | `backend/app/agents/orchestration/nodes/decision.py:33`, `decision/agent.py:113`(agents 아래) | final/ask_specialists/supplement/map_lookup/ask_user 판정 JSON을 도구 루프로 교체 |
-| 삭제(신규 경로) | `backend/app/agents/decision/context.py:64`, `agent.py:508` | 전체 분석/digest·브리핑 삽입 제거. 시스템 지시문·도구 스키마는 고정 |
-| 삭제/대체 | `backend/app/agents/specialists/agent.py:138`, `agent.py:185`; `orchestration/nodes/deliberation.py:43`(agents 아래) | write_brief·분야별 재분석 자문 제거, _run의 루프·주입 패턴만 검토 재사용 |
-| 재사용/분리 | `backend/app/agents/map_analysis/agent.py:125`, `client.py:52`, `mapping.py:64` | 비동기 검색·캐시·거리·관측 검증 재사용. judge_matches의 숨은 LLM 호출은 기본 map_search에서 분리 |
-| 교체/재사용 | `backend/app/agents/orchestration/supplement.py:39` | 일반 supplement 판정 분기 제거. 수집 실패·부분 자료·재계산 adapter는 서비스에서 재사용 |
-| 교체/재사용 | `backend/app/agents/evaluators/agent.py:175`, `orchestration/nodes/evaluation.py:18`(agents 아래) | 4역할·실패 격리·병렬 실행 유지, digest 입력과 추가 행동 요청을 읽기 도구 검토로 교체 |
-| 재사용/확장 | `backend/app/evidence/index.py:58`, `index.py:203`, `citations.py:36` | 업종 소유·citable·경로 검증을 사실 등록에 재사용. path 직접 인용은 legacy 전용 |
-| 재사용/확장 | `backend/app/db/repository/results.py:27`, `questions.py:162`, `evaluations.py:21`, `backend/app/db/schema.sql:3` | 요청·시도·질문·결과·평가 이력 보존, 원문/facts/scores/호출 감사 테이블 추가 |
-| 재사용/확장 | `backend/app/services/analysis.py:215`, `persistence.py:50`, `views.py:16`, `mocking.py:18` | 서비스 트랜잭션·재개·목업·GET 조립 유지, snapshot 포트와 v2 응답 추가 |
-| 재사용/이관 | `backend/scripts/rubric_dryrun.py:72`, `:322`, `:404` | score_item·summarize를 운영 순수 채점 엔진으로 이관. CLI·민감도·표본 수집은 scripts에 유지 |
-| 재사용 | `backend/app/agents/commercial_area/industries.py:23`, `metrics.py:92`; `business_lifecycle/formatter.py:163`(agents 아래) | 소분류 우선 51업종 매핑·결정론적 지표·한국어 formatter 유지 |
-| 유지/PR 제안 | `backend/app/schemas.py:80`, `:94`, `:486`, `:570` | AnalysisTask/AgentAnalysis 유지, Decision 입출력은 아래 v2 안을 팀 PR에서 합의 |
-| 유지/확장 | `docs/API_CONTRACT.md:224`, `:244`; `backend/app/api/v1/responses.py:29` | 폴링·seq 유지, stage와 버전별 결과 계약 추가 |
+| 재사용 | `backend/app/agents/orchestration/graph.py:40` | LangGraph·주소·분석 3종 병렬·질문 대기/재개 기반. 새 단계로 연결 |
+| 교체 | `backend/app/agents/orchestration/deps.py:50`, `state.py:43` | 모드별 deps/state를 snapshot·draft·review 참조 및 actor별 예산으로 교체 |
+| 재사용/확장 | `backend/app/execution/policy.py:38`, `backend/app/llm/budget.py:16` | 예약 호출·실패 전파·저장 오류 유지, 도구/토큰/HTTP 상한 추가. 모드·평가 활성 스위치 제거 |
+| 교체 | `backend/app/agents/decision/agent.py:113`, `orchestration/nodes/decision.py:33` | 행동 JSON(final/ask_specialists/supplement/map_lookup/ask_user) 판정을 도구 루프로 교체. 질문 기능은 ask_user 도구로 재사용 |
+| 삭제 | `backend/app/agents/decision/context.py:64`, `agent.py:508` | 전체 분석·digest·브리핑 context 삽입 제거. 고정 지시문·도구 스키마·최소 참조만 입력 |
+| 삭제 | `backend/app/agents/specialists/` 전체, `orchestration/nodes/deliberation.py:43`, `orchestration/consult.py` | 브리핑·전문가 자문·ask_specialists·브리핑 그래프 분기 제거. 보조 에이전트는 별도 자문 도구로 구현 |
+| 재사용/교체 | `backend/app/agents/map_analysis/client.py:52`, `agent.py:254` | PlaceClient·비동기 카테고리 검색·거리 계산 재사용. 지도 판단 agent 경로를 결정론적 map_search로 교체 |
+| 삭제 | `backend/app/agents/map_analysis/mapping.py:64`, `prompt.md` | judge_matches·GenerateMapping·LLM 판정·모델별 mappings 캐시 제거. 장소 API 응답 캐시는 재사용 가능 |
+| 교체/재사용 | `backend/app/agents/orchestration/supplement.py:39` | 기존 supplement 행동 분기 제거. 부분 자료·실패 상태·재계산 처리는 서비스에서 재사용 |
+| 교체/재사용 | `backend/app/agents/evaluators/agent.py:175`, `orchestration/nodes/evaluation.py:18` | 4역할·병렬·실패 격리 유지. digest/path 입력·추가 행동 요청 대신 fact 기반 읽기 도구 검토, 항상 실행 |
+| 삭제/이관 | `backend/app/evidence/citations.py:36`, `index.py:58`, `pointer.py` | agent/path 인용·{i} 렌더링 삭제. 업종 소유·citable·단위 검증 원칙만 fact registry로 이관. 원문 내부 계보 field_pointer는 인용 계약이 아님 |
+| 교체/재사용 | `backend/app/db/schema.sql:3`, `repository/results.py:27`, `questions.py:162`, `evaluations.py:21` | 요청·저장 트랜잭션 기반 유지, 새 스키마로 생성. 구 결과·질문 reader와 보존 마이그레이션 없음 |
+| 교체/재사용 | `backend/app/services/analysis.py:215`, `persistence.py:50`, `views.py:16`, `mocking.py:18` | 재개·목업·GET 조립을 새 계약으로 교체. 모드 dispatch·과거 응답 분기 제거 |
+| 재사용/이관 | `backend/scripts/rubric_dryrun.py:72`, `:322`, `:404` | 순수 채점 엔진 운영 이관. CLI·민감도·표본 수집은 scripts 유지 |
+| 재사용 | `backend/app/agents/commercial_area/industries.py:23`, `metrics.py:92`, `business_lifecycle/formatter.py:163` | 51업종 매핑·결정론적 지표·한국어 formatter 유지 |
+| 유지/교체 | `backend/app/schemas.py:80`, `:94`, `:257`, `:486`, `:504`, `:570`, `:680` | AnalysisTask/AgentAnalysis 유지. DecisionRequest/DecisionResult/Evidence/QuestionSnapshot 교체, V2 접미사 없음 |
+| 교체 | `docs/API_CONTRACT.md:224`, `backend/app/api/v1/responses.py:29` | URL·폴링 seq 기반 재사용, 새 결과·질문·stage 계약만 제공 |
 
-현재 상주·직장은 동봉 CSV 스냅샷을 사용한다(`backend/app/agents/floating_population/population.py`). 그림의 인구 수집은 원천 adapter 경계다. 기존 CSV를 API에서 갓 받은 자료처럼 표시하지 않는다. 우선 file 원천도 같은 원문 저장 계약으로 가져오며, 실시간 API 전환은 열린 질문이다.
+현재 상주·직장은 동봉 CSV를 사용한다(`backend/app/agents/floating_population/population.py`). source_type=file·파일 해시·시점을 원문에 보존한다.
+
+### 삭제 목록과 설정 정리
+
+| 대상 | 전환 작업 |
+| --- | --- |
+| 모드·브리핑 | graph.py의 mode 분기, execution/settings.py:69~76의 스위치, specialists 호출 포트·서비스 생성기·브리핑 DB 저장/조회·목업 삭제 |
+| 옛 근거·결과 | agent/path Evidence·EvidenceRef, {i} 렌더러와 관련 fixtures·검증 tests, 기존 질문 snapshot V2 및 구 결과 reader 삭제/교체 |
+| 지도 숨은 LLM | mapping.py·prompt.md·generate_mapping/mapping_cache_path 주입, cache/map_mappings.sqlite3의 mappings 캐시 사용 경로 제거. 파일 정리 방법은 PR7 초기화 안내에 포함 |
+| 지도 테스트 | test_map_mapping.py의 LLM·모델/프롬프트 캐시 테스트 제거/대체. test_map_matching.py의 유효한 검색·거리 테스트는 유지하고 category_match/name_match/unknown 회귀 검증으로 교체 |
+| 환경변수 삭제 | ANALYSIS_MODE, BRIEFING_ENABLED, EVALUATORS_ENABLED, SPECIALIST_*_LLM_*, MAP_MAPPING_LLM_* |
+| 모델 설정 유지 | ELICE_* 공통, DECISION_LLM_*, EVALUATOR_LLM_*, ADVISOR_LLM_*. 공통 옵션 LLM_*와 MOCK_MODE·API 인증·비용 상한은 유지 |
+
+실제 파일·환경변수 삭제는 PR4/PR7에서 수행한다. 이번 문서 개정은 코드·.env·schemas.py를 수정하지 않는다.
 
 ## 2. 데이터 저장 설계(SQLite)
 
-기존 테이블을 지우지 않는 추가 마이그레이션이다. 1차는 요청당 원문 snapshot_id **1개**를 유지한다. run_id·분석/판단 attempt는 실행·재개 기록이며 새 원문 스냅샷을 만들지 않는다. 부모 스냅샷·기초 자료 재수집은 2차로 미룬다. 원문은 매 페이지 수집 직후 저장하고 모든 수집이 끝나야 계산하는 강제 장벽 대신, 수집 완료/부분 스냅샷을 명시한 뒤 계산한다.
+기존 DB 보존·자동 변환 없이 새 스키마로 초기화한다. PR2는 새 저장 스키마를 정의하고 PR7은 DB 스키마 버전 검사와 초기화 안내를 연결한다. 1차는 요청당 원문 snapshot_id **1개**를 유지한다. run_id·분석/판단 attempt는 실행·재개 기록이며 새 원문 스냅샷을 만들지 않는다. 부모 스냅샷·기초 자료 재수집은 2차로 미룬다. 원문은 매 페이지 수집 직후 저장하고 모든 수집이 끝나야 계산하는 강제 장벽 대신, 수집 완료/부분 스냅샷을 명시한 뒤 계산한다.
 
 | 테이블 | 핵심 필드·키 | 규칙 |
 | --- | --- | --- |
@@ -78,9 +92,9 @@
 | evaluator_reviews | review_id PK, draft_id FK, actor, status, review_json, tool_call_ids, created_at | 4명 각각 보존. 실패는 동의가 아님 |
 | reports | report_id PK, request_id, run_id, kind(draft/final), revision, parent_id, report_json, fact_ids, score_snapshot_id, validation_status, rendered_json | 초안·최종과 번호별 피드백 반영 로그 연결. final만 완료 응답으로 채택 |
 
-새 analysis_mode는 기존 analysis_requests의 CHECK 허용값에 없으므로 PR2에서 보존 마이그레이션(테이블 복사·FK/행 수 검증)을 함께 한다. 기존 모드의 값을 임의로 바꾸지 않는다.
+analysis_mode 열·CHECK·모드 dispatch는 새 스키마에 두지 않는다. DB 스키마 버전을 올리고 기존 파일의 버전이 다르면 시작을 중단해 파일 경로·기대/실제 버전·초기화 방법을 안내한다. 실행기가 자동 삭제·변환하지 않는다. 운영자가 서버를 멈추고 SQLITE_PATH 파일을 명시적으로 삭제 또는 이동한 뒤 재시작하면 새 DB를 생성한다. 옛 결과·질문 세션은 폐기하며 구 파일을 읽는 reader를 구현하지 않는다.
 
-기존 analysis_requests·agent_results·decision_results·question_sessions·analysis_events는 계속 쓴다(`backend/app/db/schema.sql:3`, `:27`, `:43`, `:145`, `:163`). 사실 저장·호출 감사·최종 채택 실패는 서비스 오류로 전파한다. 진행 화면 이벤트의 저장 실패만 기존처럼 격리한다(`backend/app/services/persistence.py:36`).
+analysis_requests·agent_results·decision_results·question_sessions·analysis_events의 역할은 새 스키마에서 재사용하되 옛 행을 복사하지 않는다(`backend/app/db/schema.sql:3`, `:27`, `:43`, `:145`, `:163`). 사실 저장·호출 감사·최종 채택 실패는 서비스 오류로 전파한다. 진행 화면 이벤트의 저장 실패만 기존처럼 격리한다(`backend/app/services/persistence.py:36`).
 
 | 조회용 뷰 | 원천·핵심 열 | 공간·기간 |
 | --- | --- | --- |
@@ -116,16 +130,16 @@ fact_id는 `f_<UUID>`이며 값·계보가 바뀌면 새 ID다. 1차의 추가 �
 | get_scorecard | 계산 점수 우선. {industry_codes?:[Code]≤51, mode:summary/detail, limit:int≤32(summary)/5(detail), cursor?:string} | summary는 코드·B/H/A·coverage·배지·누락 상태, detail은 Scorecard·fact_ids. 전체 51업종은 페이지 조회 | common + VERSION_MISMATCH | decision 6회, 평가자 각 2회. 응답≤2,000토큰 | decision·평가자 |
 | get_facts | {fact_ids:[FactId]≤32} **또는** {industry_code?:Code, source:Source, metrics:[Metric]≤8, limit≤32,cursor?}. 둘 중 하나 | {facts:[FactView],provenance_refs}. raw 행 참조·단위·기간 제공 | common + UNKNOWN_FACT/UNCITABLE | decision 8회, 평가자 각 3회, 보조 각 1회(받은 ID만) | decision·평가자·보조 |
 | query_raw | {sql:string≤4,000자, params:object/array, max_rows:int≤50}. 승인된 뷰 단일 SELECT만(1차) | {columns,rows[{raw_row_refs,values,fact_ids}],uncitable_columns}; 직접 필드는 원문 재대조 후 자동 fact 등록 | common + SQL_DENIED/SQL_TIMEOUT/LINEAGE_UNAVAILABLE | decision 4회, 평가자 각 2회, SQL≤2초·50행·응답≤2,000토큰 | decision·평가자 |
-| map_search | {industry_code:Code **또는** facility_code:KakaoEnum, radius_m:int 50~500, limit≤20}. 좌표는 현재 Site 고정 | {observation_id,places[{place_id,name,category,distance_fact_id,match_status,fact_ids}],coverage,has_more}. 동종 미확인은 명시 | common + MAP_UNAVAILABLE/MATCH_UNCERTAIN | 요청 전체 서로 다른 검색 6개·지도 HTTP 20회·각 검색 15초 | decision·평가자 |
+| map_search | {industry_code:Code **또는** facility_code:KakaoEnum, radius_m:int 50~500, limit≤20}. 좌표는 현재 Site 고정 | {observation_id,places[{place_id,name,kakao_category,distance_fact_id,match_status:category_match/name_match/unknown,match_rule_id,fact_ids}],coverage,has_more}. 이름·카테고리·거리도 fact_id로 등록 | common + MAP_UNAVAILABLE | 요청 전체 서로 다른 검색 6개·지도 HTTP 20회·각 검색 15초 | decision·평가자 |
 | check_regulation | {}. 현재 좌표·저장된 구역 snapshot 사용 | {status,queried_at,contains_verified,zones,fact_ids,industry_restrictions,limitations}. 건축물대장은 현재 unavailable | common + REGULATION_UNAVAILABLE | 실제 구역 조회 요청당 1회, actor 호출 각 1회·캐시 공유 | decision·평가자 |
 | ask_advisor | {question:string≤800자,fact_ids:[FactId]≤12,industry_codes?:[Code]≤3} | {consult_id,status,interpretations[{claim,fact_ids,conditions,confidence}],missing_facts,limitations}. 점수 없음 | common + ADVISOR_UNAVAILABLE | 요청당 최대 2회·각 45초·출력≤1,000토큰 | decision만 |
 | ask_user | {questions:[{field:기존 QuestionField,question:string≤200자,reason:string≤200자}]≤3} | {question_session_id,status:waiting_for_input}. 답변은 재개 시 typed user facts | common + QUESTION_NOT_ALLOWED/ALREADY_ANSWERED | 요청당 1세션·질문≤3. 기존 답변 항목 재질문 금지 | decision만 |
-| submit_draft | {phase:draft/final,report:ReportProposal,review_resolutions?:[ReviewResolution]}. 점수 숫자 없음 | {report_id,validation_status,rendered_preview_ref,score_snapshot_id}. final도 같은 구조화 제출 도구 | common + REPORT_INVALID/L_EVIDENCE_INVALID/REVIEW_UNRESOLVED | draft 1회·final 1회, 스키마 오류 교정 총 1회(예산에 포함) | decision만 |
+| submit_draft | {phase:draft/final,report:ReportProposal,review_resolutions?:[Resolution]}. 점수 숫자 없음 | {report_id,validation_status,rendered_preview_ref,score_snapshot_id}. final도 같은 구조화 제출 도구 | common + REPORT_INVALID/L_EVIDENCE_INVALID/REVIEW_UNRESOLVED | draft 1회·final 1회, 스키마 오류 교정 총 1회(예산에 포함) | decision만 |
 | submit_review | {draft_id:ID,verdict:agree/conditional/oppose,issues:[ReviewIssue]≤4} | {review_id,status}. actor는 실행기가 고정 | common + DRAFT_MISMATCH/INVALID_REFERENCE | 평가자 각 1회·지적별 근거 fact_id≤3 | 평가자만 |
 
 common 오류는 INVALID_ARGUMENT / SOURCE_UNAVAILABLE / SNAPSHOT_MISMATCH / BUDGET_EXCEEDED / TIMEOUT / DUPLICATE_CALL이다. 부분 결과는 partial·truncated·누락 필드를 표시하고, '조회 범위 내 확인한 수'만 인용한다. 계약 검증·fact 저장·호출 감사 저장 실패는 일반 error ToolReply로 숨기지 않고 실행 실패로 전파한다(AGENTS.md 3).
 
-map_search는 기존 PlaceClient·카테고리·거리·MapObservation을 재사용한다. 검색에 별도의 지도 LLM이 자동 발생하지 않도록 기본 경로는 결정론적 일치만 쓰고 애매한 업종은 match_status=unknown이다. 기존 judge_matches 캐시를 쓸 때도 모델·버전·확신도 출처를 남긴다. 추후 LLM 분류가 필요하면 별도 명시 예산을 합의한다(`backend/app/agents/map_analysis/mapping.py:64`). 지도 조회 0건·has_more를 실제 동종 가게 없음으로 확대하지 않는다.
+map_search는 PlaceClient·카카오 카테고리·거리 계산을 재사용하며 LLM 호출은 0회다. 코드 규칙의 category_match를 우선 적용하고, 명시적인 업종 검색어 규칙이 맞으면 name_match, 그 밖에는 unknown을 반환한다. 일치 상태는 검색 규칙의 결과이며 실제 경쟁점 여부의 확정 판정이 아니다. 애매한 장소의 해석은 decision이 새 fact_id를 근거로 L에서 판단한다. judge_matches·GenerateMapping·모델 프롬프트·모델별 mappings 캐시 및 설정을 제거한다(`backend/app/agents/map_analysis/mapping.py:64`, `agent.py:254`). 검색 응답 캐시를 유지할 때는 좌표·반경·검색어·규칙 버전·조회 시점을 키/출처로 남긴다. 0건·has_more를 실제 동종 가게 없음으로 확대하지 않는다. 모델 클라이언트 생성 시 실패하는 대역으로 지도 LLM 0회를 검증한다.
 
 ### query_raw와 자동 사실 등록의 경계
 
@@ -190,7 +204,7 @@ LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_s
 
 설정은 `backend/app/llm/config.py:30`의 `LLMSettings.from_env("ADVISOR")` 형식을 따른다.
 
-| 환경변수(이번 .env.example에는 이름만) | 비었을 때 실제 기존 fallback |
+| 환경변수(.env.example에는 이름만) | 비었을 때 실제 기존 fallback |
 | --- | --- |
 | ADVISOR_LLM_MODEL | ELICE_MODEL |
 | ADVISOR_LLM_BASE_URL | ELICE_BASE_URL |
@@ -200,7 +214,7 @@ LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_s
 
 모델·인증·주소는 ELICE_*를, 길이·시간은 기존 LLM_*를 사용한다. 실제 .env나 운영 설정은 이번에 바꾸지 않았다. Sonnet로 시작하려면 운영자가 ADVISOR 역할 설정에 원하는 모델과 그 모델 접근 가능한 연결을 지정해야 한다. 같은 계열 fallback도 기록하며 임의로 다른 모델을 재호출하지 않는다.
 
-### 승인된 게이트웨이 일회성 확인 (2026-10-14)
+### 과거 게이트웨이 확인 기록 (2026-10-14)
 
 기존 `app/llm/client.py:131` 경로의 stream=True·include_usage=True를 사용했다. 기본 json_object만으로 스키마 지원을 주장하지 않도록 일회성 메모리 wrapper에서 response_format=json_schema(strict=True)를 지정하고 {ok:true}를 요청했다. max_completion_tokens=200·timeout45초·SDK 자동 재시도0. 확인 코드는 저장소에 남기지 않았다.
 
@@ -213,9 +227,9 @@ LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_s
 | 시간 | 최초 0.859초·재시도 0.640초 |
 | 서버 오류 | Model 'anthropic/claude-sonnet-5' is not allowed. Allowed: ['gpt-5.6-terra', 'openai/gpt-5.6-terra'] |
 
-ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했다. 이 연결의 모델 허용 목록 문제이며 Sonnet 자체의 JSON/스트리밍 비호환으로 단정하지 않는다. 별도 Sonnet용 ADVISOR_LLM_BASE_URL/API_KEY 설정 후 다음 승인된 시험에서 재확인해야 한다. 키·URL 원문은 출력·문서에 남기지 않았다. 재시도 한도를 소진했으므로 추가 호출하지 않았다.
+ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했다. 이 연결의 모델 허용 목록 문제이며 Sonnet 자체의 JSON/스트리밍 비호환으로 단정하지 않는다. 별도 Sonnet용 ADVISOR_LLM_BASE_URL/API_KEY 설정 후 다음 승인된 시험에서 재확인해야 한다. 키·URL 원문은 출력·문서에 남기지 않았다. 해당 시험의 재시도 한도를 소진했으므로 그 실행에서 추가 호출하지 않았다. 이후 별도 승인된 기본 ELICE 확인은 HTTP200·스트리밍 8청크·usage 입력38/출력25·JSON 객체 검증 성공(2.86초)이었다. 당시 ADVISOR 모델·키 미설정으로 Sonnet 확인은 실행하지 않았다. v0.3 개정에서는 호출하지 않았다.
 
-## 6. 평가자 4명
+## 6. 평가자 4명 — 항상 실행
 
 | 역할(현재 ID 유지) | 중점 | 권한 |
 | --- | --- | --- |
@@ -237,13 +251,13 @@ ReviewIssue={issue_id,industry_code|null,target:fact/score/L/claim/condition,kin
 | 실패/시간 초과 | 일부·전체 실패 모두 평가 미완료를 명시하고 기계 검증 통과 결과 제공. failed reviewer 명단·coverage 표시, 동의로 계산하지 않음 |
 | 반복 | **평가 1라운드 + decision 수정 1회**, 수정 후 기계 검증만. 추가 평가가 필요하면 다음 요청으로 분리 |
 
-사용자 목표에 따라 평가자 전원 동의라도 decision의 최종 제출 단계는 수행한다. 현재는 no_comments/all_failed면 final 호출을 건너뛸 수 있으므로 바뀌는 동작이다(`backend/app/agents/orchestration/nodes/evaluation.py:70`).
+끄는 스위치 없이 평가자 4명 모두 실행한다. MOCK_MODE에서는 같은 단계·계약을 대역으로 검증하고 예산 상한은 실제 실행과 같이 집행한다. 사용자 목표에 따라 평가자 전원 동의라도 decision의 최종 제출 단계는 수행한다. 현재는 no_comments/all_failed면 final 호출을 건너뛸 수 있으므로 바뀌는 동작이다(`backend/app/agents/orchestration/nodes/evaluation.py:70`).
 
 ## 7. 보고서 출력 계약
 
-ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments,L_records,review_resolutions}. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 registry·v0.8 scores로 계산해 ReportV2에 붙인다.
+ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments,L_records,review_resolutions}. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 registry·v0.8 scores로 계산해 DecisionResult에 붙인다.
 
-| 필드 | ReportV2 서버 출력 |
+| 필드 | DecisionResult 서버 출력 |
 | --- | --- |
 | 버전 | schema_version=2.0, rubric_version=v0.8, tool_contract_version, request_id, run_id, report_id, score_snapshot_id, evidence_snapshot_ids |
 | 검토 후보 | code·name·코드 point/90 + L point/10, L 대상/선정 이유·review_state. 대상 밖 unknown=판단 미검토, 대상 안 근거 부족 unknown=판단 미확인. A/B/H·비율·coverage·배지·G |
@@ -252,43 +266,52 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 | 검토 상태 | 평가자 4명 상태·지적·수용/일부/기각 로그, review_completeness |
 | 확인 조건 | 건축물 용도 등 미확인·자료 시점/공간 한계·partial·예산 제한 |
 
-숫자는 서버 renderer가 fact.value·단위로 채운다. grade enum·업종 코드·고정 시간대/연령 라벨은 구조화 제어값이며 측정 숫자 복사와 구분한다. 모델 자유문장에 인용 없는 수치가 있으면 거절한다. 기존 render_cited의 검증 철학은 재사용하되 `{i}`·path 문자열이 아닌 typed fact 슬롯이 새 계약이다. 원문 숫자를 텍스트에 붙이는 우회도 검사한다.
+숫자는 서버 renderer가 fact.value·단위로 채운다. grade enum·업종 코드·고정 시간대/연령 라벨은 구조화 제어값이며 측정 숫자 복사와 구분한다. 모델 자유문장에 인용 없는 수치가 있으면 거절한다. 근거는 fact_id만 인용한다. 기존 render_cited·`{i}` 자리표시자·agent/path 인용은 삭제하고 typed fact 슬롯 renderer로 교체한다. 원문 숫자를 텍스트에 붙이는 우회도 검사한다.
 
 최종 배열은 전체 51업종 채택 점수의 원점수 하한→coverage→코드로 재검증한다. L 검토는 상위10+추가2로 제한하고 대상 밖은 unknown·판단 미검토로 남기며 '전체 업종의 L을 검증했다'고 하지 않는다. Top 5에 보류/조건부가 있어도 추천처럼 표시하지 않는다.
 
-## 8. schemas.py 변경안 — 팀 PR 합의 대상
+## 8. schemas.py 변경안 — 팀 계약 교체
 
-이번에는 파일을 수정하지 않았다. AGENTS.md 1에 따라 아래는 구현 전 팀 계약 PR에서 먼저 합의한다. v1 저장 결과를 v2 모델로 재검증해 과거 데이터를 깨뜨리지 않는다.
+**결정:** 공통 계약은 schemas.py, 에이전트 내부 도구·판단 계약은 app/agents/agentic/contracts.py(신규)에 둔다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 변경 부분만 AGENTS.md 1에 따라 PR1에서 팀 합의한다. 이번에는 문서만 수정한다.
 
-| 모델 | 제안 변경·이유 | 호환 |
+| schemas.py 모델 | 변경안·이유 |
+| --- | --- |
+| AnalysisTask / AgentAnalysis | 그대로 유지. snapshot·계산 metadata는 AgentAnalysis.data 내부에만 추가 |
+| DecisionRequest | request/run/site/snapshot 참조·rubric/tool version·remaining_budget. 전체 analyses/digest 입력과 모드 dispatch 제거 |
+| DecisionResult 및 IndustryAssessment/DecisionContent | 코드 ○/90 + L ○/10, 점수 구간·비율·coverage·배지·검토 후보 Top 5·fact 슬롯·L 검토 상태·평가 요약. 기존 보고서 계약 교체 |
+| Evidence | {fact_id} 참조로 교체. agent/path·EvidenceRef 인용 계약 제거, registry가 요청·snapshot·업종·citable 검증 |
+| QuestionSnapshot | run/snapshot/score/draft refs·도구 hash·누적 예산·채택 fact 목록·질문 세션. 기존 QuestionSnapshotV2 통합 제거, 구 세션 재개 불가 |
+| AnalysisMode·Specialist 관련 모델 | single_decision/multi_agent enum·전문가 브리핑/행동 전용 모델 제거. 팀 공통 소비자 함께 갱신 |
+| 평가 응답의 공통 경계 | DecisionResult에 평가 상태·반영 요약만 노출. 내부 ReviewIssue/Resolution은 contracts.py에 정의 |
+
+| app/agents/agentic/contracts.py 내부 계약 | 내용 |
+| --- | --- |
+| 도구 입출력·ToolReply/ToolError | 3절 입력 union·출력·권한·오류·상한 |
+| Scorecard / FactView | 점수·상태·레지스트리 읽기 출력 |
+| ReportProposal / LRecord | 모델 보고서 제안·새 근거 판단 기록. 서버 출력 DecisionResult와 구분 |
+| ReviewIssue / Resolution | 평가 지적·수용/일부/기각과 이유 |
+| AdvisorAnswer | 대안 해석·fact_ids·조건·확신도. 점수 없음 |
+
+모델 자유문장·원문 응답은 경계에서 검증한다. 프롬프트는 도구 계약을 참조하고 DB 내부 열·함수명을 의존하지 않는다.
+
+## 9. 프론트·API 영향 — 새 결과 계약으로 전환
+
+GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 seq는 재사용한다. result는 새 DecisionResult만 반환하며 구 결과 변환·버전별 adapter는 만들지 않는다. source_analyses 거대 배열을 기본 결과나 모델 입력에 재삽입하지 않는다. 숫자는 fact 슬롯 renderer로 제공하고 원문 SQL·키는 GET/이벤트에 노출하지 않는다.
+
+**develop 리포트 화면(#38)은 새 DecisionResult에 맞춰 수정해야 한다.** PR1에서 계약을 공유하고 PR6에서 목업 GET을 제공한다. PR7 통합 전환 전에 코드/L 분리·점수 구간·배지·Top 5·L 미검토·평가 미완료·fact 슬롯 표시를 연결하고 프론트 검사를 통과한다. 화면/진행 이벤트 구현을 통합 전환 뒤로 미루지 않는다.
+
+현재 진행은 events seq 폴링이며 SSE가 아니다(`docs/API_CONTRACT.md:210`, `:224`). mock 진행 시뮬레이션 TODO도 실제 stage 소비로 교체한다(`frontend/app/analysis-progress/page.tsx:93`, `frontend/lib/hooks/useAnalysisProgressSimulation.ts:17`).
+
+| 단계 | stage/event·detail 계약 | 화면/전환 작업 |
 | --- | --- | --- |
-| AnalysisTask / AgentAnalysis | 기존 공통 필드 유지. raw_snapshot_id·calc_version·code_score_snapshot_id는 우선 data 내부 metadata로 추가 | 기존 3종 agent·서비스 유지 |
-| DecisionRequest | 별도 AgenticDecisionRequestV2: request/run/site/snapshot refs·rubric/tool version·capabilities·remaining_budget. analyses 전체 필수 전달 제거 | 기존 DecisionRequest(:486) 유지, 모드별 dispatch |
-| AnalysisMode | agentic_decision 신규 값, DB analysis_requests CHECK·mode별 GraphDeps/재개 검증도 같이 변경 | single_decision/multi_agent 저장 이력 reader 유지 |
-| Evidence | FactReferenceV2={fact_id}; scope·source는 registry 권한으로 검증 | 기존 Evidence agent/path(:504)는 legacy renderer 전용 |
-| IndustryAssessment / DecisionContent / DecisionResult | ReportProposalV2·ReportV2·ScoreSummary·LRecord·FactSegment. 단일 score 대신 코드/L·구간·coverage·badge | 기존 score/recommendations만으로 v2 의미를 억지 변환하지 않음. 새 schema_version 2.0 |
-| Evaluation / EvaluationLogEntry | FactReference 기반 ReviewIssue·ReviewResolution, draft/revision IDs·failed 상태 | 기존 평가 이력 그대로 조회 |
-| QuestionSnapshot | QuestionSnapshotV3: run/snapshot/score/draft refs·도구 hash·예산·채택 fact 목록·질문 세션 | 기존 :257/:680 reader 유지. 검증된 명시 마이그레이션만 |
-| Tool·advisor | ToolReply/Error·도구 입력 union·AdvisorAnswer 신규. 모델 원문은 검증 후 저장 | 런타임 schema 버전 고정 |
+| 원문 수집 | 기존 분석 agent stages + raw_capture completed {source,snapshot_id,partial} | 분석 3종 상태·부분 수집 표시 |
+| 계산/채점 | metrics/scorecard started·completed {rubric_version,industry_count} | 코드 채점 단계 표시 |
+| 판정 도구 | decision started/completed {phase:draft/final}; decision.tool completed {tool,status} | 원문·SQL·키·fact 값은 이벤트에서 제외 |
+| 자문 | advisor started/completed {status} | consult.*·briefing stages 삭제 |
+| 평가 | evaluate.examiner/founder/customer/landlord_advocate started/completed {status,issues_count} | 항상 4명 상태·평가 미완료 표시 |
+| 질문/종료 | questions waiting, run completed/failed/draft_available | 새 QuestionSnapshot으로 대기/재개. 유효 초안과 final 구분 |
 
-프롬프트는 이 계약의 명칭·입출력·권한만 참조한다. 내부 DB 열이나 Python 함수명이 바뀌어도 tool_contract_version=1 계약이 같으면 프롬프트를 바꾸지 않는다.
-
-## 9. 프론트·API 영향 — GET v2는 1차, 진행 화면·이벤트 v2는 2차
-
-현재는 폴링 events seq·GET 상세를 쓰며 SSE가 아니다(`docs/API_CONTRACT.md:210`, `:224`). 현재 진행 화면에는 mock 시뮬레이션 연결 TODO가 남아 있어 백엔드 stage만 추가해 실제 화면이 연결됐다고 주장하지 않는다(`frontend/app/analysis-progress/page.tsx:93`, `frontend/lib/hooks/useAnalysisProgressSimulation.ts:17`).
-
-| 단계 | stage/event·detail 제안 | 기존 호환 |
-| --- | --- | --- |
-| 원문 수집 | 기존 agent stages + raw_capture completed {source,snapshot_id,partial} | 기존 agent completed 유지 |
-| 계산/채점 | metrics/scorecard started·completed {rubric_version,industry_count} | unknown stage는 일반 '분석 중'으로 표시 |
-| 판정 도구 | decision started/completed {phase:draft/final}; decision.tool completed {tool,status} | actor 원문·SQL·키·fact 값은 진행 이벤트에 안 넣음 |
-| 자문 | advisor started/completed {status} | consult.*는 legacy 실행에만 유지 |
-| 평가 | evaluate.examiner/founder/customer/landlord_advocate started/completed {status,issues_count} | 기존 ID 표시 유지 |
-| 질문/종료 | questions waiting, run completed/failed/draft_available | pending/running/waiting_for_input 의미 유지, draft_available은 계약 PR에서 추가 |
-
-GET /api/v1/analyses/{id}는 기존 envelope(status/site/result/error 등)를 유지한다. 새 실행은 analysis_mode=agentic_decision, result.schema_version=2.0와 scorecard_summary·review·advisor 요약·확인 조건을 추가한다. 기존 source_analyses 거대 배열은 v2 모델 입력/기본 결과에 재삽입하지 않는다. 과거 v1 결과는 저장 당시 그대로 반환한다(`backend/app/services/views.py:16`, `:58`; `backend/app/api/v1/responses.py:29`).
-
-1차 PR6은 opt-in agentic 모드와 GET v2까지만 준비하며 기존 프론트의 일반 경로는 유지한다. 신규 화면·버전별 프론트 adapter·실제 진행 폴링/이벤트 v2는 2차 PR7에서 연결한다. 위 stage 표는 2차 계약 목표다. 기존 recommendations/not_recommended 필드에 보류를 추천처럼 포장하는 fallback은 없다. 호출 원문·원자료는 내부 DB에만 두며 GET에는 필요한 설명·인용 facts만 권한 확인 후 노출한다. 이벤트 순번·폴링·질문 answers·retry URL은 유지하고, 재시도는 저장 자료·예산을 재사용한다.
+PR1에서 API_CONTRACT의 결과·질문·stage를 갱신하고 PR6에서 런타임·GET·이벤트를 연결한다. 프론트 담당은 PR7의 전환 완료 조건에 포함해 검증한다. retry는 같은 snapshot·저장 예산을 이어받는다. DB 버전 불일치는 시작 오류와 명시적 초기화 안내로 처리한다.
 
 ## 10. 비용·시간 예산
 
@@ -306,32 +329,34 @@ GET /api/v1/analyses/{id}는 기존 envelope(status/site/result/error 등)를 �
 
 이 예산은 10~12개 각각에 독립 모델 호출을 주는 방식이 아니라 공동 조회·최대3업종 묶음 검토를 전제로 한다. 한도 안에서 근거를 확보하지 못한 대상은 unknown·검토 제한으로 남기며 예산을 자동 확대하지 않는다.
 
-계측은 role별 호출·input/cached_input/output·HTTP·도구 응답 크기·SQL ms·지연 p50/p95·L unknown·평가 실패·보고서 검증 실패를 저장한다. 토큰 절약이 정확도 하락을 숨기지 않게 동일 주소·같은 snapshot으로 기존/신규를 비교한다. 금액 환산은 실제 model별 요금을 설정한 뒤 별도로 하며 이번 문서에서 가격을 가정하지 않는다.
+계측은 role별 호출·input/cached_input/output·HTTP·도구 응답 크기·SQL ms·지연 p50/p95·L unknown·평가 실패·보고서 검증 실패를 저장한다. 토큰 절약이 정확도 하락을 숨기지 않게 동일 주소·같은 snapshot의 목업·고정 자료에서 검증하며 전환 전 확보한 시험 지표와 비교한다. 옛 실행 경로를 운영에 남기지 않는다. 금액 환산은 실제 model별 요금을 설정한 뒤 별도로 하며 이번 문서에서 가격을 가정하지 않는다.
 
-## 11. 1차 구현 계획 — 4단계용 PR1~PR6
+## 11. 1차 구현 계획 — PR1~PR7
 
-| PR | 1차 범위 | 목업·고정 자료 검증 |
+구현 PR은 **feat/agentic-decision**을 base로 순서대로 리뷰·병합한다. PR7 전환까지 통과한 뒤 이 브랜치를 develop에 한 번에 병합한다. 중간 기능을 develop의 모드 스위치로 노출하지 않는다. 이번 작업에서는 브랜치를 생성하거나 PR을 열지 않는다.
+
+| PR | 범위 | 목업·고정 자료 검증 |
 | --- | --- | --- |
-| PR1 계약 | schemas v2·도구 contract v1·권한·결과·질문 재개·L 대상 상위10+추가2 | 추가 필드·cross-request 거절, 코드 순위 선정·추가 사유·대상 밖 판단 미검토, v1 golden GET |
-| PR2 원문 저장 | 요청당 snapshot 1개·raw capture·CSV file 원천·조회 뷰·계보·보존 마이그레이션. 기초 재수집·부모 체인 없음 | 제외 업종 원문 보존, 중복/누락, 같은 snapshot 추가 관측 append-only·cutoff, DB 실패 전파·기존 DB 유지 |
-| PR3 facts·코드90 | v0.8 순수 엔진·registry·scores·기준선/프로필 버전 | L unknown·C1 sqrt·n.a. 분모·90/10·G 금지·계보. 현재8곳9/1/377/21을 대표 fixture로 재현 |
-| PR4 읽기 도구 | score/facts/raw SQL·자동 등록·지도/규제 wrapper. **mode=ro + SQLite authorizer + 행/시간 상한**, 1차 단일 SELECT | 쓰기·DDL·PRAGMA·ATTACH·직접 table/cross-request·WITH/CTE 거절, 50행/2초, 집계 citable=false, 지도/규제 unknown |
-| PR5 decision·보조 | LangGraph 도구 루프·상위10+추가2의 L·초안/최종·예산·질문 재개·ADVISOR 역할 설정 | 묶음 L·대상 범위 초과/추가 근거 누락 거절·반복 금지·자문 실패에도 단독 채점·실제 모델/계열 기록·예산 재개 |
-| PR6 평가·보고서·GET v2 | 4명 read 권한·review·반영·fact renderer·final·opt-in GET v2 | 일부/전체 평가 실패는 평가 미완료 표시, L 중복/코드점수 변경 거절, 수용/일부/기각, 숫자 슬롯, v1 GET 유지 |
+| PR1 계약 | schemas.py 교체안 팀 합의 + contracts.py + API_CONTRACT 갱신. 결과·질문·stage·fact 전용 경계 | 새 JSON fixtures·직렬화/검증, cross-request 거절, 90/10·구간·배지·Top 5·fact 슬롯. AnalysisTask/AgentAnalysis 불변 확인 |
+| PR2 원문 저장 | 요청당 snapshot 1개·raw capture·CSV file 원천·조회 뷰·계보·새 DB 스키마 | 제외 업종 원문 보존·중복/누락·append-only/cutoff·DB 실패 전파. 옛 DB 변환 코드 없음 |
+| PR3 facts·코드90 | v0.8 순수 엔진·registry·scores·기준선/프로필 버전 | L unknown·C1 sqrt·n.a. 분모·90/10·G 금지·계보. 기존 8곳 시험 결과를 익명 고정 fixture로 재현 |
+| PR4 읽기 도구 | score/facts/raw SQL 자동 등록·지도/규제 wrapper·지도 숨은 LLM 제거. mode=ro+authorizer+행/시간 상한 | 쓰기·DDL·PRAGMA·ATTACH·직접 table/cross-request·WITH 거절, 50행/2초·집계 uncitable. category_match/name_match/unknown·거리, 지도 모델 호출 0회·규제 출력 불변 |
+| PR5 decision 루프·보조 | 고정 prompt·도구 루프·상위10+추가2 L·초안/최종·예산·새 질문 재개·ADVISOR 설정 | 범위·새 근거·중복 채점 거절·반복 금지·자문 실패에도 단독 채점·실제 모델/계열·예산 재개. 분석/digest context 삽입 없음 |
+| PR6 평가자·보고서·GET | 항상 4명 read 검토·review 반영·fact renderer·final·새 GET·stage 연결 | 4명 호출·일부/전체 실패 표시·L 중복/코드 변경 거절·수용/일부/기각·숫자 슬롯·초안 상태·새 질문 대기/재개. 새 응답 계약만 제공 |
+| PR7 전환 | 옛 모드·specialists·브리핑·행동 JSON·legacy 근거/renderer/reader 삭제, 환경변수·캐시·테스트 정리, DB 스키마 버전 검사·초기화 안내, .env.example·README·프론트 연결 | 구 경로/import/설정 참조 0건, 옛 DB는 명확한 오류·초기화 안내/자동변환 없음, 새 DB 시작·질문 재개·MOCK_MODE 전체 흐름. #38 화면·실제 stage 소비·프론트 검사 통과 |
 
-1차에서는 기존 DB reader·기존 신규 실행 경로·프론트를 삭제하지 않는다. 운영으로 이관한 채점은 scripts가 같은 엔진을 import하되 시험 CLI는 유지한다. decision의 실제 프롬프트는 구조 구현 계약/도구 뒤 로드맵5단계, 실제 평가자 페르소나는 로드맵6단계에서 작성한다. PR6은 런타임·주입 목업·GET 계약 범위다.
+운영 채점 엔진을 scripts에서 import하되 시험 CLI는 유지한다. 실제 decision 프롬프트는 도구 구현 후 로드맵5단계, 평가자 페르소나는 로드맵6단계에서 작성한다. PR7 완료 검증에는 해당 프롬프트·페르소나와 비용 상한을 적용한 단일 흐름 목업 검증이 포함된다. 통합 전환 전 저장 결과는 버리고 새 DB로 시작한다.
 
 ### 나중 작업 — 2차
 
 | 항목 | 범위·선행 조건 |
 | --- | --- |
 | SQL AST·CTE | 범용 AST·승인 뷰 이름 가림 검사 후 CTE 허용 검토. 1차 authorizer를 제거하는 대체가 아님 |
-| 재수집·부모 snapshot | 동일 요청의 기초 자료 재수집·부모/자식 체인·채택 snapshot 선택·동일 조건 재계산 |
-| PR7 진행 이벤트 v2·프론트 | 9절 stage·실제 폴링·질문/재개·배지/구간/L 미검토 UI·v1/v2 adapter |
-| PR8 기존 경로 정리 | 신규 경로 실테스트 후 브리핑·전문가 되묻기·거대 context 신규 실행 제거. 과거 이력 reader 보존 |
+| 재수집·부모 snapshot | 동일 요청 기초 자료 재수집·부모/자식 체인·채택 snapshot 선택·동일 조건 재계산 |
+| 진행 화면 고도화 | 단일 모드 stage·결과 연결은 PR6/PR7 필수. 이후 상세 도구 타임라인·비용 시각화 개선 |
 | 모델별 사용량 기록 | `app/llm/budget.py` 사용량 기록에 요청 모델명·응답 실제 모델명을 추가한다. 현재 모델명이 저장되지 않아 과거 실행의 사용 모델을 식별할 수 없음 |
 
-구현 PR은 ruff·format·mypy·unittest·catalog check, 프론트 PR은 format/lint/build를 검사한다. 실 API·유료 실행은 별도 승인 범위에서만 진행한다.
+기존 경로 정리는 PR7에 포함한다. 구현 PR은 ruff·format·mypy·unittest·catalog check, 프론트 변경은 format/lint/build를 검사한다. 실제 API·유료 실행은 별도 승인 범위에서만 수행한다.
 
 ## 12. 확정 결정과 남은 질문
 
@@ -342,11 +367,40 @@ GET /api/v1/analyses/{id}는 기존 envelope(status/site/result/error 등)를 �
 | 평가 실패 | 일부·전체 실패 모두 평가 미완료 표시와 함께 기계 검증된 결과 제공. 동의로 간주하지 않음 |
 | 보조 모델 | Sonnet5 시작·다른 계열 권장·실제 사용 모델/계열 기록. 변경은 환경변수. 자문 실패와 L 채점 분리 |
 | L 검토 범위 | 코드 하한 상위10+근거 있는 추가2, 대상 밖 판단 미검토. 최종 정렬/배지는 v0.8 유지 |
-| 현재 보존 | 원문·도구 기록 전부 보존, 임의 삭제 안 함 |
+| 현재 보존 | 전환 후 새 원문·도구 기록 전부 보존. 전환 전 구 DB 결과·질문 세션은 폐기 |
+| 실행·근거 | 새 구조 단일 모드·평가자 항상 실행·fact_id만 인용. 지도 검색 LLM 없음 |
+| 계약 분리 | schemas.py 팀 계약 교체, agentic/contracts.py 내부 계약. V2 접미사 없음 |
+| 구현 통합 | feat/agentic-decision 기준 중간 PR 리뷰 → PR7 통과 → develop에 한 번 병합 |
 
 | 남은 사용자 확인 | 필요 사항 |
 | --- | --- |
 | 운영 보존 기간 | 지금은 전부 보존. 운영 배포 전 원문·도구·임대인 답변 기록의 보존/삭제 정책 결정 |
-| Sonnet 연결 접근권한 | 현재 공통 ELICE 연결은 terra 모델만 허용. Sonnet용 ADVISOR_LLM_BASE_URL/API_KEY를 안전하게 설정한 뒤 별도 승인된 호환 확인 필요. 채팅에 키를 보내지 않음 |
+| Sonnet 연결 확인 | 최근 기본 ELICE 호출은 성공했으나 ADVISOR 모델·키 미설정으로 Sonnet은 미확인. 안전한 역할 설정 후 별도 승인 범위에서 확인. 키를 채팅에 보내지 않음 |
 
-schemas/API 계약은 위 제품 결정과 별도로 팀 PR 합의 대상이다. 1차 SQL은 AST를 미루는 대신 CTE까지 허용하지 않는 보수적 범위이며, 확장 전 안전 검사를 추가한다.
+schemas.py 공통 계약 교체 부분은 PR1 팀 합의 대상이며 API_CONTRACT에는 합의된 응답·질문·stage를 반영한다. 1차 SQL은 AST를 미루는 대신 CTE까지 허용하지 않는 보수적 범위이며, 확장 전 안전 검사를 추가한다.
+
+
+## 13. 팀 공지 문안
+
+### 프론트 담당
+
+- 구조 구현 PR은 feat/agentic-decision에 모으고 PR7 완료 후 develop에 한 번에 병합합니다.
+- PR1에서 새 DecisionResult/API 계약을 공유하고 PR6에서 목업 GET을 제공합니다.
+- develop 리포트 화면(#38)을 코드 ○/90 + L ○/10·점수 구간·배지·Top 5·fact 슬롯에 맞춰 변경해야 합니다.
+- 판단 미검토·평가 미완료·새 질문 재개와 실제 진행 stage를 연결하고, PR7 전환 전 프론트 검사를 통과합니다.
+- 옛 결과/질문 DB는 초기화하며 구 응답 변환 화면은 만들지 않습니다.
+
+### 규제 담당
+
+- education_zone.py의 조회 코드·출력은 그대로 재사용합니다.
+- bf24caf에서 decision 입력에 주입하던 규제 자료는 check_regulation 읽기 도구로 연결합니다.
+- 폴리곤의 입력 좌표 포함·조회 오류 상태를 유지하고, fact_id로 근거를 등록해 판정관/평가자가 확인합니다.
+- 지도·규제 조회 결과의 재해석으로 확정 규제 금지를 상쇄하지 않으며 규제 코드 변경은 이번 전환 범위에 없습니다.
+
+## 14. 변경 이력
+
+| 버전 | 내용 |
+| --- | --- |
+| v0.1 | 원문/계산 분리·fact_id·SQL·코드90/L10·도구·평가자 기본 설계 |
+| v0.2 | L 상위10+추가2·자문 실패와 채점 분리·단일 snapshot·초기 예산·보조 모델 설정, 1차/2차 범위 구분 |
+| v0.3 (2026-10-14) | 단일 모드·항상 평가·fact 전용 근거·구 DB 초기화 결정. 지도 LLM/캐시 제거, schemas와 내부 contracts 분리, PR7 전환·통합 브랜치·팀 공지 추가 |
