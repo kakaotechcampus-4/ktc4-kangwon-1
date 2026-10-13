@@ -435,14 +435,16 @@ PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schema
 | 규제 | 기존 출력만 복사하며 조회 코드는 유지. geometry 없는 구역은 좌표 포함 미확인으로 해당 제한 업종 G unknown. 조회 영역에 구역이 없으면 해당 없음 |
 | 재현 | verify_rubric_reproduction.py는 8개 표본·기준 JSON을 읽기만 함. 408/408 항목 상태/등급/점수·배지·Top 5 일치, 합계 추천9/조건부1/보류377/비추천21 |
 
-#### PR5에 대한 진단 제안 — 미결정, 호출 코드 변경 없음
+#### PR5 호출 방식 확정 — 앱 경로 재확인
 
-2026-10-14 직접 SDK 진단 3회: a/b는 HTTP400 unsupported_parameter(max_tokens 미지원), a 정정(max_completion_tokens=200)은 HTTP400 invalid_request_error(코드400)으로 'gpt-6-luna에서 reasoning_effort와 function tools의 Chat Completions 조합 미지원'을 반환했다. SDK 재시도·도구 실행은 없었다. 성공 응답이 없어 스트리밍 확인은 수행하지 않았다. ADVISOR 모델 미설정으로 Sonnet은 미실행이다.
+- Luna는 앱 경로의 `max_completion_tokens`·`reasoning_effort=none`에서 function calling을 지원한다.
+- HTTP 200, get_scorecard 입력 검증 통과, 스트리밍 인자 조각 28개, 입력 469·출력 41·합계 510 토큰을 확인했다.
+- reasoning을 켜는 조합은 tools와 함께 400으로 거절됐다. decision·평가자는 reasoning_effort=none을 사용한다.
+- PR5는 기존 Chat Completions 도구 경로를 사용한다. Responses 전환은 7단계 실테스트에서 판단 품질이 부족할 때만 검토한다.
 
-| 대안 | PR5 영향·확인 필요 |
-| --- | --- |
-| Chat Completions + reasoning_effort='none' | 기존 도구 계약을 유지하는 최소 변경 후보. 서버가 안내한 조합이나 아직 실호출 미검증. L 해석 품질은 별도 평가 필요 |
-| Responses API | reasoning을 유지하는 후보. 도구 정의 adapter·이벤트/인자 조립·usage·예산 연결을 설계/검증해야 함 |
-| JSON 행동 대체 | 서버가 도구 자체를 미지원한다고 증명된 경우의 후순위. 이번 진단으로 도구 미지원은 확인되지 않았으므로 채택하지 않음 |
+#### PR4 구현 순서
 
-선택 전 PR5 호출 경로·설정·.env는 바꾸지 않는다.
+1. SQL 격리·직접 필드 fact 등록 테스트 → 읽기 전용 SQL 실행기(승인 뷰·authorizer·50행·2초).
+2. 저장된 점수/fact 읽기·actor 권한·호출 상한 테스트 → 현재 스냅샷 도구 실행기.
+3. 지도 결정론·모델 생성 금지·규제 공유 테스트 → 지도 규칙과 읽기 도구, 지도/규제 뷰.
+4. 기존 지도 LLM·프롬프트·캐시 설정 삭제와 호출부/테스트 갱신 → 전체 검사 후 문서/PR4 분리 커밋.
