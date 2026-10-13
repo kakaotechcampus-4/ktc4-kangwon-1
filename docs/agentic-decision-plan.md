@@ -272,7 +272,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 
 ## 8. schemas.py 변경안 — 팀 계약 교체
 
-**결정:** 공통 계약은 schemas.py, 에이전트 내부 도구·판단 계약은 app/agents/agentic/contracts.py(신규)에 둔다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 변경 부분만 AGENTS.md 1에 따라 PR1에서 팀 합의한다. 이번에는 문서만 수정한다.
+**결정:** 최종 배치는 공통 계약 schemas.py·내부 계약 app/agents/agentic/contracts.py다. PR1~PR6에는 모든 새 계약을 contracts.py에 최종 이름 그대로 두어 기존 실행을 유지한다. PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 schemas.py로 옮겨 기존 계약을 교체한다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 교체안의 팀 승인은 완료됐으며 실제 파일 변경은 PR7에서 적용한다. 이번에는 문서만 수정한다.
 
 | schemas.py 모델 | 변경안·이유 |
 | --- | --- |
@@ -337,13 +337,13 @@ PR1에서 API_CONTRACT의 결과·질문·stage를 갱신하고 PR6에서 런타
 
 | PR | 범위 | 목업·고정 자료 검증 |
 | --- | --- | --- |
-| PR1 계약 | schemas.py 교체안 팀 합의 + contracts.py + API_CONTRACT 갱신. 결과·질문·stage·fact 전용 경계 | 새 JSON fixtures·직렬화/검증, cross-request 거절, 90/10·구간·배지·Top 5·fact 슬롯. AnalysisTask/AgentAnalysis 불변 확인 |
+| PR1 계약 | 승인된 교체안의 모든 새 모델을 contracts.py에 최종 이름으로 정의 + API_CONTRACT에 PR7 이후 계약 추가. schemas.py 변경·실행 연결 없음 | 새 JSON fixtures·직렬화/검증, cross-request 거절, 90/10·구간·배지·Top 5·fact 슬롯. AnalysisTask/AgentAnalysis 불변 확인 |
 | PR2 원문 저장 | 요청당 snapshot 1개·raw capture·CSV file 원천·조회 뷰·계보·새 DB 스키마 | 제외 업종 원문 보존·중복/누락·append-only/cutoff·DB 실패 전파. 옛 DB 변환 코드 없음 |
 | PR3 facts·코드90 | v0.8 순수 엔진·registry·scores·기준선/프로필 버전 | L unknown·C1 sqrt·n.a. 분모·90/10·G 금지·계보. 기존 8곳 시험 결과를 익명 고정 fixture로 재현 |
 | PR4 읽기 도구 | score/facts/raw SQL 자동 등록·지도/규제 wrapper·지도 숨은 LLM 제거. mode=ro+authorizer+행/시간 상한 | 쓰기·DDL·PRAGMA·ATTACH·직접 table/cross-request·WITH 거절, 50행/2초·집계 uncitable. category_match/name_match/unknown·거리, 지도 모델 호출 0회·규제 출력 불변 |
 | PR5 decision 루프·보조 | 고정 prompt·도구 루프·상위10+추가2 L·초안/최종·예산·새 질문 재개·ADVISOR 설정 | 범위·새 근거·중복 채점 거절·반복 금지·자문 실패에도 단독 채점·실제 모델/계열·예산 재개. 분석/digest context 삽입 없음 |
 | PR6 평가자·보고서·GET | 항상 4명 read 검토·review 반영·fact renderer·final·새 GET·stage 연결 | 4명 호출·일부/전체 실패 표시·L 중복/코드 변경 거절·수용/일부/기각·숫자 슬롯·초안 상태·새 질문 대기/재개. 새 응답 계약만 제공 |
-| PR7 전환 | 옛 모드·specialists·브리핑·행동 JSON·legacy 근거/renderer/reader 삭제, 환경변수·캐시·테스트 정리, DB 스키마 버전 검사·초기화 안내, .env.example·README·프론트 연결 | 구 경로/import/설정 참조 0건, 옛 DB는 명확한 오류·초기화 안내/자동변환 없음, 새 DB 시작·질문 재개·MOCK_MODE 전체 흐름. #38 화면·실제 stage 소비·프론트 검사 통과 |
+| PR7 전환 | DecisionRequest/DecisionResult/Evidence/QuestionSnapshot을 contracts.py에서 schemas.py로 옮겨 기존 것을 교체, 옛 모드·specialists·브리핑·행동 JSON·legacy 근거/renderer/reader 삭제, 환경변수·캐시·테스트 정리, DB 스키마 버전 검사·초기화 안내, .env.example·README·프론트 연결 | 구 경로/import/설정 참조 0건, 옛 DB는 명확한 오류·초기화 안내/자동변환 없음, 새 DB 시작·질문 재개·MOCK_MODE 전체 흐름. #38 화면·실제 stage 소비·프론트 검사 통과 |
 
 운영 채점 엔진을 scripts에서 import하되 시험 CLI는 유지한다. 실제 decision 프롬프트는 도구 구현 후 로드맵5단계, 평가자 페르소나는 로드맵6단계에서 작성한다. PR7 완료 검증에는 해당 프롬프트·페르소나와 비용 상한을 적용한 단일 흐름 목업 검증이 포함된다. 통합 전환 전 저장 결과는 버리고 새 DB로 시작한다.
 
@@ -377,7 +377,7 @@ PR1에서 API_CONTRACT의 결과·질문·stage를 갱신하고 PR6에서 런타
 | 운영 보존 기간 | 지금은 전부 보존. 운영 배포 전 원문·도구·임대인 답변 기록의 보존/삭제 정책 결정 |
 | Sonnet 연결 확인 | 최근 기본 ELICE 호출은 성공했으나 ADVISOR 모델·키 미설정으로 Sonnet은 미확인. 안전한 역할 설정 후 별도 승인 범위에서 확인. 키를 채팅에 보내지 않음 |
 
-schemas.py 공통 계약 교체 부분은 PR1 팀 합의 대상이며 API_CONTRACT에는 합의된 응답·질문·stage를 반영한다. 1차 SQL은 AST를 미루는 대신 CTE까지 허용하지 않는 보수적 범위이며, 확장 전 안전 검사를 추가한다.
+schemas.py 공통 계약 교체안은 팀 승인 완료, 실제 교체는 PR7이며 API_CONTRACT에는 합의된 응답·질문·stage를 반영한다. 1차 SQL은 AST를 미루는 대신 CTE까지 허용하지 않는 보수적 범위이며, 확장 전 안전 검사를 추가한다.
 
 
 ## 13. 팀 공지 문안
@@ -404,3 +404,5 @@ schemas.py 공통 계약 교체 부분은 PR1 팀 합의 대상이며 API_CONTRA
 | v0.1 | 원문/계산 분리·fact_id·SQL·코드90/L10·도구·평가자 기본 설계 |
 | v0.2 | L 상위10+추가2·자문 실패와 채점 분리·단일 snapshot·초기 예산·보조 모델 설정, 1차/2차 범위 구분 |
 | v0.3 (2026-10-14) | 단일 모드·항상 평가·fact 전용 근거·구 DB 초기화 결정. 지도 LLM/캐시 제거, schemas와 내부 contracts 분리, PR7 전환·통합 브랜치·팀 공지 추가 |
+
+PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schemas.py를 수정하지 않는다. PR7 이동 시 내부 계약 의존/import도 함께 정리하며 기존 실행 경로를 제거한다.

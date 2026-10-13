@@ -440,3 +440,180 @@ POST 주소 분석·답변·최종판단 재시도 경로와 기존 응답 형�
 기존 DB는 명시적 초기화 때 마이그레이션합니다. 기존 요청은 단일판정 모드,
 기존 지도 행은 1차로 보존합니다. 보완은 원본 이력과 대조 가능한 차수만 복원합니다.
 호출 예산 초과는 `LLM_BUDGET_EXHAUSTED`로 실패하며 유효하지 않은 판정을 성공으로 만들지 않습니다.
+
+
+## 새 결과 형태(PR7 전환 후)
+
+현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agents/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
+
+전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
+
+```json
+{
+  "schema_version": "2.0",
+  "rubric_version": "v0.8",
+  "tool_contract_version": "1",
+  "request_id": "request-demo",
+  "run_id": "run-demo",
+  "report_id": "report-demo",
+  "snapshot_id": "snapshot-demo",
+  "score_snapshot_id": "scores-demo",
+  "summary_segments": [
+    {
+      "type": "text",
+      "text": "검토 후보와 확인 조건을 함께 제시합니다."
+    }
+  ],
+  "top5": [
+    {
+      "industry_code": "I201",
+      "industry_name": "한식 음식점업",
+      "code_points": 50.0,
+      "L_points": null,
+      "L_status": "unknown",
+      "A": 65.0,
+      "B": 50.0,
+      "H": 60.0,
+      "lower_ratio": 0.7692307692307693,
+      "upper_ratio": 0.9230769230769231,
+      "coverage": 0.8461538461538461,
+      "demand_coverage": 1.0,
+      "competition_coverage": 1.0,
+      "G": "해당 없음",
+      "badge": "추천",
+      "confirmation_conditions": [
+        "판단 미확인",
+        "건축물 용도 확인 필요"
+      ],
+      "reasons_segments": [
+        {
+          "type": "text",
+          "text": "주변 동종 점포 밀도는 "
+        },
+        {
+          "type": "fact",
+          "fact_id": "f_12345678-1234-4234-8234-123456789abc",
+          "format": "rate"
+        },
+        {
+          "type": "text",
+          "text": "입니다."
+        }
+      ],
+      "risks_segments": [],
+      "confirmation_conditions_segments": [
+        {
+          "type": "text",
+          "text": "건축물 용도는 별도 확인합니다."
+        }
+      ],
+      "fact_ids": [
+        "f_12345678-1234-4234-8234-123456789abc"
+      ],
+      "review_state": "unreviewed"
+    }
+  ],
+  "excluded_candidates": [],
+  "facts": [
+    {
+      "fact_id": "f_12345678-1234-4234-8234-123456789abc",
+      "source": "commercial_area",
+      "metric": "density_per_km2",
+      "value": 10.0,
+      "unit": "개/km²",
+      "period": "2026Q2",
+      "spatial_scope": {
+        "radius_m": 500
+      },
+      "industry_code": "I201",
+      "status": "observed",
+      "citable": true,
+      "calc_version": "demo-1",
+      "provenance_ref": "raw-demo"
+    }
+  ],
+  "L_records": [],
+  "evaluator_reviews": [
+    {
+      "actor": "examiner",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "founder",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "customer",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "landlord_advocate",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    }
+  ],
+  "review_completeness": 0.0,
+  "review_resolutions": [],
+  "confirmation_conditions_segments": [
+    {
+      "type": "text",
+      "text": "실제 영업 전 건축물 용도를 확인해야 합니다."
+    }
+  ],
+  "limitations_segments": [
+    {
+      "type": "text",
+      "text": "평가 미완료: 이 예시는 평가자 전체 실패와 판단 미확인을 보여 주는 목업입니다."
+    }
+  ]
+}
+```
+
+| 필드 | 의미 |
+| --- | --- |
+| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 1. 모델 이름에 V2를 붙이지 않음 |
+| request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
+| top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지 제외·B 내림차순→coverage→코드 정렬, 부족하면 미충원 |
+| code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
+| A / B / H | 적용 배점(n.a. 제외·unknown 포함)·하한·상한 |
+| lower_ratio / upper_ratio / coverage | B/A·H/A·observed 배점/A. A=0이면 null. D/C 묶음 coverage는 별도 제공 |
+| G / badge | 규제 금지/조건부/해당 없음/unknown, 추천/조건부/보류/비추천. 규제 금지는 점수로 상쇄 불가 |
+| *_segments / facts | text 또는 fact_id 슬롯. 숫자는 facts 레지스트리 값·단위로 렌더링. `{i}`·agent/path 인용 없음 |
+| L_records / review_state | 대상 선정·새 근거·질문·도구·자문 반영 기록. 대상 밖은 판단 미검토, 대상 안 자료 부족은 판단 미확인 |
+| evaluator_reviews / review_completeness | 항상 4명 실행. completed 수/4, 실패는 동의로 간주하지 않음 |
+| review_resolutions | 지적별 수용·일부·기각과 근거/이유 |
+| confirmation_conditions_segments / limitations_segments | 영업 전 확인 조건·시점/공간/예산/평가 한계. 건축물 용도는 확인 조건 |
+
+### 진행 이벤트 stage 변경
+
+| 단계 | stage·event | detail |
+| --- | --- | --- |
+| 수집 | 기존 분석 agent stages + raw_capture completed | source·snapshot_id·partial |
+| 계산·채점 | metrics / scorecard started·completed | rubric_version·industry_count |
+| 판정 | decision started·completed / decision.tool completed | phase(draft/final)·tool·status |
+| 선택적 자문 | advisor started·completed | status. 기존 consult.*·브리핑 stage 삭제 |
+| 필수 평가 | evaluate.examiner / founder / customer / landlord_advocate started·completed | status·issues_count |
+| 질문·종료 | questions waiting / run completed·failed·draft_available | 새 질문 snapshot 재개·초안/최종 구분 |
+
+seq 폴링은 유지합니다. stage 연결은 PR6, develop의 리포트 화면(#38) 및 진행 화면 소비는 PR7 통과 조건입니다. 키·SQL·원문·fact 값은 이벤트에 넣지 않습니다.
+
+### 도구 function 정의의 내보내기
+
+`tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 9개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
+
+get_facts/map_search의 배타 조건·상세 limit·L/평가 정합성은 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. 이번 PR에서는 API·LLM 호출을 하지 않습니다. SQL 내용/권한/시간·fact 소유/숫자 슬롯·점수 재계산·정렬의 실제 검증은 PR4~PR6 범위입니다.
