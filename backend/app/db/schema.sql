@@ -254,3 +254,61 @@ FROM raw_rows r JOIN raw_responses p USING(response_id)
 WHERE p.source='worker_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 
 CREATE INDEX IF NOT EXISTS raw_row_natural_key ON raw_rows(natural_key);
+
+
+-- PR3 사실·코드 점수는 불변 레코드로 보존합니다.
+CREATE TABLE IF NOT EXISTS facts (
+    fact_id TEXT PRIMARY KEY NOT NULL,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    industry_code TEXT,
+    source TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    value_json TEXT NOT NULL CHECK(json_valid(value_json)),
+    unit TEXT NOT NULL,
+    period TEXT NOT NULL,
+    spatial_scope_json TEXT NOT NULL CHECK(json_valid(spatial_scope_json)),
+    comparison_json TEXT NOT NULL CHECK(json_valid(comparison_json)),
+    status TEXT NOT NULL CHECK(status IN ('observed','unknown','n.a.')),
+    citable INTEGER NOT NULL CHECK(citable IN (0,1)),
+    calc_version TEXT NOT NULL,
+    lineage_hash TEXT NOT NULL,
+    identity_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    CHECK((status='observed' AND json_type(value_json) != 'null') OR (status!='observed' AND json_type(value_json)='null' AND citable=0)),
+    UNIQUE(snapshot_id,identity_hash),
+    FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
+);
+CREATE TABLE IF NOT EXISTS fact_sources (
+    fact_id TEXT NOT NULL REFERENCES facts(fact_id),
+    raw_row_id TEXT NOT NULL REFERENCES raw_rows(raw_row_id),
+    field_pointer TEXT NOT NULL,
+    PRIMARY KEY(fact_id,raw_row_id,field_pointer)
+);
+CREATE TABLE IF NOT EXISTS score_snapshots (
+    score_snapshot_id TEXT PRIMARY KEY NOT NULL,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    run_id TEXT NOT NULL,
+    rubric_version TEXT NOT NULL,
+    calc_version TEXT NOT NULL,
+    summary_json TEXT NOT NULL CHECK(json_valid(summary_json)),
+    top5_json TEXT NOT NULL CHECK(json_valid(top5_json)),
+    L_review_state TEXT NOT NULL DEFAULT 'unreviewed',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
+);
+CREATE TABLE IF NOT EXISTS scores (
+    score_snapshot_id TEXT NOT NULL REFERENCES score_snapshots(score_snapshot_id),
+    industry_code TEXT NOT NULL,
+    item TEXT NOT NULL,
+    weight REAL NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('observed','unknown','n.a.')),
+    grade INTEGER CHECK(grade BETWEEN 0 AND 4),
+    points REAL,
+    fact_ids_json TEXT NOT NULL CHECK(json_valid(fact_ids_json)),
+    PRIMARY KEY(score_snapshot_id,industry_code,item),
+    CHECK((status='observed' AND grade IS NOT NULL AND points IS NOT NULL) OR (status!='observed' AND grade IS NULL AND points IS NULL))
+);
+CREATE TRIGGER IF NOT EXISTS immutable_facts BEFORE UPDATE ON facts
+BEGIN SELECT RAISE(ABORT,'facts are immutable'); END;

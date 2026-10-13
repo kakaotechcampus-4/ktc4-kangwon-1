@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.agents.agentic.registry import persist_snapshot_scores
 from app.agents.orchestration import workflow
 from app.agents.orchestration.deps import GraphDeps
 from app.agents.orchestration.state import GraphState, GraphUpdate
@@ -53,4 +54,5 @@ async def run_analyses(state: GraphState, *, deps: GraphDeps) -> GraphUpdate:
         on_analysis_completed=completed,
         agent_timeout=deps.agent_timeout,
     )
+    await persist_snapshot_scores(state["task"], state.get("education_zones"))
     return {"analyses": analyses}

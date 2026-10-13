@@ -419,3 +419,30 @@ PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schema
 - 2026-10-14 승인 확인: 기본 ELICE function calling 1회는 LLM_REQUEST_ERROR·tool 인자 조각0·usage 없음. ADVISOR 모델·키 미설정으로 Sonnet 호출은 생략했다. 도구 실행·추가 재호출은 없었으며 PR5 연결 전 호환성은 미확인이다.
 
 수집 완료 시 스냅샷을 먼저 마무리하며, 이후 decision 실패나 새 수집 없는 질문 재개가 이미 완전한 원문을 partial로 바꾸지는 않는다.
+
+
+### PR3 구현·검증 메모
+
+| 항목 | 구현 |
+| --- | --- |
+| 원문 캐시 | raw-v2 파일·version=2. API 페이지 envelope를 축소 없이 저장·복사하고 cache_hit/original_collected_at 기록. 옛 캐시는 읽지 않음 |
+| 단일 채점 엔진 | app/agents/agentic/scoring.py가 rubric_dryrun.py의 v0.8 계산·판정을 소유. CLI는 import만 하며 민감도 시험을 유지 |
+| 원문 formatter | 저장된 상권·유동·상주/직장·개폐업 행에서 기존 map_stores/build_middle_rows/_aggregate/_benchmark/_trend/resident_block/worker_block/_aggregate_rows 호출. 외부 호출 경로 없음 |
+| 사실 저장 | facts와 fact_sources. f_UUID, 값·단위·기간·비교 기준·원문 행/응답 참조·계산/입력 버전. 동일 값/계보는 ID 재사용, 새 값은 새 ID. UPDATE 거절 |
+| 코드 점수 | score_snapshots/scores. 항목·배점·등급·점수·상태·fact_ids와 A/B/H·coverage·배지·Top 5 저장. L unknown·unreviewed, 적용 배점에는 포함 |
+| 연결 | 분석 3종 수집 후 사실·점수 저장. 기존 decision 데이터/행동 JSON은 바꾸지 않으며 PR7에서 교체 |
+| 실패·부분 수집 | 저장/채점 실패는 서비스 failed로 전파. 행·페이지가 불완전한 원천의 문항은 unknown, 승인 미적용은 n.a.로 유지 |
+| 규제 | 기존 출력만 복사하며 조회 코드는 유지. geometry 없는 구역은 좌표 포함 미확인으로 해당 제한 업종 G unknown. 조회 영역에 구역이 없으면 해당 없음 |
+| 재현 | verify_rubric_reproduction.py는 8개 표본·기준 JSON을 읽기만 함. 408/408 항목 상태/등급/점수·배지·Top 5 일치, 합계 추천9/조건부1/보류377/비추천21 |
+
+#### PR5에 대한 진단 제안 — 미결정, 호출 코드 변경 없음
+
+2026-10-14 직접 SDK 진단 3회: a/b는 HTTP400 unsupported_parameter(max_tokens 미지원), a 정정(max_completion_tokens=200)은 HTTP400 invalid_request_error(코드400)으로 'gpt-6-luna에서 reasoning_effort와 function tools의 Chat Completions 조합 미지원'을 반환했다. SDK 재시도·도구 실행은 없었다. 성공 응답이 없어 스트리밍 확인은 수행하지 않았다. ADVISOR 모델 미설정으로 Sonnet은 미실행이다.
+
+| 대안 | PR5 영향·확인 필요 |
+| --- | --- |
+| Chat Completions + reasoning_effort='none' | 기존 도구 계약을 유지하는 최소 변경 후보. 서버가 안내한 조합이나 아직 실호출 미검증. L 해석 품질은 별도 평가 필요 |
+| Responses API | reasoning을 유지하는 후보. 도구 정의 adapter·이벤트/인자 조립·usage·예산 연결을 설계/검증해야 함 |
+| JSON 행동 대체 | 서버가 도구 자체를 미지원한다고 증명된 경우의 후순위. 이번 진단으로 도구 미지원은 확인되지 않았으므로 채택하지 않음 |
+
+선택 전 PR5 호출 경로·설정·.env는 바꾸지 않는다.
