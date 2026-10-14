@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from app.canonical import file_sha256
 from app.clock import utc_now_iso
+from app.db.connection import SQLITE_BUSY_TIMEOUT_MS
 from app.industries.catalog import INDUSTRIES
 from app.seoul import previous_quarter
 
@@ -76,7 +77,8 @@ class LocalDataDB:
 
     @contextmanager
     def connection(self):
-        con = sqlite3.connect(self.path, timeout=30)
+        con = sqlite3.connect(self.path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
+        con.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
         con.execute("PRAGMA foreign_keys=ON")
         con.execute("PRAGMA journal_mode=WAL")
         con.row_factory = sqlite3.Row

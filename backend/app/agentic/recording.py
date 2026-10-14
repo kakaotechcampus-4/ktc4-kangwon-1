@@ -5,6 +5,7 @@ import json
 import re
 from copy import deepcopy
 from pathlib import Path
+from typing import get_args
 
 from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
@@ -14,6 +15,8 @@ from app.concurrency import run_in_thread
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.storage.scrub import env_secrets, scrub
+
+from .contracts import Actor
 
 _IDENTIFIER = re.compile(
     r"^(?P<prefix>(?:request|snapshot|fact|tc|consult|score|question|report|map|f|s|sc|ss)_)?"
@@ -166,9 +169,9 @@ class ReplayGenerate:
             raise ValueError("녹화된 모델 호출을 모두 재생했습니다.")
         entry = self.entries[self.position]
         self.position += 1
-        if entry.get("role") not in {"decision", "advisor"}:
+        if entry.get("role") not in get_args(Actor):
             raise ValueError("녹화 호출의 역할이 올바르지 않습니다.")
-        if entry["role"] != ("decision" if definitions is not None else "advisor"):
+        if (entry["role"] == "advisor") != (definitions is None):
             raise ValueError("녹화 호출과 재생 역할의 순서가 다릅니다.")
         _map_ids(entry["messages"], messages, self.mapping)
         receipt.update(model=entry.get("model"), usage=deepcopy(entry.get("usage")))
@@ -179,4 +182,4 @@ class ReplayGenerate:
         if entry.get("error"):
             _raise_recorded(entry["error"])
         value = _remap(entry["value"], self.mapping)
-        return ChatCompletionMessage.model_validate(value) if entry["role"] == "decision" else value
+        return ChatCompletionMessage.model_validate(value) if entry["role"] != "advisor" else value

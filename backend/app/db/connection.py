@@ -12,6 +12,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 # ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
 _INITIALIZE_LOCK = Lock()
 SCHEMA_VERSION = 5
+SQLITE_BUSY_TIMEOUT_MS = 30000
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:
@@ -25,12 +26,15 @@ def resolve_path(db_path: str | Path | None = None) -> Path:
 @contextmanager
 def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     """초기화된 파일만 열고 트랜잭션 종료 후 연결을 닫습니다."""
-    connection = sqlite3.connect(resolve_path(db_path).as_uri() + "?mode=rw", uri=True, timeout=30)
+    connection = sqlite3.connect(
+        resolve_path(db_path).as_uri() + "?mode=rw", uri=True, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000
+    )
     try:
         connection.row_factory = sqlite3.Row
         connection.create_function("raw_request_id", 0, lambda: None)
         connection.create_function("raw_snapshot_id", 0, lambda: None)
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
         with connection:
             yield connection
     finally:
@@ -59,7 +63,7 @@ def initialize(db_path: str | Path | None = None) -> Path:
 
 def _initialize(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=5)
+    connection = sqlite3.connect(path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
     try:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         populated = connection.execute(
@@ -72,6 +76,7 @@ def _initialize(path: Path) -> Path:
                 "LOCAL_DATA_DB_PATH의 자료 DB는 삭제하지 마세요."
             )
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
         connection.execute("PRAGMA journal_mode = WAL")
         schema = files("app.db").joinpath("schema.sql").read_text(encoding="utf-8")
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

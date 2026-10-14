@@ -15,7 +15,7 @@ from app.agentic.contracts import MapResult, RegulationResult, ToolReply  # noqa
 from app.agentic.recording import ReplayGenerate  # noqa: E402
 from app.agentic.runtime import DecisionLoop  # noqa: E402
 from app.config import load_environment  # noqa: E402
-from app.db.connection import connect  # noqa: E402
+from app.db.connection import SQLITE_BUSY_TIMEOUT_MS, connect  # noqa: E402
 from app.local_data.provenance import validate_snapshot  # noqa: E402
 from app.schemas import AnalysisTask, Site  # noqa: E402
 from app.storage.raw import CaptureScope  # noqa: E402
@@ -26,7 +26,7 @@ def prepare(source, output, request_id):
         raise ValueError("원본과 다른 새 재생 DB 경로를 지정하세요.")
     output.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True) as original:
-        with sqlite3.connect(output) as target:
+        with sqlite3.connect(output, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000) as target:
             original.backup(target)
     with connect(output) as db:
         rows = db.execute("SELECT request_id,site_json FROM analysis_requests").fetchall()

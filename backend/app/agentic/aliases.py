@@ -1,6 +1,7 @@
 """모델 경계에서만 짧은 요청별 별칭을 사용하고 저장 식별자는 보존합니다."""
 
 import json
+import sqlite3
 from hashlib import sha256
 
 from app.db.connection import connect
@@ -24,7 +25,12 @@ def _walk(value, translate, key=None):
 
 
 def encode(scope, value):
+    references = set()
+    _walk(value, lambda fid: references.add(fid) or fid)
+    resolved = {}
     with connect(scope.path) as db:
+        # 먼저 쓰기 권한을 잡아 조회-삽입 사이의 동시 생성 경합을 막습니다.
+        db.execute("BEGIN IMMEDIATE")
 
         def alias(fid):
             existing = db.execute(
@@ -44,18 +50,32 @@ def encode(scope, value):
                 (scope.request_id, scope.snapshot_id, fid),
             ).fetchone():
                 raise ValueError("요청에 없는 fact를 별칭으로 내보낼 수 없습니다.")
-            counter = 0
-            while True:
+            for counter in range(8):
                 short = sha256(f"{fid}:{counter}".encode()).hexdigest()[:8]
-                added = db.execute(
-                    "INSERT OR IGNORE INTO fact_aliases VALUES(?,?,?)",
-                    (scope.request_id, short, fid),
-                )
-                if added.rowcount:
+                try:
+                    db.execute(
+                        "INSERT INTO fact_aliases VALUES(?,?,?)",
+                        (scope.request_id, short, fid),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    if exc.sqlite_errorcode not in {
+                        sqlite3.SQLITE_CONSTRAINT_UNIQUE,
+                        sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
+                    }:
+                        raise
+                    row = db.execute(
+                        "SELECT alias FROM fact_aliases WHERE request_id=? AND fact_id=?",
+                        (scope.request_id, fid),
+                    ).fetchone()
+                    if row:
+                        return row[0]
+                else:
                     return short
-                counter += 1
+            raise ValueError("별칭 충돌 재시도 8회 한도를 초과했습니다.")
 
-        return _walk(value, alias)
+        for fid in sorted(references):
+            resolved[fid] = alias(fid)
+    return _walk(value, resolved.__getitem__)
 
 
 def encode_messages(scope, messages):
