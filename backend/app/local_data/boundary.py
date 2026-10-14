@@ -1,31 +1,33 @@
 """서울 시도 경계의 수동 수집과 반경 포함 여부를 확인합니다."""
 
-import os
-
 from app.agents.business_lifecycle.area_resolver import (
     polygon_contains_point,
     polygon_distance_m,
 )
+from app.education_zone import VWORLD_DATA_URL, EducationZoneSettings
 from app.geo import to_epsg5181
 from app.local_data.database import DataValidationError
 
 
 async def fetch_boundary(http):
-    key = os.getenv("VWORLD_API_KEY")
-    if not key:
+    settings = EducationZoneSettings.from_env()
+    key = settings.api_key
+    if not isinstance(key, str) or not key.strip():
         raise DataValidationError("V-World 키 설정 없음")
     response = await http.get(
-        "https://api.vworld.kr/req/data",
-        headers={"Referer": os.getenv("VWORLD_REFERER", "http://localhost:8000")},
+        VWORLD_DATA_URL,
+        headers={"Referer": settings.referer.strip()},
+        timeout=settings.request_timeout_s,
         params={
             "service": "data",
             "request": "GetFeature",
             "version": "2.0",
             "data": "LT_C_ADSIDO_INFO",
-            "key": key,
-            "domain": os.getenv("VWORLD_REFERER", "http://localhost:8000"),
+            "key": key.strip(),
             "attrFilter": "ctp_kor_nm:=:서울특별시",
             "format": "json",
+            "errorFormat": "json",
+            "page": 1,
             "crs": "EPSG:4326",
             "size": 10,
             "geometry": "true",

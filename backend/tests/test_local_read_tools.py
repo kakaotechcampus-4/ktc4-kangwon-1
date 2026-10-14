@@ -5,11 +5,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
+
 from app.agents.agentic.raw_query import query_raw
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.local_data.adapter import LocalAdapter
-from app.local_data.boundary import boundary_limitations
+from app.local_data.boundary import boundary_limitations, fetch_boundary
 from app.local_data.database import LocalDataDB
 from app.local_data.provenance import save_snapshot
 from app.schemas import AnalysisTask, Site
@@ -17,6 +19,52 @@ from app.storage.raw import capture_scope
 
 
 class LocalReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_boundary_auth_matches_regulation(self):
+        def respond(request):
+            self.assertEqual(request.headers["Referer"], "http://localhost:8000")
+            self.assertEqual(request.url.params["key"], "test-key")
+            self.assertNotIn("domain", request.url.params)
+            self.assertEqual(request.url.params["errorFormat"], "json")
+            self.assertEqual(
+                str(request.url.copy_with(query=None)), "https://api.vworld.kr/req/data"
+            )
+            return httpx.Response(
+                200,
+                json={
+                    "response": {
+                        "status": "OK",
+                        "result": {
+                            "featureCollection": {
+                                "features": [
+                                    {
+                                        "properties": {"ctp_kor_nm": "서울특별시"},
+                                        "geometry": {
+                                            "type": "Polygon",
+                                            "coordinates": [
+                                                [
+                                                    [126.9, 37.4],
+                                                    [127.1, 37.4],
+                                                    [127.1, 37.6],
+                                                    [126.9, 37.4],
+                                                ]
+                                            ],
+                                        },
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                },
+            )
+
+        with patch.dict(
+            "os.environ",
+            {"VWORLD_API_KEY": " test-key ", "VWORLD_REFERER": " http://localhost:8000 "},
+        ):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+                rows = await fetch_boundary(http)
+        self.assertEqual(rows[0]["row_key"], "11")
+
     async def test_bound_views_cells_limits_and_denials(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
