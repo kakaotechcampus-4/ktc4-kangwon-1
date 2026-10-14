@@ -21,7 +21,8 @@ class DependencyBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_lower_layers_do_not_import_services_or_api(self):
-        for root in (APP / "db", APP / "agents", APP / "execution"):
+        for root in (APP / "db", APP / "agents", APP / "agentic"):
+            self.assertTrue(root.is_dir(), f"검사할 계층이 없습니다: {root.name}")
             for path in root.rglob("*.py"):
                 with self.subTest(path=path.relative_to(APP)):
                     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -41,18 +42,3 @@ class DependencyBoundaryTests(unittest.TestCase):
                             ),
                             f"{path.relative_to(APP)}:{getattr(node, 'lineno', 0)}",
                         )
-
-    def test_common_execution_rules_have_no_storage_or_http_dependency(self):
-        for path in (APP / "execution").rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                modules = (
-                    [node.module or ""]
-                    if isinstance(node, ast.ImportFrom)
-                    else [alias.name for alias in node.names]
-                    if isinstance(node, ast.Import)
-                    else []
-                )
-                self.assertFalse(
-                    any(module.split(".")[0] in {"sqlite3", "fastapi"} for module in modules)
-                )

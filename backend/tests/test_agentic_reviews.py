@@ -4,7 +4,7 @@ import asyncio
 import json
 import unittest
 
-from app.agents.agentic.contracts import SubmitDraftInput
+from app.agentic.contracts import SubmitDraftInput
 from tests import test_agentic_runtime as fixtures
 
 
@@ -14,7 +14,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
-        from app.agents.agentic.runtime import DecisionLoop
+        from app.agentic.runtime import DecisionLoop
 
         entered = set()
         ready = asyncio.Event()

@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.agents.agentic.budget import RuntimeBudget
+from app.agentic.budget import RuntimeBudget
 from app.llm.budget import BudgetExceeded
 
 
@@ -79,7 +79,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(budget.used, saved.get("used", 0))
 
     async def test_measurement_resumes_saved_counters_and_estimates(self):
-        with patch("app.agents.agentic.budget.monotonic", return_value=100):
+        with patch("app.agentic.budget.monotonic", return_value=100):
             budget = RuntimeBudget({"active_seconds": 599}, measurement=True)
             budget.schema_chars = 10000
             self.assertEqual(await budget.reserve("decision", input_chars=790000), 1)
@@ -89,7 +89,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resumed.active_seconds, 599)
             with self.assertRaises(BudgetExceeded):
                 await resumed.reserve("decision", input_chars=2)
-        with patch("app.agents.agentic.budget.monotonic", return_value=101):
+        with patch("app.agentic.budget.monotonic", return_value=101):
             with self.assertRaises(BudgetExceeded):
                 await resumed.reserve("decision")
 

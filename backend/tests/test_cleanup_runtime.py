@@ -56,7 +56,7 @@ class CleanupRuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(detail[0]["exception_class"], "ValueError")
 
     async def test_question_definition_and_execution_are_both_disabled(self):
-        from app.agents.agentic.runtime import DecisionLoop
+        from app.agentic.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site, allow_questions=False)
         self.assertNotIn("ask_user", [d["function"]["name"] for d in loop.definitions()])

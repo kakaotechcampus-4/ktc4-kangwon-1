@@ -10,11 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.agents.agentic.budget import RuntimeBudget
-from app.agents.agentic.contracts import ReportProposal, ReviewResolution, ToolReply
-from app.agents.agentic.report import ReportInvalid, finalize, validate_proposal
-from app.agents.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
-from app.agents.agentic.tools import ToolExecutor, _audit
+from app.agentic.budget import RuntimeBudget
+from app.agentic.contracts import ReportProposal, ReviewResolution, ToolReply
+from app.agentic.report import ReportInvalid, finalize, validate_proposal
+from app.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
+from app.agentic.tools import ToolExecutor, _audit
 from app.db.connection import connect, initialize
 from app.llm.budget import BudgetExceeded
 from app.local_data.adapter import LocalAdapter
@@ -157,7 +157,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
         }
 
     def validate(self, proposal, facts):
-        with patch("app.agents.agentic.report.fact_rows", return_value=facts):
+        with patch("app.agentic.report.fact_rows", return_value=facts):
             return validate_proposal(
                 self.scope, ReportProposal.model_validate(proposal), "base", [{"code": "I201"}]
             )

@@ -4,7 +4,7 @@ from typing import Literal, Self, get_args
 
 from pydantic import Field, model_validator
 
-from app.agents.agentic.contracts import (
+from app.agentic.contracts import (
     EvaluatorActor,
     EvaluatorReview,
     FactId,

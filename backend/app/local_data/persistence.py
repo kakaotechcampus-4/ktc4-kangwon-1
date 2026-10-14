@@ -2,9 +2,9 @@
 
 import json
 
-from app.agents.agentic.facts import register_fact
-from app.agents.agentic.scoring import evaluate
-from app.agents.agentic.snapshot import (
+from app.agentic.facts import register_fact
+from app.agentic.scoring import evaluate
+from app.agentic.snapshot import (
     persist_input_facts,
     persist_report,
     persist_space_requirements,

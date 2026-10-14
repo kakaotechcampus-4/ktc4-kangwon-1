@@ -5,7 +5,7 @@ import math
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from app.agents.agentic.inputs import format_inputs
+from app.agentic.inputs import format_inputs
 from app.agents.business_lifecycle.area_resolver import (
     BusinessAreaNoDataError,
     ShapeFeature,

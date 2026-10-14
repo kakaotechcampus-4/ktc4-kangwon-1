@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app import schemas as s
-from app.agents.agentic import contracts as c
+from app.agentic import contracts as c
 from app.industries.catalog import INDUSTRIES
 
 FACT = "f_12345678-1234-4234-8234-123456789abc"

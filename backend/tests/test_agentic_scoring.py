@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agents.agentic.facts import register_fact
-from app.agents.agentic.scoring import WEIGHTS, rank_candidates, result, score_item, summarize
-from app.agents.agentic.snapshot import persist_snapshot_scores
+from app.agentic.facts import register_fact
+from app.agentic.scoring import WEIGHTS, rank_candidates, result, score_item, summarize
+from app.agentic.snapshot import persist_snapshot_scores
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.schemas import AnalysisTask, Site
@@ -192,7 +192,7 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
         from app.services.mock import dependencies
 
         with (
-            patch("app.agents.agentic.snapshot._persist", side_effect=ValueError("secret")),
+            patch("app.agentic.snapshot._persist", side_effect=ValueError("secret")),
             self.assertRaises(RawStorageError),
         ):
             await execute_agentic_analysis(

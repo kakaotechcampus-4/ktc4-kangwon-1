@@ -9,9 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agents.agentic.contracts import GetFactsInput
-from app.agents.agentic.read_tools import get_facts
-from app.agents.agentic.snapshot import persist_space_requirements
+from app.agentic.contracts import GetFactsInput
+from app.agentic.read_tools import get_facts
+from app.agentic.snapshot import persist_space_requirements
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.industries import DATA_DIR
@@ -108,7 +108,7 @@ class SpaceRequirementsFactsTests(unittest.IsolatedAsyncioTestCase):
                 "industry_code,industry_name\nG204,종합 소매\n", encoding="utf-8-sig"
             )
             async with capture_scope("invalid", path) as scope:
-                with patch("app.agents.agentic.snapshot.DATA_DIR", folder):
+                with patch("app.agentic.snapshot.DATA_DIR", folder):
                     with self.assertRaises(ValueError):
                         await asyncio.to_thread(persist_space_requirements, scope)
                 with connect(path) as db:

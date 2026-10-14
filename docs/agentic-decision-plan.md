@@ -352,7 +352,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 
 ## 8. schemas.py 변경안 — 팀 계약 교체
 
-**결정:** 최종 배치는 공통 계약 schemas.py·내부 계약 app/agents/agentic/contracts.py다. 전환 전에는 모든 새 계약을 contracts.py에 최종 이름 그대로 두어 기존 실행을 유지한다. LD6(기존 PR7 전환 범위)에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 schemas.py로 옮겨 기존 계약을 교체한다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 교체안의 팀 승인은 완료됐으며 실제 파일 변경은 LD6에서 적용한다. 이번에는 문서만 수정한다.
+**결정:** 최종 배치는 공통 계약 schemas.py·내부 계약 app/agentic/contracts.py다. 전환 전에는 모든 새 계약을 contracts.py에 최종 이름 그대로 두어 기존 실행을 유지한다. LD6(기존 PR7 전환 범위)에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 schemas.py로 옮겨 기존 계약을 교체한다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 교체안의 팀 승인은 완료됐으며 실제 파일 변경은 LD6에서 적용한다. 이번에는 문서만 수정한다.
 
 | schemas.py 모델 | 변경안·이유 |
 | --- | --- |
@@ -364,7 +364,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 | AnalysisMode·Specialist 관련 모델 | single_decision/multi_agent enum·전문가 브리핑/행동 전용 모델 제거. 팀 공통 소비자 함께 갱신 |
 | 평가 응답의 공통 경계 | DecisionResult에 평가 상태·반영 요약만 노출. 내부 ReviewIssue/Resolution은 contracts.py에 정의 |
 
-| app/agents/agentic/contracts.py 내부 계약 | 내용 |
+| app/agentic/contracts.py 내부 계약 | 내용 |
 | --- | --- |
 | 도구 입출력·ToolReply/ToolError | 3절 입력 union·출력·권한·오류·상한 |
 | Scorecard / FactView | 점수·상태·레지스트리 읽기 출력 |
@@ -701,7 +701,7 @@ PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schema
 | 항목 | 구현 |
 | --- | --- |
 | 원문 캐시 | raw-v2 파일·version=2. API 페이지 envelope를 축소 없이 저장·복사하고 cache_hit/original_collected_at 기록. 옛 캐시는 읽지 않음 |
-| 단일 채점 엔진 | app/agents/agentic/scoring.py가 rubric_dryrun.py의 v0.8 계산·판정을 소유. CLI는 import만 하며 민감도 시험을 유지 |
+| 단일 채점 엔진 | app/agentic/scoring.py가 rubric_dryrun.py의 v0.8 계산·판정을 소유. CLI는 import만 하며 민감도 시험을 유지 |
 | 원문 formatter | 저장된 상권·유동·상주/직장·개폐업 행에서 기존 map_stores/build_middle_rows/_aggregate/_benchmark/_trend/resident_block/worker_block/_aggregate_rows 호출. 외부 호출 경로 없음 |
 | 사실 저장 | facts와 fact_sources. f_UUID, 값·단위·기간·비교 기준·원문 행/응답 참조·계산/입력 버전. 동일 값/계보는 ID 재사용, 새 값은 새 ID. UPDATE 거절 |
 | 코드 점수 | score_snapshots/scores. 항목·배점·등급·점수·상태·fact_ids와 A/B/H·coverage·배지·Top 5 저장. L unknown·unreviewed, 적용 배점에는 포함 |

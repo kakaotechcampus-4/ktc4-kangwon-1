@@ -33,7 +33,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_shared_body_rows_views_and_lineage(self):
-        from app.agents.agentic.facts import register_fact
+        from app.agentic.facts import register_fact
 
         scopes = []
         for name in ("one", "two"):
@@ -129,7 +129,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(db.execute("SELECT count(*) FROM " + table).fetchone()[0], 0)
 
     async def test_lineage_validation_reads_references_in_batches(self):
-        from app.agents.agentic.facts import register_fact
+        from app.agentic.facts import register_fact
 
         async with capture_scope("one", self.path) as scope:
             await scope.record(

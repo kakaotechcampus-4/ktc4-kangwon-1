@@ -4,12 +4,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.agents.agentic.scoring import regulation, score_item, summarize
+from app.agentic.scoring import regulation, score_item, summarize
 
 
 class RubricDryrunTests(unittest.TestCase):
     def test_v08_default_c1_half_power_and_missing_demand(self):
-        from app.agents.agentic.scoring import population_baseline
+        from app.agentic.scoring import population_baseline
 
         sample = {
             "floating_population": {
@@ -23,16 +23,14 @@ class RubricDryrunTests(unittest.TestCase):
                 "by_middle": [{"code": "I201", "density_per_km2": 40}],
             },
         }
-        with patch(
-            "app.agents.agentic.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES", {"I201": {50: 10}}
-        ):
+        with patch("app.agentic.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES", {"I201": {50: 10}}):
             self.assertEqual(score_item("C1", {}, "I201", sample)["value"], 2)
             self.assertEqual(score_item("C1", {}, "I201", sample, c1_alpha=0)["value"], 4)
             sample["floating_population"]["benchmark"]["mean_daily_per_trade_area"] = 0
             self.assertEqual(score_item("C1", {}, "I201", sample)["status"], "unknown")
 
     def test_c1_alternatives_only_change_c1(self):
-        from app.agents.agentic.scoring import WEIGHTS
+        from app.agentic.scoring import WEIGHTS
         from scripts.audit_c1_density import alternatives
         from scripts.build_density_baseline import area_km2
 
@@ -79,7 +77,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(zero_demand["demand"][0]["rows"][0]["items"]["C1"]["status"], "unknown")
 
     def test_normalized_bounds_and_only_g_blocks_recommendation(self):
-        from app.agents.agentic.scoring import WEIGHTS
+        from app.agentic.scoring import WEIGHTS
 
         items = {k: {"status": "n.a.", "points": None} for k in WEIGHTS}
         items["D1"] = {"status": "observed", "points": 7.5}
@@ -104,7 +102,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(report["badge"], "보류")
 
     def test_recommendation_requires_applicable_weight_and_demand_evidence(self):
-        from app.agents.agentic.scoring import WEIGHTS
+        from app.agentic.scoring import WEIGHTS
 
         items = {
             k: {"status": "observed", "points": weight * 0.75} for k, weight in WEIGHTS.items()
@@ -131,7 +129,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(report["badge"], "추천")
 
     def test_v08_weights_and_unknown_decision_judgment(self):
-        from app.agents.agentic.scoring import WEIGHTS, result
+        from app.agentic.scoring import WEIGHTS, result
 
         self.assertEqual(sum(WEIGHTS.values()), 100)
         self.assertEqual(sum(v for k, v in WEIGHTS.items() if k != "L"), 90)
@@ -178,7 +176,7 @@ class RubricDryrunTests(unittest.TestCase):
             value["value"]["r"], 0.6 / (AGE_SHARE_AVG["20"] + AGE_SHARE_AVG["30"])
         )
         self.assertIn("유동 연령 대체", value["reason"])
-        from app.agents.agentic.scoring import WEIGHTS
+        from app.agentic.scoring import WEIGHTS
 
         items = {k: {"status": "n.a.", "points": None} for k in WEIGHTS}
         items["C1"] = {"status": "observed", "points": 15}

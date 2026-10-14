@@ -11,9 +11,9 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.agentic.contracts import MapResult, RegulationResult, ToolReply  # noqa: E402
-from app.agents.agentic.recording import ReplayGenerate  # noqa: E402
-from app.agents.agentic.runtime import DecisionLoop  # noqa: E402
+from app.agentic.contracts import MapResult, RegulationResult, ToolReply  # noqa: E402
+from app.agentic.recording import ReplayGenerate  # noqa: E402
+from app.agentic.runtime import DecisionLoop  # noqa: E402
 from app.config import load_environment  # noqa: E402
 from app.db.connection import connect  # noqa: E402
 from app.local_data.provenance import validate_snapshot  # noqa: E402

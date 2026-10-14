@@ -12,10 +12,10 @@ from types import SimpleNamespace
 from typing import get_args
 from unittest.mock import MagicMock, patch
 
-from app.agents.agentic.contracts import Metric
-from app.agents.agentic.facts import register_fact
-from app.agents.agentic.scoring import WEIGHTS, evaluate, result, summarize
-from app.agents.agentic.snapshot import persist_report
+from app.agentic.contracts import Metric
+from app.agentic.facts import register_fact
+from app.agentic.scoring import WEIGHTS, evaluate, result, summarize
+from app.agentic.snapshot import persist_report
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.errors import AnalysisConflictError
@@ -179,7 +179,7 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         return scope, waiting.question_session_id, json.loads(run[2])
 
     async def test_concurrent_answer_loser_leaves_no_raw_response(self):
-        from app.agents.agentic.questions import save_user_facts
+        from app.agentic.questions import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         replies = await asyncio.gather(
@@ -200,11 +200,11 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count, 1)
 
     async def test_answer_fact_failure_rolls_back_raw_response(self):
-        from app.agents.agentic.questions import save_user_facts
+        from app.agentic.questions import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         with (
-            patch("app.agents.agentic.questions.register_fact", side_effect=OSError("저장 실패")),
+            patch("app.agentic.questions.register_fact", side_effect=OSError("저장 실패")),
             self.assertRaises(OSError),
         ):
             await asyncio.to_thread(save_user_facts, scope, {"floor": "지상"}, question_id, state)

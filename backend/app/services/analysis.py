@@ -8,10 +8,10 @@ import uuid
 from time import monotonic
 
 from app.address import resolve_site
-from app.agents.agentic.budget import RuntimeBudget
-from app.agents.agentic.recording import CallRecording
-from app.agents.agentic.runtime import DecisionLoop
-from app.agents.agentic.snapshot import persist_snapshot_scores
+from app.agentic.budget import RuntimeBudget
+from app.agentic.recording import CallRecording
+from app.agentic.runtime import DecisionLoop
+from app.agentic.snapshot import persist_snapshot_scores
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.config import BACKEND_DIR

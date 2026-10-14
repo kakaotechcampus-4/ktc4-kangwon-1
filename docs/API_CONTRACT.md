@@ -38,7 +38,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 
 ## 새 결과 형태(PR7 전환 후)
 
-현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agents/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
+현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
 
 전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
 
