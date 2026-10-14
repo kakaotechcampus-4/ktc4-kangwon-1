@@ -1,48 +1,81 @@
-# Agentic decision 구조 설계안 v0.3
+# Agentic decision 구조 설계안 v0.4 — 분기별 로컬 자료 DB
 
-작성: 2026-10-13 · 개정: 2026-10-14 · 설계 작업: perf/decision · 구현 통합 브랜치: feat/agentic-decision · 상태: 단일 모드 전환 결정, 코드 미적용.
-기준: [채점표 v0.8](decision-prompt-rubric.md)의 **확정 규칙**. 로드맵: 51업종 완료 → 채점표 완료 → **3 구조 설계** → 4 구조 구현 → 5 decision 프롬프트 → 6 평가자 4명 → 7 실테스트·효율화.
+작성: 2026-10-13 · 개정: 2026-10-14 · 구현 통합 브랜치: feat/agentic-decision · 상태: **분기별 로컬 DB 전환 설계, 코드 미적용**.
+기준: [채점표 v0.8](decision-prompt-rubric.md)의 확정 규칙. 코드 90점 + decision의 L 10점, 단일 모드·fact_id·평가자 네 명은 유지한다.
 
-사용자가 확정한 흐름·SQL 방식·fact_id·L 역할은 고정한다. schemas.py의 팀 공통 계약 교체는 PR1에서 팀 합의한다. 도구 계약은 app/agents/agentic/contracts.py로 분리한다. 초기 예산·CSV 원천·평가 실패 제공 정책은 사용자 결정으로 확정했으며 실테스트 후 조정한다. v0.3 개정은 문서만 수정하며 외부 API·LLM 호출은 없다. 5절 연결 확인은 과거 실행 기록이다.
+사용자 결정: 상가·개폐업·유동·상주·직장은 요청 시 API 수집하지 않는다. 수동 분기 갱신으로 서울 전체 자료를 미리 적재하고, 요청은 가진 최신 활성 버전을 SQL로 읽는다. 카카오 지도(기존 주소 변환 포함)·V-World 규제만 실시간이다. RAG·벡터 검색은 사용하지 않는다.
+
+이번 개정은 문서 한 개만 수정한다. 외부/LLM 호출, 코드·schemas.py·.env 변경은 없다. 아래의 크기·쿼터는 로컬 확인값과 설계 추정을 구분하며, 다운로드 사이트의 현재 제공 상태는 새로 조회하지 않았다. 문서 끝의 PR2~PR5 메모는 **이전 구현·실패 기록**이며 v0.4 구현 지시가 아니다. 최초 실패 원인 추적은 종료한다.
 
 ## 1. 한 장 요약
 
 ```text
-주소 → 주소 변환 → 분석 3종 병렬 수집 [상권 / 개폐업 / 인구(유동·직장·상주)]
-                  ↓ 수집 직후, 정규화·업종 매핑으로 버리기 전에 저장
-             SQLite 원문 응답·원문 행·출처/범위/기간
-                  ↓ 결정론적 계산·formatter·v0.8 코드 채점 90점
-             SQLite 계산 facts·scores·스냅샷
-                  ↓ 요청/스냅샷 참조만 전달
-             decision: 고정 시스템 프롬프트 + 조회 도구
-                ├ 계산 자료 먼저 → 필요 시 읽기 전용 원문 SQL
-                ├ 지도·규제 읽기 / 임대인 질문
-                └ 애매할 때만 보조 LLM 자문(다른 계열 권장)
-                  ↓ decision 단독 L 10점 판단 + 초안 저장
-             평가자 4명 병렬: 심사관 / 창업자 / 고객 / 임대인 편
-                  ↓ 같은 읽기 도구로 독립 검토 → 구조화 피드백
-             decision: 수용·일부·기각 기록 → 최종 제출
-                  ↓ 코드가 점수·숫자·배지·Top 5 검증/렌더링
-             SQLite 최종 저장 → 새 DecisionResult GET/진행 이벤트 → 새 리포트 화면
+[요청과 분리: 운영자 수동 분기 갱신]
+파일 / 분기 API 일괄 수집 → 비활성 자료 버전 적재 → 필드·행·계산 검증
+ → release의 원천 버전 목록을 한 트랜잭션으로 활성화 (실패 시 이전 release 유지)
+
+[요청]
+주소 → 기존 카카오 주소 변환 → 활성 release/원천 버전 목록 고정
+ → 로컬 SQL: 반경 점포·비교 범위·상권 선택·개폐업 12분기·유동 5분기·상주/직장
+ → 기존 계산·formatter·채점기 → 작은 facts/scores·snapshot 저장
+ → decision: 고정 프롬프트 + 계산 조회 / 제한된 로컬 SQL / 지도 / 규제
+     ↔ 필요할 때만 보조 모델 자문 / 임대인 질문
+ → L 10점·초안 → 평가자 네 명 → 피드백 반영 → 코드 검증·최종 보고서
 ```
 
-| 지금 | 목표 | 현재 근거 |
-| --- | --- | --- |
-| single_decision은 분석 JSON, multi_agent는 digest·브리핑·되묻기를 입력에 포함 | 처음에는 요청·스냅샷·예산만, 사실은 도구로 조회 | `backend/app/agents/decision/agent.py:508`, `context.py:50`(같은 decision 디렉터리) |
-| 3개 브리핑 → 분야별 전문가 되묻기 | 자동 브리핑 제거, decision 주도 도구 + 선택적 자문 1역할 | `backend/app/agents/orchestration/graph.py:40`, `nodes/deliberation.py:43` |
-| 평가자는 초안·digest·원자료 경로를 받음 | 초안·인용 fact_id 목록만 받고 같은 조회 도구로 확인 | `backend/app/agents/evaluators/agent.py:62`, `agent.py:89` |
-| SQLite agent_results는 계산된 AgentAnalysis JSON 저장 | API 업무 원문과 계산 결과·계보를 분리 | `backend/app/db/schema.sql:43`, `backend/app/services/persistence.py:50` |
-| {i} 자리표시자·agent/path 검증·원본 값 렌더링 | 구조화 fact 슬롯과 불변 fact_id, 같은 요청·버전 검증 | `backend/app/evidence/citations.py:36`, `backend/app/agents/decision/agent.py:383` |
+snapshots에는 원문을 복사하지 않고 **release_id + 사용한 자료 버전 ID 목록**과 카탈로그·프로필·baseline·계산 버전을 고정한다. 질문 재개·평가·초안 수정에도 이 목록을 사용한다. 갱신 중에도 요청은 시작한 버전을 끝까지 읽는다.
 
-현재 실행 상한은 그래프 재귀 32·분석별 timeout 180초, 전문가 초기 2라운드/평가 후 4라운드, 모델 호출 24회 또는 평가 포함 64회·최종 예약 2회다(`backend/app/agents/orchestration/constants.py:3`, `backend/app/llm/budget.py:16`). 서비스 전체 timeout 기본은 평가 없음 600초·있음 1,200초이며 기존 질문 대기 제외 누적을 재사용한다(`backend/app/execution/settings.py:50`, `backend/app/services/analysis.py:466`). 새 제안 상한과 현재 값을 혼동하지 않는다.
+### 1.1 원천 조사 — 로컬 근거만
+
+확인값은 2026-10-14 로컬 파일/저장 응답 기준이다. 서울시 일괄 파일 제공 여부를 모르면 없다고 단정하지 않고 API 일괄 수집을 준비한다.
+
+| 원천 | 일괄 파일·형식·갱신 | 서울 전체 규모 | 현재 필드 호환·차이 | 근거 |
+| --- | --- | --- | --- | --- |
+| 소진공 상가(상권)정보 | **확인**: 202606 서울 UTF-8 CSV, 분기 스냅샷. 행 안에 분기 열은 없음 | 실파일 554,092행·301,889,640B(287.90MiB), 39열 | Store 파서의 14필드 전부 대응. 한글→API 영문 열 매핑. CSV에는 표준산업분류·층/호 등 추가 열도 있으며 적재 때 보존. reference_date/폐업 상태는 현재 사용 자료에서 확인 못 함 | `backend/scripts/build_density_baseline.py:236`, `commercial_area/client.py:189`, `docs/decision-prompt-rubric.md:413` |
+| 점포·개폐업(상권) `VwsmTrdarStorQq` | **파일 제공/파일 열 미확인**. 현 코드 JSON API의 분기·상권 조회는 확인됨. CSV/Excel이 있으면 필수 열 검증 후 우선 사용 | 상권 1,650 × 서울 업종 최대 100 = 최대 165,000행/분기(상한 추정). JSON 40~80MiB/분기 추정, 기존 기본 분석은 12분기 | API 필수 14열: 분기, 상권 종류/코드/이름, 서울 업종 코드/이름, 점포·유사업종·가맹점 수, 개업/폐업 수·비율. 파일이 없으므로 완전 호환은 아직 판정 불가 | `business_lifecycle/client.py:17,130`, `config.py:21` |
+| 추정유동(길단위인구-상권) `VwsmTrdarFlpopQq` | **파일 제공/파일 열 미확인**. JSON API 분기별 서울 전체 조회는 기존 코드로 확인 | 과거 기준선 1,648행/분기, 최근 영역 응답은 약 1,650. JSON/CSV 약 1~3MiB/분기 추정. D4 포함 최근 5분기 유지 | 분기·상권 코드, 총량·남/여, 시간대 6·요일 7·연령 6열이 필수. 통행량은 **분기 합계**이며 주거/직장 인원과 단위가 다름 | `floating_population/config.py:17`, `client.py:92`, `models.py:173`, `scripts/measure_flpop_baseline.py` |
+| 상주 `VwsmTrdarRepopQq` | **로컬 CSV 확인**. 공식 일괄 파일 제공 여부는 미확인. 분기 라벨이 있지만 README 실증에서는 값이 여러 해 동일 | resident.csv: 2026Q2, 1,633행·137,365B. 기존 API 전체는 약 36,000행/22분기 | 현재 파서 필수 11열은 모두 있음: 분기·상권 코드/이름·총량·연령 6·가구 수. 현재 CSV는 `write_snapshot`이 남긴 **축소본**, 전체 API 열을 보존한 원문은 아님 | `floating_population/README.md:305,322`, `population.py:51`, `models.py:151`, `scripts/fetch_population_snapshot.py:1` |
+| 직장 `VwsmTrdarWrcPopltnQq` | **로컬 CSV 확인**. 공식 파일 제공 미확인. 분기 라벨과 실제 값 갱신을 구분 | worker.csv: 2026Q2, 1,641행·122,307B. 기존 API 전체 약 36,000행/22분기 | 현재 파서 필수 10열 전부 있음: 분기·상권 코드/이름·총량·연령 6. 총가구 수는 없음. 역시 축소본 | 동일 README/스크립트, `models.py:151` |
+| 상권 영역 SHP | **로컬 파일 확인**: shp/dbf/shx/prj/cpg. 현재 다운로드 제공 위치·갱신 주기는 미확인, 분기라고 단정하지 않음 | 1,650피처, 묶음 4,456,586B(4.25MiB); SHP 본체 약 3.47MiB | EPSG:5181, 폴리곤·대표점·RELM_AR·구/동 코드. DBF 10자 제한으로 `XCNTS_VALU`, `TRDAR_CD_N` 등 열명이 축약됨. API 중심점 응답은 폴리곤 대체물이 아님 | `business_lifecycle/config.py:19`, `area_resolver.py:139,148,335`, 실제 파일 헤더 |
+| 영역 대표점/면적(보조) `TbgisTrdarRelm` | 패키지 `seoul_trade_areas.csv`에 code/name/kind/signgu/adstrd/x/y/area_m2 존재. API 서울 전체도 2페이지 확인 | CSV/SHP 약 1,650개, 기준선의 1,648개와 차이 있음 | 유동의 **기존 원 근사·면적 안분** 유지용. SHP의 중심·면적과 일치하면 같은 버전에서 제공; 불일치하면 별도 버전으로 고정하고 차이를 표시 | `commercial_area/data/seoul_trade_areas.csv:1`, `floating_population/client.py:86`, `models.py:96` |
+
+상주·직장 갱신은 현재 `fetch_population_snapshot.py`가 두 API의 전 분기를 받아 최신 분기만 CSV로 남기는 방식이다. 새 적재기는 받은 전체 원본/열을 보존하고 필요한 분기를 로컬로 고른다. 분기 번호가 최신이라고 실제 인구 추정값이 갱신됐다고 표현하지 않는다.
+
+**상가 CSV 호환 근거:** `backend/cache/rubric_samples/c1-evidence-report.md:17`와 `c1-density-audit.json`에서 8곳·주요 40개 밀도의 최대 배수 차이는 약 **1.014**. 전체 408조합에서 1.3배 이상/한쪽만 영인 사례는 없었다. 이는 그 파일·8곳의 증거이며 모든 분기·서울 경계까지 동일하다는 보장은 아니다. 500m 경계 점포 14개·API 기준일 null·폐업 상태 열 부재를 함께 기록한다.
+
+### 1.2 파일 미확인 원천의 분기 일괄 수집 예산
+
+모두 **갱신 스크립트에서만**, 요청 중 호출 영 회. HTTP 페이지당 1,000행은 기존 클라이언트 설정이다. 아래는 탐색·재시도 제외 추정이며 재시도도 일일 예산에 센다. 하루 10,000회는 사용자 지정 예산으로 비교한다. 기존 README의 10,000회는 소진공 API 설명이므로 모든 서울시 서비스의 실제 할당량을 같다고 단정하지 않는다.
+
+| 원천 | 분기 갱신 HTTP | 최초 채우기 | 판단 |
+| --- | --- | --- | --- |
+| 상가 서울 CSV / SHP | 파일 사용이면 영 회 | 파일 수동 입수 | 상가 파일 대체 소진공 API 수집은 기본안에서 제외 |
+| 점포·개폐업 | 서울 전체 분기 필터가 지원되면 최대 약 165회. **현재 코드로 이 옵션은 미확인** | 같은 조건이면 12분기 최대 약 1,980회 | 지원 확인 전 숫자를 확정치로 쓰지 않음 |
+| 점포·개폐업 확실한 대안 | 현 코드처럼 상권별, 각 최대 100행이므로 약 1,650회/새 분기 | 12분기 약 19,800회 → 최소 이틀로 분할(재시도/다른 자료 포함 시 더 필요) | 하루 10,000 미만으로 체크포인트·예산 차단. 구/서울 집계 API로 상권 행을 대체하지 않음 |
+| 유동 | 새 분기 약 2회 | 최근 5분기 약 10회 | 기존 서울 전체 분기 조회 재사용 |
+| 상주·직장 | 분기 필터가 먹지 않는 기존 동작 기준 합계 약 73회(36+37) | 동일 약 73회, 받아 필요한 기간만 적재 | `fetch_population_snapshot.py:55` 동시 8·재시도 2회; 행 증가 시 `ceil(total/1000)` 재산정 |
+| 대표점/면적 보조 | 약 2회, 파일/일치 SHP면 영 회 | 동일 | 공간 버전은 데이터 분기와 별도 관리 |
+| S 서울 기준선(보조) `VwsmMegaStorW` | 기존 전체 2,200행·3회 | 동일 | `measure_lifecycle_baseline.py:27`의 **점포-서울시**. 상권별 `VwsmTrdarStorQq` 대체 불가 |
+
+기존 확실한 상권별 방식의 새 분기 갱신은 대략 1,650+2+73+2+3=**1,730회**로 일일 예산 안이다. 초기 12분기는 분할 실행한다. 아직 자동 탐색/재수집 실행을 승인한 것이 아니며 이번 작업에서 호출하지 않는다.
+
+### 1.3 지난 91초의 구성과 페이지 크기
+
+| 상권 조회 | 저장 응답 | page_size | 원문 저장 시각 범위 | 해석 |
+| --- | --- | --- | --- | --- |
+| 주소 500m | 6페이지 / 5,182점포 | 1,000 | 약 1.03초 | 모두 cache_hit=true, 새 HTTP 지연 측정값이 아님 |
+| LQ 2km | 48페이지 / 47,096점포 | 1,000 | 약 25.09초 | 역시 캐시 원문 재복사 구간 |
+| 강남구 전체 | 67페이지 / 66,269점포 | 1,000 | 약 62.15초 | 실제 갱신 수집·저장 구간. HTTP와 DB 시간을 따로 계측하지 않았음 |
+
+이 범위들은 parse/대기와 다른 분석 병렬 구간을 포함하지 않아 정확한 91초 분해나 합산식은 아니다. page_size는 `commercial_area/config.py:39`, `client.py:308` 및 저장 args에서 **이미 1,000**이다. 더 크게 받을 수 있다는 근거는 없으며 이번에 확인 호출하지 않는다. 로컬 전환은 기본 반경·LQ·구 조회의 페이지 수를 요청 경로에서 없앤다.
 
 ### 현재 코드 분류
 
-새 구조는 유일한 실행 경로다. PR7 전환 시 기존 모드·근거·저장 결과를 폐기하며 과거 결과·질문 세션을 읽는 코드는 만들지 않는다. 평가자 4명은 항상 실행한다. 개발 비용은 MOCK_MODE와 예산 상한으로 관리한다.
+새 구조는 유일한 실행 경로다. LD6 전환 시 기존 모드·근거·저장 결과를 폐기하며 과거 결과·질문 세션을 읽는 코드는 만들지 않는다. 평가자 4명은 항상 실행한다. 개발 비용은 MOCK_MODE와 예산 상한으로 관리한다.
 
 | 구분 | 현재 코드·위치 | 단일 모드 전환 범위 |
 | --- | --- | --- |
-| 재사용 | `backend/app/agents/orchestration/graph.py:40` | LangGraph·주소·분석 3종 병렬·질문 대기/재개 기반. 새 단계로 연결 |
+| 재사용/교체 | `backend/app/agents/orchestration/graph.py:40` | LangGraph·주소·질문 재개 기반 유지. 분석 3종 입력 수집은 버전 고정 로컬 SQL로 교체 |
 | 교체 | `backend/app/agents/orchestration/deps.py:50`, `state.py:43` | 모드별 deps/state를 snapshot·draft·review 참조 및 actor별 예산으로 교체 |
 | 재사용/확장 | `backend/app/execution/policy.py:38`, `backend/app/llm/budget.py:16` | 예약 호출·실패 전파·저장 오류 유지, 도구/토큰/HTTP 상한 추가. 모드·평가 활성 스위치 제거 |
 | 교체 | `backend/app/agents/decision/agent.py:113`, `orchestration/nodes/decision.py:33` | 행동 JSON(final/ask_specialists/supplement/map_lookup/ask_user) 판정을 도구 루프로 교체. 질문 기능은 ask_user 도구로 재사용 |
@@ -60,7 +93,7 @@
 | 유지/교체 | `backend/app/schemas.py:80`, `:94`, `:257`, `:486`, `:504`, `:570`, `:680` | AnalysisTask/AgentAnalysis 유지. DecisionRequest/DecisionResult/Evidence/QuestionSnapshot 교체, V2 접미사 없음 |
 | 교체 | `docs/API_CONTRACT.md:224`, `backend/app/api/v1/responses.py:29` | URL·폴링 seq 기반 재사용, 새 결과·질문·stage 계약만 제공 |
 
-현재 상주·직장은 동봉 CSV를 사용한다(`backend/app/agents/floating_population/population.py`). source_type=file·파일 해시·시점을 원문에 보존한다.
+현재 상주·직장은 동봉 CSV를 사용한다. v0.4에서는 두 파일도 분기 자료 DB에 한 번 적재하고, 요청 시 파일을 다시 저장하지 않는다. 현재 코드 분류 표는 기존 경로의 출발점이며 원천 수집·계보 교체는 아래 v0.4 계획이 우선한다.
 
 ### 삭제 목록과 설정 정리
 
@@ -75,42 +108,77 @@
 
 실제 파일·환경변수 삭제는 PR4/PR7에서 수행한다. 이번 문서 개정은 코드·.env·schemas.py를 수정하지 않는다.
 
-## 2. 데이터 저장 설계(SQLite)
+## 2. 데이터 저장 설계 — 자료 DB / 요청 DB 분리
 
-PR2에서는 기존 테이블을 유지하며 원문 테이블·뷰만 추가한다. 실행 결과·decision 입력은 바꾸지 않는다. PR7에서는 기존 DB를 자동 변환하지 않고 스키마 버전 검사·명시적 초기화 안내로 새 구조에 전환한다. 1차는 요청당 원문 snapshot_id **1개**를 유지한다. run_id·분석/판단 attempt는 실행·재개 기록이며 새 원문 스냅샷을 만들지 않는다. 부모 스냅샷·기초 자료 재수집은 2차로 미룬다. 원문은 매 페이지 수집 직후 저장하고 모든 수집이 끝나야 계산하는 강제 장벽 대신, 수집 완료/부분 스냅샷을 명시한 뒤 계산한다.
+### 2.1 자료 DB
 
-| 테이블 | 핵심 필드·키 | 규칙 |
+`market_data.sqlite3` 한 개를 버전별 행으로 관리하고, 요청은 **mode=ro**로 연다. 갱신만 쓰기 권한을 갖는다. SQLite WAL로 이전 활성 자료를 읽는 동안 비활성 버전을 적재할 수 있다. 변경 중인 WAL DB에 `immutable=1`을 쓰지 않는다. 운영 배포 시 파일 위치·동시 작성자 정책은 별도 설정하며 이번에 .env를 바꾸지 않는다.
+
+| 테이블 | 키·열 | 인덱스·규칙 |
 | --- | --- | --- |
-| raw_payloads | payload_hash PK, response_json | 정제한 응답 본문은 해시마다 한 번만 보존 |
-| raw_responses | response_id PK, request_id, run_id, snapshot_id, source, source_type(api/file/user), request_args_json, page, http_status, collected_at, payload_hash FK | 요청·스냅샷과 본문 해시 연결. 인증 키·Authorization·Referer 인증 설정은 저장하지 않음. 캐시 원천·수집/캐시 시각 구분 |
-| raw_rows | raw_row_id PK, payload_hash FK, row_index, natural_key, raw_json, row_hash | 본문 해시별 원문 행 한 벌. 매핑 제외 업종·소분류도 보존 |
-| raw_response_rows | response_id FK, raw_row_id FK, duplicate_of | 관측과 공유 행 연결. 중복 표시는 요청·실행·원천·조회 범위 안에서만 판정 |
-| snapshots | snapshot_id PK, request_id, run_id, base_source_manifest, completeness, source_periods, created_at | 요청당 1개. 기초 수집 완료 후 기준선·프로필·catalog·원천 해시 고정. 지도·규제·답변 관측은 같은 snapshot에 append-only 추가, 기존 행·fact는 덮지 않음 |
-| facts | fact_id PK, request_id, snapshot_id, source, metric, value_json, unit, period, spatial_scope_json, industry_code(nullable), citable, status, calc_version, baseline_version, lineage_hash, created_at | 숫자·문자·관측 여부도 typed fact. unknown은 null·citable=false, 관측 0과 구분 |
-| fact_sources | fact_id FK, raw_row_id FK, field_pointer | 원문 행/열 계보. 집계는 여러 행을 연결, 출력에는 개수·해시·조회 참조만 보내 토큰 절약 |
-| scores | score_id PK, request_id, score_snapshot_id, rubric_version, industry_code, item, status, grade(nullable), points(nullable), fact_ids, created_at | 코드 90점은 불변 snapshot. L은 draft/revision별 별도 score_snapshot으로 추가. 이전 결과 UPDATE 금지. score_snapshot_id는 논리 점수 revision이며 새 원문 snapshot이 아님 |
-| tool_calls | call_id PK, request_id, run_id, actor, phase, tool, normalized_args_hash, snapshot_ids, outcome_ref, status, error_code, duration_ms, http_calls, model_calls, input/output_tokens | 결과 본문은 참조 저장, 키·원시 인증 오류 URL 로깅 금지. 동일 조회 감지·실제 예산 근거 |
-| advisor_consults | consult_id PK, call_id FK, question, fact_ids, advisor_model/family, answer_json, reflected, reason | 자문은 새 사실이나 L 점수로 간주하지 않음 |
-| evaluator_reviews | review_id PK, draft_id FK, actor, status, review_json, tool_call_ids, created_at | 4명 각각 보존. 실패는 동의가 아님 |
-| reports | report_id PK, request_id, run_id, kind(draft/final), revision, parent_id, report_json, fact_ids, score_snapshot_id, validation_status, rendered_json | 초안·최종과 번호별 피드백 반영 로그 연결. final만 완료 응답으로 채택 |
+| data_versions | version_id, source, quarter(nullable), source_period, file_sha256, content_sha256, schema_version, mapping_version, loaded_at, row_count, status(staging/ready/active), archive_ref | 원천·분기·파일 해시·변환 버전 조합으로 동일 적재 판별. 다분기 파일은 분기별 자식 버전과 원본 해시를 연결. SHP에 없는 분기를 만들지 않음 |
+| data_releases / release_versions | release_id, 원천 버전 목록, 활성 포인터, activated_at, validation_ref | 필요한 원천·기간이 준비된 release만 한 트랜잭션으로 활성화. 기존 release 목록은 불변 |
+| stores | version_id, store_id, 원 대/중/소분류, service_industry_code(nullable), 상호·지점·주소·구/동, lat/lon, x/y, 나머지 원문 열 | PK(version_id,store_id), (version_id,구,업종), RTree 공간 후보. 제외 업종 원문도 유지. `map_stores`/소분류 우선 규칙으로 **적재 시** 매핑 |
+| lifecycle | version_id, quarter, trade_area_code, seoul_industry_code, 원문 14열 | PK(version_id,quarter,상권,서울코드), (상권,quarter), (quarter,서울코드). 비율 평균 금지 |
+| floating | version_id, quarter, trade_area_code, 총량·남녀·시간대6·요일7·연령6·원문 추가 열 | PK(version_id,quarter,상권), (상권,quarter). 최근 5분기와 같은 상권 집합으로 YoY |
+| resident / worker | version_id, quarter, trade_area_code, 현재 파서의 필수 열·원천에 있는 추가 열 | PK(version_id,quarter,상권). 상주만 가구 수. 받은 필드 전부 보존하고 필수 열 부족은 활성화 거절 |
+| trade_areas | version_id, trade_area_code, 구/동·상권 종류, 대표점·면적, polygon/rings, bbox, CRS, geometry_hash | PK(version_id,상권), bbox RTree. DBF 축약 열 어댑터. 포함 우선·300m 최근접 규칙 재사용 |
+| coverage_groups | version_id, quarter, trade_area_code, 관측/명시적 빈 그룹/미확인, 원천 근거 | 전체 파일에 행이 없다는 이유만으로 해당 상권 전체를 영으로 만들지 않음 |
+| district_counts(파생) | store_version_id, mapping_version, district_code, service_industry_code, count, calc_version | 구별 51업종 집계만 적재 때 생성. 원문 복사 아님. 구 전체 점포를 요청 메모리로 펼치지 않음 |
 
-analysis_mode 열·CHECK·모드 dispatch는 새 스키마에 두지 않는다. DB 스키마 버전을 올리고 기존 파일의 버전이 다르면 시작을 중단해 파일 경로·기대/실제 버전·초기화 방법을 안내한다. 실행기가 자동 삭제·변환하지 않는다. 운영자가 서버를 멈추고 SQLITE_PATH 파일을 명시적으로 삭제 또는 이동한 뒤 재시작하면 새 DB를 생성한다. 옛 결과·질문 세션은 폐기하며 구 파일을 읽는 reader를 구현하지 않는다.
+원본 CSV/SHP/API 분기 파일은 저장소 밖 자료 보관 영역에 **버전당 한 벌** 둔다. DB는 원천별 열을 정규화해 저장하며 원문 JSON과 같은 열을 중복 복제하지 않는다. 모르는 추가 열은 원천별 확장 열/메타데이터로 보존하고 모델에 허용한 열만 노출한다. file_sha256은 적재 때 검증하고, 요청마다 288MiB 파일을 재해시하지 않는다. 활성 자료는 덮어쓰지 않으며 값 수정은 새 버전이다.
 
-analysis_requests·agent_results·decision_results·question_sessions·analysis_events의 역할은 새 스키마에서 재사용하되 옛 행을 복사하지 않는다(`backend/app/db/schema.sql:3`, `:27`, `:43`, `:145`, `:163`). 사실 저장·호출 감사·최종 채택 실패는 서비스 오류로 전파한다. 진행 화면 이벤트의 저장 실패만 기존처럼 격리한다(`backend/app/services/persistence.py:36`).
+공간 조회는 RTree로 후보를 좁힌 뒤 기존 `haversine_m`/폴리곤 함수로 최종 판정한다. 직사각형이나 투영 거리만으로 500m를 확정하지 않는다. 유동은 기존 중심점·면적 원 근사 방식을 유지하며 이번 변경으로 실제 폴리곤 안분으로 바꾸지 않는다. 서울 CSV는 서울 경계 밖 점포를 포함하지 않으므로, 예전 전국 반경 API와 서울 외곽 2km 비교가 달라질 수 있다. 서울 범위를 명시하고 경기 자료 필요 여부를 사용자 확인으로 남긴다.
 
-| 조회용 뷰 | 원천·핵심 열 | 공간·기간 |
+### 2.2 요청 DB와 계보
+
+`analysis_requests.sqlite3`에는 요청·좌표·snapshot·facts·scores·관측·도구/모델 기록·초안/최종만 둔다. 55만 점포나 12분기 개폐업 행을 복사하지 않는다. 자료 DB와 요청 DB의 FK는 파일을 넘을 수 없으므로 버전/행 존재 검증은 서버가 한다.
+
+| 기록 | 저장 단위 | 검증 |
 | --- | --- | --- |
-| v_raw_stores | raw_row_id, response_id, store_id, 소진공 원 대/중/소분류, lat/lon, 주소 | 수집 반경·시점 유지, 서비스 업종 코드는 매핑 버전과 함께 별도 노출 |
-| v_raw_lifecycle | raw_row_id, 상권 코드, quarter, 서울 업종 코드, 점포/개업/폐업 수 | 선택 상권 포함/최근접·거리 유지. 누락 행을 원문 0행으로 생성하지 않음 |
-| v_raw_floating | raw_row_id, 상권 코드, quarter, 시간대/요일/연령 원값 | 반경 선택된 공식 상권 집합 명시 |
-| v_raw_resident / v_raw_worker | raw_row_id, 상권 코드, quarter, 연령 원값 | 현재 CSV source_type=file·파일 해시 명시 |
-| v_raw_map / v_raw_regulation / v_raw_answers | raw_row_id, 관측/구역/답변 필드 | 실제 조회 시각·출처·사용자 진술 구분 |
+| snapshot | release_id, 사용한 source_version_ids, 기간, catalog/profile/baseline/rubric/calc 버전, 좌표·반경·선택 상권 | 요청 시작/질문 재개/평가 전 버전 고정. 새 활성 버전으로 몰래 재개 금지 |
+| 직접 셀 fact | fact_id, 값·단위, data_version_id, 자연 행 키, 원문 열, 기대 해시 | 해당 버전이 snapshot에 있고 행/열 값이 실제 존재. 예: 점포명, 한 분기 특정 서울 업종의 점포 수 |
+| 집계 fact | fact_id, 값·단위, provenance_id → 버전 목록·query_id·정규화된 조건·calc_version·mapping/baseline 해시 | 허용 계산 레시피로 재현 가능. 수천 행 ID/행별 fact_sources 링크를 생성하지 않음 |
+| provenance_queries | query_id, 레시피 이름, SQL/파라미터의 정규화 해시, 좌표·반경·상권·업종·기간, 버전 목록 | 같은 조건은 한 번 저장. 모델 임의 SQL 집계값은 자동으로 사실 등록하지 않음 |
+| 지도·규제·답변 관측 | observation_id, 원천, 시각·상태·해시·필요 관측 필드, fact 참조 | 현재 요청만. 키·인증 URL 제거. 숫자 렌더링/규제 포함 검증 유지 |
+| 감사·보고서 | 도구 결과 한 벌 + 참조, 모델/usage, 질문/답변, L·평가·반영 기록, 최종 fact 슬롯 | 대화 상태에 도구 본문/자료를 반복 복사하지 않음. 보존 한도·잘림은 명시 |
 
-fact_id는 `f_<UUID>`이며 값·계보가 바뀌면 새 ID다. 1차의 추가 관측은 같은 원문 snapshot 안에서 새 fact로 등록한다. 보고서·호출마다 fact_ids와 observation cutoff seq를 기록해 당시 사용 범위를 재현하며, 스냅샷 부모 체인은 만들지 않는다. request·snapshot·metric·단위·기간·범위·업종·계산 버전·lineage가 같은 경우만 중복 등록을 피한다. 모델이 ID를 정하거나 값·citable을 쓰지 않는다. 요청 밖 fact, 현재 보고서의 비채택 관측 fact, 폐기된 draft fact는 제출 시 거절한다. 코드 점수의 fact_ids와 L 새 근거의 중복은 기계 검사하고, 의미상 같은 요인의 중복은 평가자가 검토한다.
+fact_id는 f_UUID·불변 규칙을 유지한다. CSV의 행 번호만 키로 쓰지 않는다. 점포는 store_id, 개폐업은 (quarter,trade_area_code,seoul_industry_code), 인구는 (quarter,trade_area_code), 영역은 trade_area_code를 쓴다. source_version_id와 함께 해석하므로 같은 자연키라도 자료 수정 시 다른 계보다.
 
-기초 API 응답 수집 hook은 파싱·필드 축소 전 transport 계층에 추가해야 한다. 현재 상권 캐시는 items를 추리고 SQLite에는 formatter 결과를 저장하므로 이를 원문 저장으로 간주하지 않는다(`backend/app/agents/commercial_area/client.py:82`, `backend/app/services/persistence.py:50`). API·파일은 asyncio 기반, SQLite·SHP·CSV는 asyncio.to_thread. 현재 rw 연결(`backend/app/db/connection.py:23`)을 query_raw에 그대로 노출하지 않는다.
+집계의 예는 밀도·LQ·C1·S 지수·유동 시간/연령 적합 지수다. 여러 버전/기간을 섞는 계산은 참여한 버전을 모두 고정한다. 계산 버전·예상 source hash가 달라지면 인용 검증을 실패시키며 다른 활성 버전으로 대체하지 않는다. 자료 버전이 제거되면 SOURCE_UNAVAILABLE로 표시한다. 서울 개폐업 자료가 없는 여섯 업종과 표본 부족·영 분모·결측/영값 구분은 v0.8 그대로다.
+
+### 2.3 query_raw 로컬 뷰·서버 바인딩
+
+| 승인 뷰 | 보이는 자료 | 서버가 고정하는 범위 |
+| --- | --- | --- |
+| v_raw_stores | 로컬 stores의 원문 대응 열·버전·자연 행 키 | snapshot의 점포 버전 + 주소 반경. SQL로 반경을 늘릴 수 없음 |
+| v_raw_lifecycle | 점포/개폐업 행 | 고정된 포함/300m 최근접 상권 + 선택 12분기 |
+| v_raw_floating | 유동 원문 행 | 고정된 선택 상권 집합 + 5분기 |
+| v_raw_resident / v_raw_worker | 상주/직장 원문 행 | 선택 상권 집합 + 실제 보유 원천 분기 |
+| v_raw_trade_areas | 상권 이름·대표점·면적·범위 정보 | 해당 공간 버전과 선택/주변 후보 상권. 서울 전체 폴리곤 덤프 금지 |
+| v_ref_district_counts | 구·서비스 업종별 사전 집계 51행 | 현재 snapshot의 점포/매핑 버전 + 주소의 구 |
+| v_raw_map / v_raw_regulation | 실시간 관측 | 현재 request/snapshot만 |
+
+자료 DB readonly 연결과 요청 관측 DB 연결은 서버가 구성한다. DB 연결/경로·version_id·좌표·범위를 모델 입력으로 고를 수 없다. SQL은 현재처럼 읽기 전용·authorizer·단일 SELECT·50행·2초 상한을 유지한다. 쓰기/DDL/PRAGMA/ATTACH/기반 테이블/다른 버전·요청/CTE는 거절한다. 소스 DB 별칭/임시 뷰의 authorizer 규칙은 새 테스트가 필요하다.
+
+직접 원천 셀은 (버전,행 키,열)을 다시 대조해 fact로 등록한다. SUM/AVG/COUNT 같은 모델 SQL 결과는 uncitable로 둔다. v_ref_district_counts처럼 적재 시 만든 집계는 **승인 레시피의 집계 계보**로 등록하며 원문 셀로 가장하지 않는다. 원천별 원문 필드 호환은 1절의 적재 검증을 통과해야 한다. L의 새 근거/코드 중복 채점 금지는 바뀌지 않는다.
+
+### 2.4 수동 분기 갱신
+
+제안 스크립트 이름은 `scripts/update_local_market_data.py`이며 **아직 만들지 않았다**.
+
+1. 운영자가 분기·파일 경로를 지정한다. 파일명/제공 메타데이터와 기존 버전을 비교해 새 분기·수정판 여부를 확인한다. 파일 없는 원천만 별도 수집 모드로 일괄 조회한다. 요청이 갱신을 시작하지 않는다.
+2. 파일/API 본문 해시·인코딩·필드 목록을 기록하고 비활성 버전에 스트리밍 적재한다. 동일 원천·분기·해시·변환 버전이면 건너뛴다. API 갱신은 페이지/상권 체크포인트·일일 HTTP 상한을 둔다.
+3. 필수 열/자연키·숫자·좌표·CRS·분기·상권 코드·전체 수집량·누락/중복을 검증한다. 중복 자연키의 값 충돌은 오류다. 예상한 카탈로그 제외는 보존하고, 새 분할 코드 미확인은 활성화하지 않는다.
+4. 51업종 매핑·구 집계·공간 인덱스와 기간별 coverage를 준비한다. 기존 계산·408건 회귀와 8곳 조회 시간/요청 증가량 목표를 확인한다. 단순 총행 수 감소만으로 실패시키거나 자동으로 영을 보충하지 않고 원천 수정 근거를 요구한다.
+5. 필요한 원천을 모두 검증한 release를 한 트랜잭션으로 활성화한다. 실패·중단·쿼터 초과는 이전 활성 release 유지, staging만 정리/재개 가능하다. 최초 적재 실패 시 서비스는 DATA_NOT_READY이고 요청 시 API 대체를 하지 않는다.
+
+파일별 최신 분기가 달라도 원천별 실제 기간을 보고서에 표시한다. 기본 보유 창은 개폐업 12분기·유동 5분기·점포 최신 스냅샷·상주/직장 실제 최신 자료다. v0.8 baseline은 우선 그대로 버전 고정하며 새 원천 분기와 기준선 시점 차이를 표시한다. S 기준값/분위수의 분기 갱신은 별도 검증·승인으로 진행하고 요청마다 재측정하지 않는다.
 
 ## 3. 도구 계약
+
+v0.4에서도 도구 아홉 개의 이름·한도와 ToolReply 계약은 유지한다. 원문 조회/등록의 저장 대상과 계보는 2절의 로컬 자료 버전·행 키/집계 레시피가 우선한다. raw_row_refs 문자열은 새 버전/자연키 참조로 내보내며 내부 contracts 변경은 새 PR에서 한다.
+
 
 ### 공통 입출력·권한
 
@@ -145,16 +213,16 @@ map_search는 PlaceClient·카카오 카테고리·거리 계산을 재사용하
 
 ### query_raw와 자동 사실 등록의 경계
 
-**register_fact는 모델 도구로 만들지 않는다.** query_raw가 원문 ID·허용 필드·metric 대응·단위·기간·업종·scope를 코드로 검증해 단순 원문 셀을 자동 등록한다. 모델이 값·수식을 제출해 사실로 승인받는 경로는 없다. 평가자의 조회도 서버가 기계적으로 등록하며, 모델은 raw·계산·점수에 쓰기 권한이 없다. submit_review는 자신의 검토 출력 저장만 허용하는 예외다.
+**register_fact는 모델 도구로 만들지 않는다.** query_raw가 자료 버전·자연 행 키·허용 필드·metric 대응·단위·기간·업종·scope를 코드로 검증해 단순 원문 셀을 자동 등록한다. 모델이 값·수식을 제출해 사실로 승인받는 경로는 없다. 평가자의 조회도 서버가 기계적으로 등록하며, 모델은 raw·계산·점수에 쓰기 권한이 없다. submit_review는 자신의 검토 출력 저장만 허용하는 예외다.
 
 | SQL 조건 | 실행·인용 규칙 |
 | --- | --- |
-| 연결 | mode=ro 별도 연결. query_only는 실행기가 설정. 현재 요청의 단일 snapshot·허용 observation cutoff에 한정된 승인 뷰만 노출 |
-| 격리 | 뷰 WHERE 조건은 실행기가 바인딩한 current_request_id/current_snapshot 범위로 고정. 모델 조건을 빼도 다른 요청은 안 보임. 연결은 actor별 독립 |
+| 연결 | mode=ro 별도 연결. query_only는 실행기가 설정. 현재 snapshot의 자료 버전·서버 고정 공간/기간 범위 및 해당 요청의 observation cutoff에 한정된 승인 뷰만 노출 |
+| 격리 | 뷰 WHERE 조건은 실행기가 바인딩한 snapshot의 version_id·반경/상권/기간과 관측의 current_request_id 범위로 고정. 모델 조건을 빼도 다른 요청은 안 보임. 연결은 actor별 독립 |
 | 허용 | 단일 SELECT, 승인 뷰·안전 함수 목록, 파라미터 바인딩. SQLite authorizer로 기반 테이블 직접 읽기·sqlite_master·미승인 함수 차단. 뷰를 통한 허용 기반 접근만 승인. 범용 SQL AST 검사는 2차 |
 | 금지 | INSERT/UPDATE/DELETE, DDL, PRAGMA, ATTACH/DETACH, 다중 문장, load_extension·외부 파일 함수. 방어의 중심은 읽기 전용 연결·SQLite authorizer·행/시간 상한이다. AST 없는 1차에서는 WITH/CTE를 보수적으로 거절해 승인 뷰 이름 가림을 차단한다. 범용 CTE 허용·AST는 2차 |
 | 중단 | LIMIT은 최종 51행 검사로 초과 탐지. progress_handler·monotonic deadline·cancel 시 connection.interrupt로 실제 쿼리 중단. to_thread await만 취소하고 백그라운드 SQL을 방치하지 않음 |
-| 원문 셀 | raw_row_id + 허용 원 필드를 서버 원문에서 다시 읽어 값·단위·metric을 대조한 경우만 fact_id 생성. 등록 값은 SQL 수식 결과가 아니라 그 원문 셀이다. 불일치·계보 불명은 citable=false. alias로 의미·단위를 바꾸지 못함 |
+| 원문 셀 | (data_version_id, 자연 행 키, 허용 원 필드)를 자료 DB에서 다시 읽어 값·단위·metric을 대조한 경우만 fact_id 생성. 등록 값은 SQL 수식 결과가 아니라 그 원문 셀이다. 불일치·계보 불명은 citable=false. alias로 의미·단위를 바꾸지 못함 |
 | SQL 집계·임의 식·계보 불명 | 결과는 탐색용 citable=false, fact_id 미부여. 숫자를 보고서에 복사 금지. 집계는 get_facts/get_scorecard의 승인 계산 지표를 쓰고, 필요한 새 metric은 코드 PR로 추가 |
 
 운영 쓰기 연결은 서비스 전용이며 모델 SQL 연결과 분리한다. 자동 fact 등록은 읽기 연결 밖의 서버 검증/트랜잭션으로 한다. 이를 원자료 쓰기 권한으로 해석하지 않는다.
@@ -169,7 +237,7 @@ map_search는 PlaceClient·카카오 카테고리·거리 계산을 재사용하
 | L·초안 | 선정된 10~12개를 최대 3업종씩 묶어 검토. 보조 실패 시 advisor_unavailable 기록 후 decision 단독 채점. 코드 90점은 수정 못 함. submit_draft(draft) | 대상 선정·질문·근거·grade/unknown·자문 상태를 LRecord에 기록 |
 | 평가·수정 | 4명 review 완료/실패 → 각 지적 수용·일부·기각. 필요한 조회만 추가하고 L/문장 변경 | review_resolutions·새 L revision |
 | 최종 | submit_draft(final), 서버가 전체 51업종 최신 채택 점수로 배지·정렬·fact 인용 재검증 | final·적용 스냅샷·완료 |
-| 질문 | ask_user 후 waiting_for_input·state 참조 저장, 실행 종료. 재개 시 같은 원문/코드 점수 사용·답변 fact 추가 | 기존 질문/답변 흐름 |
+| 질문 | ask_user 후 waiting_for_input·state 참조 저장, 실행 종료. 재개 시 같은 자료 release/코드 점수 사용·답변 fact 추가 | 기존 질문/답변 흐름 |
 
 LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_scope,code_score_snapshot_id,code_lower_rank,code_lower_B,reason,reason_fact_ids},review_state:reviewed/unreviewed,advisor_unavailable:bool,status,grade|null,new_factors[{direction:favorable/adverse/neutral,claim,fact_ids}],checked_questions,tool_call_ids,advisor_consult_ids,limitations}. points는 코드가 계산한다. 코드 문항 fact_ids만으로 채점한 L은 거절하고, C2/C3·지도·상가 조건의 새 근거가 있어야 한다. 새 요인 없음을 실제 조회로 확인한 등급 2와 미조회 unknown을 구분한다. 보호구역 금지는 L로 상쇄하지 않는다. 최종 후보 선택도 모델이 점수 순서를 임의로 바꾸지 못한다.
 
@@ -274,7 +342,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 
 ## 8. schemas.py 변경안 — 팀 계약 교체
 
-**결정:** 최종 배치는 공통 계약 schemas.py·내부 계약 app/agents/agentic/contracts.py다. PR1~PR6에는 모든 새 계약을 contracts.py에 최종 이름 그대로 두어 기존 실행을 유지한다. PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 schemas.py로 옮겨 기존 계약을 교체한다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 교체안의 팀 승인은 완료됐으며 실제 파일 변경은 PR7에서 적용한다. 이번에는 문서만 수정한다.
+**결정:** 최종 배치는 공통 계약 schemas.py·내부 계약 app/agents/agentic/contracts.py다. 전환 전에는 모든 새 계약을 contracts.py에 최종 이름 그대로 두어 기존 실행을 유지한다. LD6(기존 PR7 전환 범위)에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 schemas.py로 옮겨 기존 계약을 교체한다. V2 접미사와 구 결과·질문 reader를 만들지 않는다. schemas.py 교체안의 팀 승인은 완료됐으며 실제 파일 변경은 LD6에서 적용한다. 이번에는 문서만 수정한다.
 
 | schemas.py 모델 | 변경안·이유 |
 | --- | --- |
@@ -298,98 +366,104 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 
 ## 9. 프론트·API 영향 — 새 결과 계약으로 전환
 
+v0.4에서는 화면에 원천별 자료 분기/기준선 시점과 release 참조를 표시한다. 자료조회/채점 stage를 사용하고 요청별 수집 진행률은 삭제한다. 수동 갱신 진행은 운영자 경로로 분리한다. 공통 응답 필드의 최종 배치는 팀 계약 PR에서 합의하며 이번에 schemas.py/API_CONTRACT 코드를 수정하지 않는다.
+
+
 GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 seq는 재사용한다. result는 새 DecisionResult만 반환하며 구 결과 변환·버전별 adapter는 만들지 않는다. source_analyses 거대 배열을 기본 결과나 모델 입력에 재삽입하지 않는다. 숫자는 fact 슬롯 renderer로 제공하고 원문 SQL·키는 GET/이벤트에 노출하지 않는다.
 
-**develop 리포트 화면(#38)은 새 DecisionResult에 맞춰 수정해야 한다.** PR1에서 계약을 공유하고 PR6에서 목업 GET을 제공한다. PR7 통합 전환 전에 코드/L 분리·점수 구간·배지·Top 5·L 미검토·평가 미완료·fact 슬롯 표시를 연결하고 프론트 검사를 통과한다. 화면/진행 이벤트 구현을 통합 전환 뒤로 미루지 않는다.
+**develop 리포트 화면(#38)은 새 DecisionResult에 맞춰 수정해야 한다.** 기존 PR1 계약을 공유하고 LD5에서 목업 GET을 제공한다. LD6 통합 전환 전에 코드/L 분리·점수 구간·배지·Top 5·L 미검토·평가 미완료·fact 슬롯 표시를 연결하고 프론트 검사를 통과한다. 화면/진행 이벤트 구현을 통합 전환 뒤로 미루지 않는다.
 
 현재 진행은 events seq 폴링이며 SSE가 아니다(`docs/API_CONTRACT.md:210`, `:224`). mock 진행 시뮬레이션 TODO도 실제 stage 소비로 교체한다(`frontend/app/analysis-progress/page.tsx:93`, `frontend/lib/hooks/useAnalysisProgressSimulation.ts:17`).
 
 | 단계 | stage/event·detail 계약 | 화면/전환 작업 |
 | --- | --- | --- |
-| 원문 수집 | 기존 분석 agent stages + raw_capture completed {source,snapshot_id,partial} | 분석 3종 상태·부분 수집 표시 |
+| 로컬 자료 조회 | data_lookup started/completed {release_id,source_periods,coverage} | 수집 진행률 대신 자료 버전·조회/결측 상태 표시 |
 | 계산/채점 | metrics/scorecard started·completed {rubric_version,industry_count} | 코드 채점 단계 표시 |
 | 판정 도구 | decision started/completed {phase:draft/final}; decision.tool completed {tool,status} | 원문·SQL·키·fact 값은 이벤트에서 제외 |
 | 자문 | advisor started/completed {status} | consult.*·briefing stages 삭제 |
 | 평가 | evaluate.examiner/founder/customer/landlord_advocate started/completed {status,issues_count} | 항상 4명 상태·평가 미완료 표시 |
 | 질문/종료 | questions waiting, run completed/failed/draft_available | 새 QuestionSnapshot으로 대기/재개. 유효 초안과 final 구분 |
 
-PR1에서 API_CONTRACT의 결과·질문·stage를 갱신하고 PR6에서 런타임·GET·이벤트를 연결한다. 프론트 담당은 PR7의 전환 완료 조건에 포함해 검증한다. retry는 같은 snapshot·저장 예산을 이어받는다. DB 버전 불일치는 시작 오류와 명시적 초기화 안내로 처리한다.
+기존 PR1 결과·질문 계약을 재사용하고 LD5에서 API_CONTRACT의 자료 기간·stage와 런타임·GET·이벤트를 연결한다. 프론트 담당은 LD6의 전환 완료 조건에 포함해 검증한다. retry는 같은 snapshot·저장 예산을 이어받는다. DB 버전 불일치는 시작 오류와 명시적 초기화 안내로 처리한다.
 
-## 10. 비용·시간 예산
+## 10. 용량·시간·모델 예산
 
-입력 약 31만 토큰·약 80초는 **사용자가 제공한 이전 실행 측정치**다. 이번에 해당 원 실행 로그를 재측정하지 않았다. `docs/backend-design.md:158`의 80초·19호출은 부하 산술 가정이므로 독립 실측 근거로 쓰지 않는다. 아래는 설계 추정이며 실제 공급자 요금·캐시 할인·HTTP 지연을 보장하지 않는다.
+아래는 **설계 목표/가정**이며 로컬 자료 DB를 아직 만들거나 실측하지 않았다.
 
-| 항목 | 지금 문제 | 새 구조 추정/측정 방법 |
+| 항목 | 계획 수치 | 산정/검증 |
 | --- | --- | --- |
-| 초기 입력 | 자료/digest·브리핑 선행 입력 | 고정 지시문·도구 + 최소 Site·snapshot refs. 첫 scorecard/facts에서 필요한 값만 조회 |
-| 정상 입력 예 | 역할별 입력 중복 | L 최대12개를 4묶음으로 검토: decision 초안7+최종2=9호출×평균7,000=63,000 + 평가자8호출×6,000=48,000 + 보조1호출×4,000=4,000 → **약115,000 입력 토큰**, 이전310,000 대비 약63% 감소 가설 |
-| 출력 | 긴 전문 요약·재판단 | 위 18호출×평균800이면 약14,400 출력 토큰. 구조화 출력 상한24,000. 기존 출력 실측 없어 비용 절감률은 미확정 |
-| 호출 | 요약·되묻기 | 예시18회(decision9+평가8+보조1)·최대26회. 도구 왕복이 늘면 고정 prompt와 대화가 반복돼 입력도 늘 수 있음 |
-| 시간 | 이전 약80초 | decision 순차9×3~6초 + 평가 병렬2×3~6초 + 보조3~6초 + 수집30~60초 → 약66~132초 **가정**. 도구/재시도/긴 모델 지연 시 2~3분 가능, 300초 상한 |
-| 캐시 | 불안정 prompt 변경 | 버전별 고정 prefix·도구 스키마·업종 enum으로 공급자 prompt cache 후보. 지원/할인·적중률은 사용량으로 확인 |
-| 원자료 | 재전송/재수집 | 요청당 단일 snapshot의 SQL/사실 읽기만. 지도·규제 추가 관측은 append-only, 기초 API 재수집·부모 snapshot은 2차 |
+| 서울 점포 최신 1개 버전 | 554,092행, SQL·공간/업종 인덱스 약 250~600MiB 추정 | 288MiB 원본 CSV와 39열 기준. 동일 원문 JSON 복사 없음 |
+| 개폐업 12분기 | 최대 약 198만 행, SQL·인덱스 약 300~900MiB 추정 | 1,650×100×12 상한, 실제 희소행 수로 재산정 |
+| 유동 5분기·상주/직장·공간 | 수만 행/약 10~50MiB 추정 | 인구 두 CSV 260kB, SHP 묶음 4.25MiB. 대표점과 폴리곤 포함 |
+| 활성 자료 DB | **약 0.6~1.6GiB 추정** | 열 보존·인덱스 수에 따라 달라짐. staging/원본 보관·이전 점포 버전은 별도이며 누적 보존은 증가 |
+| 요청 기본자료 조회+계산+저장 | **좌표 확정 후 10초 이하** | SQL ≤3초, 기존 계산/채점 ≤5초, 작은 사실 저장 ≤2초 목표. 8곳 cold/warm별 개별 시간 실측. 주소·지도·규제·LLM 지연은 별도 |
+| 요청당 저장 증가 | **1MiB 이하 목표** | 기본 사실·scores·집계 계보 ≤350KiB, 관측/감사/대화 참조 ≤350KiB, 보고서/질문 ≤200KiB, 여유 약100KiB. WAL 체크포인트 후 두 번째 요청 증가도 측정 |
+| 요청 자료 API | **영 회** | 자료 provider를 호출하면 실패하는 대역으로 확인. 주소·카카오 장소·V-World만 실시간 허용 |
 
-이 예산은 10~12개 각각에 독립 모델 호출을 주는 방식이 아니라 공동 조회·최대3업종 묶음 검토를 전제로 한다. 한도 안에서 근거를 확보하지 못한 대상은 unknown·검토 제한으로 남기며 예산을 자동 확대하지 않는다.
+큰 지도/규제 응답과 반복 도구 본문도 저장량에 포함한다. 파일로 빼거나 자료 DB로 옮겨 목표를 맞췄다고 계산하지 않는다. 감사 결과는 한 번 저장하고 대화에는 참조만 둔다. 자료 공간과 요청 공간 증가를 분리해 보고하며, 최초 자료 적재 증가를 요청당 증가와 섞지 않는다. 목표 초과 시 어떤 관측/감사 항목이 차지하는지 보고하고 합의 없이 필요한 근거를 삭제하지 않는다.
 
-계측은 role별 호출·input/cached_input/output·HTTP·도구 응답 크기·SQL ms·지연 p50/p95·L unknown·평가 실패·보고서 검증 실패를 저장한다. 토큰 절약이 정확도 하락을 숨기지 않게 동일 주소·같은 snapshot의 목업·고정 자료에서 검증하며 전환 전 확보한 시험 지표와 비교한다. 옛 실행 경로를 운영에 남기지 않는다. 금액 환산은 실제 model별 요금을 설정한 뒤 별도로 하며 이번 문서에서 가격을 가정하지 않는다.
+모델 예산은 기존 전체 활성300초·모델26/상한28·입력160k/출력24k·도구40을 유지한다. L 상위10+추가2, 보조 최대2회, 평가자4명도 동일하다. 요청 앞단 10초는 모델 보고서 전체 시간 약속이 아니다. 실제 사용 model/계열·usage와 SQL/계산/저장/루프 시간을 기록한다. DB/SQL 작업은 to_thread 및 협력적 취소/시간 상한으로 종료하며 예전처럼 취소 후 무한 대기하지 않는다.
 
-## 11. 1차 구현 계획 — PR1~PR7
+## 11. 새 PR 순서 — 로컬 자료 경로부터 전환
 
-구현 PR은 **feat/agentic-decision**을 base로 순서대로 리뷰·병합한다. PR7 전환까지 통과한 뒤 이 브랜치를 develop에 한 번에 병합한다. 중간 기능을 develop의 모드 스위치로 노출하지 않는다. 이번 작업에서는 브랜치를 생성하거나 PR을 열지 않는다.
+기존 PR1 계약·PR3 채점기·PR4 읽기 도구·PR5 루프는 재사용한다. 기존 PR 번호의 요청별 원문 저장 확대는 중단한다. 아래 LD 번호는 이번 전환 PR 순서이며 기존 PR 이력을 다시 쓰지 않는다.
 
-| PR | 범위 | 목업·고정 자료 검증 |
+| PR | 범위 | 완료 기준 |
 | --- | --- | --- |
-| PR1 계약 | 승인된 교체안의 모든 새 모델을 contracts.py에 최종 이름으로 정의 + API_CONTRACT에 PR7 이후 계약 추가. schemas.py 변경·실행 연결 없음 | 새 JSON fixtures·직렬화/검증, cross-request 거절, 90/10·구간·배지·Top 5·fact 슬롯. AnalysisTask/AgentAnalysis 불변 확인 |
-| PR2 원문 저장 | 요청당 snapshot 1개·raw capture·CSV file 원천·조회 뷰·계보·새 DB 스키마 | 제외 업종 원문 보존·중복/누락·append-only/cutoff·DB 실패 전파. 옛 DB 변환 코드 없음 |
-| PR3 facts·코드90 | v0.8 순수 엔진·registry·scores·기준선/프로필 버전 | L unknown·C1 sqrt·n.a. 분모·90/10·G 금지·계보. 기존 8곳 시험 결과를 익명 고정 fixture로 재현 |
-| PR4 읽기 도구 | score/facts/raw SQL 자동 등록·지도/규제 wrapper·지도 숨은 LLM 제거. mode=ro+authorizer+행/시간 상한 | 쓰기·DDL·PRAGMA·ATTACH·직접 table/cross-request·WITH 거절, 50행/2초·집계 uncitable. category_match/name_match/unknown·거리, 지도 모델 호출 0회·규제 출력 불변 |
-| PR5 decision 루프·보조 | 고정 prompt·도구 루프·상위10+추가2 L·초안/최종·예산·새 질문 재개·ADVISOR 설정 | 범위·새 근거·중복 채점 거절·반복 금지·자문 실패에도 단독 채점·실제 모델/계열·예산 재개. 분석/digest context 삽입 없음 |
-| PR6 평가자·보고서·GET | 항상 4명 read 검토·review 반영·fact renderer·final·새 GET·stage 연결 | 4명 호출·일부/전체 실패 표시·L 중복/코드 변경 거절·수용/일부/기각·숫자 슬롯·초안 상태·새 질문 대기/재개. 새 응답 계약만 제공 |
-| PR7 전환 | DecisionRequest/DecisionResult/Evidence/QuestionSnapshot을 contracts.py에서 schemas.py로 옮겨 기존 것을 교체, 옛 모드·specialists·브리핑·행동 JSON·legacy 근거/renderer/reader 삭제, 환경변수·캐시·테스트 정리, DB 스키마 버전 검사·초기화 안내, .env.example·README·프론트 연결 | 구 경로/import/설정 참조 0건, 옛 DB는 명확한 오류·초기화 안내/자동변환 없음, 새 DB 시작·질문 재개·MOCK_MODE 전체 흐름. #38 화면·실제 stage 소비·프론트 검사 통과 |
+| LD1 자료 버전·적재 계약 | 원천 필드 어댑터, data_versions/release·자연키·기간·coverage, 요청 snapshot 내부 계약, 작은 가짜 CSV/SHP | 필수 열·불일치·동일 해시 재적재 차단, 수정판 새 ID, 일부 적재/실패 시 기존 release 유지. 공통 schemas 변경안은 팀 리뷰 |
+| LD2 전체 자료 DB·수동 갱신 | CSV/API 배치 입고, 공간/업종/기간 인덱스, 51 매핑·구 사전 집계, 12/5분기 보유·활성화 | 실제 보유 파일 적재·행 수/코드/단위 검증, 원천별 크기/시간/HTTP 보고. 네트워크 수집은 별도 승인. 반경 경계/SHP CRS 보존 |
+| LD3 로컬 분석 어댑터 | API/CSV 재수집 없이 주소 좌표로 점포·개폐업·인구 조회, 기존 계산/formatter/evaluate 호출 | 자료 API 호출 금지 대역, 포함/최근접300m·YoY 동일 집합·누락/영 규칙. **동일 자료에서 408/408·배지9/1/377/21**, 다르면 차이 표 |
+| LD4 버전 계보·읽기 도구 | 직접 셀/집계 레시피 계보, readonly 뷰·범위 바인딩, facts/scores와 도구 기록 단순화 | 다른 버전/범위/요청 SQL 거절·50행2초, 해시 불일치 인용 실패, 집계에 행 링크 없음. 8곳 기본 단계≤10초·요청 증가≤1MiB |
+| LD5 decision·평가·GET 연결 | 기존 PR5 루프/보조·질문 재개를 고정 release에 연결, 기존 PR6 평가4명·fact 렌더링/GET 구현 | 재개/평가에 동일 버전, L/코드 중복 거절·예산·실패 표시, 원천별 기간 출력. 목업 우선, 유료 테스트는 따로 승인 |
+| LD6 단일 경로·팀 전환 | 구 원문 hooks/캐시/원문 테이블·옛 모드/전문가/legacy 근거 삭제, 기존 PR7 schemas 이관·DB 초기화 안내·프론트 | 삭제 대상 참조 영 건, 기존 DB 자동이전 없음, MOCK_MODE 새 전체 흐름·팀 계약/화면 검사. feat/agentic-decision 기준 리뷰 후 develop 병합 |
 
-운영 채점 엔진을 scripts에서 import하되 시험 CLI는 유지한다. 실제 decision 프롬프트는 도구 구현 후 로드맵5단계, 평가자 페르소나는 로드맵6단계에서 작성한다. PR7 완료 검증에는 해당 프롬프트·페르소나와 비용 상한을 적용한 단일 흐름 목업 검증이 포함된다. 통합 전환 전 저장 결과는 버리고 새 DB로 시작한다.
+408건 기준은 `scripts/verify_rubric_reproduction.py`를 유지한다. 엔진 단독 검증뿐 아니라 **저장된 동일 원천 fixture → 로컬 SQL → 계산 입력 → 점수** 비교를 추가해야 한다. API와 새 분기 CSV의 원래 값 차이를 숨겨 등급을 맞추지 않는다. CSV의 1.014배 유사성은 408건 완전 일치 검증을 대체하지 않는다.
 
-### 나중 작업 — 2차
+### 삭제 / 유지
 
-| 항목 | 범위·선행 조건 |
+| 대상 | 처리·이유 |
 | --- | --- |
-| SQL AST·CTE | 범용 AST·승인 뷰 이름 가림 검사 후 CTE 허용 검토. 1차 authorizer를 제거하는 대체가 아님 |
-| 재수집·부모 snapshot | 동일 요청 기초 자료 재수집·부모/자식 체인·채택 snapshot 선택·동일 조건 재계산 |
-| 진행 화면 고도화 | 단일 모드 stage·결과 연결은 PR6/PR7 필수. 이후 상세 도구 타임라인·비용 시각화 개선 |
-| 모델별 사용량 기록 보강 | PR5부터 응답 실제 모델명·계열·usage를 기록한다. 요청 모델명과 응답 전 실패한 호출의 설정 모델 기록은 후속 작업. 이전 실행은 모델명이 없어 식별할 수 없음 |
+| 기본 5원천의 PR2 transport 수집 hooks·요청별 page 원문 저장 | 삭제. 외부 client는 갱신 스크립트 전용으로 제한 |
+| raw_payloads/raw_responses/raw_rows/raw_response_rows의 기본자료 경로 | 삭제. 자료 DB의 자연키·버전이 원문을 한 번 보존하므로 요청별 해시/행 연결 구조 불필요 |
+| 기본 집계의 행별 fact_sources·행 UUID/응답 ID 목록 | 버전+쿼리 조건+계산 버전으로 교체. 직접 셀만 버전/행 키/열 계보 |
+| 상가 radius/district raw-v2 캐시와 원문 재복사 | 런타임 삭제. 자료 버전·인덱스가 대체. 과거 캐시는 fixture 검증 후 운영 경로에서 읽지 않음 |
+| resident.csv/worker.csv 요청 읽기·재저장 | 자료 DB 조회로 교체. 기존 파일·파서는 초기 적재/회귀용 유지 |
+| SHP 요청별 읽기/범위 판정 | 적재·공간 조회로 이관. 기존 parser/CRS·polygon/최근접 계산은 재사용 |
+| 지도·규제·임대인 관측 | 유지하되 작은 요청 관측과 fact 계보로 단순화. education_zone.py 수정 없이 출력 읽기 |
+| `_write`, scrub, 협력적 취소·실패 진단/사용량 | 공통 유틸로 유지. 저장 모델이 바뀌어도 스레드 격리·키 제거·오류 전파는 필요 |
+| 51업종 CSV/catalog·map_stores·profiles | 유지. 적재 시 매핑과 버전 검증. 소분류 분할·합병·제외 규칙 동일 |
+| density/population/lifecycle baseline·scoring.py | 유지. 버전 고정·기간 한계 표시. 갱신은 배치 검증으로 분리 |
+| 공정위 `load_brands()`의 숨은 실시간 호출 | 요청에서 삭제. 필요 시 운영자가 갱신한 별도 브랜드 자료/캐시만 읽고 없으면 unknown·한계 표시 (`commercial_area/franchise.py:100`) |
+| 기존 브리핑·전문가·모드·legacy 근거 | 기존 단일 모드 전환 결정대로 삭제. 자료 DB 전환 때문에 되살리지 않음 |
 
-기존 경로 정리는 PR7에 포함한다. 구현 PR은 ruff·format·mypy·unittest·catalog check, 프론트 변경은 format/lint/build를 검사한다. 실제 API·유료 실행은 별도 승인 범위에서만 수행한다.
+행 단위 payload_hash 공유는 기본자료에 **유지하지 않는 쪽을 권고**한다. typed 자료 테이블/자연키가 중복 적재를 막고 snapshot은 ID만 저장하므로 raw 전개·관측 링크·중복 검사 코드를 없앨 수 있다. 최종 코드 줄 수/자료 크기/요청 증가량은 LD4에서 비교하며 현재 문서만으로 절감 측정치를 주장하지 않는다.
 
-## 12. 확정 결정과 남은 질문
+## 12. 결정·사용자 확인
 
-| 확정 결정 | 내용 |
+확정: 분기 로컬 DB·수동 갱신·최신 보유 버전 사용·원천별 기간 표시·RAG 없음·지도/규제만 실시간·기존 51업종/채점표/decision/평가 계약 유지. 최초 실패 추적은 종료하고 이후 오류는 기록된 진단으로 다룬다.
+
+| 사용자 확인 | 권고·필요 자료 |
 | --- | --- |
-| 초기 예산 | 전체300초·모델26/상한28·누적 입력160,000/출력24,000·도구40. 실제 테스트 후 조정 |
-| 상주·직장 원천 | 현재 분기 CSV를 source_type=file로 저장하고 파일 해시·시점을 표시 |
-| 평가 실패 | 일부·전체 실패 모두 평가 미완료 표시와 함께 기계 검증된 결과 제공. 동의로 간주하지 않음 |
-| 보조 모델 | Sonnet5 시작·다른 계열 권장·실제 사용 모델/계열 기록. 변경은 환경변수. 자문 실패와 L 채점 분리 |
-| L 검토 범위 | 코드 하한 상위10+근거 있는 추가2, 대상 밖 판단 미검토. 최종 정렬/배지는 v0.8 유지 |
-| 현재 보존 | 전환 후 새 원문·도구 기록 전부 보존. 전환 전 구 DB 결과·질문 세션은 폐기 |
-| 실행·근거 | 새 구조 단일 모드·평가자 항상 실행·fact_id만 인용. 지도 검색 LLM 없음 |
-| 계약 분리 | schemas.py 팀 계약 교체, agentic/contracts.py 내부 계약. V2 접미사 없음 |
-| 구현 통합 | feat/agentic-decision 기준 중간 PR 리뷰 → PR7 통과 → develop에 한 번 병합 |
+| 직접 내려받는 상가 파일 | 이미 받은 `소상공인시장진흥공단_상가(상권)정보_서울_202606.csv` 재사용 가능. 이후 [공공데이터포털 상가정보 파일](https://www.data.go.kr/data/15083033/fileData.do)의 분기 ZIP 중 서울 파일. 저장소 밖 보관 |
+| 점포·개폐업 파일 | [서울 열린데이터광장](https://data.seoul.go.kr/)에서 **상권분석서비스(점포-상권)** / `VwsmTrdarStorQq`를 찾고 파일 탭에 CSV/Excel이 있으면 **상권별 최근12분기·원필드 포함본** 전달. 이번에는 제공 여부 미확인. 없으면 상권별 API 배치·일일 분할 권고 |
+| 유동 파일 | [길단위인구-상권 OA-15568](https://data.seoul.go.kr/dataList/OA-15568/S/1/datasetView.do). 파일이 있으면 최근5분기, 없으면 기존 API 분기 전체 약10회 초기 수집 권고 |
+| 상주·직장 | 현재 두 CSV로 초기 시작 가능. [상주 OA-15584](https://data.seoul.go.kr/dataList/OA-15584/S/1/datasetView.do), [직장 OA-15569](https://data.seoul.go.kr/dataList/OA-15569/S/1/datasetView.do)의 파일 제공은 미확인. 전체 원필드가 필요하면 기존 스크립트 배치를 갱신 단계로 이관 |
+| SHP/대표점·면적 | 현재 TbgisTrdarRelm 5종 파일 묶음과 패키지 seoul_trade_areas.csv 사용 가능. 이후 [영역-상권 OA-15560](https://data.seoul.go.kr/dataList/OA-15560/S/1/datasetView.do)에서 영역 자료를 찾되 API 중심점 JSON을 SHP로 대체하지 않음. SHP 실제 갱신 출처/시점은 받은 묶음의 제공 메타데이터 필요 |
+| 서울 경계 | 서울 CSV만 쓰는 첫 버전은 서울 범위를 표시. 서울 외곽 500m/2km에 포함되는 경기 점포까지 분석하려면 해당 지역 CSV 추가 필요 |
+| 최신 자료와 기준선 | 우선 기존 v0.8 기준선 고정·시점 차이 표시 권고. 자동 갱신하지 않고 동기간 기준선 업데이트는 별도 검증 |
+| 보존 | 초기에는 이전 버전/원문/실행 기록 유지. 운영 전 점포 과거 분기·구 release/원본 보존 기간 결정(자료 DB 누적 용량에 직접 영향) |
+| 구현 승인 | 이 문서 검토 후 LD1부터 진행. 이번에는 코드·다운로드·API 수집·유료 실행을 하지 않음 |
 
-| 남은 사용자 확인 | 필요 사항 |
-| --- | --- |
-| 운영 보존 기간 | 지금은 전부 보존. 운영 배포 전 원문·도구·임대인 답변 기록의 보존/삭제 정책 결정 |
-| Sonnet 연결 확인 | 최근 기본 ELICE 호출은 성공했으나 ADVISOR 모델·키 미설정으로 Sonnet은 미확인. 안전한 역할 설정 후 별도 승인 범위에서 확인. 키를 채팅에 보내지 않음 |
-
-schemas.py 공통 계약 교체안은 팀 승인 완료, 실제 교체는 PR7이며 API_CONTRACT에는 합의된 응답·질문·stage를 반영한다. 1차 SQL은 AST를 미루는 대신 CTE까지 허용하지 않는 보수적 범위이며, 확장 전 안전 검사를 추가한다.
-
+상가 외 서울시 파일의 실제 헤더가 오면 API 필드와 일대일 비교하고 누락 여부를 확정한다. 위 링크는 저장소의 기존 서비스/주소 근거를 재사용한 것으로 이번에 사이트를 열어 최신 파일 제공을 확인한 것이 아니다.
 
 ## 13. 팀 공지 문안
 
 ### 프론트 담당
 
-- 구조 구현 PR은 feat/agentic-decision에 모으고 PR7 완료 후 develop에 한 번에 병합합니다.
-- PR1에서 새 DecisionResult/API 계약을 공유하고 PR6에서 목업 GET을 제공합니다.
+- 구조 구현 PR은 feat/agentic-decision에 모으고 LD6 전환 완료 후 develop에 한 번에 병합합니다.
+- 기존 PR1 계약을 재사용하고 LD5에서 목업 GET·원천별 자료 분기·자료조회/채점 stage를 제공합니다.
 - develop 리포트 화면(#38)을 코드 ○/90 + L ○/10·점수 구간·배지·Top 5·fact 슬롯에 맞춰 변경해야 합니다.
-- 판단 미검토·평가 미완료·새 질문 재개와 실제 진행 stage를 연결하고, PR7 전환 전 프론트 검사를 통과합니다.
+- 판단 미검토·평가 미완료·새 질문 재개와 실제 진행 stage를 연결하고, LD6 전환 전 프론트 검사를 통과합니다.
 - 옛 결과/질문 DB는 초기화하며 구 응답 변환 화면은 만들지 않습니다.
 
 ### 규제 담당
@@ -405,10 +479,15 @@ schemas.py 공통 계약 교체안은 팀 승인 완료, 실제 교체는 PR7이
 | --- | --- |
 | v0.1 | 원문/계산 분리·fact_id·SQL·코드90/L10·도구·평가자 기본 설계 |
 | v0.2 | L 상위10+추가2·자문 실패와 채점 분리·단일 snapshot·초기 예산·보조 모델 설정, 1차/2차 범위 구분 |
+| v0.4 (2026-10-14) | 분기별 서울 로컬 자료 DB·버전 고정 snapshot·셀/집계 계보·수동 갱신·뷰 범위·LD1~LD6 전환. 요청 API/원문 복사 제거, 목표10초/1MiB. 코드 미적용 |
 | v0.3 (2026-10-14) | 단일 모드·항상 평가·fact 전용 근거·구 DB 초기화 결정. 지도 LLM/캐시 제거, schemas와 내부 contracts 분리, PR7 전환·통합 브랜치·팀 공지 추가 |
 
 PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schemas.py를 수정하지 않는다. PR7 이동 시 내부 계약 의존/import도 함께 정리하며 기존 실행 경로를 제거한다.
 
+
+## 부록 — v0.3 및 PR2~PR5 구현·실행 기록 (현재 구현 이력)
+
+이하 원문 hook·해시 공유·계보 최적화·실실행 기록은 비교 근거다. v0.4 요청/갱신 구조에서 계속 확장하지 않는다. 미착수한 구 단일-구 공유 참조 구현도 분기 로컬 DB로 대체하며 이번에 코드는 바꾸지 않았다.
 
 ### PR2 원문 저장 구현 메모
 
