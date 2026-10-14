@@ -61,10 +61,10 @@ async def preprocess_business_lifecycle_data(
         quarter_count=quarter_count,
         settings=settings,
     )
-    return await asyncio.to_thread(_aggregate_rows, rows, area_code, base_quarter, quarter_count)
+    return await asyncio.to_thread(aggregate_rows, rows, area_code, base_quarter, quarter_count)
 
 
-def _aggregate_rows(
+def aggregate_rows(
     rows: list[dict], area_code: str, base_quarter: str, quarter_count: int
 ) -> pd.DataFrame:
     """조회가 끝난 원자료만 작업 스레드에서 계산합니다."""

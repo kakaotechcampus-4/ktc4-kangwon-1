@@ -8,7 +8,6 @@ import openai
 from llm_stream_fixture import stream_response
 from openai.types.chat import ChatCompletionMessage
 
-from app.agents.decision.llm import generate_decision
 from app.llm.client import LLMResponseError, complete_json
 from app.llm.config import LLMSettings
 
@@ -92,14 +91,3 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 await complete_json("", "{}", LLMSettings())
         self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
         self.assertNotIn("SECRET", str(caught.exception))
-
-    async def test_schema_fields_are_safe(self):
-        with patch(
-            "app.agents.decision.llm.client.complete_json",
-            return_value={"status": "ok", "SECRET": "SECRET"},
-        ):
-            with self.assertRaises(LLMResponseError) as caught:
-                await generate_decision("", "{}", settings=LLMSettings())
-        self.assertEqual(caught.exception.code, "LLM_SCHEMA_INVALID")
-        self.assertIn("summary", str(caught.exception.diagnostics))
-        self.assertNotIn("SECRET", str(caught.exception) + str(caught.exception.diagnostics))

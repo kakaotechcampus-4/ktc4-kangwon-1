@@ -1,20 +1,27 @@
 """요청 범위 원문 수집·보안 정제·SQLite 저장입니다. 모델 호출은 없습니다."""
 
-import asyncio
-import hashlib
 import json
-import re
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event, Lock
-from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 
-from app.db.connection import connect
+from app.canonical import canonical_hash, canonical_json
+from app.clock import utc_now_iso
+from app.concurrency import run_in_thread
+from app.db.connection import connect, readonly
+from app.storage.scrub import _AUTH_KEYS as _AUTH_KEYS
+from app.storage.scrub import _auth as _auth
+from app.storage.scrub import scrub as scrub
+
+# 기존 검사와 이전 단계 호출의 임시 호환 이름입니다.
+_json = canonical_json
+_hash = canonical_hash
+_now = utc_now_iso
+_write = run_in_thread
 
 
 class RawStorageError(sqlite3.DatabaseError):
@@ -31,81 +38,6 @@ def raise_storage_error(error: BaseException) -> None:
 
 
 _SCOPE: ContextVar["CaptureScope | None"] = ContextVar("raw_capture", default=None)
-_AUTH_KEYS = {
-    "apikey",
-    "servicekey",
-    "authorization",
-    "proxyauthorization",
-    "referer",
-    "referrer",
-    "xapikey",
-    "accesskey",
-    "accesstoken",
-    "token",
-    "password",
-    "cookie",
-    "setcookie",
-}
-
-
-def _auth(name: str) -> bool:
-    return re.sub(r"[^a-z0-9]", "", name.lower()) in _AUTH_KEYS
-
-
-def scrub(value, secrets=()):
-    """모든 원천에서 같은 규칙으로 인증 필드·URL·응답에 반사된 키를 제거합니다."""
-    if isinstance(value, dict):
-        return {str(k): scrub(v, secrets) for k, v in value.items() if not _auth(str(k))}
-    if isinstance(value, (tuple, list)):
-        return [scrub(v, secrets) for v in value]
-    if not isinstance(value, str):
-        return value
-    text = value
-    for secret in secrets:
-        if secret:
-            for encoded in {secret, quote(secret, safe=""), quote_plus(secret)}:
-                text = text.replace(encoded, "[REDACTED]")
-    if text.startswith(("https://", "http://")):
-        url = urlsplit(text)
-        parts = url.path.split("/")
-        if url.hostname == "openapi.seoul.go.kr" and len(parts) > 2:
-            parts[1] = "[REDACTED]"
-        query = [(k, v) for k, v in parse_qsl(url.query, keep_blank_values=True) if not _auth(k)]
-        text = urlunsplit(
-            (url.scheme, url.netloc.rsplit("@", 1)[-1], "/".join(parts), urlencode(query), "")
-        )
-    return text
-
-
-def _json(value) -> str:
-    return json.dumps(
-        value, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":")
-    )
-
-
-def _hash(value) -> str:
-    return hashlib.sha256(_json(value).encode()).hexdigest()
-
-
-async def _write(fn, *args, on_cancel=None):
-    """스레드 쓰기가 끝난 뒤 취소를 전파해 늦은 저장·마무리 경합을 막습니다."""
-    task = asyncio.create_task(asyncio.to_thread(fn, *args))
-    cancelled = False
-    while not task.done():
-        try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            cancelled = True
-            if on_cancel is not None:
-                on_cancel()
-    result = task.result()
-    if cancelled:
-        raise asyncio.CancelledError
-    return result
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def current_capture():
@@ -146,7 +78,7 @@ def _snapshot(request_id, run_id, path):
             "INSERT OR IGNORE INTO "
             "snapshots(snapshot_id,request_id,run_id,completeness,created_at) "
             "VALUES(?,?,?,'collecting',?)",
-            ("s_" + str(uuid.uuid4()), request_id, run_id, _now()),
+            ("s_" + str(uuid.uuid4()), request_id, run_id, utc_now_iso()),
         )
         return db.execute(
             "SELECT snapshot_id FROM snapshots WHERE request_id=?", (request_id,)
@@ -181,13 +113,14 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
     query = grouping.get("query")
     if isinstance(query, dict):
         grouping["query"] = {k: v for k, v in query.items() if k not in {"pageNo", "numOfRows"}}
-    group_key = _hash(grouping)
+    group_key = canonical_hash(grouping)
     response_id = "r_" + str(uuid.uuid4())
-    payload_hash = _hash(payload)
+    payload_hash = canonical_hash(payload)
     with connect(scope.path) as db:
         db.execute("BEGIN IMMEDIATE")
         inserted = db.execute(
-            "INSERT OR IGNORE INTO raw_payloads VALUES(?,?)", (payload_hash, _json(payload))
+            "INSERT OR IGNORE INTO raw_payloads VALUES(?,?)",
+            (payload_hash, canonical_json(payload)),
         ).rowcount
         if inserted:
             db.executemany(
@@ -198,8 +131,8 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
                         payload_hash,
                         index,
                         _natural(row),
-                        _json(row),
-                        _hash(row),
+                        canonical_json(row),
+                        canonical_hash(row),
                     )
                     for index, row in enumerate(rows)
                     if isinstance(row, dict)
@@ -219,10 +152,10 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
                 scope.snapshot_id,
                 source,
                 source_type,
-                _json(args),
+                canonical_json(args),
                 str(page),
                 status,
-                _now(),
+                utc_now_iso(),
                 payload_hash,
                 group_key,
                 expected,
@@ -259,7 +192,7 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
             periods[source] = sorted(set(periods.get(source, [])) | {str(quarter)})
         db.execute(
             "UPDATE snapshots SET base_source_manifest=?,source_periods=? WHERE snapshot_id=?",
-            (_json(manifest), _json(periods), scope.snapshot_id),
+            (canonical_json(manifest), canonical_json(periods), scope.snapshot_id),
         )
     return response_id
 
@@ -294,7 +227,7 @@ def _finish(scope):
             partial = True
         db.execute(
             "UPDATE snapshots SET completeness=?,base_source_manifest=? WHERE snapshot_id=?",
-            ("partial" if partial else "complete", _json(manifest), scope.snapshot_id),
+            ("partial" if partial else "complete", canonical_json(manifest), scope.snapshot_id),
         )
 
 
@@ -326,7 +259,7 @@ class CaptureScope:
             raise RawStorageError("원문 저장에 실패했습니다.") from exc
 
     async def record(self, **kwargs):
-        return await _write(lambda: self.record_sync(**kwargs))
+        return await run_in_thread(lambda: self.record_sync(**kwargs))
 
     async def finish(self):
         def finish_locked():
@@ -334,7 +267,7 @@ class CaptureScope:
                 _finish(self)
 
         try:
-            await _write(finish_locked)
+            await run_in_thread(finish_locked)
             self.finished = True
         except Exception as exc:
             raise RawStorageError("원문 스냅샷 마무리에 실패했습니다.") from exc
@@ -344,7 +277,7 @@ class CaptureScope:
 async def capture_scope(request_id: str, path: Path):
     run_id = "run_" + str(uuid.uuid4())
     try:
-        snapshot = await _write(_snapshot, request_id, run_id, path)
+        snapshot = await run_in_thread(_snapshot, request_id, run_id, path)
     except Exception as exc:
         raise RawStorageError("원문 스냅샷 생성에 실패했습니다.") from exc
     scope = CaptureScope(request_id, path, run_id, snapshot)
@@ -380,7 +313,7 @@ async def capture_http(source, response, *, args=None, page="1", secrets=()):
     )
     try:
         payload = response.json()
-        _json(payload)
+        canonical_json(payload)
     except (ValueError, TypeError):
         payload = {"unparsed_text": response.text}
         scope.incomplete(source + ":invalid_json")
@@ -400,11 +333,7 @@ async def capture_http(source, response, *, args=None, page="1", secrets=()):
 @contextmanager
 def scoped_reader(path, request_id, snapshot_id):
     """뷰 조회 범위는 실행기가 지정합니다. 모델에게 이 연결 설정 권한을 주지 않습니다."""
-    db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
-    try:
-        db.row_factory = sqlite3.Row
+    with readonly(path) as db:
         db.create_function("raw_request_id", 0, lambda: request_id)
         db.create_function("raw_snapshot_id", 0, lambda: snapshot_id)
         yield db
-    finally:
-        db.close()

@@ -4,10 +4,7 @@ import unittest
 
 import pandas as pd
 
-from app.agents.business_lifecycle.formatter import format_unscored_industry
-from app.agents.business_lifecycle.input_builder import _build_input
-from app.agents.business_lifecycle.preprocess import _aggregate_rows
-from app.agents.business_lifecycle.scoring import calculate_lifecycle_scores
+from app.agents.business_lifecycle.preprocess import aggregate_rows
 
 
 def source_row(quarter, source, stores=20, opened=2, closed=1):
@@ -27,7 +24,7 @@ def source_row(quarter, source, stores=20, opened=2, closed=1):
 
 class ZeroFillTests(unittest.TestCase):
     def test_partial_sources_in_present_quarter_are_zero_filled_and_marked(self):
-        frame = _aggregate_rows([source_row("20244", "CS100008")], "area", "20244", 1)
+        frame = aggregate_rows([source_row("20244", "CS100008")], "area", "20244", 1)
         row = frame.set_index("service_id").loc["I210"]
         self.assertEqual(row["latest_store_count"], 20)
         self.assertEqual(row["period_open_count"], 2)
@@ -39,12 +36,9 @@ class ZeroFillTests(unittest.TestCase):
             r for r in frame.attrs["quarterly_detail"]["industries"] if r["industry_id"] == "I210"
         )
         self.assertEqual(detail["zero_filled_sources"], 3)
-        built = _build_input(calculate_lifecycle_scores(frame, 1), "area", "20244", 1, "r", None)
-        unscored = next(r for r in built["unavailable_industries"] if r["industry_id"] == "I210")
-        self.assertEqual(format_unscored_industry(unscored)["zero_filled_sources"], 3)
 
     def test_absent_area_quarter_remains_missing(self):
-        frame = _aggregate_rows([source_row("20244", "CS100008")], "area", "20244", 2)
+        frame = aggregate_rows([source_row("20244", "CS100008")], "area", "20244", 2)
         row = frame.set_index("service_id").loc["I210"]
         self.assertEqual(row["data_status"], "incomplete")
         self.assertTrue(pd.isna(row["period_open_count"]))
@@ -55,7 +49,7 @@ class ZeroFillTests(unittest.TestCase):
         self.assertEqual(detail["store_counts"], [None, 20])
 
     def test_all_sources_absent_keeps_missing_status_and_undefined_rate(self):
-        frame = _aggregate_rows([source_row("20244", "CS100001")], "area", "20244", 1)
+        frame = aggregate_rows([source_row("20244", "CS100001")], "area", "20244", 1)
         row = frame.set_index("service_id").loc["I210"]
         self.assertEqual(row["latest_store_count"], 0)
         self.assertTrue(pd.isna(row["recent_year_close_rate"]))

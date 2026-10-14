@@ -6,6 +6,8 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
+from app.geo import haversine_m as haversine_m
+
 from .baseline import seoul_percentile
 from .config import RESTAURANT_MAJOR_NAMES, Settings
 from .schemas import (
@@ -20,8 +22,6 @@ from .schemas import (
     SpecializationRank,
     Store,
 )
-
-EARTH_RADIUS_M = 6_371_000.0
 
 
 def area_km2(radius_m: int) -> float:
@@ -203,14 +203,6 @@ def build_diversity(
         hhi_middle=round(hhi_middle, 6),
         effective_categories=round(effective_categories(hhi_middle), 4),
     )
-
-
-def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    d_phi = phi2 - phi1
-    d_lambda = math.radians(lon2 - lon1)
-    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
 
 
 def stores_within(

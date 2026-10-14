@@ -7,13 +7,13 @@ import json
 import math
 import time
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from weakref import WeakKeyDictionary
 
 import httpx
 
+from app.clock import utc_now_iso
 from app.storage.raw import RawStorageError, capture_http, current_capture, scrub
 
 from .config import (
@@ -73,8 +73,8 @@ def _read_cache(path: Path, ttl_hours: int) -> Any | None:
                 or not isinstance(page.get("collected_at"), str)
             ):
                 return None
-            _check_header(page["payload"])
-            items.extend(_extract_items(page["payload"])[0])
+            check_header(page["payload"])
+            items.extend(extract_items(page["payload"])[0])
         if len(items) != payload["meta"].get("fetched"):
             return None
         return {**payload, "items": items}
@@ -130,7 +130,7 @@ def _unwrap(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _check_header(payload: dict[str, Any]) -> None:
+def check_header(payload: dict[str, Any]) -> None:
     header = _unwrap(payload).get("header")
     if header is None:
         header = {}
@@ -147,7 +147,7 @@ def _check_header(payload: dict[str, Any]) -> None:
         raise SbizApiError(code, message or "unknown error")
 
 
-def _extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+def extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
     body = _unwrap(payload).get("body")
     if not isinstance(body, dict) or "items" not in body:
         raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
@@ -345,7 +345,7 @@ class StoreClient:
                     raise SbizApiError(
                         "BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다."
                     )
-                _check_header(payload)
+                check_header(payload)
                 return payload
             except SbizApiError:
                 raise
@@ -378,7 +378,7 @@ class StoreClient:
         except NoDataError:
             return [], 0
 
-        items, total_count = _extract_items(payload)
+        items, total_count = extract_items(payload)
         if not items or len(items) >= total_count:
             return items, total_count
 
@@ -397,7 +397,7 @@ class StoreClient:
                 except NoDataError:
                     results[page] = []
                 else:
-                    results[page] = _extract_items(page_payload)[0]
+                    results[page] = extract_items(page_payload)[0]
 
         # 한 페이지가 실패하면 남은 요청을 취소한다.
         # gather 는 예외만 올려보내고 나머지를 계속 돌려서, 어차피 버릴 조회에
@@ -425,7 +425,7 @@ class StoreClient:
                 {
                     "page": str(page),
                     "http_status": 200,
-                    "collected_at": datetime.now(UTC).isoformat(),
+                    "collected_at": utc_now_iso(),
                     "request_args": {
                         "operation": operation,
                         "query": {

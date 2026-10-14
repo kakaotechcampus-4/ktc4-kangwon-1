@@ -31,10 +31,10 @@ import math
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from pprint import pformat
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.agents.commercial_area.baseline import DENSITY_PERCENTILES_PATH  # noqa: E402
 from app.agents.commercial_area.client import SbizApiError, StoreClient, to_store  # noqa: E402
 from app.agents.commercial_area.config import (  # noqa: E402
     RESTAURANT_MAJOR_NAMES,
@@ -42,8 +42,8 @@ from app.agents.commercial_area.config import (  # noqa: E402
     load_dotenv_if_present,
 )
 from app.agents.commercial_area.industries import incomplete_split_codes, map_stores  # noqa: E402
-from app.agents.commercial_area.metrics import haversine_m  # noqa: E402
 from app.agents.commercial_area.trade_areas import SeoulTradeArea, load_trade_areas  # noqa: E402
+from app.geo import haversine_m  # noqa: E402
 from app.industries.catalog import CATALOG_VERSION, INDUSTRIES  # noqa: E402
 
 SAMPLE_PATH = (
@@ -305,7 +305,7 @@ def write_industry_sample(rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def emit_industries() -> int:
+def emit_industries(output: Path = DENSITY_PERCENTILES_PATH) -> int:
     done = load_industry_done()
     expected = {area.code for area in load_trade_areas()}
     done = {code: row for code, row in done.items() if code in expected}
@@ -332,12 +332,17 @@ def emit_industries() -> int:
             percentiles[code] = dict(zip(STEPS, percentile_table(values), strict=True))
     complete = set(done) == expected and all(n == len(expected) for n in sample_counts.values())
     print(f"표본 {len(done)}/{len(expected)}곳 · 완전 기준선={complete}")
-    print("INDUSTRY_SAMPLE_COUNTS = " + pformat(sample_counts))
-    print("SEOUL_INDUSTRY_DENSITY_PERCENTILES = " + pformat(percentiles))
-    medians = {code: values[50] for code, values in percentiles.items()}
-    print("SEOUL_INDUSTRY_MEDIAN_DENSITY = " + pformat(medians))
-    print("분할 기준선 부족·부분 수집은 승인 전 운영 기준선으로 사용하지 않습니다.")
-    return 0 if complete else 1
+    if not complete:
+        print("분할 기준선 부족·부분 수집은 운영 기준선으로 저장하지 않습니다.")
+        return 1
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["industry_code", *(f"p{p}" for p in STEPS)])
+        writer.writerows(
+            [code, *(values[p] for p in STEPS)] for code, values in percentiles.items()
+        )
+    print(f"51업종 밀도 기준선 CSV 저장: {output}")
+    return 0
 
 
 def main() -> int:

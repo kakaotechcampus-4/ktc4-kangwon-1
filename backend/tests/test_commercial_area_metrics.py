@@ -158,16 +158,6 @@ class DistrictComparisonTests(unittest.TestCase):
         rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100})
         self.assertTrue(all(r.lq_district is None for r in rows))
 
-    def test_district_specialization_names_the_district(self):
-        from app.agents.commercial_area.metrics import build_district_specialization
-
-        rows = build_middle_rows(sample_stores(), 500, MASTER, None, {"I201": 200, "G204": 800})
-        ranks = build_district_specialization(rows, Settings(), "송파구")
-
-        self.assertTrue(ranks)
-        self.assertIn("송파구 전체", ranks[0].note)
-        self.assertTrue(all(r.count >= Settings().min_count_for_specialization for r in ranks))
-
 
 class ClusterAttractionTests(unittest.TestCase):
     def test_cluster_count_is_the_whole_major(self):

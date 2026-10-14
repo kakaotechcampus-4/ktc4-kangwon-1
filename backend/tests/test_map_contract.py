@@ -1,71 +1,26 @@
-"""지도 요청 경계를 검증합니다."""
+"""지도 도구의 업종·시설 선택과 반경·표본 경계를 검증합니다."""
 
 import unittest
 
 from pydantic import ValidationError
 
-from app import schemas
-
-
-def plan_data():
-    return {
-        "action": "map_lookup",
-        "queries": [
-            {
-                "kind": "industry",
-                "industry_code": "I212",
-                "query": "카페",
-                "why_needed": "현재 경쟁 확인",
-                "expected_impact": "후보 비교",
-            }
-        ],
-    }
+from app.agents.agentic.contracts import MapSearchInput
 
 
 class MapContractTests(unittest.TestCase):
-    def test_query_boundaries(self):
-        self.assertTrue(hasattr(schemas, "MapLookupPlan"))
-        plan = schemas.MapLookupPlan.model_validate(plan_data())
-        self.assertEqual(plan.queries[0].industry_code, "I212")
+    def test_query_requires_exactly_one_target(self):
+        self.assertEqual(MapSearchInput(industry_code="I212", radius_m=500).industry_code, "I212")
+        self.assertEqual(MapSearchInput(facility_code="SC4", radius_m=50).facility_code, "SC4")
         for update in (
+            {},
             {"industry_code": "bad"},
-            {"query": "가" * 51},
-            {"facility_code": "SW8"},
-            {"query": " "},
+            {"facility_code": "bad"},
+            {"industry_code": "I212", "facility_code": "SC4"},
         ):
-            raw = plan_data()
-            raw["queries"][0].update(update)
             with self.subTest(update=update), self.assertRaises(ValidationError):
-                schemas.MapLookupPlan.model_validate(raw)
-        raw = plan_data()
-        raw["queries"] *= 9
-        with self.assertRaises(ValidationError):
-            schemas.MapLookupPlan.model_validate(raw)
+                MapSearchInput.model_validate({"radius_m": 500, **update})
 
-    def test_failed_query_is_not_zero(self):
-        self.assertTrue(hasattr(schemas, "MapQueryResult"))
-        with self.assertRaises(ValidationError):
-            schemas.MapQueryResult(
-                request=schemas.MapLookupPlan.model_validate(plan_data()).queries[0],
-                status="error",
-                method="keyword",
-                total_count=0,
-                error="TIMEOUT",
-            )
-
-    def test_unmapped_cannot_claim_industry(self):
-        self.assertTrue(hasattr(schemas, "MapPlace"))
-        with self.assertRaises(ValidationError):
-            schemas.MapPlace(
-                name="가게", category_name="기타", mapping_status="ambiguous", industry_code="I212"
-            )
-
-    def test_observation_rejects_inconsistent_status_and_time(self):
-        from test_map_mapping import plan, task
-
-        from app.agents.map_analysis.agent import failed_observation
-
-        observed = failed_observation(task(), plan(), "TIMEOUT")
-        for change in ({"status": "ok"}, {"queried_at": "yesterday"}):
-            with self.subTest(change=change), self.assertRaises(ValidationError):
-                schemas.MapObservation.model_validate({**observed.model_dump(), **change})
+    def test_radius_and_sample_count_boundaries(self):
+        for update in ({"radius_m": 49}, {"radius_m": 501}, {"limit": 0}, {"limit": 21}):
+            with self.subTest(update=update), self.assertRaises(ValidationError):
+                MapSearchInput.model_validate({"industry_code": "I212", "radius_m": 500, **update})

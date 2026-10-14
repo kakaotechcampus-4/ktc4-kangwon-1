@@ -2,9 +2,7 @@
 
 import json
 import math
-import sqlite3
-from collections import defaultdict
-from contextlib import contextmanager
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from app.agents.agentic.formatter import format_inputs
@@ -13,10 +11,12 @@ from app.agents.business_lifecycle.area_resolver import (
     ShapeFeature,
     resolve_features,
 )
-from app.agents.commercial_area.agent import _nearest_district
 from app.agents.commercial_area.client import CSV_FIELDS, to_store
 from app.agents.commercial_area.industries import map_stores
-from app.agents.commercial_area.metrics import haversine_m
+from app.agents.floating_population.geo import overlapping_areas
+from app.agents.floating_population.models import TrdarArea
+from app.db.connection import readonly
+from app.geo import haversine_m, to_epsg5181
 from app.local_data.boundary import boundary_limitations
 from app.local_data.database import DataValidationError, default_path
 
@@ -29,6 +29,18 @@ SOURCE_NAMES = {
     "areas": "areas",
     "seoul_boundary": "seoul_boundary",
 }
+
+
+def nearest_district(stores, lat, lon):
+    located = [
+        s for s in stores if s.district_code and s.latitude is not None and s.longitude is not None
+    ]
+    if not located:
+        return None, None
+    located.sort(key=lambda s: haversine_m(lat, lon, s.latitude, s.longitude))
+    nearest = located[:10]
+    code = Counter(s.district_code for s in nearest).most_common(1)[0][0]
+    return code, next((s.district_name for s in nearest if s.district_code == code), None)
 
 
 class LocalAdapter:
@@ -56,14 +68,8 @@ class LocalAdapter:
                 if row is None or row[0] != version["file_hash"]:
                     raise DataValidationError("SOURCE_UNAVAILABLE: 고정 자료 버전이 없거나 변경됨")
 
-    @contextmanager
     def connection(self):
-        db = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True, timeout=5)
-        db.row_factory = sqlite3.Row
-        try:
-            yield db
-        finally:
-            db.close()
+        return readonly(self.path)
 
     def rows(self, source: str, *, area_codes=None, bounds=None) -> list[dict]:
         if source not in SOURCE_NAMES:
@@ -177,11 +183,7 @@ class LocalAdapter:
             ):
                 row[target] = row.get(target, row.get(original))
             raw["floating_population"].append(wrap(row))
-        from app.agents.floating_population.geo import _overlapping_areas
-        from app.agents.floating_population.models import TrdarArea
-        from app.geo import to_epsg5181
-
-        hits = _overlapping_areas(
+        hits = overlapping_areas(
             [TrdarArea.from_api_row(r["row"]) for r in raw["floating_population"]],
             *to_epsg5181(task.site.latitude, task.site.longitude),
             task.radius_m,
@@ -206,7 +208,7 @@ class LocalAdapter:
                         "request_args_json": json.dumps({"extra": version["quarter"]}),
                     }
                 )
-        district, _ = _nearest_district(map_stores(nearby), task.site.latitude, task.site.longitude)
+        district, _ = nearest_district(map_stores(nearby), task.site.latitude, task.site.longitude)
         store_version = next(v["version_id"] for v in self.versions if v["source"] == "stores")
         with self.connection() as db:
             counts = dict(

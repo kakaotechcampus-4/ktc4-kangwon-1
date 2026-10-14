@@ -19,7 +19,7 @@ from app.agents.business_lifecycle.client import (  # noqa: E402
     get_recent_quarters,
     normalize_row,
 )
-from app.agents.business_lifecycle.preprocess import _aggregate_rows  # noqa: E402
+from app.agents.business_lifecycle.preprocess import aggregate_rows  # noqa: E402
 from app.config import load_environment  # noqa: E402
 from app.industries.catalog import INDUSTRIES_WITHOUT_SEOUL  # noqa: E402
 from app.seoul import request_json  # noqa: E402
@@ -52,7 +52,7 @@ def measure(raw: list[dict], base_quarter: str, quarter_count: int) -> dict:
         normalized = normalize_row(row)
         normalized["trdar_cd"] = "11"
         rows.append(normalized)
-    frame = _aggregate_rows(rows, "11", base_quarter, quarter_count)
+    frame = aggregate_rows(rows, "11", base_quarter, quarter_count)
     result = {}
     for row in frame.to_dict("records"):
         code = row["service_id"]

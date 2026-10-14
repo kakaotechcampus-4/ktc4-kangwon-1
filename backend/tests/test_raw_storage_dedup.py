@@ -33,7 +33,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_shared_body_rows_views_and_lineage(self):
-        from app.agents.agentic.registry import register_fact
+        from app.agents.agentic.facts import register_fact
 
         scopes = []
         for name in ("one", "two"):
@@ -129,7 +129,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(db.execute("SELECT count(*) FROM " + table).fetchone()[0], 0)
 
     async def test_lineage_validation_reads_references_in_batches(self):
-        from app.agents.agentic.registry import register_fact
+        from app.agents.agentic.facts import register_fact
 
         async with capture_scope("one", self.path) as scope:
             await scope.record(
@@ -184,32 +184,15 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(finished.is_set())
 
     async def test_service_failure_records_scoring_and_loop_stage(self):
-        from app.mocks import MOCK_SCOPE
-        from app.schemas import AgentAnalysis, Site
-        from app.services.agentic_analysis import execute_agentic_analysis
+        from contextlib import nullcontext
 
-        async def resolve(address):
-            return Site(input_address=address, road_address=address, latitude=37.5, longitude=127)
+        from app.services.agentic_analysis import execute_agentic_analysis
+        from app.services.agentic_mock import dependencies
 
         async def generate(*args):
             raise OSError("모델 대역 오류")
 
-        agents = {}
-        for key in ("floating_population", "business_lifecycle", "commercial_area"):
-
-            async def agent(task, key=key):
-                return AgentAnalysis(
-                    request_id=task.request_id,
-                    agent_id=key,
-                    status="no_data",
-                    scope=MOCK_SCOPE,
-                    data={},
-                )
-
-            agents[key] = agent
         for stage in ("채점", "루프"):
-            from contextlib import nullcontext
-
             mocked = (
                 patch(
                     "app.services.agentic_analysis.persist_snapshot_scores",
@@ -223,9 +206,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                     "오프라인",
                     request_id=stage,
                     db_path=self.path,
-                    resolve=resolve,
-                    agents=agents,
-                    generate=generate,
+                    **(dependencies() | {"generate": generate}),
                 )
             with connect(self.path) as db:
                 details = json.loads(

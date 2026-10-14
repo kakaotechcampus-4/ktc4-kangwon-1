@@ -2,7 +2,7 @@
 
 ## 확정 규칙
 
-이 절이 v0.8의 유일한 현재 규칙이다. 뒤의 v0.2~v0.7 기록에 다른 배점·식·권고가 있어도 이 절을 우선한다. 다음 단계의 decision 프롬프트는 이 절만 읽어 구현할 수 있다. 대상은 service-51의 [생성 카탈로그](../backend/app/industries/catalog.py) 51업종과 승인된 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)다. 운영 decision·프롬프트·schemas.py는 아직 미적용이다. 성공 확률·매출·수익을 예측하는 점수가 아니다.
+이 절이 v0.8의 유일한 현재 규칙이다. 뒤의 v0.2~v0.7 기록에 다른 배점·식·권고가 있어도 이 절을 우선한다. 대상은 service-51의 [생성 카탈로그](../backend/app/industries/catalog.py) 51업종과 승인된 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)다. 현재 단일 decision 경로의 코드 채점·보고서 검증에 적용하며 실행 구조는 [백엔드 README](../backend/README.md)를 따른다. 성공 확률·매출·수익을 예측하는 점수가 아니다.
 
 ### 문항·배점·입력·식
 
@@ -145,7 +145,7 @@ L의 근거는 fact_id로 인용한 새 근거여야 한다. 이미 코드가 �
 
 아래 경로는 `AgentAnalysis.data` 내부의 JSON Pointer다. `{i}`는 해당 업종 코드로 찾은 실제 배열 인덱스이며 고정 번호가 아니다. `{band}`·`{age}`도 승인 프로필의 실제 키로 치환한다. 업종·기간·단위·citable을 검증한 뒤 인용하며, 데이터 선별로 제거됐거나 null이면 있는 필드로 간주하지 않는다.
 
-지도는 세 AgentAnalysis 밖의 `MapObservation.data`를 사용하므로 별도 표시한다. 교육환경보호구역은 `AgentAnalysis.data`에 없다. decision 모델 입력 payload의 `/education_zones/...`이며 [agent.py](../backend/app/agents/decision/agent.py)의 `_build_input`이 주입한다. 이를 분석 에이전트의 필드로 만들어 쓰지 않는다.
+이 v0.3 기록에서 지도는 세 AgentAnalysis 밖의 `MapObservation.data`를 사용하므로 별도 표시한다. 교육환경보호구역은 `AgentAnalysis.data`에 없다. 당시 decision 모델 입력 payload의 `/education_zones/...`는 옛 `decision/agent.py`의 `_build_input`이 주입했다. 현재 도구·fact 구조는 [백엔드 README](../backend/README.md)를 따른다.
 
 ## 항목별 채점표
 

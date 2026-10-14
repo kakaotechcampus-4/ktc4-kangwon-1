@@ -1,6 +1,6 @@
 """주거인구·직장인구 집계와 인구 총괄.
 
-유동인구와 **같은 상권 집합**(`_overlapping_areas` 결과)을 쓴다. 따로 상권을 고르면 세 인구의
+유동인구와 **같은 상권 집합**(`overlapping_areas` 결과)을 쓴다. 따로 상권을 고르면 세 인구의
 분모가 달라져 같은 지역인데 서로 다른 구역을 세게 된다 — 이 블록을 별도 에이전트가 아니라
 유동인구 `data` 안에 두는 이유다.
 
@@ -107,7 +107,7 @@ def _read(kind: str, path: Path) -> list[PopulationRecord]:
     return [PopulationRecord.from_api_row(row, kind) for row in rows]
 
 
-def _age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
+def age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
     total = complete_sum(r.total for r in records)
     return {
         a: rounded(ratio(complete_sum(r.by_age[a] for r in records), total), 4) for a in AGE_BANDS
@@ -138,7 +138,7 @@ def _benchmark(
     label: str,
     with_households: bool,
 ) -> PopulationBenchmark:
-    local_share, seoul_share = _age_share(local), _age_share(seoul)
+    local_share, seoul_share = age_share(local), age_share(seoul)
     household_index = None
     if with_households:
         mine, avg = _persons_per_household(local), _persons_per_household(seoul)
@@ -170,7 +170,7 @@ def resident_block(
         count=complete_sum(r.total for r in local),
         households=complete_sum(r.households for r in local),
         persons_per_household=_persons_per_household(local),
-        age_share=_age_share(local),
+        age_share=age_share(local),
         trade_area_count=len(main_codes),
         covered_trade_areas=len(local),
         benchmark=_benchmark(local, seoul, quarter, "주거인구", with_households=True),
@@ -189,7 +189,7 @@ def worker_block(
         period_code=quarter,
         period=period_ko(quarter),
         count=complete_sum(r.total for r in local),
-        age_share=_age_share(local),
+        age_share=age_share(local),
         trade_area_count=len(main_codes),
         covered_trade_areas=len(local),
         benchmark=_benchmark(local, seoul, quarter, "직장인구", with_households=False),

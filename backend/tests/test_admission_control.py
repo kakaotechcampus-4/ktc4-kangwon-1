@@ -2,13 +2,13 @@
 
 import asyncio
 import unittest
+from types import SimpleNamespace
 
 import httpx
-from fastapi import Response
 
-from app.api.v1.routes import analysis_runner
+from app.api.v1.agentic import analysis_runner
+from app.main import create_app
 from app.services.settings import ExecutionSettings
-from tests.legacy_app import create_app
 
 
 class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
@@ -20,7 +20,9 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
         async def execute(*args, **kwargs):
             await started.put(kwargs["request_id"])
             await release.wait()
-            return Response(content="{}", media_type="application/json")
+            return SimpleNamespace(
+                status="waiting_for_input", question_session_id="q", questions=[]
+            )
 
         app.dependency_overrides[analysis_runner] = lambda: execute
         async with httpx.AsyncClient(
@@ -43,10 +45,7 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(rejected.status_code, 429)
                 self.assertEqual(rejected.headers["retry-after"], "30")
                 self.assertIn("x-request-id", rejected.headers)
-                self.assertEqual(
-                    rejected.json()["detail"],
-                    "동시에 실행할 수 있는 분석 수를 넘었습니다. 잠시 뒤 다시 요청해 주세요.",
-                )
+                self.assertIn("동시에 실행할 수 있는 분석 수", rejected.json()["detail"])
             finally:
                 release.set()
                 await waiting
@@ -67,4 +66,5 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
                     "/api/v1/analyses?mock=true", json={"address": "시험 주소"}
                 )
                 self.assertEqual(response.status_code, 502)
+                await asyncio.sleep(0)
                 self.assertFalse(app.state.job_registry.tasks)

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
-from app.api.v1.routes import health as api_health
+from app.api.v1.jobs import health as api_health
 from app.config import load_environment
 from app.db import repository
 from app.db.connection import initialize

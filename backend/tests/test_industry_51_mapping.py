@@ -3,17 +3,13 @@
 import csv
 import unittest
 from dataclasses import replace
-from unittest.mock import AsyncMock, patch
 
-from test_commercial_area_agent import SITE, FakeClient, sample_stores
+from test_commercial_area_metrics import sample_stores
 
-from app.agents.business_lifecycle.preprocess import _aggregate_rows
-from app.agents.commercial_area.agent import analyze
-from app.agents.commercial_area.config import Settings
+from app.agents.business_lifecycle.preprocess import aggregate_rows
 from app.agents.commercial_area.industries import map_stores
 from app.agents.commercial_area.metrics import count_by_middle
 from app.industries import DATA_DIR, lookup
-from app.schemas import AnalysisTask
 
 
 class Industry51MappingTests(unittest.TestCase):
@@ -64,29 +60,7 @@ class Industry51MappingTests(unittest.TestCase):
                 ("CS200005", 90, 0),
             )
         ]
-        frame = _aggregate_rows(rows, "area", "20262", 1).set_index("service_id")
+        frame = aggregate_rows(rows, "area", "20262", 1).set_index("service_id")
         self.assertEqual(frame.loc["P105", "latest_store_count"], 370)
         self.assertEqual(frame.loc["P105", "recent_year_close_rate"], 1.35)
         self.assertFalse(frame.loc["M107", "data_available"])
-
-
-class SplitBaselineTests(unittest.IsolatedAsyncioTestCase):
-    async def test_missing_small_baseline_blocks_lq_and_radius_rank(self):
-        base = sample_stores()[0]
-        stores = [
-            replace(base, store_id=str(i), middle_code="G215", small_code="G21503")
-            for i in range(6)
-        ]
-        baseline = [replace(base, store_id="missing", middle_code="G215", small_code=None)]
-        settings = Settings()
-        task = AnalysisTask(request_id="split", site=SITE)
-        with patch("app.agents.commercial_area.agent.load_brands", new=AsyncMock(return_value=[])):
-            result = await analyze(
-                task, settings=settings, store_client=FakeClient(settings, stores, baseline)
-            )
-        row = next(r for r in result.data["by_middle"] if r["code"] == "G215B")
-        self.assertEqual(row["count"], 6)
-        self.assertIsNone(row["lq"])
-        self.assertFalse(row["citable"]["lq"])
-        for radius in result.data["by_radius"]:
-            self.assertFalse(any(r["code"] == "G215B" for r in radius["top_by_specialization"]))

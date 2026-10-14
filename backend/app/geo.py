@@ -33,6 +33,18 @@ from __future__ import annotations
 
 import math
 
+EARTH_RADIUS_M = 6_371_000.0
+
+
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """WGS84 위경도 두 점의 구면 거리(미터)를 계산합니다."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = phi2 - phi1
+    d_lambda = math.radians(lon2 - lon1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
+
+
 # EPSG:5181 — 중부원점 TM
 _LAT0 = math.radians(38.0)
 _LON0 = math.radians(127.0)

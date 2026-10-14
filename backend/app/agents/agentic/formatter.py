@@ -3,18 +3,19 @@
 import json
 from collections import defaultdict
 
+import pandas as pd
+
 from app.agents.business_lifecycle.client import normalize_row
-from app.agents.business_lifecycle.input_builder import to_float
-from app.agents.business_lifecycle.preprocess import _aggregate_rows
-from app.agents.commercial_area.client import SbizApiError, _check_header, _extract_items, to_store
+from app.agents.business_lifecycle.preprocess import aggregate_rows
+from app.agents.commercial_area.client import SbizApiError, check_header, extract_items, to_store
 from app.agents.commercial_area.industries import (
     incomplete_split_codes,
     load_middle_master,
     map_stores,
 )
 from app.agents.commercial_area.metrics import build_middle_rows, count_by_middle
-from app.agents.floating_population.geo import _overlapping_areas
-from app.agents.floating_population.metrics import _aggregate, _benchmark, _trend
+from app.agents.floating_population.geo import overlapping_areas
+from app.agents.floating_population.metrics import aggregate, daily_benchmark, trend
 from app.agents.floating_population.models import (
     FlpopRecord,
     PopulationRecord,
@@ -25,7 +26,7 @@ from app.agents.floating_population.numeric import complete_sum
 from app.agents.floating_population.population import (
     RESIDENT_KIND,
     WORKER_KIND,
-    _age_share,
+    age_share,
     resident_block,
     worker_block,
 )
@@ -33,6 +34,11 @@ from app.db.connection import connect
 from app.geo import to_epsg5181
 from app.industries.catalog import SEOUL_TO_INDUSTRY
 from app.industries.lookup import service_code
+
+
+def to_float(value):
+    """pandas 결측을 없애고 기존 보고 자료의 소수 두 자리 규칙을 유지합니다."""
+    return None if pd.isna(value) else round(float(value), 2)
 
 
 def load_raw(scope):
@@ -128,8 +134,8 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
     if collection:
         try:
             for page in collection:
-                _check_header(json.loads(page["response_json"]))
-                _extract_items(json.loads(page["response_json"]))
+                check_header(json.loads(page["response_json"]))
+                extract_items(json.loads(page["response_json"]))
         except SbizApiError:
             partial.add("commercial_area")
             data["runtime_partial_sources"] = sorted(partial)
@@ -179,7 +185,7 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         if "XCNTS_VALUE" in r["row"] and "YDNTS_VALUE" in r["row"]
     ]
     hits = (
-        _overlapping_areas(
+        overlapping_areas(
             areas, *to_epsg5181(task.site.latitude, task.site.longitude), task.radius_m
         )
         if areas
@@ -205,16 +211,16 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         series.setdefault(latest, [])
         quarters = sorted(series)
         records = series[latest]
-        pop = _aggregate(records, latest)
+        pop = aggregate(records, latest)
         warnings = []
         data["floating_population"] = {
             "period_code": latest,
             "population": pop.model_dump(mode="json"),
-            "benchmark": _benchmark(
+            "benchmark": daily_benchmark(
                 pop, complete_sum(r.total for r in records), len(records), quarter_days(latest)
             ).model_dump(mode="json"),
             "reliability": {"covered_trade_areas": len(records)},
-            "trend": _trend([(q, series[q]) for q in quarters], codes, warnings).model_dump(
+            "trend": trend([(q, series[q]) for q in quarters], codes, warnings).model_dump(
                 mode="json"
             ),
         }
@@ -228,7 +234,7 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         ]:
             rows = raw[source]
             records = [PopulationRecord.from_api_row(r["row"], kind) for r in rows]
-            data["population_baselines"][kind] = _age_share(records) if records else {}
+            data["population_baselines"][kind] = age_share(records) if records else {}
             if records:
                 block = builder(records, records[0].stdr_yyqu_cd, codes)
                 data["floating_population"][key] = block.model_dump(mode="json") if block else None
@@ -250,7 +256,7 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         }
         requested = {q for q in requested if len(q) == 5 and q.isdigit() and q <= base}
         count = len(requested) or 12
-        frame = _aggregate_rows([normalize_row(r["row"]) for r in lifecycle], area, base, count)
+        frame = aggregate_rows([normalize_row(r["row"]) for r in lifecycle], area, base, count)
         metrics = [
             "avg_store_count",
             "recent_year_close_rate",

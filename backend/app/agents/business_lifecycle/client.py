@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from app.seoul import SeoulOpenApiError as SeoulOpenAPIError
-from app.seoul import previous_quarter, request_json
+from app.seoul import previous_quarter, request_json, shift_quarter
 
 from .config import Settings
 
@@ -311,7 +311,6 @@ def get_recent_quarters(
 
     validate_quarter_code(base_quarter)
 
-    year = int(base_quarter[:4])
     quarter = int(base_quarter[4])
 
     if quarter not in (1, 2, 3, 4):
@@ -320,23 +319,7 @@ def get_recent_quarters(
     if count <= 0:
         raise ValueError("조회할 분기 수는 1 이상이어야 합니다.")
 
-    quarters: list[str] = []
-
-    current_year = year
-    current_quarter = quarter
-
-    for _ in range(count):
-        quarters.append(f"{current_year}{current_quarter}")
-
-        current_quarter -= 1
-
-        if current_quarter == 0:
-            current_quarter = 4
-            current_year -= 1
-
-    quarters.reverse()
-
-    return quarters
+    return [shift_quarter(base_quarter, -offset) for offset in range(count - 1, -1, -1)]
 
 
 async def fetch_store_data_for_quarters(

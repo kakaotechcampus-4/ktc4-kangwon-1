@@ -6,6 +6,17 @@ RULE_VERSION = "map-rules-1"
 INDUSTRY_CATEGORIES = {"P105": "AC5", "Q102": "HP8", "I212": "CE7", "G215": "PM9"}
 
 
+def distance_m(document):
+    raw = document.get("distance")
+    if not isinstance(raw, (str, int, float)):
+        return None
+    try:
+        value = int(float(raw))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return value if value >= 0 else None
+
+
 def match_place(industry_code, name, category_name, category_code, facility_code=None):
     if facility_code:
         return (

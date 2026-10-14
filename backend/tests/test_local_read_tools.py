@@ -16,6 +16,7 @@ from app.local_data.database import LocalDataDB
 from app.local_data.provenance import save_snapshot
 from app.schemas import AnalysisTask, Site
 from app.storage.raw import capture_scope
+from tests.local_data_fixture import complete_versions
 
 
 class LocalReadTests(unittest.IsolatedAsyncioTestCase):
@@ -83,14 +84,18 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                                 "longitude": 127.0,
                                 "district_code": "11680",
                                 "industry_code": "I201",
-                                "payload": {"SIMILR_INDUTY_STOR_CO": i, "TOT_FLPOP_CO": i},
+                                "payload": {
+                                    "SIMILR_INDUTY_STOR_CO": i,
+                                    "TOT_FLPOP_CO": i,
+                                    "STDR_YYQU_CD": "20262",
+                                },
                             }
                             for i in range(61)
                         ],
                         source,
                     )
                 )
-            market.activate(versions)
+            market.activate(complete_versions(market, versions, "20262"))
             path = initialize(root / "request.sqlite3")
             create_request("one", "시험", radius_m=500, db_path=path)
             site = Site(input_address="시험", road_address="시험", latitude=37.5, longitude=127.0)
@@ -106,7 +111,9 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )
                 direct = await query_raw(
-                    scope, "SELECT store_count FROM v_raw_lifecycle WHERE store_count=5"
+                    scope,
+                    "SELECT store_count FROM v_raw_lifecycle "
+                    "WHERE store_count=5 AND quarter='20262'",
                 )
                 self.assertEqual(direct.status, "ok")
                 self.assertEqual(len(direct.fact_ids), 1)
@@ -117,7 +124,9 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(tuple(lineage), ("5", "SIMILR_INDUTY_STOR_CO"))
                 for view in ("stores", "lifecycle", "floating", "resident", "worker"):
                     result = await query_raw(scope, f"SELECT count(*) AS n FROM v_raw_{view}")
-                    self.assertEqual(result.data.rows[0].values["n"], 60)
+                    self.assertEqual(result.status, "ok", (view, result.error))
+                    quarters = 12 if view == "lifecycle" else 5 if view == "floating" else 1
+                    self.assertEqual(result.data.rows[0].values["n"], 60 * quarters)
                     self.assertEqual(result.data.uncitable_columns, ["n"])
                 limited = await query_raw(scope, "SELECT store_count FROM v_raw_lifecycle")
                 self.assertTrue(limited.truncated)
@@ -142,7 +151,9 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     denied = await query_raw(scope, sql)
                     self.assertEqual(denied.error.code, "SQL_DENIED", sql)
                 cell = await query_raw(
-                    scope, "SELECT TOT_FLPOP_CO FROM v_raw_floating WHERE TOT_FLPOP_CO=4"
+                    scope,
+                    "SELECT TOT_FLPOP_CO FROM v_raw_floating "
+                    "WHERE TOT_FLPOP_CO=4 AND quarter='20262'",
                 )
                 self.assertEqual(len(cell.fact_ids), 1)
                 self.assertEqual(cell.data.uncitable_columns, [])

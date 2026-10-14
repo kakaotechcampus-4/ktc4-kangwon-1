@@ -14,10 +14,16 @@ class SeoulOpenApiTimeout(SeoulOpenApiError):
 
 
 def previous_quarter(code: str) -> str:
+    return shift_quarter(code, -1)
+
+
+def shift_quarter(code: str, count: int) -> str:
+    """YYYYQ 분기를 이동합니다. 양수는 이후, 음수는 이전 분기입니다."""
     if len(code) != 5 or not code.isdigit() or code[-1] not in "1234":
         raise ValueError("분기는 YYYYQ 형식이어야 합니다.")
     year, quarter = int(code[:4]), int(code[-1])
-    return f"{year - 1}4" if quarter == 1 else f"{year}{quarter - 1}"
+    index = year * 4 + quarter - 1 + count
+    return f"{index // 4}{index % 4 + 1}"
 
 
 async def request_json(

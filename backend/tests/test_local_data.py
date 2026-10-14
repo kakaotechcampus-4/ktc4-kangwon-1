@@ -9,6 +9,7 @@ from pathlib import Path
 from app.local_data.database import DataValidationError, LocalDataDB
 from app.local_data.refresh import collect_pages, normalize, store_rows
 from scripts.build_density_baseline import CSV_FIELDS
+from tests.local_data_fixture import complete_versions
 
 
 class LocalDataTests(unittest.TestCase):
@@ -33,36 +34,44 @@ class LocalDataTests(unittest.TestCase):
 
     def test_failure_preserves_active_and_atomic_release(self):
         a = self.stage()
-        self.db.activate([a])
-        b = self.stage("20261")
+        first = complete_versions(self.db, [a], "20262")
+        self.db.activate(first)
+        b = self.stage("20263")
         with self.assertRaises(DataValidationError):
             self.db.activate([b, "missing"])
-        self.assertEqual(self.db.active_versions(), [a])
-        self.db.activate([a, b])
-        self.assertEqual(set(self.db.active_versions()), {a, b})
+        self.assertEqual(set(self.db.active_versions()), set(first))
+        b = self.stage("20263")
+        second = complete_versions(self.db, [b], "20263")
+        self.db.activate(second)
+        self.assertEqual(set(self.db.active_versions()), set(second))
 
     def test_duplicate_missing_and_quarter_gap(self):
         for rows in ([self.row(), self.row()], [{"row_key": "x"}]):
             with self.assertRaises(DataValidationError):
                 self.stage(rows=rows)
         a = self.stage("20262")
-        b = self.stage("20254")
+        versions = complete_versions(self.db, [a], "20262")
+        removed = next(v for v in versions if self.db.version(v)["quarter"] == "20261")
+        versions.remove(removed)
+        versions.append(self.stage("20231"))
         with self.assertRaises(DataValidationError):
-            self.db.activate([a, b])
+            self.db.activate(versions)
 
     def test_retention_and_row_count_drift(self):
         a = self.stage("20254")
-        self.db.activate([a])
+        self.db.activate(complete_versions(self.db, [a], "20254"))
         b = self.stage("20261")
-        self.db.activate([b])
+        self.db.activate(complete_versions(self.db, [b], "20261"))
         c = self.stage("20262")
-        self.db.activate([c])
+        current = complete_versions(self.db, [c], "20262")
+        self.db.activate(current)
         self.assertEqual(self.db.release_count(), 2)
         self.assertIsNone(self.db.version(a))
         bad = self.stage("20263", [self.row("a"), self.row("b"), self.row("c")])
+        invalid = complete_versions(self.db, [bad], "20263")
         with self.assertRaises(DataValidationError):
-            self.db.activate([bad])
-        self.assertEqual(self.db.active_versions(), [c])
+            self.db.activate(invalid)
+        self.assertEqual(set(self.db.active_versions()), set(current))
 
     def test_resume_pages(self):
         calls = []
@@ -82,8 +91,8 @@ class LocalDataTests(unittest.TestCase):
         broken = False
         rows, count = asyncio.run(collect_pages(self.db, "test", fetch))
         self.assertEqual(len(rows), 1001)
-        self.assertEqual(count, 1)
-        self.assertEqual(calls, [1, 1001, 1001])
+        self.assertEqual(count, 2)
+        self.assertEqual(calls, [1, 1001, 1, 1001])
 
     def test_csv_mapping_preserves_excluded_rows_and_district_zeros(self):
         path = Path(self.temp.name) / "stores.csv"
@@ -156,8 +165,9 @@ class LocalDataTests(unittest.TestCase):
         a = self.stage()
         b = self.stage()
         self.assertEqual(a, b)
-        self.db.activate([a])
-        self.db.activate([a])
+        versions = complete_versions(self.db, [a], "20262")
+        self.db.activate(versions)
+        self.db.activate(versions)
         self.assertEqual(self.db.release_count(), 1)
 
 

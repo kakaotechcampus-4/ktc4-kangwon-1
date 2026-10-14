@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.agents.floating_population import baseline  # noqa: E402
 from app.agents.floating_population.client import SeoulOpenDataClient  # noqa: E402
-from app.agents.floating_population.metrics import _aggregate  # noqa: E402
+from app.agents.floating_population.metrics import aggregate  # noqa: E402
 from app.agents.floating_population.models import (  # noqa: E402
     AGE_BANDS,
     DAYS,
@@ -115,7 +115,7 @@ def measure(
         for bands in patterns.values()
     ):
         raise ValueError("패턴에 잘못된 시간대가 있습니다.")
-    population = _aggregate(records, quarter)
+    population = aggregate(records, quarter)
     return {
         "AGE_SHARE_AVG": population.age_share,
         "TIME_PER_HOUR_SHARE_AVG": population.time_per_hour_share,

@@ -4,17 +4,16 @@ import json
 import math
 import re
 import sqlite3
-from contextlib import closing
 from time import monotonic
 
-from app.agents.commercial_area.metrics import haversine_m
-from app.db.connection import connect
+from app.concurrency import run_in_thread
+from app.db.connection import connect, readonly
+from app.geo import haversine_m
 from app.local_data.persistence import register_cell
 from app.local_data.provenance import load_snapshot, validate_snapshot
-from app.storage.raw import _write
 
 from .contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolError, ToolReply
-from .registry import register_fact
+from .facts import register_fact
 
 VIEWS = {
     "v_raw_stores": "commercial_area",
@@ -41,6 +40,9 @@ FUNCTIONS = {
     "length",
     "lower",
     "upper",
+    "like",
+    "substr",
+    "instr",
 }
 FIELDS = {
     "store_count": ("SIMILR_INDUTY_STOR_CO", "store_count", "개"),
@@ -57,9 +59,15 @@ def error(code, message):
 
 
 def _authorizer(action, arg1, arg2, database, origin):
+    arg1 = arg1.lower() if arg1 else arg1
+    arg2 = arg2.lower() if arg2 else arg2
+    origin = origin.lower() if origin else origin
     if action == sqlite3.SQLITE_SELECT:
         return sqlite3.SQLITE_OK
     if action == sqlite3.SQLITE_READ:
+        # UNION 뷰의 COUNT(*)는 SQLite가 DB 이름 없는 빈 열 읽기로 추가 검사합니다.
+        if database is None and origin is None and arg2 == "" and arg1 in LOCAL_VIEWS:
+            return sqlite3.SQLITE_OK
         allowed = (
             (database == "temp" and arg1 in LOCAL_VIEWS)
             or (
@@ -113,8 +121,7 @@ def quote(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def local_views(db, scope, snapshot):
-    adapter = validate_snapshot(scope)
+def local_views(db, scope, snapshot, adapter):
     spatial = json.loads(snapshot["scope_json"])
     db.execute("ATTACH DATABASE ? AS local", (adapter.path.as_uri() + "?mode=ro",))
     db.create_function(
@@ -209,7 +216,7 @@ def local_views(db, scope, snapshot):
                     " AND area_code IN (" + (",".join(quote(c) for c in codes) or "NULL") + ")"
                 )
             parts.append(f"SELECT {','.join(selected)} FROM local.{source} WHERE {condition}")
-            mappings[view] = (source, mapping)
+            mappings.setdefault(view, (source, {}))[1][vid] = mapping
         if parts:
             db.execute(f"CREATE TEMP VIEW {view} AS " + " UNION ALL ".join(parts))
     versions = [quote(v["version_id"]) for v in adapter.versions if v["source"] == "stores"]
@@ -230,6 +237,7 @@ def _query(scope, input):
         return error("SQL_DENIED", "승인된 뷰의 단일 SELECT만 허용합니다.")
     view, projection = _projection(sql)
     snapshot = load_snapshot(scope)
+    adapter = validate_snapshot(scope) if snapshot else None
     is_local = snapshot is not None and view in {
         "v_raw_stores",
         "v_raw_lifecycle",
@@ -261,10 +269,8 @@ def _query(scope, input):
         timed_out = monotonic() > deadline
         return int(timed_out)
 
-    with closing(
-        sqlite3.connect(scope.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
-    ) as db:
-        mappings = local_views(db, scope, snapshot) if snapshot else {}
+    with readonly(scope.path, timeout=2) as db:
+        mappings = local_views(db, scope, snapshot, adapter) if snapshot else {}
         db.execute("PRAGMA query_only=ON")
         db.create_function("raw_request_id", 0, lambda: scope.request_id)
         db.create_function("raw_snapshot_id", 0, lambda: scope.snapshot_id)
@@ -274,7 +280,7 @@ def _query(scope, input):
                 snapshot
                 and action == sqlite3.SQLITE_READ
                 and database == "main"
-                and (arg1 in mappings or origin in mappings)
+                and ((arg1 or "").lower() in mappings or (origin or "").lower() in mappings)
             ):
                 return sqlite3.SQLITE_DENY
             return _authorizer(action, arg1, arg2, database, origin)
@@ -282,6 +288,7 @@ def _query(scope, input):
         db.set_authorizer(authorize)
         db.set_progress_handler(progress, 100)
         try:
+            json.dumps(input.params, allow_nan=False)
             if progress():
                 return error("SQL_TIMEOUT", "원문 조회가 2초를 초과했습니다.")
             cursor = db.execute(sql, input.params)
@@ -289,7 +296,7 @@ def _query(scope, input):
             if len(set(columns)) != len(columns):
                 return error("SQL_DENIED", "중복 출력 열 이름은 허용하지 않습니다.")
             rows = cursor.fetchmany(input.max_rows + 1)
-        except sqlite3.Error:
+        except (sqlite3.Error, OverflowError, ValueError):
             return error(
                 "SQL_TIMEOUT" if timed_out else "SQL_DENIED",
                 "원문 조회 시간 초과" if timed_out else "허용되지 않거나 잘못된 원문 조회입니다.",
@@ -297,6 +304,8 @@ def _query(scope, input):
     public_columns = [c for c in columns if c not in (hidden, "__server_version__")]
     citable = set()
     output = []
+    truncated = len(rows) > input.max_rows
+    output_bytes = len(json.dumps(public_columns, ensure_ascii=False).encode()) + 1024
     with connect(scope.path) as db:
         for values in rows[: input.max_rows]:
             value_map = dict(zip(columns, values, strict=True))
@@ -304,8 +313,15 @@ def _query(scope, input):
             if hidden:
                 value_map.pop(hidden, None)
             version = value_map.pop("__server_version__", None)
+            row_bytes = len(json.dumps(value_map, ensure_ascii=False).encode())
+            # 계보와 응답 메타데이터 몫도 남겨 모델·감사 기록을 같은 상한에 가둡니다.
+            if output_bytes + row_bytes + 200 > 65536:
+                truncated = True
+                break
+            output_bytes += row_bytes + 200
             if is_local and version and ref:
-                source, mapping = mappings[view]
+                source, version_mappings = mappings[view]
+                mapping = version_mappings[version]
                 facts = []
                 for alias, field in projection.items():
                     original_column = mapping.get(field)
@@ -323,6 +339,8 @@ def _query(scope, input):
                             metric=metric,
                             unit=unit,
                             expected_value=value_map[output_alias],
+                            adapter=adapter,
+                            connection=db,
                         )
                         facts.append(fact)
                         citable.add(output_alias)
@@ -369,8 +387,7 @@ def _query(scope, input):
                     raw_row_refs=[ref] if original else [], values=value_map, fact_ids=facts
                 )
             )
-    truncated = len(rows) > input.max_rows
-    return ToolReply(
+    reply = ToolReply(
         status="partial" if truncated else "ok",
         truncated=truncated,
         data=RawQueryResult(
@@ -380,8 +397,15 @@ def _query(scope, input):
         ),
         fact_ids=[f for row in output for f in row.fact_ids],
     )
+    while len(reply.model_dump_json().encode()) > 65536 and reply.data.rows:
+        reply.data.rows.pop()
+        reply.fact_ids = [f for row in reply.data.rows for f in row.fact_ids]
+        reply.status, reply.truncated = "partial", True
+    if len(reply.model_dump_json().encode()) > 65536:
+        return error("SQL_DENIED", "원문 조회 열 정보가 응답 크기 상한을 초과했습니다.")
+    return reply
 
 
 async def query_raw(scope, sql, params=None, max_rows=50):
     input = QueryRawInput(sql=sql, params=params or {}, max_rows=max_rows)
-    return await _write(_query, scope, input)
+    return await run_in_thread(_query, scope, input)

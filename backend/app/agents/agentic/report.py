@@ -1,13 +1,14 @@
 """L 근거를 서버에서 검증하고 코드 채점기로 순위·숫자를 다시 만듭니다."""
 
 import json
-import re
 import uuid
 from copy import deepcopy
 
+from app.clock import utc_now_iso
 from app.db.connection import connect
+from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 from app.schemas import DecisionResult
-from app.storage.raw import _now
+from app.text import has_digit
 
 from .contracts import FactView, FinalCandidate, LRecord, LSelection
 from .reads import score_summary
@@ -46,8 +47,6 @@ def load_base(scope):
 
 
 def fact_rows(scope, ids):
-    from app.local_data.provenance import validate_snapshot
-
     validate_snapshot(scope)
     if not ids:
         return {}
@@ -61,8 +60,6 @@ def fact_rows(scope, ids):
         )
         names = [c[0] for c in cursor.description]
         rows = {r[0]: dict(zip(names, r, strict=True)) for r in cursor.fetchall()}
-    from app.local_data.provenance import expand_spatial_scope
-
     expand_spatial_scope(scope, rows.values())
     if set(rows) != set(ids):
         raise ReportInvalid("현재 스냅샷에 없는 fact_id입니다.")
@@ -110,9 +107,12 @@ def validate_proposal(scope, proposal, base_id, base_rows, advisor_unavailable=F
     if len(extras) > 2:
         raise ReportInvalid("추가 L 검토는 두 업종까지입니다.")
     facts = fact_rows(scope, ids)
-    for s in segments(proposal):
-        if s.type == "text" and re.search(r"\d", s.text):
-            raise ReportInvalid("문장 숫자는 fact 슬롯으로 제출해야 합니다.")
+    free_texts = [s.text for s in segments(proposal) if s.type == "text"]
+    for record in proposal.L_records:
+        free_texts += [record.selection.reason, *record.checked_questions, *record.limitations]
+        free_texts += [factor.claim for factor in record.new_factors]
+    if any(has_digit(text) for text in free_texts):
+        raise ReportInvalid("문장 숫자는 fact 슬롯으로 제출해야 합니다.")
     for fact in facts.values():
         if fact["status"] != "observed" or not fact["citable"]:
             raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")
@@ -139,10 +139,17 @@ def validate_proposal(scope, proposal, base_id, base_rows, advisor_unavailable=F
                 raise ReportInvalid("L 도구 기록이 실제 성공한 호출과 다릅니다.")
             call_text = json.dumps([calls[k] for k in record.tool_call_ids])
             claims = [f.claim.strip() for f in record.new_factors]
-            evidence_sets = [tuple(sorted(set(f.fact_ids))) for f in record.new_factors]
-            if len(set(claims)) != len(claims) or len(set(evidence_sets)) != len(evidence_sets):
+            evidence_sets = [set(f.fact_ids) for f in record.new_factors]
+            if len(set(claims)) != len(claims) or sum(map(len, evidence_sets)) != len(
+                set().union(*evidence_sets)
+            ):
                 raise ReportInvalid("같은 새 요인·근거를 중복해 등급을 올릴 수 없습니다.")
             for factor in record.new_factors:
+                if any(
+                    facts[f]["industry_code"] not in (None, record.industry_code)
+                    for f in factor.fact_ids
+                ):
+                    raise ReportInvalid("L 근거의 업종이 검토 업종과 다릅니다.")
                 if factor.major_constraint and factor.direction != "adverse":
                     raise ReportInvalid("큰 운영 제약은 불리 요인으로 기록해야 합니다.")
                 if any(
@@ -210,6 +217,12 @@ def finalize(
     reviews=None,
     resolutions=(),
 ):
+    if any(
+        has_digit(text)
+        for resolution in resolutions
+        for text in [resolution.reason, *resolution.applied, *resolution.not_applied]
+    ):
+        raise ReportInvalid("검토 반영 문장 숫자는 fact 슬롯으로 제출해야 합니다.")
     facts = validate_proposal(scope, proposal, base_id, base_rows, advisor_unavailable)
     if reviews is not None:
         expected = {i.issue_id for r in reviews for i in r.issues}
@@ -350,7 +363,7 @@ def finalize(
                 json.dumps(rows, ensure_ascii=False),
                 json.dumps([r.industry_code for r in top]),
                 "reviewed" if records else "unreviewed",
-                _now(),
+                utc_now_iso(),
             ),
         )
         for row in rows:
@@ -391,7 +404,7 @@ def finalize(
                 result_model.model_dump_json(),
                 json.dumps(rendered, ensure_ascii=False),
                 "final" if reviews is not None else "draft_candidate",
-                _now(),
+                utc_now_iso(),
             ),
         )
     return result_model

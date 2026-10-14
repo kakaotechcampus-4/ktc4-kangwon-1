@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from app.db.connection import connect
 from app.db.repository import append_event
+from app.errors import AnalysisConflictError
 from app.llm.budget import BudgetExceeded, llm_scope
 from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
 from app.llm.config import LLMSettings
@@ -35,29 +36,30 @@ from .report import ReportInvalid, fact_rows, finalize, load_base
 from .reviews import review
 from .tools import ToolExecutor
 
-SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다. 코드 점수는
-고정이고 자료는 읽기 도구로 확인합니다.
-계산 자료를 먼저 읽고 필요할 때만 원문·지도·규제를 조회하세요. 수치
-계산·점수 순위·배지는 서버가 정합니다.
-L은 코드 하한 상위 열 업종과 fact 근거로 추가한 최대 두 업종만
-검토합니다. 나머지는 판단 미검토입니다.
-L에는 실제 조회한 새 fact만 사용하세요. D/C/S 지표 반복은 금지하며
-근거가 없으면 unknown입니다.
-L 등급은 새 요인 기준: 유리 요인 둘 이상·불리 없음이면 최고, 유리
-하나·불리 없음이면 그다음,
-중립 또는 유리·불리 상쇄는 중간, 불리 하나는 낮음, 불리 둘 이상 또는 큰
-운영 제약은 최저입니다.
-애매하면 ask_advisor로 질문과 선택한 fact만 전달하세요. 실패하면
-혼자 판단합니다. 미확인 임대 조건만 ask_user로 질문하세요.
-보고서 문장 숫자는 text에 쓰지 말고 fact 슬롯으로 인용하세요. 인용
-불가 사실·추측은 사실처럼 말하지 마세요.
-LRecord에는 초기 score_snapshot_id·코드 순위·선정 사유,
-실제 tool_call_id, 확인 질문, 새 요인·fact_id·등급을
-기록하세요.
-추가 선정은 decision_extra와 reason_fact_ids가
-필요합니다. 자문은 점수를 매기지 않습니다.
-같은 조회를 반복하지 말고 submit_draft(phase=draft)로
-제출하세요. 모델은 점수·배지를 제출하지 않습니다."""
+SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
+계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하고
+get_scorecard는 L_top10을 한 묶음으로 한 번 조회하세요.
+L_top10의 업종을 하나씩 검토하고, 근거가 없으면 unknown 이유를 limitations에 남기세요.
+그 밖에는 fact 근거로 추가한 최대 두 업종만 검토하며 나머지는 판단 미검토입니다.
+get_facts는 업종·source·metrics를 지정하거나 받은 fact_ids로 좁혀 읽으세요.
+공간 조건은 source=industry_profile, metrics=[space_requirements]로 조회하세요.
+reviewed=false 공간 요건은 운영 가설 초안입니다. 임대인의 확인된 조건과 대조하고
+확인 조건으로 남기세요. 초안을 법규·필수 시설·확정 사실이나 L 가감점 근거로 쓰지 마세요.
+소매업은 주방·조리 배기가 없다는 이유로 불리하게 판단하지 마세요.
+기업 간 거래·예약 중심 업종도 보행 통행이나 층 조건만으로 일괄 탈락시키지 마세요.
+임대인이 아직 확인하지 않은 핵심 공간 조건만 처음에 최대 세 항목을 한 번 묶어 ask_user로
+질문하세요. 자료로 확인할 수 있거나 이미 답한 조건은 다시 묻지 마세요.
+기존 fact로 설명할 수 없는 경쟁·시설·규제 조건이 있을 때만 원문·지도·규제를 조회하세요.
+해석 충돌이나 결측으로 후보·확인 조건이 달라질 때만 ask_advisor로 질문과 선택한 fact를
+전달하세요. 자문은 점수를 매기지 않으며 실패하면 불확실성을 남겨 직접 판단합니다.
+L에는 실제 조회한 새 fact만 사용하세요. D/C/S 지표 반복과 같은 근거의 중복 채점은 금지합니다.
+L 등급은 새 요인 기준: 유리 둘 이상·불리 없음은 최고, 유리 하나·불리 없음은 그다음,
+중립 또는 유리·불리 상쇄는 중간, 불리 하나는 낮음, 불리 둘 이상 또는 큰 운영 제약은 최저입니다.
+LRecord에는 초기 score_snapshot_id·코드 순위·선정 사유·실제 tool_call_id·확인 질문·
+새 요인·fact_id·등급을 기록하세요. 추가 선정은 decision_extra와 reason_fact_ids가 필요합니다.
+모든 보고서 문장 숫자는 text에 직접 쓰지 말고 fact_id 슬롯으로 인용하세요.
+인용 불가 사실·추측은 확인 조건으로 남기세요. 동일 조회를 반복하지 말고
+submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출하지 않습니다."""
 ADVISOR_PROMPT = """당신은 decision의 상권 자문역입니다. 질문과 제공한 fact만 읽으며
 도구는 없습니다.
 점수·순위는 매기지 않습니다. 대안 해석·성립 조건·확신도·부족한 사실을 짧은
@@ -110,6 +112,7 @@ class DecisionLoop:
         budget=None,
         measurement=False,
         recorder=None,
+        allow_questions=True,
     ):
         self.scope, self.site, self.base_id, self.base_rows = scope, site, base_id, base_rows
         self.generate, self.advisor_generate = generate, advisor_generate
@@ -123,6 +126,7 @@ class DecisionLoop:
             "known_fact_ids": [],
         }
         self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
+        self.state.setdefault("allow_questions", allow_questions)
         self.recorder = recorder
         self.budget.on_change = self._budget_changed
         self.tools = ToolExecutor(
@@ -214,9 +218,12 @@ class DecisionLoop:
             raise ValueError("평가할 초안이 없습니다.")
         await self.event("evaluation", "started", {})
         reviewers = self.evaluator_executors()
-        reviews = await asyncio.gather(
-            *(review(self, actor, executor, draft) for actor, executor in reviewers.items())
-        )
+        async with asyncio.TaskGroup() as group:
+            tasks = [
+                group.create_task(review(self, actor, executor, draft))
+                for actor, executor in reviewers.items()
+            ]
+        reviews = [task.result() for task in tasks]
         self.state["reviews"] = [r.model_dump(mode="json") for r in reviews]
         self.state["phase"] = "final"
         self.state["feedback_rounds"] = 1
@@ -294,7 +301,10 @@ class DecisionLoop:
             receipt["_record_raw"] = True
         value, failure = None, None
         used = self.budget.used
-        reserved = await self.budget.claim_output()
+        requested = min(
+            settings.max_tokens or 16000, 4000 if role not in {"decision", "advisor"} else 16000
+        )
+        reserved = await self.budget.claim_output(requested)
         try:
             value, receipt = await self.model_call(
                 role, messages, replace(settings, max_tokens=reserved), definitions, receipt
@@ -334,7 +344,7 @@ class DecisionLoop:
             else self.evaluator_generate
         )
         if generator is None:
-            with llm_scope(self.budget, role):
+            with llm_scope(self.budget, role, final=self.state.get("phase") == "final"):
                 if definitions is not None:
                     value = await complete_tools(messages, definitions, settings, receipt=receipt)
                 else:
@@ -342,7 +352,9 @@ class DecisionLoop:
                         messages[0]["content"], messages[1]["content"], settings, receipt=receipt
                     )
         else:
-            attempt = await self.budget.reserve(role, input_chars=len(_json(messages)))
+            attempt = await self.budget.reserve(
+                role, final=self.state.get("phase") == "final", input_chars=len(_json(messages))
+            )
             status = "error"
             try:
                 value = generator(messages, definitions, settings, receipt)
@@ -460,6 +472,8 @@ class DecisionLoop:
             )
 
     async def ask_user(self, input):
+        if not self.state["allow_questions"] or self.state.get("phase") == "final":
+            return error("QUESTION_NOT_ALLOWED", "현재 요청·단계에서 질문할 수 없습니다.")
         if self.state["asked"]:
             return error("ALREADY_ANSWERED", "질문 세션을 반복할 수 없습니다.")
         self.state["asked"] = True
@@ -561,6 +575,14 @@ class DecisionLoop:
     def model_messages(self):
         return deepcopy(self.state["messages"])
 
+    def definitions(self):
+        blocked = not self.state["allow_questions"] or self.state.get("phase") == "final"
+        return [
+            d
+            for d in self.tools.definitions()
+            if not (blocked and d["function"]["name"] == "ask_user")
+        ]
+
     async def compact_reply(self, reply, name, arguments):
         body = reply.model_dump(mode="json")
         data = body.get("data") or {}
@@ -591,9 +613,7 @@ class DecisionLoop:
     async def run(self):
         while True:
             try:
-                definitions = self.tools.definitions()
-                if self.state.get("phase") == "final":
-                    definitions = [d for d in definitions if d["function"]["name"] != "ask_user"]
+                definitions = self.definitions()
                 self.budget.schema_chars = len(_json(definitions))
                 if (
                     self.budget.totals()[1] >= self.budget.output_limit
@@ -654,12 +674,28 @@ class DecisionLoop:
                     "호출·시간·토큰 예산 상한에 도달해 코드 점수로 마무리했습니다."
                 )
             except LLMResponseError as exc:
-                if exc.code != "LLM_OUTPUT_LIMIT":
-                    raise
-                return await self.fallback("모델 출력 상한에 도달해 코드 점수로 마무리했습니다.")
+                if exc.code in {"LLM_TIMEOUT", "LLM_CONNECTION_ERROR"} and not self.state.get(
+                    "model_retried"
+                ):
+                    self.state["model_retried"] = True
+                    continue
+                return await self.fallback("모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.")
+            except LLMHTTPError as exc:
+                if exc.diagnostics.get("http_status") in {
+                    429,
+                    500,
+                    502,
+                    503,
+                    504,
+                } and not self.state.get("model_retried"):
+                    self.state["model_retried"] = True
+                    continue
+                return await self.fallback(
+                    "모델 서비스를 확인하지 못해 코드 점수로 마무리했습니다."
+                )
 
-    @classmethod
-    async def resume(cls, scope, site, answers, **kwargs):
+    @staticmethod
+    async def validate_resume(scope, answers):
         def load():
             with connect(scope.path) as db:
                 row = db.execute(
@@ -687,13 +723,17 @@ class DecisionLoop:
                     raise ValueError("답변 항목·길이가 잘못되었습니다.")
                 return json.loads(row[0]), question[0]
 
-        saved, question_id = await _write(load)
+        return await _write(load)
+
+    @classmethod
+    async def resume(cls, scope, site, answers, *, resume_state=None, **kwargs):
+        saved, question_id = resume_state or await cls.validate_resume(scope, answers)
         saved = await _write(_save_user_facts, scope, answers, question_id, saved)
         return await cls.create(scope, site, saved=saved, **kwargs)
 
 
 def _save_user_facts(scope, answers, question_id, saved):
-    from .registry import register_fact
+    from .facts import register_fact
 
     response = scope.record_sync(
         source="user", source_type="api", args={}, page="1", status=200, payload={"rows": [answers]}
@@ -705,7 +745,7 @@ def _save_user_facts(scope, answers, question_id, saved):
             (question_id,),
         ).fetchone()
         if question is None or question[0] != "waiting":
-            raise ValueError("이미 답변한 질문입니다.")
+            raise AnalysisConflictError("이미 답변한 질문입니다.")
         ref = db.execute(
             "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
         ).fetchone()[0]

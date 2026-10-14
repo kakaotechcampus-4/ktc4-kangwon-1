@@ -4,7 +4,7 @@ import json
 
 from openai.types.chat import ChatCompletionMessage
 
-from app.schemas import AGENT_IDS, AgentAnalysis, Scope, Site
+from app.schemas import Site
 
 
 def call(name, arguments):
@@ -57,19 +57,4 @@ def dependencies(*, ask=False):
     async def resolve(address):
         return Site(input_address=address, road_address=address, latitude=37.552, longitude=126.925)
 
-    def agent(name):
-        async def analyze(task):
-            return AgentAnalysis(
-                request_id=task.request_id,
-                agent_id=name,
-                status="no_data",
-                scope=Scope(area="목업", period="목업"),
-            )
-
-        return analyze
-
-    return {
-        "resolve": resolve,
-        "agents": {name: agent(name) for name in AGENT_IDS},
-        **generators(ask=ask),
-    }
+    return {"resolve": resolve, "mock": True, **generators(ask=ask)}

@@ -8,8 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agents.agentic.registry import persist_snapshot_scores, register_fact
+from app.agents.agentic.facts import register_fact
 from app.agents.agentic.scoring import WEIGHTS, rank_candidates, result, score_item, summarize
+from app.agents.agentic.snapshot import persist_snapshot_scores
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.schemas import AnalysisTask, Site
@@ -187,20 +188,18 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_scoring_failure_marks_service_failed(self):
-        from app.mocks import mock_agents, mock_generate, mock_resolve
-        from app.services.analysis import execute_analysis
+        from app.services.agentic_analysis import execute_agentic_analysis
+        from app.services.agentic_mock import dependencies
 
         with (
-            patch("app.agents.agentic.registry._persist", side_effect=ValueError("secret")),
+            patch("app.agents.agentic.snapshot._persist", side_effect=ValueError("secret")),
             self.assertRaises(RawStorageError),
         ):
-            await execute_analysis(
+            await execute_agentic_analysis(
                 "서울",
                 request_id="score-failed",
                 db_path=self.path,
-                resolve=mock_resolve,
-                agents=mock_agents(),
-                generate=mock_generate,
+                **dependencies(),
             )
         with connect(self.path) as db:
             row = db.execute(

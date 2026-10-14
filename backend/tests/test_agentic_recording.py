@@ -12,9 +12,9 @@ from unittest.mock import patch
 from openai.types.chat import ChatCompletionMessage
 
 from app.agents.agentic.recording import CallRecording, ReplayGenerate
-from app.agents.agentic.registry import persist_report
 from app.agents.agentic.runtime import DecisionLoop
 from app.agents.agentic.scoring import WEIGHTS, result, summarize
+from app.agents.agentic.snapshot import persist_report
 from app.db.connection import initialize
 from app.db.repository import create_request
 from app.llm.budget import BudgetExceeded

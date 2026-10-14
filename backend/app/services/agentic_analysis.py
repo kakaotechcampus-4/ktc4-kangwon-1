@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import uuid
 from time import monotonic
@@ -11,18 +10,19 @@ from time import monotonic
 from app.address import resolve_site
 from app.agents.agentic.budget import RuntimeBudget
 from app.agents.agentic.recording import CallRecording
-from app.agents.agentic.registry import persist_snapshot_scores
 from app.agents.agentic.runtime import DecisionLoop
-from app.agents.orchestration.workflow import run_agents
+from app.agents.agentic.snapshot import persist_snapshot_scores
 from app.config import BACKEND_DIR
 from app.db import repository
 from app.db.connection import connect, initialize
+from app.errors import AnalysisConflictError
 from app.llm.session import with_client_session
 from app.local_data.adapter import LocalAdapter
 from app.local_data.persistence import persist_local
 from app.local_data.provenance import validate_snapshot
 from app.schemas import AgentError, AnalysisTask, Site
-from app.storage.raw import CaptureScope, _now, _write, capture_scope, scrub
+from app.storage.raw import CaptureScope, _now, _write, capture_scope
+from app.storage.scrub import env_secrets, scrub_text
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +51,10 @@ def _persist_outcome(path, request_id, outcome):
 
 
 async def _failure(path, request_id, exc, stage, timings=None):
-    secrets = [
-        v for k, v in os.environ.items() if any(s in k.upper() for s in ("KEY", "TOKEN", "SECRET"))
-    ]
+    secrets = env_secrets()
 
     def safe(value):
-        text = scrub(str(value), secrets)
-        text = re.sub(r"https?://[^\s<>\"']+", "[URL 생략]", text)
-        text = re.sub(
-            r"(?i)(?:servicekey|api[_-]?key|authorization|token)\s*[=:]\s*\S+", "[인증 생략]", text
-        )
+        text = re.sub(r"https?://[^\s<>\"']+", "[URL 생략]", scrub_text(str(value), secrets))
         return text[:1000]
 
     causes = []
@@ -122,13 +116,14 @@ async def execute_agentic_analysis(
     db_path=None,
     request_id=None,
     resolve=None,
-    agents=None,
+    mock=False,
     generate=None,
     advisor_generate=None,
     evaluator_generate=None,
     local_data_path=None,
     measurement=False,
     recording_path=None,
+    allow_questions=False,
 ):
     request_id = request_id or uuid.uuid4().hex
     path = await _write(initialize, db_path)
@@ -146,7 +141,7 @@ async def execute_agentic_analysis(
         await _write(lambda: repository.mark_running(request_id, db_path=path))
         await _event(path, request_id, "address", "started")
         async with capture_scope(request_id, path) as scope:
-            adapter = await _write(LocalAdapter, local_data_path) if agents is None else None
+            adapter = await _write(LocalAdapter, local_data_path) if not mock else None
             async with asyncio.timeout(600 if measurement else 120):
                 site = await (resolve or resolve_site)(address)
                 task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
@@ -154,13 +149,6 @@ async def execute_agentic_analysis(
                 await _event(path, request_id, "address", "completed")
                 await _event(path, request_id, "local_data", "started")
 
-                async def completed(analysis):
-                    await _write(lambda: repository.save_agent(analysis, db_path=path))
-
-                if adapter is None:
-                    await run_agents(
-                        task, agents, on_analysis_completed=completed, agent_timeout=110
-                    )
                 timings[stage] = monotonic() - started
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
                 if adapter is not None:
@@ -180,6 +168,7 @@ async def execute_agentic_analysis(
                 evaluator_generate=evaluator_generate,
                 budget=budget,
                 recorder=recorder,
+                allow_questions=allow_questions,
             )
             loop.state["limitations"].extend(data.get("limitations", []))
             loop.state["phase_seconds"] = timings
@@ -224,6 +213,10 @@ async def resume_agentic_analysis(
 
     site, snapshot, run_id = await _write(context)
     scope = CaptureScope(request_id, path, run_id, snapshot)
+    try:
+        resume_state = await DecisionLoop.validate_resume(scope, answers)
+    except ValueError as exc:
+        raise AnalysisConflictError(str(exc)) from None
     recorder = (
         CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
         if measurement or recording_path
@@ -240,6 +233,7 @@ async def resume_agentic_analysis(
             evaluator_generate=evaluator_generate,
             measurement=measurement,
             recorder=recorder,
+            resume_state=resume_state,
         )
         outcome = await loop.run()
         if outcome.status == "draft_available":
@@ -247,7 +241,7 @@ async def resume_agentic_analysis(
         await scope.finish()
         await _write(_persist_outcome, path, request_id, outcome)
         return outcome
-    except ValueError:
+    except AnalysisConflictError:
         raise
     except (Exception, asyncio.CancelledError) as exc:
         await _failure(path, request_id, exc, "루프")

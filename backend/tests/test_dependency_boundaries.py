@@ -10,9 +10,9 @@ APP = Path(__file__).resolve().parents[1] / "app"
 
 
 class DependencyBoundaryTests(unittest.TestCase):
-    def test_mocking_imports_in_fresh_process(self):
+    def test_mock_imports_in_fresh_process(self):
         result = subprocess.run(
-            [sys.executable, "-c", "import app.services.mocking"],
+            [sys.executable, "-c", "import app.services.agentic_mock"],
             cwd=APP.parent,
             capture_output=True,
             text=True,

@@ -16,6 +16,7 @@ from app.local_data.database import LocalDataDB
 from app.local_data.persistence import persist_local, register_cell
 from app.schemas import AnalysisTask, Site
 from app.storage.raw import capture_scope
+from tests.local_data_fixture import complete_versions
 
 
 class LocalAdapterTests(unittest.TestCase):
@@ -28,7 +29,7 @@ class LocalAdapterTests(unittest.TestCase):
                 [{"row_key": "a", "payload": {"a": 1}, "latitude": 37.5, "longitude": 127.0}],
                 "first",
             )
-            db.activate([first])
+            db.activate(complete_versions(db, [first], "20262"))
             adapter = LocalAdapter(db.path)
             second = db.stage(
                 "stores",
@@ -36,8 +37,8 @@ class LocalAdapterTests(unittest.TestCase):
                 [{"row_key": "b", "payload": {"a": 2}, "latitude": 37.5, "longitude": 127.0}],
                 "second",
             )
-            db.activate([second])
-            self.assertEqual(adapter.versions[0]["version_id"], first)
+            db.activate(complete_versions(db, [second], "20263"))
+            self.assertIn(first, [version["version_id"] for version in adapter.versions])
             self.assertEqual(adapter.rows("stores")[0]["a"], 1)
             before, after = db.vacuum()
             self.assertLessEqual(after, before)
@@ -133,7 +134,7 @@ class LocalAdapterTests(unittest.TestCase):
                         source,
                     )
                 )
-            market.activate(versions)
+            market.activate(complete_versions(market, versions, "20262"))
             path = initialize(root / "requests.sqlite3")
             repository.create_request("test", site.input_address, db_path=path)
             task = AnalysisTask(request_id="test", site=site, radius_m=500)
@@ -174,10 +175,23 @@ class LocalAdapterTests(unittest.TestCase):
                         self.assertEqual(reply.facts[0].spatial_scope["radius_m"], 500)
                         with connect(path) as con:
                             self.assertEqual(
-                                con.execute("SELECT COUNT(*) FROM raw_rows").fetchone()[0], 0
+                                con.execute("SELECT COUNT(*) FROM raw_rows").fetchone()[0], 51
                             )
                             self.assertEqual(
-                                con.execute("SELECT COUNT(*) FROM fact_sources").fetchone()[0], 0
+                                con.execute(
+                                    "SELECT COUNT(*) FROM fact_sources JOIN facts USING(fact_id) "
+                                    "WHERE source='industry_profile' "
+                                    "AND metric='space_requirements'"
+                                ).fetchone()[0],
+                                51,
+                            )
+                            self.assertEqual(
+                                con.execute(
+                                    "SELECT COUNT(*) FROM fact_sources JOIN facts USING(fact_id) "
+                                    "WHERE NOT (source='industry_profile' "
+                                    "AND metric='space_requirements')"
+                                ).fetchone()[0],
+                                0,
                             )
                             row = con.execute(
                                 "SELECT row_key,column_name FROM local_fact_lineage "

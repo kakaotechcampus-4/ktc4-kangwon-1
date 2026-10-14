@@ -20,7 +20,7 @@ from app.agents.floating_population.models import quarter_days
 from app.agents.floating_population.population import (
     RESIDENT_KIND,
     WORKER_KIND,
-    _age_share,
+    age_share,
     load_snapshot,
 )
 from app.industries import DATA_DIR
@@ -61,7 +61,7 @@ def result(
 @cache
 def seoul_age_share(kind: str, quarter: str) -> dict:
     records = [r for r in load_snapshot(kind) if r.stdr_yyqu_cd == quarter]
-    return _age_share(records) if records else {}
+    return age_share(records) if records else {}
 
 
 def score_item(

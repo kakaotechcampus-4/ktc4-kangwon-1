@@ -11,8 +11,8 @@ from typing import Annotated, Any, Literal, Self, get_args
 from pydantic import AfterValidator, Field, JsonValue, model_validator
 
 from app.industries.catalog import INDUSTRIES
-from app.legacy_schemas import FacilityCode as FacilityCode
-from app.legacy_schemas import QuestionField, Schema, Text
+from app.schema_types import FacilityCode as FacilityCode
+from app.schema_types import QuestionField, Schema, Text
 
 FactId = Annotated[
     str,
@@ -83,6 +83,7 @@ Metric = Literal[
     "space_condition",
     "existing_facilities",
     "industry_preferences",
+    "space_requirements",
 ]
 ToolName = Literal[
     "get_scorecard",
@@ -107,6 +108,7 @@ Source = Literal[
     "regulation",
     "user",
     "baseline",
+    "industry_profile",
 ]
 ItemStatus = Literal["observed", "unknown", "not_applicable"]
 ScoreItemId = Literal["D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L"]
@@ -144,7 +146,6 @@ class ToolError(Schema):
     code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=300)]
     retryable: bool = False
-    failed_fields: list[Text] = Field(default_factory=list)
 
 
 class ToolReply[T](Schema):
@@ -603,15 +604,18 @@ TOOL_INPUTS: dict[str, type[Schema]] = {
     "submit_review": SubmitReviewInput,
 }
 _TOOL_DESCRIPTIONS = {
-    "get_scorecard": "업종별 코드 점수·문항 상태·근거를 먼저 조회합니다. 상세는 최대 5개입니다.",
-    "get_facts": "fact_ids 또는 업종·출처·지표 중 한 방식으로 계산 사실을 조회합니다.",
+    "get_scorecard": "초기 L_top10을 한 번 묶어 조회하고 받은 코드 점수·상태를 재사용합니다. 상세는 최대 5개입니다.",
+    "get_facts": (
+        "받은 fact_ids 또는 업종·source·metrics로 좁혀 조회합니다. 공간 초안은 "
+        "source=industry_profile, metrics=[space_requirements]이며 reviewed=false를 확인하세요."
+    ),
     "query_raw": "승인 뷰 SELECT로 원문을 최대 50행 확인합니다. 쓰기·집계 인용은 금지합니다.",
-    "map_search": "업종 또는 시설 하나를 검색해 장소·카테고리·거리·규칙 일치 상태를 받습니다.",
+    "map_search": "기존 fact로 설명되지 않는 경쟁·시설 조건이 있을 때 업종 또는 시설 하나만 검색합니다.",
     "check_regulation": "현재 좌표의 교육환경보호구역과 업종 제한을 확인합니다.",
-    "ask_advisor": "애매한 질문과 fact_id 근거로 자문만 받습니다. 최종 판단은 decision이 합니다.",
-    "ask_user": "임대인에게 미확인 상가 조건을 최대 3개 질문합니다.",
-    "submit_draft": "fact 슬롯·L 근거로 초안/최종을 제출합니다. 점수·숫자 복사는 금지합니다.",
-    "submit_review": "초안의 사실·L 중복·확인 조건을 검토해 최대 4개 지적을 제출합니다.",
+    "ask_advisor": "해석 충돌·결측이 후보나 확인 조건을 바꿀 때 질문과 선택한 fact_id만 보내 자문합니다.",
+    "ask_user": "미확인 핵심 상가 조건을 처음에 한 번 묶어 최대 3개 질문합니다. 이미 답한 항목은 제외합니다.",
+    "submit_draft": "숫자는 fact_id 슬롯으로 인용해 초안/최종을 제출합니다. 공간 초안은 확인 조건이며 점수 복사는 금지합니다.",
+    "submit_review": "읽기 최대 3회 뒤 한 번 제출합니다. 실제 fact_id로 최대 4개 지적과 확인 조건을 남깁니다.",
 }
 
 

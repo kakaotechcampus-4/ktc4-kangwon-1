@@ -8,8 +8,11 @@ from dataclasses import dataclass, field
 from pydantic import TypeAdapter, ValidationError
 
 from app.agents.map_analysis.client import MapApiError
+from app.canonical import canonical_hash, canonical_json
+from app.clock import utc_now_iso
+from app.concurrency import run_in_thread
 from app.db.connection import connect
-from app.storage.raw import _hash, _json, _now, _write
+from app.storage.scrub import env_secrets, scrub
 
 from .contracts import TOOL_INPUTS, Actor, ToolReply, tool_definitions
 from .observations import check_regulation, map_search
@@ -47,9 +50,9 @@ def _audit(scope, call_id, actor, name, arguments, reply):
                 scope.run_id,
                 actor,
                 name,
-                _json(arguments),
+                canonical_json(scrub(arguments, env_secrets())),
                 reply.model_dump_json(),
-                _now(),
+                utc_now_iso(),
             ),
         )
 
@@ -66,7 +69,10 @@ def previous_reply(scope, actor, name, signature):
             validated = TOOL_INPUTS[name].model_validate_json(arguments)
         except ValidationError:
             continue
-        if _hash([actor, name, validated.model_dump(mode="json"), scope.snapshot_id]) == signature:
+        if (
+            canonical_hash([actor, name, validated.model_dump(mode="json"), scope.snapshot_id])
+            == signature
+        ):
             return ToolReply.model_validate_json(reply)
     return None
 
@@ -111,12 +117,13 @@ class ToolExecutor:
             maxima.update(get_scorecard=2, get_facts=3, query_raw=2)
         if self.actor == "advisor":
             maxima["get_facts"] = 1
-        if not self.shared.measurement and (
-            calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor
-        ):
-            return error("BUDGET_EXCEEDED", "도구 호출 상한을 초과했습니다.")
-        calls["total"] += 1
-        calls[(self.actor, "total")] += 1
+        if name not in {"submit_review", "submit_draft"}:
+            if not self.shared.measurement and (
+                calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor
+            ):
+                return error("BUDGET_EXCEEDED", "도구 호출 상한을 초과했습니다.")
+            calls["total"] += 1
+            calls[(self.actor, "total")] += 1
         if name not in allowed:
             return error("INVALID_ARGUMENT", "현재 actor에 허용되지 않은 도구입니다.")
         if (
@@ -136,9 +143,12 @@ class ToolExecutor:
             except ValidationError:
                 pass
             else:
-                signature = _hash(
-                    [self.actor, name, input.model_dump(mode="json"), self.scope.snapshot_id]
-                )
+                try:
+                    signature = canonical_hash(
+                        [self.actor, name, input.model_dump(mode="json"), self.scope.snapshot_id]
+                    )
+                except ValueError:
+                    input = None
         duplicate = signature is not None and signature in self.shared.seen
         rejected = self._reserve(name, arguments, duplicate=duplicate)
         call_id = "tc_" + str(uuid.uuid4())
@@ -149,7 +159,9 @@ class ToolExecutor:
         elif duplicate:
             original = self.shared.replies.get(signature)
             if original is None:
-                original = await _write(previous_reply, self.scope, self.actor, name, signature)
+                original = await run_in_thread(
+                    previous_reply, self.scope, self.actor, name, signature
+                )
             reply = (
                 original.model_copy(
                     deep=True,
@@ -163,9 +175,15 @@ class ToolExecutor:
             )
         else:
             reply = await self._execute(name, input)
-            self.shared.seen.add(signature)
-            self.shared.replies[signature] = reply.model_copy(deep=True)
-        await _write(_audit, self.scope, call_id, self.actor, name, arguments, reply)
+            if not reply.error or reply.error.code not in {
+                "MAP_UNAVAILABLE",
+                "SQL_TIMEOUT",
+                "TIMEOUT",
+                "SOURCE_UNAVAILABLE",
+            }:
+                self.shared.seen.add(signature)
+                self.shared.replies[signature] = reply.model_copy(deep=True)
+        await run_in_thread(_audit, self.scope, call_id, self.actor, name, arguments, reply)
         self.last_call_id = call_id
         return reply
 
@@ -189,7 +207,7 @@ class ToolExecutor:
                     return result
                 return ToolReply(status="ok", data=result)
             if name == "map_search":
-                key = _hash(input.model_dump(mode="json"))
+                key = canonical_hash(input.model_dump(mode="json"))
                 async with self.shared.observation_lock:
                     if key not in self.shared.map_cache:
                         if (

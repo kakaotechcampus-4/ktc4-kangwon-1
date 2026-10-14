@@ -155,10 +155,12 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(args["quarter"])
 
     async def test_storage_failure_is_not_an_agent_result(self):
-        from app.mocks import mock_agents, mock_generate, mock_resolve
-        from app.services.analysis import execute_analysis
+        from app.services.agentic_analysis import execute_agentic_analysis
+        from app.services.agentic_mock import dependencies
 
-        async def broken(task):
+        mock = dependencies()
+
+        async def broken(address):
             with patch("app.storage.raw._save_response", side_effect=OSError("secret")):
                 await capture_http(
                     "commercial_area",
@@ -166,18 +168,14 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
                         200, json={}, request=httpx.Request("GET", "https://example.invalid")
                     ),
                 )
-            return await mock_agents()["commercial_area"](task)
+            return await mock["resolve"](address)
 
-        agents = mock_agents()
-        agents["commercial_area"] = broken
         with self.assertRaises(RawStorageError):
-            await execute_analysis(
+            await execute_agentic_analysis(
                 "서울",
                 request_id="failed",
                 db_path=self.path,
-                resolve=mock_resolve,
-                agents=agents,
-                generate=mock_generate,
+                **(mock | {"resolve": broken}),
             )
         with connect(self.path) as db:
             row = db.execute(
@@ -259,20 +257,18 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 3)
 
     async def test_snapshot_finish_failure_prevents_completion(self):
-        from app.mocks import mock_agents, mock_generate, mock_resolve
-        from app.services.analysis import execute_analysis
+        from app.services.agentic_analysis import execute_agentic_analysis
+        from app.services.agentic_mock import dependencies
 
         with (
             patch("app.storage.raw._finish", side_effect=OSError("secret")),
             self.assertRaises(RawStorageError),
         ):
-            await execute_analysis(
+            await execute_agentic_analysis(
                 "서울",
                 request_id="finish-failed",
                 db_path=self.path,
-                resolve=mock_resolve,
-                agents=mock_agents(),
-                generate=mock_generate,
+                **dependencies(),
             )
         with connect(self.path) as db:
             row = db.execute(

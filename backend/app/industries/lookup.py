@@ -104,9 +104,3 @@ def from_legacy70(legacy_id: int) -> tuple[Industry, ...]:
     0~100 점수라 **여기 나온 업종들에 그대로 복제하면 안 된다.** 가중 방식은 팀 미합의 사항이다.
     """
     return tuple(get(code) for code in LEGACY70_TO_INDUSTRY.get(legacy_id, ()))
-
-
-def as_category(code: str) -> tuple[str, str]:
-    """`app.schemas.Category(major=..., middle=...)` 에 넣을 두 값."""
-    industry = get(code)
-    return industry.major_name, industry.name

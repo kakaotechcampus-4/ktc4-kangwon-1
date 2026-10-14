@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import get_args
 
-from test_commercial_area_agent import sample_stores
+from test_commercial_area_metrics import sample_stores
 
 from app.agents.commercial_area.trade_areas import SeoulTradeArea
 from app.geo import to_epsg5181

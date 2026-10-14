@@ -12,13 +12,14 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.concurrency import run_in_thread  # noqa: E402
 from app.config import load_environment  # noqa: E402
 from app.db import repository  # noqa: E402
 from app.db.connection import connect, initialize  # noqa: E402
 from app.local_data.adapter import LocalAdapter  # noqa: E402
 from app.local_data.persistence import persist_local  # noqa: E402
 from app.schemas import AnalysisTask, Site  # noqa: E402
-from app.storage.raw import _write, capture_scope  # noqa: E402
+from app.storage.raw import capture_scope  # noqa: E402
 from scripts.verify_rubric_reproduction import verify  # noqa: E402
 
 
@@ -30,56 +31,56 @@ def checkpoint(path):
 async def main():
     load_environment()
     folder = Path("cache/rubric_samples")
-    golden = await _write(verify, folder)
+    golden = await run_in_thread(verify, folder)
     expected = json.loads(
-        await _write(partial((folder / "dryrun-results.json").read_text, encoding="utf-8"))
+        await run_in_thread(partial((folder / "dryrun-results.json").read_text, encoding="utf-8"))
     )["reports"]
     expected = {r["address"]: r for r in expected}
-    path = await _write(initialize, Path("cache/ld3-performance-final.sqlite3"))
+    path = await run_in_thread(initialize, Path("cache/ld3-performance-final.sqlite3"))
     perf, differences, badges = [], [], Counter()
-    files = await _write(lambda: sorted(folder.glob("sample-*.json")))
-    logic_path = await _write(initialize, Path("cache/ld3-logic.sqlite3"))
+    files = await run_in_thread(lambda: sorted(folder.glob("sample-*.json")))
+    logic_path = await run_in_thread(initialize, Path("cache/ld3-logic.sqlite3"))
     matched = 0
     for number, file in enumerate(files, 1):
-        sample = json.loads(await _write(partial(file.read_text, encoding="utf-8")))
+        sample = json.loads(await run_in_thread(partial(file.read_text, encoding="utf-8")))
         request = "ld3-" + str(number) + "-" + str(uuid.uuid4())
         task = AnalysisTask(
             request_id=request, site=Site.model_validate(sample["site"]), radius_m=500
         )
-        before = (await _write(path.stat)).st_size
+        before = (await run_in_thread(path.stat)).st_size
         started = monotonic()
-        await _write(
+        await run_in_thread(
             lambda request=request, sample=sample: repository.create_request(
                 request, sample["address"], db_path=path
             )
         )
         with patch("httpx.AsyncClient", side_effect=AssertionError("기본자료 HTTP 금지")):
             async with capture_scope(request, path) as scope:
-                adapter = await _write(LocalAdapter)
-                data = await _write(adapter.analyze, task)
+                adapter = await run_in_thread(LocalAdapter)
+                data = await run_in_thread(adapter.analyze, task)
                 # 지도·규제는 같은 저장 관측 대역을 써 기본자료 차이만 비교합니다.
                 data["education_zones"] = sample["education_zones"]
                 data["facilities"] = sample["facilities"]
-                _, report, _ = await _write(persist_local, task, scope, adapter, data)
+                _, report, _ = await run_in_thread(persist_local, task, scope, adapter, data)
                 await scope.finish()
         elapsed = monotonic() - started
-        await _write(checkpoint, path)
+        await run_in_thread(checkpoint, path)
         perf.append(
             {
                 "address": sample["address"],
                 "seconds": round(elapsed, 3),
-                "db_increase": (await _write(path.stat)).st_size - before,
+                "db_increase": (await run_in_thread(path.stat)).st_size - before,
             }
         )
         old = {r["code"]: r for r in expected[sample["address"]]["rows"]}
         logic_request = "logic-" + str(uuid.uuid4())
-        await _write(
+        await run_in_thread(
             lambda request=logic_request, sample=sample: repository.create_request(
                 request, sample["address"], db_path=logic_path
             )
         )
         async with capture_scope(logic_request, logic_path) as logic_scope:
-            _, prepared, _ = await _write(persist_local, task, logic_scope, adapter, sample)
+            _, prepared, _ = await run_in_thread(persist_local, task, logic_scope, adapter, sample)
             await logic_scope.finish()
         for row in prepared["rows"]:
             keys = ("items", "lower", "upper", "applicable_weight", "badge", "coverage")
@@ -111,7 +112,7 @@ async def main():
         "differences": differences,
         "badges": dict(badges),
     }
-    await _write(
+    await run_in_thread(
         partial(
             Path("cache/ld3-results.json").write_text,
             json.dumps(result, ensure_ascii=False, indent=2),

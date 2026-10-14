@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -10,9 +9,11 @@ from pathlib import Path
 from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
 
+from app.canonical import canonical_json
+from app.concurrency import run_in_thread
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
-from app.storage.raw import _json, _write, scrub
+from app.storage.scrub import env_secrets, scrub
 
 _IDENTIFIER = re.compile(
     r"^(?P<prefix>(?:request|snapshot|fact|tc|consult|score|question|report|map|f|s|sc|ss)_)?"
@@ -66,20 +67,16 @@ class CallRecording:
             "error_code": failure["code"] if failure else None,
             "error": failure,
         }
-        secrets = [
-            value
-            for name, value in os.environ.items()
-            if any(part in name.upper() for part in ("KEY", "TOKEN", "SECRET"))
-        ]
+        secrets = env_secrets()
         async with self._lock:
-            await _write(self._append, scrub(entry, secrets))
+            await run_in_thread(self._append, scrub(entry, secrets))
 
     def _append(self, entry):
         entries = _load(self.path) if self.path.exists() else []
         entries.append(entry)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + ".tmp")
-        temporary.write_text(_json(entries), encoding="utf-8")
+        temporary.write_text(canonical_json(entries), encoding="utf-8")
         temporary.replace(self.path)
 
 
@@ -130,7 +127,7 @@ def _remap(value, identifiers):
         if body is not None:
             remapped = _remap(body, identifiers)
             if remapped != body:
-                return _json(remapped)
+                return canonical_json(remapped)
     return value
 
 

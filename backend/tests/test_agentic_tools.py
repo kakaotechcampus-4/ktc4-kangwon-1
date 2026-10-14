@@ -215,8 +215,8 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stored_score_and_facts_are_typed(self):
         from app.agents.agentic.contracts import FactsResult, ScorecardResult
-        from app.agents.agentic.registry import persist_report
         from app.agents.agentic.scoring import WEIGHTS, result, summarize
+        from app.agents.agentic.snapshot import persist_report
 
         items = {key: result(key) for key in WEIGHTS}
         row = summarize("I201", items, "unknown")

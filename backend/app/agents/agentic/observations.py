@@ -7,19 +7,19 @@ import uuid
 from dataclasses import replace
 
 from app.agents.business_lifecycle.area_resolver import polygon_contains_point
-from app.agents.map_analysis.agent import _distance_m
 from app.agents.map_analysis.client import PlaceClient
 from app.agents.map_analysis.config import Settings
-from app.agents.map_analysis.matching import match_place
+from app.agents.map_analysis.matching import distance_m, match_place
+from app.canonical import canonical_json
+from app.concurrency import run_in_thread
 from app.db.connection import connect
 from app.education_zone import find_education_zones
 from app.geo import to_epsg5181
 from app.industries.catalog import INDUSTRIES
 from app.industries.lookup import industry_terms
-from app.storage.raw import _json, _write
 
 from .contracts import IndustryRestriction, MapPlace, MapResult, RegulationResult, ToolReply
-from .registry import register_fact
+from .facts import register_fact
 from .scoring import regulation
 
 
@@ -31,14 +31,14 @@ def _place_facts(scope, response_id, documents):
             (response_id,),
         ).fetchall()
 
-        refs = {_json(json.loads(r[1])): r[0] for r in rows}
+        refs = {canonical_json(json.loads(r[1])): r[0] for r in rows}
         facts = {}
         for doc in documents:
             fields = []
             for key, metric, unit, value in [
                 ("place_name", "place_name", "이름", doc.get("place_name")),
                 ("category_name", "kakao_category", "분류", doc.get("category_name")),
-                ("distance", "distance_m", "m", _distance_m(doc)),
+                ("distance", "distance_m", "m", distance_m(doc)),
             ]:
                 fields.append(
                     register_fact(
@@ -49,7 +49,7 @@ def _place_facts(scope, response_id, documents):
                         value=value,
                         unit=unit,
                         status="observed" if value is not None else "unknown",
-                        row_ids=[refs[_json(doc)]],
+                        row_ids=[refs[canonical_json(doc)]],
                         field_pointer="/" + key,
                         period="지도 조회 시점",
                         connection=db,
@@ -113,7 +113,7 @@ async def map_search(scope, site, input, shared):
                     payload=response,
                     secrets=[os.getenv("GEOCODING_API_KEY", "")],
                 )
-                facts = await _write(_place_facts, scope, response_id, documents)
+                facts = await run_in_thread(_place_facts, scope, response_id, documents)
                 more = more or response["meta"].get("is_end") is not True
                 for doc in documents:
                     status, rule = match_place(
@@ -265,9 +265,9 @@ async def check_regulation(scope, site, shared):
     if shared.regulation is None:
         scan = shared.regulation_scan
         if scan is None:
-            scan = await _write(_stored_regulation, scope)
+            scan = await run_in_thread(_stored_regulation, scope)
         if scan is None:
             lookup = shared.regulation_lookup or find_education_zones
             scan = await lookup(site.latitude, site.longitude, with_geometry=True)
-        shared.regulation = await _write(_regulation, scope, site, scan)
+        shared.regulation = await run_in_thread(_regulation, scope, site, scan)
     return shared.regulation

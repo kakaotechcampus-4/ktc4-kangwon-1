@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import math
 
+from app.stats import percentile_rank
+
 from .models import TIME_BANDS
 
 BASELINE_LABEL = "서울 전체 상권 평균 (2026년 2분기 · 1,648곳)"
@@ -400,17 +402,9 @@ def index(value: float | None, average: float | None) -> float | None:
 
 def _percentile(value: float, thresholds: dict[int, float]) -> int:
     """분위 경계 사이를 보간하며 기존 규모 백분위의 끝값 정책을 유지합니다."""
-    boundaries = sorted(thresholds.items())
-    if value <= boundaries[0][1]:
-        return boundaries[0][0]
-    prev_p, prev_v = boundaries[0]
-    for p, v in boundaries[1:]:
-        if value <= v:
-            span = v - prev_v
-            frac = (value - prev_v) / span if span else 0.0
-            return int(round(prev_p + frac * (p - prev_p)))
-        prev_p, prev_v = p, v
-    return 99
+    if not value <= thresholds[max(thresholds)]:
+        return 99
+    return int(round(percentile_rank(value, thresholds)))
 
 
 def scale_percentile(mean_per_area: float | None) -> int | None:

@@ -3,22 +3,10 @@
 import unittest
 
 import app.schemas as schemas
-from app.legacy_schemas import AgentAnalysis, DecisionRequest
+from app.schemas import AgentAnalysis
 
 
 class SchemaTests(unittest.TestCase):
-    def test_category_code_fills_names_and_preserves_old_input(self):
-        category = schemas.Category.model_validate({"code": "I201"})
-        self.assertEqual(category.major, "음식점업")
-        self.assertEqual(category.middle, "한식 음식점")
-        legacy = schemas.Category(major="음식점업", middle="한식 음식점")
-        self.assertEqual(legacy.code, "I201")
-
-    def test_category_rejects_unknown_code_and_name_conflict(self):
-        for value in ({"code": "UNKNOWN"}, {"code": "I201", "middle": "중식 음식점"}):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                schemas.Category.model_validate(value)
-
     def test_analysis_task_keeps_resolved_site(self):
         task = schemas.AnalysisTask.model_validate(
             {
@@ -64,53 +52,6 @@ class SchemaTests(unittest.TestCase):
             }
         )
         self.assertEqual(result.error.code, "UPSTREAM_TIMEOUT")
-
-    def test_decision_content_uses_middle_category_and_allows_five(self):
-        payload = {
-            "status": "ok",
-            "summary": "검증용 요약입니다.",
-            "recommendations": [
-                {
-                    "category": {"major": "음식점업", "middle": middle},
-                    "score": 70 - index,
-                    "reasons": ["검증용 근거입니다."],
-                    "evidence": [{"agent_id": "floating_population", "path": "/value"}],
-                    "risks": [],
-                }
-                for index, middle in enumerate(
-                    [
-                        "중식 음식점",
-                        "양식·외국식 음식점",
-                        "일식 음식점",
-                        "한식 음식점",
-                        "간이 음식점",
-                    ]
-                )
-            ],
-            "not_recommended": [],
-            "limitations": [],
-        }
-        content = schemas.DecisionContent.model_validate(payload)
-        self.assertEqual(content.recommendations[-1].category.middle, "간이 음식점")
-
-    def test_decision_request_rejects_another_request_result(self):
-        with self.assertRaises(ValueError):
-            DecisionRequest.model_validate(
-                {
-                    "request_id": "request-001",
-                    "address": "서울특별시 강남구 테헤란로 123",
-                    "analyses": [
-                        {
-                            "request_id": "request-002",
-                            "agent_id": "floating_population",
-                            "status": "ok",
-                            "scope": {"area": "서울특별시 강남구 역삼동", "period": "2026년 2분기"},
-                            "data": {"daily_average": {"value": 12000, "unit": "명/일"}},
-                            "warnings": [],
-                        }
-                    ],
-                }
-            )
 
 
 if __name__ == "__main__":

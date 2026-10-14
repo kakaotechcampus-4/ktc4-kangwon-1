@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from app.seoul import shift_quarter
+
 from . import baseline
 from .geo import circle_overlap_ratio
 from .models import (
@@ -28,7 +30,7 @@ from .schemas import (
 )
 
 
-def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
+def aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     """여러 상권의 같은 분기 레코드를 하나로 합산하고 비중까지 계산한다.
 
     원본 인원수는 **분기 합계**다. 결정 에이전트가 다른 에이전트의 "명/일" 과 나란히 읽게
@@ -71,7 +73,7 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     )
 
 
-def _benchmark(
+def daily_benchmark(
     population: Population, quarter_total: float | None, trade_area_count: int, days: int
 ) -> Benchmark:
     """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다.
@@ -100,7 +102,7 @@ def _benchmark(
     )
 
 
-def _trend(
+def trend(
     series: list[tuple[str, list[FlpopRecord]]],
     main_codes: set[str],
     warnings: list[str] | None = None,
@@ -123,7 +125,7 @@ def _trend(
         if not rs:
             continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
         codes_by_quarter[quarter] = {r.trdar_cd for r in rs}
-        pop = _aggregate(rs, quarter)
+        pop = aggregate(rs, quarter)
         points_by_quarter[quarter] = QuarterPoint(
             period_code=quarter,
             period=period_ko(quarter),
@@ -138,15 +140,10 @@ def _trend(
     def change(new: float | None, old: float | None) -> float | None:
         return round((new - old) / old, 4) if new is not None and old else None
 
-    def previous_quarter(quarter: str, count: int = 1) -> str:
-        year, number = int(quarter[:4]), int(quarter[4])
-        index = year * 4 + number - 1 - count
-        return f"{index // 4}{index % 4 + 1}"
-
     latest = points_by_quarter.get(latest_quarter or "")
-    previous = points_by_quarter.get(previous_quarter(latest_quarter)) if latest_quarter else None
+    previous = points_by_quarter.get(shift_quarter(latest_quarter, -1)) if latest_quarter else None
     previous_year = (
-        points_by_quarter.get(previous_quarter(latest_quarter, 4)) if latest_quarter else None
+        points_by_quarter.get(shift_quarter(latest_quarter, -4)) if latest_quarter else None
     )
     qoq = change(latest.daily_avg, previous.daily_avg) if latest and previous else None
     yoy = None

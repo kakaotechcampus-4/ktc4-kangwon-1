@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.agents.agentic.registry import persist_report
 from app.agents.agentic.scoring import WEIGHTS, result, summarize
+from app.agents.agentic.snapshot import persist_report
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.schemas import Site
@@ -266,7 +266,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(repeated["duplicate"])
         self.assertIn("이미 조회한 결과", repeated["warnings"])
         self.assertEqual(loop.budget.used, 3)
-        self.assertEqual(loop.tools.shared.calls["total"], 3)
+        self.assertEqual(loop.tools.shared.calls["total"], 2)
         self.assertEqual(output.status, "draft_available")
 
     async def test_consecutive_errors_reset_after_success(self):
@@ -287,7 +287,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.result.summary_segments)
 
     async def make_fact(self, metric="lq"):
-        from app.agents.agentic.registry import register_fact
+        from app.agents.agentic.facts import register_fact
 
         response = await self.scope.record(
             source="commercial_area",
@@ -366,7 +366,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         await loop.save("waiting_for_input")
-        with patch("app.agents.agentic.registry.register_fact", side_effect=OSError("저장 실패")):
+        with patch("app.agents.agentic.facts.register_fact", side_effect=OSError("저장 실패")):
             with self.assertRaises(OSError):
                 await resume_agentic_analysis("loop", {"floor": "지상"}, db_path=self.path)
         with connect(self.path) as db:
@@ -553,7 +553,9 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rendered["summary"], "1.20")
 
     async def test_service_entrypoint_without_old_decision(self):
-        from app.mocks import MOCK_SCOPE
+        from app.schemas import Scope
+
+        MOCK_SCOPE = Scope(area="목업", period="목업")
         from app.schemas import AgentAnalysis
         from app.services.agentic_analysis import execute_agentic_analysis
 
@@ -589,7 +591,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             db_path=self.path,
             request_id="service",
             resolve=resolve,
-            agents=agents,
+            mock=True,
             generate=generate,
             evaluator_generate=evaluator,
         )

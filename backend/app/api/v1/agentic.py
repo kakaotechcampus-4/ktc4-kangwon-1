@@ -15,19 +15,19 @@ from app.schemas import DecisionResult, Schema, Text
 from app.services.agentic_analysis import execute_agentic_analysis, resume_agentic_analysis
 from app.services.agentic_mock import dependencies, generators
 
-from .responses import AcceptedAnalysis, AnalysisEvents
-from .routes import (
+from .errors import run_or_http
+from .jobs import (
     WAIT_QUERY,
     AnalysisRequest,
-    _await_task,
-    _jobs,
-    _request_headers,
-    _run_or_http,
-    _start_job,
-    _start_task,
+    await_task,
     health,
+    jobs,
     list_analysis_events,
+    request_headers,
+    start_job,
+    start_task,
 )
+from .responses import AcceptedAnalysis, AnalysisEvents
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
@@ -97,22 +97,23 @@ async def create_analysis(
     if not body.address.strip():
         raise HTTPException(400, "주소를 입력해 주세요.")
     request_id = uuid.uuid4().hex
-    response.headers.update(_request_headers(request_id))
+    response.headers.update(request_headers(request_id))
 
     async def work():
         outcome = await runner(
             body.address,
             request_id=request_id,
             radius_m=body.radius_m,
+            allow_questions=body.allow_questions,
             **options(request, request_id),
             **(dependencies(ask=body.allow_questions) if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
 
     if not wait:
-        return _start_job(request, request_id, work())
-    return await _run_or_http(
-        _await_task(_start_task(request, request_id, work())), request_id, kind="analysis"
+        return start_job(request, request_id, work())
+    return await run_or_http(
+        await_task(start_task(request, request_id, work())), request_id, kind="analysis"
     )
 
 
@@ -182,7 +183,7 @@ async def answers(
         raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
     question = row["questions"]
     if (
-        request_id in _jobs(request)
+        request_id in jobs(request)
         or row["status"] != "waiting_for_input"
         or not question
         or question["question_session_id"] != body.question_session_id
@@ -201,7 +202,7 @@ async def answers(
         return public_result(request_id, outcome)
 
     if not wait:
-        return _start_job(request, request_id, work())
-    return await _run_or_http(
-        _await_task(_start_task(request, request_id, work())), request_id, kind="answers"
+        return start_job(request, request_id, work())
+    return await run_or_http(
+        await_task(start_task(request, request_id, work())), request_id, kind="answers"
     )

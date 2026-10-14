@@ -3,7 +3,7 @@
 import math
 from time import monotonic
 
-from app.llm.budget import BudgetExceeded, LLMBudget
+from app.llm.budget import FINAL_RESERVE, BudgetExceeded, LLMBudget
 
 
 class RuntimeBudget(LLMBudget):
@@ -54,8 +54,10 @@ class RuntimeBudget(LLMBudget):
                 ((input_chars or 0) + (self.schema_chars if role != "advisor" else 0)) / 2
             )
             inputs, outputs = self.totals()
+            evaluator = role in {"examiner", "founder", "customer", "landlord_advocate"}
+            call_limit = self.limit - (FINAL_RESERVE if evaluator and not final else 0)
             if (
-                self.used >= self.limit
+                self.used >= call_limit
                 or inputs + estimate > self.input_limit
                 or outputs >= self.output_limit
                 or self.active_seconds >= self.seconds_limit
@@ -77,12 +79,14 @@ class RuntimeBudget(LLMBudget):
             await self._save()
             return self.used
 
-    async def claim_output(self):
+    async def claim_output(self, requested=16000):
+        if type(requested) is not int or not 0 < requested <= 16000:
+            raise ValueError("출력 예약은 한 호출 출력 상한 안의 양수여야 합니다.")
         async with self._lock:
             available = self.output_limit - self.totals()[1] - self.pending_output
             if available <= 0:
                 raise BudgetExceeded()
-            reserved = min(16000, available)
+            reserved = min(requested, available)
             self.pending_output += reserved
             return reserved
 

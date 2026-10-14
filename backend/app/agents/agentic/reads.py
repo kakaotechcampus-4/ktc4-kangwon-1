@@ -2,8 +2,9 @@
 
 import json
 
+from app.concurrency import run_in_thread
 from app.db.connection import connect
-from app.storage.raw import _write
+from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 
 from .contracts import (
     FactsResult,
@@ -72,8 +73,6 @@ def _scorecards(scope, input):
 
 
 def _facts(scope, input):
-    from app.local_data.provenance import validate_snapshot
-
     validate_snapshot(scope)
     with connect(scope.path) as db:
         query = (
@@ -94,8 +93,6 @@ def _facts(scope, input):
         cursor = db.execute(query + " ORDER BY fact_id", params)
         columns = [c[0] for c in cursor.description]
         records = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
-        from app.local_data.provenance import expand_spatial_scope
-
         expand_spatial_scope(scope, records)
         if input.fact_ids and len(records) != len(set(input.fact_ids)):
             return error("UNKNOWN_FACT", "현재 스냅샷에 없는 fact_id입니다.")
@@ -127,11 +124,11 @@ def _facts(scope, input):
 
 
 async def get_scorecard(scope, input):
-    return await _write(_scorecards, scope, input)
+    return await run_in_thread(_scorecards, scope, input)
 
 
 async def get_facts(scope, input):
-    return await _write(_facts, scope, input)
+    return await run_in_thread(_facts, scope, input)
 
 
 def score_summary(row):

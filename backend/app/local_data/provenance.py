@@ -1,10 +1,11 @@
 """요청별 자료 버전과 셀/집계 계보를 작은 참조로 저장합니다."""
 
 import json
+from pathlib import Path
 
+from app.canonical import canonical_hash, canonical_json
 from app.db.connection import connect
 from app.local_data.adapter import SOURCE_NAMES, LocalAdapter
-from app.storage.raw import _hash, _json
 
 
 def save_snapshot(scope, adapter, task, config_hashes=None, data=None):
@@ -26,9 +27,9 @@ def save_snapshot(scope, adapter, task, config_hashes=None, data=None):
             (
                 scope.snapshot_id,
                 str(adapter.path),
-                _json(adapter.versions),
-                _json(config_hashes or {}),
-                _json(spatial),
+                canonical_json(adapter.versions),
+                canonical_json(config_hashes or {}),
+                canonical_json(spatial),
             ),
         )
 
@@ -59,10 +60,17 @@ def pin_provenance(db, scope, source, metric, industry, calc_version, cell=None)
         if cell["version_id"] not in refs:
             raise ValueError("다른 버전의 셀")
         query["version_id"] = cell["version_id"]
-    identity = _hash([scope.snapshot_id, source, refs, query, calc_version])
+    identity = canonical_hash([scope.snapshot_id, source, refs, query, calc_version])
     db.execute(
         "INSERT OR IGNORE INTO local_provenance VALUES(?,?,?,?,?,?)",
-        (identity, scope.snapshot_id, source, _json(refs), _json(query), calc_version),
+        (
+            identity,
+            scope.snapshot_id,
+            source,
+            canonical_json(refs),
+            canonical_json(query),
+            calc_version,
+        ),
     )
     return identity
 
@@ -70,8 +78,6 @@ def pin_provenance(db, scope, source, metric, industry, calc_version, cell=None)
 def validate_snapshot(scope):
     row = load_snapshot(scope)
     if row is not None:
-        from pathlib import Path
-
         return LocalAdapter(Path(row["database_path"]), json.loads(row["versions_json"]))
     return None
 
@@ -84,4 +90,4 @@ def expand_spatial_scope(scope, records):
     spatial = json.loads(snapshot["scope_json"])
     for row in records:
         if row.get("local_lineage"):
-            row["spatial_scope_json"] = _json(spatial | {"snapshot_id": scope.snapshot_id})
+            row["spatial_scope_json"] = canonical_json(spatial | {"snapshot_id": scope.snapshot_id})

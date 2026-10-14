@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import repository  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.services.mocking import mock_dependencies  # noqa: E402
+from app.services.agentic_mock import dependencies as mock_dependencies  # noqa: E402
 from app.services.settings import ExecutionSettings  # noqa: E402
 
 
@@ -114,7 +114,7 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
             async def invoke(*inputs, **options):
                 fake[kind] += 1
                 await asyncio.sleep(0.03 if kind == "model" else 0.005)
-                if kind == "api" and inputs[0].site.input_address.endswith("failure"):
+                if kind == "api" and str(inputs[0]).endswith("failure"):
                     fake["external_failures"] += 1
                     raise RuntimeError("대역 외부 실패")
                 result = fn(*inputs, **options)
@@ -123,13 +123,8 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
             return invoke
 
         bundle["generate"] = wrap(bundle["generate"], "model")
-        for field in ("generate_specialists", "generate_evaluators"):
-            bundle[field] = {key: wrap(fn, "model") for key, fn in bundle[field].items()}
-        if "agents" in bundle:
-            bundle["agents"] = {
-                key: wrap(fn, "api") if key == "floating_population" else wrap(fn, "api_ok")
-                for key, fn in bundle["agents"].items()
-            }
+        bundle["evaluator_generate"] = wrap(bundle["evaluator_generate"], "model")
+        bundle["resolve"] = wrap(bundle["resolve"], "api")
         return bundle
 
     async def sample():
@@ -139,26 +134,14 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
             lags.append(max(0, time.perf_counter() - start - 0.01))
             rss_samples.append(rss_bytes())
 
-    settings = ExecutionSettings(
-        db_path=db_path, analysis_mode="multi_agent", evaluators_enabled=True, max_concurrency=2
-    )
+    settings = ExecutionSettings(db_path=db_path, max_concurrency=2)
     with (
         patch("sqlite3.connect", side_effect=connect),
-        patch("app.api.v1.routes.mock_dependencies", side_effect=dependencies),
+        patch("app.api.v1.agentic.dependencies", side_effect=dependencies),
         patch("openai.AsyncOpenAI", side_effect=AssertionError("실제 LLM 생성 금지")),
         patch.object(socket.socket, "connect", side_effect=AssertionError("외부 연결 금지")),
     ):
         app = create_app(settings=settings, load_env=False)
-        # PR8 삭제 전 옛 경로의 부하 회귀 전용이며 공개 서버에는 등록하지 않습니다.
-        from app.api.v1.routes import router as legacy_router
-
-        app.router.routes[:] = [
-            r
-            for r in app.router.routes
-            if getattr(r, "path", "")
-            in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc", "/health"}
-        ]
-        app.include_router(legacy_router)
         async with app.router.lifespan_context(app):
             if scenario == "events":
                 for state in ("running", "completed"):

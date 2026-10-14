@@ -3,7 +3,6 @@
 import unittest
 
 from app.industries import lookup
-from app.schemas import Category
 
 
 class NameNormalizationTests(unittest.TestCase):
@@ -52,21 +51,6 @@ class Legacy70Tests(unittest.TestCase):
 
     def test_unknown_legacy_id_returns_empty(self):
         self.assertEqual(lookup.from_legacy70(999), ())
-
-
-class CategoryBridgeTests(unittest.TestCase):
-    def test_as_category_passes_team_contract_validation(self):
-        major, middle = lookup.as_category("I201")
-        category = Category(major=major, middle=middle)
-        self.assertEqual(category.major, "음식점업")
-        self.assertEqual(category.middle, "한식 음식점")
-
-    def test_every_industry_produces_a_valid_category(self):
-        from app.industries.catalog import INDUSTRIES
-
-        for code in INDUSTRIES:
-            major, middle = lookup.as_category(code)
-            Category(major=major, middle=middle)
 
 
 if __name__ == "__main__":
