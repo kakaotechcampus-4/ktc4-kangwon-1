@@ -192,6 +192,9 @@ async def refresh(args, db: LocalDataDB) -> list[dict]:
             unchanged.append(vid)
     await asyncio.to_thread(db.activate, unchanged + versions)
     await asyncio.to_thread(db.clear_pages, checkpoints)
+    if not args.no_vacuum:
+        before, after = await asyncio.to_thread(db.vacuum)
+        print(json.dumps({"vacuum_before": before, "vacuum_after": after}), flush=True)
     return report
 
 
@@ -204,6 +207,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--shp", type=Path, default=LifecycleSettings.from_env().area_shape_path)
     p.add_argument("--db", type=Path, default=default_path())
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--no-vacuum", action="store_true")
     p.add_argument("--api", action="store_true", help="상주/직장은 전체 API에서 선택 분기를 적재")
     return p
 

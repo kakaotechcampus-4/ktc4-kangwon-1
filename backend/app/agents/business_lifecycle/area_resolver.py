@@ -61,8 +61,12 @@ class BusinessAreaResolverError(RuntimeError):
 def resolve_area(site: Site, settings: Settings | None = None) -> BusinessArea:
     """포함 상권 우선, 없으면 경계가 300m 이내인 최근접 상권을 찾습니다."""
     settings = settings or Settings.from_env()
+    return resolve_features(site, load_shape_features(settings.area_shape_path))
+
+
+def resolve_features(site: Site, features: Sequence[ShapeFeature]) -> BusinessArea:
+    """이미 읽은 영역(로컬 DB 포함)에 기존 포함/최근접 판정을 적용합니다."""
     target_x, target_y = to_epsg5181(site.latitude, site.longitude)
-    features = load_shape_features(settings.area_shape_path)
     matches = [
         feature
         for feature in features

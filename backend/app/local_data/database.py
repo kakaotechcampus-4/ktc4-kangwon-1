@@ -335,3 +335,10 @@ class LocalDataDB:
             con.executemany("DELETE FROM api_pages WHERE collection_key=?", [(k,) for k in keys])
         with self.connection() as con:
             con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+    def vacuum(self) -> tuple[int, int]:
+        before = self.path.stat().st_size
+        with self.connection() as con:
+            con.execute("VACUUM")
+            con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        return before, self.path.stat().st_size

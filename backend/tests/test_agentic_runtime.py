@@ -85,10 +85,15 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        loop.state["limitations"].append("서울 밖 점포 미반영")
         output = await loop.run()
         self.assertEqual(output.status, "draft_available")
         self.assertEqual(loop.budget.used, 2)
         self.assertEqual(len(output.result.top5), 5)
+        self.assertIn(
+            "서울 밖 점포 미반영",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
         self.assertFalse(any("analyses" in str(m) or "digest" in str(m) for m in names[0]))
 
     async def test_invalid_arguments_return_tool_error_and_continue(self):

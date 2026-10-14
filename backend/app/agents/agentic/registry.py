@@ -51,8 +51,14 @@ def register_fact(
     response_ids=(),
     field_pointer="/",
     connection=None,
+    local_cell=None,
 ):
     """동일 값·계보는 기존 ID를 반환합니다. 값을 바꾸면 새 ID를 생성합니다."""
+    local = comparison and comparison.get("input_versions", {}).get("local_snapshot")
+    if local and local != scope.snapshot_id:
+        raise ValueError("다른 로컬 스냅샷")
+    if local:
+        comparison = {"input_versions": {"local_snapshot": local}}
     row_ids = sorted(set(row_ids))
     comparison = comparison or {}
     if status != "observed":
@@ -69,6 +75,7 @@ def register_fact(
         "responses": sorted(response_ids),
         "comparison": comparison,
         "calc_version": CALC_VERSION,
+        "local_cell": local_cell,
     }
     identity_hash = _hash(identity)
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
@@ -101,7 +108,7 @@ def register_fact(
                 is None
             ):
                 raise ValueError("응답 계보의 요청 범위가 다릅니다.")
-        citable = status == "observed" and bool(row_ids or response_ids)
+        citable = status == "observed" and bool(row_ids or response_ids or local)
         if status == "observed" and not citable:
             raise ValueError("관측 fact에는 검증 가능한 원문 계보가 필요합니다.")
         old = db.execute(
@@ -125,7 +132,11 @@ def register_fact(
                 period,
                 _json(
                     {"snapshot_id": scope.snapshot_id}
-                    | comparison.get("input_versions", {}).get("spatial_scope", {})
+                    | (
+                        {}
+                        if local
+                        else comparison.get("input_versions", {}).get("spatial_scope", {})
+                    )
                 ),
                 _json(comparison | {"response_ids": list(response_ids)}),
                 status,
@@ -136,6 +147,19 @@ def register_fact(
                 _now(),
             ),
         )
+        if local:
+            from app.local_data.provenance import pin_provenance
+
+            ref = pin_provenance(db, scope, source, metric, industry_code, CALC_VERSION, local_cell)
+            db.execute(
+                "INSERT INTO local_fact_lineage VALUES(?,?,?,?)",
+                (
+                    fact_id,
+                    ref,
+                    local_cell["row_key"] if local_cell else None,
+                    local_cell["column"] if local_cell else None,
+                ),
+            )
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
@@ -146,7 +170,7 @@ def register_fact(
     return fact_id
 
 
-def _config(scope):
+def _config(scope, *, local=False):
     profile_path = DATA_DIR / "industry_profile.csv"
     profile_bytes = profile_path.read_bytes()
     profiles = list(csv.DictReader(io.StringIO(profile_bytes.decode("utf-8-sig"))))
@@ -200,6 +224,8 @@ def _config(scope):
     for path, rows in configs:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         hashes[path.name + str(path.parent.name)] = digest
+        if local:
+            continue
         with connect(scope.path) as db:
             old = db.execute(
                 "SELECT response_id FROM raw_responses WHERE snapshot_id=? AND "
@@ -215,6 +241,8 @@ def _config(scope):
                 status=None,
                 payload={"rows": rows},
             )
+    if local:
+        return {r["industry_code"]: r for r in profiles}, hashes, ([], {})
     with connect(scope.path) as db:
         profile_refs = {}
         shared = []
@@ -246,6 +274,10 @@ def persist_report(scope, report, lineage, responses, version=None):
                 if item == "L":
                     facts_by_item[(row["code"], item)] = []
                     continue
+                if (version or {}).get("local_snapshot") and score["status"] != "observed":
+                    # 결측/n.a. 상태는 scores에 보존하고 인용할 숫자 fact는 만들지 않습니다.
+                    facts_by_item[(row["code"], item)] = []
+                    continue
                 metric, unit, source = METRICS[item]
                 value = score["value"]
                 if item == "D1" and isinstance(value, (int, float)):
@@ -268,7 +300,12 @@ def persist_report(scope, report, lineage, responses, version=None):
                 if item == "C1" and score["status"] == "observed":
                     refs.extend(lineage.get("floating_population", []))
                 response_ids = response_refs.get(source, [])
-                if score["status"] == "observed" and not lineage.get(source) and not response_ids:
+                if (
+                    score["status"] == "observed"
+                    and not lineage.get(source)
+                    and not response_ids
+                    and not (version or {}).get("local_snapshot")
+                ):
                     raise ValueError("계산값에 해당하는 원문이 없습니다.")
                 comparison = {
                     "rubric_version": "v0.8",

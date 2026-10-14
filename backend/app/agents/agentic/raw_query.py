@@ -193,5 +193,11 @@ def _query(scope, input):
 
 
 async def query_raw(scope, sql, params=None, max_rows=50):
+    from app.local_data.provenance import load_snapshot
+
+    if await _write(load_snapshot, scope) is not None:
+        return error(
+            "SOURCE_UNAVAILABLE", "로컬 원문 SQL 도구는 LD4에서 연결합니다. 계산 사실을 조회하세요."
+        )
     input = QueryRawInput(sql=sql, params=params or {}, max_rows=max_rows)
     return await _write(_query, scope, input)

@@ -94,7 +94,11 @@ def _unique(rows, keys):
 
 
 def format_snapshot(task, scope):
-    raw, responses, partial = load_raw(scope)
+    return format_inputs(task, *load_raw(scope))
+
+
+def format_inputs(task, raw, responses, partial, *, district_counts=None, periods=None):
+    """전송/저장과 분리한 기존 계산 경로. 로컬 어댑터도 같은 함수를 호출합니다."""
     data = {
         "address": task.site.input_address,
         "runtime_partial_sources": sorted(partial),
@@ -149,13 +153,21 @@ def format_snapshot(task, scope):
             "by_middle": [
                 r.model_dump(mode="json")
                 for r in build_middle_rows(
-                    mapped, task.radius_m, load_middle_master(), baseline_counts=baseline_counts
+                    mapped,
+                    task.radius_m,
+                    load_middle_master(),
+                    baseline_counts=baseline_counts,
+                    district_counts=district_counts,
                 )
             ],
         }
-        lineage["commercial_area"] = [r["raw_row_id"] for r in store_rows]
+        lineage["commercial_area"] = [
+            r["raw_row_id"] for r in store_rows if r["raw_row_id"] is not None
+        ]
     lineage["industry_rows"] = {"commercial_area": {}, "business_lifecycle": {}}
     for row in store_rows:
+        if row["raw_row_id"] is None:
+            continue
         code = service_code(row["row"].get("indsMclsCd", ""), row["row"].get("indsSclsCd"))
         if code:
             lineage["industry_rows"]["commercial_area"].setdefault(code, []).append(
@@ -189,8 +201,9 @@ def format_snapshot(task, scope):
         for r in fp_rows:
             record = FlpopRecord.from_api_row(r["row"])
             series[record.stdr_yyqu_cd].append(record)
+        latest = (periods or {}).get("floating") or max(series)
+        series.setdefault(latest, [])
         quarters = sorted(series)
-        latest = quarters[-1]
         records = series[latest]
         pop = _aggregate(records, latest)
         warnings = []
@@ -206,7 +219,9 @@ def format_snapshot(task, scope):
             ),
         }
         data["floating_warnings"] = warnings
-        lineage["floating_population"] = [r["raw_row_id"] for r in fp_rows]
+        lineage["floating_population"] = [
+            r["raw_row_id"] for r in fp_rows if r["raw_row_id"] is not None
+        ]
         for source, kind, key, builder in [
             ("resident_population", RESIDENT_KIND, "resident", resident_block),
             ("worker_population", WORKER_KIND, "worker", worker_block),
@@ -217,7 +232,7 @@ def format_snapshot(task, scope):
             if records:
                 block = builder(records, records[0].stdr_yyqu_cd, codes)
                 data["floating_population"][key] = block.model_dump(mode="json") if block else None
-                lineage[source] = [r["raw_row_id"] for r in rows]
+                lineage[source] = [r["raw_row_id"] for r in rows if r["raw_row_id"] is not None]
 
     lifecycle = _unique(raw["business_lifecycle"], ["STDR_YYQU_CD", "TRDAR_CD", "SVC_INDUTY_CD"])
     if lifecycle:
@@ -225,7 +240,9 @@ def format_snapshot(task, scope):
         if len(area_codes) != 1:
             raise ValueError("개폐업 원문에 여러 상권이 섞였습니다.")
         area = next(iter(area_codes))
-        base = max(str(r["row"]["STDR_YYQU_CD"]) for r in lifecycle)
+        base = (periods or {}).get("lifecycle") or max(
+            str(r["row"]["STDR_YYQU_CD"]) for r in lifecycle
+        )
         requested = {
             json.loads(r["request_args_json"]).get("extra", "").split("/")[0]
             for r in responses
@@ -254,8 +271,12 @@ def format_snapshot(task, scope):
             ],
         }
         data["lifecycle_quarterly"] = frame.attrs["quarterly_detail"]
-        lineage["business_lifecycle"] = [r["raw_row_id"] for r in lifecycle]
+        lineage["business_lifecycle"] = [
+            r["raw_row_id"] for r in lifecycle if r["raw_row_id"] is not None
+        ]
         for row in lifecycle:
+            if row["raw_row_id"] is None:
+                continue
             code = SEOUL_TO_INDUSTRY.get(row["row"].get("SVC_INDUTY_CD"))
             if code:
                 lineage["industry_rows"]["business_lifecycle"].setdefault(code, []).append(

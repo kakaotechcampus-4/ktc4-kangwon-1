@@ -12,10 +12,13 @@ from app.address import resolve_site
 from app.agents.agentic.budget import RuntimeBudget
 from app.agents.agentic.registry import persist_snapshot_scores
 from app.agents.agentic.runtime import DecisionLoop
-from app.agents.orchestration.workflow import build_react_agents, run_agents
+from app.agents.orchestration.workflow import run_agents
 from app.db import repository
 from app.db.connection import connect, initialize
 from app.llm.session import with_client_session
+from app.local_data.adapter import LocalAdapter
+from app.local_data.persistence import persist_local
+from app.local_data.provenance import validate_snapshot
 from app.schemas import AgentError, AnalysisTask, Site
 from app.storage.raw import CaptureScope, _now, _write, capture_scope, scrub
 
@@ -113,6 +116,7 @@ async def execute_agentic_analysis(
     agents=None,
     generate=None,
     advisor_generate=None,
+    local_data_path=None,
 ):
     request_id = request_id or uuid.uuid4().hex
     path = await _write(initialize, db_path)
@@ -124,6 +128,7 @@ async def execute_agentic_analysis(
     try:
         await _write(lambda: repository.mark_running(request_id, db_path=path))
         async with capture_scope(request_id, path) as scope:
+            adapter = await _write(LocalAdapter, local_data_path) if agents is None else None
             async with asyncio.timeout(120):
                 site = await (resolve or resolve_site)(address)
                 task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
@@ -132,21 +137,24 @@ async def execute_agentic_analysis(
                 async def completed(analysis):
                     await _write(lambda: repository.save_agent(analysis, db_path=path))
 
-                await run_agents(
-                    task,
-                    agents or build_react_agents(),
-                    on_analysis_completed=completed,
-                    agent_timeout=110,
-                )
-                await scope.finish()
+                if adapter is None:
+                    await run_agents(
+                        task, agents, on_analysis_completed=completed, agent_timeout=110
+                    )
                 timings[stage] = monotonic() - started
-                stage, started = "채점", monotonic()
-                await persist_snapshot_scores(task)
+                stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
+                if adapter is not None:
+                    data, _, _ = await _write(persist_local, task, scope, adapter)
+                else:
+                    await persist_snapshot_scores(task)
+                    data = {}
+                await scope.finish()
                 timings[stage] = monotonic() - started
             stage, started = "루프", monotonic()
             loop = await DecisionLoop.create(
                 scope, site, generate=generate, advisor_generate=advisor_generate, budget=budget
             )
+            loop.state["limitations"].extend(data.get("limitations", []))
             loop.state["phase_seconds"] = timings
             outcome = await loop.run()
             timings[stage] = monotonic() - started
@@ -179,6 +187,7 @@ async def resume_agentic_analysis(
     site, snapshot, run_id = await _write(context)
     scope = CaptureScope(request_id, path, run_id, snapshot)
     try:
+        await _write(validate_snapshot, scope)
         loop = await DecisionLoop.resume(
             scope, site, answers, generate=generate, advisor_generate=advisor_generate
         )

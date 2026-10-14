@@ -45,17 +45,24 @@ def load_base(scope):
 
 
 def fact_rows(scope, ids):
+    from app.local_data.provenance import validate_snapshot
+
+    validate_snapshot(scope)
     if not ids:
         return {}
     with connect(scope.path) as db:
         cursor = db.execute(
-            "SELECT * FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id IN ("
+            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
+            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id IN ("
             + ",".join("?" for _ in ids)
             + ")",
             [scope.request_id, scope.snapshot_id, *ids],
         )
         names = [c[0] for c in cursor.description]
         rows = {r[0]: dict(zip(names, r, strict=True)) for r in cursor.fetchall()}
+    from app.local_data.provenance import expand_spatial_scope
+
+    expand_spatial_scope(scope, rows.values())
     if set(rows) != set(ids):
         raise ReportInvalid("현재 스냅샷에 없는 fact_id입니다.")
     return rows
@@ -268,7 +275,8 @@ def finalize(
             status=f["status"],
             citable=bool(f["citable"]),
             calc_version=f["calc_version"],
-            provenance_ref="fact_sources:" + f["fact_id"],
+            provenance_ref=("local_fact_lineage:" if f["local_lineage"] else "fact_sources:")
+            + f["fact_id"],
         )
         for f in facts.values()
     ]

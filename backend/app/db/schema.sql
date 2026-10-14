@@ -390,3 +390,19 @@ CREATE TABLE IF NOT EXISTS agentic_questions (
     status TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+-- LD3: 분기 자료는 요청에 복사하지 않고 고정 버전과 조회 레시피만 저장합니다.
+CREATE TABLE IF NOT EXISTS local_snapshots (
+    snapshot_id TEXT PRIMARY KEY REFERENCES snapshots(snapshot_id),
+    database_path TEXT NOT NULL, versions_json TEXT NOT NULL,
+    config_hashes_json TEXT NOT NULL, scope_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_provenance (
+    provenance_id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    source TEXT NOT NULL, version_ids_json TEXT NOT NULL,
+    query_json TEXT NOT NULL, calc_version TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_fact_lineage (
+    fact_id TEXT PRIMARY KEY REFERENCES facts(fact_id),
+    provenance_id TEXT NOT NULL REFERENCES local_provenance(provenance_id),
+    row_key TEXT, column_name TEXT
+);

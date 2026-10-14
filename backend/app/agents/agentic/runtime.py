@@ -366,6 +366,7 @@ class DecisionLoop:
                     self.base_rows,
                     advisor_unavailable=self.state["advisor_unavailable"],
                     regulation_result=self.tools.shared.regulation,
+                    limitations=self.state["limitations"],
                 )
             )
             self.state["last_draft"] = input.report.model_dump(mode="json")

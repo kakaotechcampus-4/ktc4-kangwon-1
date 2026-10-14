@@ -225,22 +225,7 @@ def load_industry_done() -> dict[str, dict[str, str]]:
     return result
 
 
-CSV_FIELDS = {
-    "bizesId": "상가업소번호",
-    "bizesNm": "상호명",
-    "brchNm": "지점명",
-    "indsLclsCd": "상권업종대분류코드",
-    "indsLclsNm": "상권업종대분류명",
-    "indsMclsCd": "상권업종중분류코드",
-    "indsMclsNm": "상권업종중분류명",
-    "indsSclsCd": "상권업종소분류코드",
-    "indsSclsNm": "상권업종소분류명",
-    "lat": "위도",
-    "lon": "경도",
-    "rdnmAdr": "도로명주소",
-    "signguCd": "시군구코드",
-    "signguNm": "시군구명",
-}
+from app.agents.commercial_area.client import CSV_FIELDS  # noqa: E402
 
 
 def sample_csv(path: Path, quarter: str, areas: tuple[SeoulTradeArea, ...]) -> list[dict]:

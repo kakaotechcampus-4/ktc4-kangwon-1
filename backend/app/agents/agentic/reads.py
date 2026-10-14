@@ -72,8 +72,14 @@ def _scorecards(scope, input):
 
 
 def _facts(scope, input):
+    from app.local_data.provenance import validate_snapshot
+
+    validate_snapshot(scope)
     with connect(scope.path) as db:
-        query = "SELECT * FROM facts WHERE request_id=? AND snapshot_id=?"
+        query = (
+            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
+            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=?"
+        )
         params = [scope.request_id, scope.snapshot_id]
         if input.fact_ids:
             query += " AND fact_id IN (" + ",".join("?" for _ in input.fact_ids) + ")"
@@ -88,6 +94,9 @@ def _facts(scope, input):
         cursor = db.execute(query + " ORDER BY fact_id", params)
         columns = [c[0] for c in cursor.description]
         records = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+        from app.local_data.provenance import expand_spatial_scope
+
+        expand_spatial_scope(scope, records)
         if input.fact_ids and len(records) != len(set(input.fact_ids)):
             return error("UNKNOWN_FACT", "현재 스냅샷에 없는 fact_id입니다.")
         offset = _cursor(input.cursor)
@@ -105,7 +114,8 @@ def _facts(scope, input):
                 status="not_applicable" if r["status"] == "n.a." else r["status"],
                 citable=bool(r["citable"]),
                 calc_version=r["calc_version"],
-                provenance_ref="fact_sources:" + r["fact_id"],
+                provenance_ref=("local_fact_lineage:" if r["local_lineage"] else "fact_sources:")
+                + r["fact_id"],
             )
             for r in records_page
         ]
