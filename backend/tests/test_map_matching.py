@@ -1,7 +1,6 @@
 """질문별 동종 판단과 지도 인용 연결의 회귀 시험입니다."""
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -277,7 +276,7 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
 
             await evaluate(request, allow_map_lookup=allowed, generate=generate)
 
-    async def test_ogeum_school_matches_are_question_specific(self):
+    async def test_ogeum_school_rules_preserve_places_and_citations(self):
         from app.agents.map_analysis.agent import observe
 
         page = json.loads((Path(__file__).parent / "fixtures/map_ogeum404.json").read_text("utf-8"))
@@ -289,36 +288,14 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
                 seen.append(self_filter)
                 return page
 
-        batches = []
-
-        async def judge(_prompt, raw):
-            pairs = json.loads(raw)["pairs"]
-            batches.append(pairs)
-            return {
-                key: {
-                    "status": "same"
-                    if any(word in item["category"]["name"] for word in ("수학", "논술"))
-                    else "unclear"
-                    if item.get("place_names")
-                    else "different",
-                    "reason": "고정 자료의 동종 여부",
-                }
-                for key, item in pairs.items()
-            }
-
         request = plan()
         request.queries[0].industry_code = "P105"
         request.queries[0].query = "수학학원"
         request.queries.append(request.queries[0].model_copy(update={"query": "입시학원"}))
-        result = await observe(task(), request, client=Places(), generate_mapping=judge)
-        self.assertEqual(result.data.industries["P105"].sampled_count, 2)
+        result = await observe(task(), request, client=Places())
+        self.assertEqual(result.data.industries["P105"].sampled_count, 14)
         self.assertEqual(len(result.data.places), 15)
-        self.assertEqual(len(batches), 1)
-        self.assertEqual(len(batches[0]), 13)
         self.assertEqual(seen, ["AC5", "AC5"])
-        pairs = list(batches[0].values())
-        self.assertEqual(sum(bool(x.get("place_names")) for x in pairs), 4)
-        self.assertTrue(all(x["target"]["includes"] for x in pairs))
         self.assertTrue(all(p.industry_code is None for p in result.data.places.values()))
         from app.evidence import map_citations, valid_map_path, validate_findings
         from app.schemas import Finding
@@ -340,33 +317,5 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             validate_findings([finding], agent_id="map_analysis", data=data),
-            ([finding.model_copy(update={"claim": "동종 표본 2개"})], []),
+            ([finding.model_copy(update={"claim": "동종 표본 14개"})], []),
         )
-
-    async def test_named_pairs_are_not_cached_and_different_is_cached(self):
-        from app.agents.map_analysis.mapping import judge_matches
-
-        calls = []
-        pairs = {
-            "specific": {"target": {"code": "P105"}, "category": {"name": "교육 > 학원 > 미술"}},
-            "named": {
-                "target": {"code": "P105"},
-                "category": {"name": "교육 > 학원"},
-                "place_names": ["시험 수학학원"],
-            },
-        }
-
-        def judge(_prompt, raw):
-            pending = json.loads(raw)["pairs"]
-            calls.append(set(pending))
-            return {
-                key: {"status": "same" if key == "named" else "different", "reason": "시험"}
-                for key in pending
-            }
-
-        with tempfile.TemporaryDirectory() as folder:
-            for _ in range(2):
-                await judge_matches(
-                    pairs, generate=judge, cache_path=Path(folder) / "cache.sqlite3"
-                )
-        self.assertEqual(calls, [{"specific", "named"}, {"named"}])

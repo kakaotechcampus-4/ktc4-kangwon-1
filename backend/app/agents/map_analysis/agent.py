@@ -10,14 +10,12 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
 from app.industries.catalog import CATALOG_VERSION
-from app.industries.lookup import get, industry_terms
-from app.llm.budget import BudgetStorageError
+from app.industries.lookup import get
 from app.schemas import (
     AnalysisTask,
     MapData,
@@ -26,11 +24,12 @@ from app.schemas import (
     MapObservation,
     MapPlace,
     MapQueryResult,
+    MatchStatus,
 )
 
 from .client import MapApiError, PlaceClient
 from .config import Settings
-from .mapping import GenerateMapping, judge_matches
+from .matching import match_place
 
 # 카카오가 정한 18종 분류. 이름은 응답의 category_group_name 을 그대로 옮김
 #
@@ -128,8 +127,6 @@ async def observe(
     *,
     settings: Settings | None = None,
     client: PlaceClient | None = None,
-    generate_mapping: GenerateMapping | None = None,
-    mapping_cache_path: Path | None = None,
 ) -> MapObservation:
     """원본 장소를 보존하고 질문 업종별 동종 표본을 집계합니다."""
     task, plan = AnalysisTask.model_validate(task), MapLookupPlan.model_validate(plan)
@@ -172,7 +169,10 @@ async def observe(
     queries: dict[str, MapQueryResult] = {}
     places: dict[str, MapPlace] = {}
     conflicts: set[str] = set()
-    warnings = ["지도 등록 정보의 첫 페이지 표본이며 실제 영업 점포 전수가 아닙니다."]
+    warnings = [
+        "지도 등록 정보의 첫 페이지 표본이며 실제 영업 점포 전수가 아닙니다.",
+        "동종 일치는 코드 규칙이며 실제 경쟁점 확정 판정이 아닙니다.",
+    ]
     degraded = False
     for i, (q, response) in enumerate(zip(wanted, responses, strict=True), 1):
         base: dict[str, Any] = dict(
@@ -224,51 +224,19 @@ async def observe(
         )
     if degraded:
         warnings.append("형식이 잘못된 장소를 제외하고 유효한 장소만 보존했습니다.")
-    pairs = {}
-    pair_ids: dict[tuple, str] = {}
-    targets = {}
-    for qid, query in queries.items():
-        if query.request.kind != "industry" or query.request.industry_code is None:
-            continue
-        for pid in query.place_ids:
-            p = places[pid]
-            if pid in conflicts or not (p.category_name.strip() or p.category_code.strip()):
-                continue
-            broad = len(p.category_name.split(">")) <= 2
-            key = (
-                query.request.industry_code,
-                p.category_name,
-                p.category_code,
-                pid if broad else None,
-            )
-            if key not in pair_ids:
-                pair_id = f"p{len(pair_ids) + 1}"
-                pair_ids[key] = pair_id
-                pairs[pair_id] = {
-                    "target": industry_terms(query.request.industry_code),
-                    "category": {"name": p.category_name, "code": p.category_code},
-                    **({"place_names": [p.name]} if broad else {}),
-                }
-            targets[qid, pid] = pair_ids[key]
-    try:
-        matches = await judge_matches(
-            pairs, generate=generate_mapping, cache_path=mapping_cache_path
-        )
-    except BudgetStorageError:
-        raise
-    except (RuntimeError, ValueError):
-        matches = {}
-    if set(matches) != set(pairs):
-        warnings.append("동종 판단 실패: 원본 장소만 보존했습니다.")
-        degraded = True
     groups: dict[str, set[str]] = {}
     unclear = set()
-    for qid, query in queries.items():
+    for query in queries.values():
         if query.request.kind != "industry" or query.request.industry_code is None:
             continue
         for pid in query.place_ids:
-            judgement = matches.get(targets.get((qid, pid), ""))
-            match = judgement.status if judgement else "unclear"
+            place = places[pid]
+            state, _ = match_place(
+                query.request.industry_code, place.name, place.category_name, place.category_code
+            )
+            match: MatchStatus = (
+                "same" if state != "unknown" and pid not in conflicts else "unclear"
+            )
             query.matches[pid] = match
             if match == "same":
                 groups.setdefault(query.request.industry_code, set()).add(pid)

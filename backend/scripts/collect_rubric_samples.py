@@ -144,7 +144,7 @@ async def collect(index: int, kind: str, address: str) -> dict:
         ],
     )
     zones = await scan_site(site, lambda s: find_education_zones(s.latitude, s.longitude))
-    facilities = await observe(task, plan, generate_mapping=forbid_llm)
+    facilities = await observe(task, plan)
     result = {
         "address": address,
         "kind": kind,

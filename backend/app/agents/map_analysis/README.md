@@ -14,11 +14,10 @@
 1. 업종 코드와 검색 표현 또는 시설 코드를 검증한다.
 2. 최대 8개 요청의 첫 페이지를 병렬 조회한다. 검색당 최대 15건이다.
 3. 장소 ID를 중복 제거하고 원본 분류를 보존한다.
-4. 질문 업종 설명과 원본 분류 쌍을 모델에 보내 동종(same)·다른 업종(different)·불확실(unclear)로 판단한다.
-   세부 분류가 없으면 장소별 이름을 보조로 제공하며 캐시하지 않는다. 그 외 same·different만 7일 캐시한다.
-5. 질문별 same 장소를 중복 제거해 업종별 집계한다. 같은 장소가 여러 업종의 동종 표본일 수 있다.
+4. 카카오 카테고리와 업종 검색어 규칙으로 category_match·name_match·unknown을 판단한다.
+5. 기존 계약은 category_match/name_match를 same, unknown을 unclear로 연결해 질문별 표본을 집계한다.
 
-동종 판단은 LLM 추론이며 수동 검수된 확정표가 아니다. 실패하면 캐시된 판단만 사용하고 나머지는 unclear로 남긴다.
+일치 상태는 코드 규칙이며 실제 경쟁점 확정 판정이 아니다. LLM·모델별 매핑 캐시를 사용하지 않는다.
 검색어는 생성된 industry_terms의 소분류 설명을 보고 업종당 일상어 1~3개로 선택한다.
 카카오 분류 제한은 P105(AC5), Q102(HP8)에 적용한다.
 
@@ -45,11 +44,9 @@
 
 - `GEOCODING_API_KEY`: 기존 주소 변환과 같은 카카오 REST 키.
 - `MAP_ANALYSIS_MAX_CONCURRENCY`: 기본 4.
-- `MAP_MAPPING_LLM_MODEL / API_KEY / BASE_URL / MAX_TOKENS / TIMEOUT_SECONDS / REASONING_EFFORT`:
-  기존 공통 모델 설정 규칙을 따른다. 미지정 값은 기존 ELICE·LLM 공통 설정을 사용한다.
 
-키·모델 원문 오류는 관측에 저장하지 않는다. API 오류와 정상 0건은 구분한다.
+키·외부 API 원문 오류는 관측에 저장하지 않는다. API 오류와 정상 0건은 구분한다.
 시설 예제는 `python examples/run_map_analysis.py --address "서울 송파구 오금로 404" --query 지하철역`이다.
-업종 키워드는 `--industry-code I212 --query 커피`처럼 공통 코드를 함께 전달하며 실제 동종 판단 LLM 비용이 발생할 수 있다.
+업종 키워드는 `--industry-code I212 --query 커피`처럼 공통 코드를 함께 전달하며 카테고리·이름 규칙으로 일치 상태를 판단하며 LLM을 호출하지 않는다.
 전체 옵션은 `python examples/run_map_analysis.py --help`로 확인한다.
 대역 검증은 백엔드에서 `python -m unittest discover -s tests -p "test_map*.py"`로 실행한다.
