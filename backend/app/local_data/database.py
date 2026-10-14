@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
+from app.canonical import file_sha256
+from app.clock import utc_now_iso
 from app.industries.catalog import INDUSTRIES
 from app.seoul import previous_quarter
 
 SOURCES = ("stores", "lifecycle", "floating", "resident", "worker", "areas", "seoul_boundary")
 
 
-class DataValidationError(ValueError):
+class DataValidationError(Exception):
     """활성 자료를 바꾸지 않고 적재를 거절합니다."""
 
 
@@ -90,9 +91,7 @@ class LocalDataDB:
             raise DataValidationError("알 수 없는 원천")
         if quarter:
             previous_quarter(quarter)
-        mapping_hash = hashlib.sha256(
-            (Path(__file__).parents[1] / "industries/catalog.py").read_bytes()
-        ).hexdigest()
+        mapping_hash = file_sha256(Path(__file__).parents[1] / "industries/catalog.py")
         with self.connection() as con:
             existing = con.execute(
                 "SELECT version_id FROM data_versions WHERE source=? AND quarter=? "
@@ -110,7 +109,7 @@ class LocalDataDB:
                     quarter,
                     file_hash,
                     0,
-                    datetime.now(UTC).isoformat(),
+                    utc_now_iso(),
                     "staged",
                     mapping_hash,
                 ),
@@ -243,6 +242,13 @@ class LocalDataDB:
             return con.execute("SELECT COUNT(*) FROM data_releases").fetchone()[0]
 
     def activate(self, versions: list[str]) -> None:
+        try:
+            self._activate(versions)
+        except DataValidationError:
+            self.clear_staged()
+            raise
+
+    def _activate(self, versions: list[str]) -> None:
         with self.connection() as con:
             con.execute("BEGIN IMMEDIATE")
             selected = []
@@ -258,6 +264,17 @@ class LocalDataDB:
             groups: dict[str, list[dict]] = {}
             for row in selected:
                 groups.setdefault(row["source"], []).append(row)
+            if (set(SOURCES) - {"seoul_boundary"}) - groups.keys():
+                raise DataValidationError("기본 6원천 묶음이 필요합니다.")
+            for source, count in (("lifecycle", 12), ("floating", 5)):
+                if len(groups[source]) != count:
+                    raise DataValidationError(f"{source} 원천은 {count}분기가 필요합니다.")
+            latest = {
+                max(row["quarter"] for row in groups[source])
+                for source in ("stores", "lifecycle", "floating", "resident", "worker")
+            }
+            if "" in latest or len(latest) != 1:
+                raise DataValidationError("원천 간 최신 분기가 일치하지 않습니다.")
             for source, group in groups.items():
                 quarters = sorted(r["quarter"] for r in group)
                 if len(quarters) != len(set(quarters)):
@@ -282,10 +299,11 @@ class LocalDataDB:
                 )
             ]
             if set(current) == set(versions):
+                self._delete_unused_staged(con)
                 return
             release = con.execute(
                 "INSERT INTO data_releases(activated_at) VALUES(?)",
-                (datetime.now(UTC).isoformat(),),
+                (utc_now_iso(),),
             ).lastrowid
             con.execute("UPDATE data_versions SET state='retired' WHERE state='active'")
             for vid in versions:
@@ -303,19 +321,48 @@ class LocalDataDB:
                 "DELETE FROM data_versions WHERE state='retired' AND version_id NOT IN "
                 "(SELECT version_id FROM release_versions)"
             )
+            self._delete_unused_staged(con)
+
+    @staticmethod
+    def _delete_unused_staged(con: sqlite3.Connection) -> None:
+        con.execute(
+            "DELETE FROM data_versions WHERE state='staged' AND version_id NOT IN "
+            "(SELECT version_id FROM release_versions)"
+        )
+
+    def clear_staged(self) -> None:
+        """실패한 적재만 정리하며 release가 참조하는 버전은 보존합니다."""
+        with self.connection() as con:
+            self._delete_unused_staged(con)
 
     def page(self, key: str, start: int) -> dict | None:
         with self.connection() as con:
             row = con.execute(
                 "SELECT body FROM api_pages WHERE collection_key=? AND start=?", (key, start)
             ).fetchone()
-            return json.loads(row[0]) if row else None
+            if row is None:
+                return None
+            checkpoint = json.loads(row[0])
+            collected_at = checkpoint.get("collected_at")
+            if not collected_at or datetime.fromisoformat(collected_at) < datetime.now(
+                UTC
+            ) - timedelta(days=1):
+                con.execute("DELETE FROM api_pages WHERE collection_key=?", (key,))
+                return None
+            return checkpoint["body"]
 
     def save_page(self, key: str, start: int, body: dict) -> None:
         with self.connection() as con:
             con.execute(
                 "INSERT OR REPLACE INTO api_pages VALUES(?,?,?)",
-                (key, start, json.dumps(body, ensure_ascii=False)),
+                (
+                    key,
+                    start,
+                    json.dumps(
+                        {"collected_at": utc_now_iso(), "body": body},
+                        ensure_ascii=False,
+                    ),
+                ),
             )
 
     def reserve_http(self, limit: int = 9500) -> None:

@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS facts (
     snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
     industry_code TEXT,
     source TEXT NOT NULL,
-    metric TEXT NOT NULL,
+    metric TEXT NOT NULL CHECK(metric IN ('raw_cell','by_time','time_per_hour_share','covered_trade_areas','period_code','mean_daily_per_trade_area','pattern_fit_index','pattern_scale_percentile','pattern_daily_per_trade_area','weekend_index','day_fit_index','age_share','resident_age_share','worker_age_share','target_age_index','yoy_change','density_per_km2','competition_index','seoul_median_density','daily_total_median','distance_m','facility_distance_ratio','recent_year_close_rate','oldest_year_close_rate','net_change_rate','turnover_rate','close_rate_ratio','net_change_index','turnover_ratio','close_trend_ratio','store_exposure','avg_store_count','zero_filled_sources','seoul_close_rate','seoul_turnover_rate','seoul_net_change_rate','seoul_close_trend_ratio','store_count','opening_count','closing_count','lq','differentiation','place_name','kakao_category','match_status','regulation_status','zone_contains','floor','exclusive_area','space_condition','existing_facilities','industry_preferences','space_requirements')),
     value_json TEXT NOT NULL CHECK(json_valid(value_json)),
     unit TEXT NOT NULL,
     period TEXT NOT NULL,
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS score_snapshots (
 CREATE TABLE IF NOT EXISTS scores (
     score_snapshot_id TEXT NOT NULL REFERENCES score_snapshots(score_snapshot_id),
     industry_code TEXT NOT NULL,
-    item TEXT NOT NULL,
+    item TEXT NOT NULL CHECK(item IN ('D1','D2','D3','D4','C1','C4','S1','S2','S3','S4','L')),
     weight REAL NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('observed','unknown','n.a.')),
     grade INTEGER CHECK(grade BETWEEN 0 AND 4),
@@ -203,6 +203,17 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 CREATE TRIGGER IF NOT EXISTS immutable_facts BEFORE UPDATE ON facts
 BEGIN SELECT RAISE(ABORT,'facts are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_facts_delete BEFORE DELETE ON facts
+BEGIN SELECT RAISE(ABORT,'facts are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_fact_sources BEFORE UPDATE ON fact_sources
+BEGIN SELECT RAISE(ABORT,'fact_sources are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_fact_sources_delete BEFORE DELETE ON fact_sources
+BEGIN SELECT RAISE(ABORT,'fact_sources are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_scores BEFORE UPDATE ON scores
+BEGIN SELECT RAISE(ABORT,'scores are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_scores_delete BEFORE DELETE ON scores
+BEGIN SELECT RAISE(ABORT,'scores are immutable'); END;
+CREATE INDEX IF NOT EXISTS idx_score_snapshots_req ON score_snapshots(request_id,snapshot_id,created_at);
 
 CREATE TABLE IF NOT EXISTS tool_calls (
     tool_call_id TEXT PRIMARY KEY NOT NULL,
@@ -221,7 +232,7 @@ CREATE TABLE IF NOT EXISTS agentic_runs (
     request_id TEXT PRIMARY KEY REFERENCES analysis_requests(request_id),
     snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
     run_id TEXT NOT NULL,
-    status TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('running','draft_available','waiting_for_input','completed','failed')),
     state_json TEXT NOT NULL CHECK(json_valid(state_json)),
     result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json)),
     updated_at TEXT NOT NULL
@@ -282,3 +293,9 @@ CREATE TABLE IF NOT EXISTS local_fact_lineage (
     provenance_id TEXT NOT NULL REFERENCES local_provenance(provenance_id),
     row_key TEXT, column_name TEXT
 );
+CREATE TRIGGER IF NOT EXISTS immutable_local_fact_lineage BEFORE UPDATE ON local_fact_lineage
+BEGIN SELECT RAISE(ABORT,'local_fact_lineage are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_local_fact_lineage_delete BEFORE DELETE ON local_fact_lineage
+BEGIN SELECT RAISE(ABORT,'local_fact_lineage are immutable'); END;
+CREATE INDEX IF NOT EXISTS idx_tool_calls_req ON tool_calls(request_id,snapshot_id,actor,tool_name);
+CREATE INDEX IF NOT EXISTS idx_advisor_consults_req ON advisor_consults(request_id,snapshot_id);

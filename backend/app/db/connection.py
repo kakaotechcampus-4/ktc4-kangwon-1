@@ -40,7 +40,9 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
 @contextmanager
 def readonly(path: str | Path, *, timeout: float = 5) -> Iterator[sqlite3.Connection]:
     """기존 파일을 읽기 전용으로 열고 연결을 반드시 닫습니다."""
-    connection = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=timeout)
+    connection = sqlite3.connect(
+        Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=timeout
+    )
     connection.row_factory = sqlite3.Row
     try:
         yield connection

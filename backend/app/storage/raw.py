@@ -3,7 +3,7 @@
 import json
 import sqlite3
 import uuid
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,7 +85,9 @@ def _snapshot(request_id, run_id, path):
         ).fetchone()[0]
 
 
-def _save_response(scope, *, source, source_type, args, page, status, payload, secrets=()):
+def _save_response(
+    scope, *, source, source_type, args, page, status, payload, secrets=(), connection=None
+):
     args, payload = scrub(args, secrets), scrub(payload, secrets)
     rows, expected = _rows(payload)
     try:
@@ -116,8 +118,9 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
     group_key = canonical_hash(grouping)
     response_id = "r_" + str(uuid.uuid4())
     payload_hash = canonical_hash(payload)
-    with connect(scope.path) as db:
-        db.execute("BEGIN IMMEDIATE")
+    with connect(scope.path) if connection is None else nullcontext(connection) as db:
+        if not db.in_transaction:
+            db.execute("BEGIN IMMEDIATE")
         inserted = db.execute(
             "INSERT OR IGNORE INTO raw_payloads VALUES(?,?)",
             (payload_hash, canonical_json(payload)),
@@ -216,10 +219,11 @@ def _finish(scope):
             (scope.snapshot_id,),
         ).fetchone()
         manifest = json.loads(row[0])
-        manifest.setdefault("runs", {})[scope.run_id] = {
-            "partial": scope.partial or bool(gaps),
+        previous = manifest.setdefault("runs", {}).get(scope.run_id, {})
+        manifest["runs"][scope.run_id] = {
+            "partial": previous.get("partial", False) or scope.partial or bool(gaps),
             "missing_pages": gaps,
-            "reasons": sorted(scope.reasons),
+            "reasons": sorted(scope.reasons | set(previous.get("reasons", []))),
         }
         partial = row[1] == "partial" or scope.partial or bool(gaps)
         # 원문 없는 목업 실행을 완전 수집으로 표시하지 않습니다.

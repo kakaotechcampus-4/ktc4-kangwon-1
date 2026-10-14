@@ -448,6 +448,6 @@ def evaluate(
         "address": sample["address"],
         "rows": rows,
         "top5": top,
-        "top5_status": "v0.3 하한→coverage→코드 순 검토 후보",
+        "top5_status": "v0.8 하한→coverage→코드 순 검토 후보",
         "badges": dict(Counter(r["badge"] for r in rows)),
     }

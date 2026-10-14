@@ -170,12 +170,15 @@ def rows_hash(rows: list[dict]) -> str:
 async def collect_pages(
     db: LocalDataDB, key: str, fetch: Callable[[int, int], Awaitable[dict]]
 ) -> tuple[list[dict], int]:
-    """완료된 페이지는 재사용. 동시 네 페이지가 모두 끝난 뒤 오류를 전파합니다."""
+    """첫 페이지를 재확인하고 총행 수가 바뀌면 한 번 새로 수집합니다."""
     requests = 0
 
-    async def page(start: int, expected_total: int | None = None) -> dict:
+    class TotalChangedError(DataValidationError):
+        pass
+
+    async def page(start: int, expected_total: int | None = None, *, fresh: bool = False) -> dict:
         nonlocal requests
-        body = await asyncio.to_thread(db.page, key, start)
+        body = None if fresh else await asyncio.to_thread(db.page, key, start)
         cached = body is not None
         if body is None:
             await asyncio.to_thread(db.reserve_http)
@@ -183,7 +186,7 @@ async def collect_pages(
             body = await fetch(start, start + 999)
         total = int(body.get("list_total_count", 0))
         if expected_total is not None and total != expected_total:
-            raise DataValidationError("이어 받는 중 총행 수 변경: 체크포인트 재수집 필요")
+            raise TotalChangedError("수집 중 총행 수 변경")
         rows = body.get("row", [])
         if not isinstance(rows, list) or len(rows) != min(1000, max(0, total - start + 1)):
             raise DataValidationError("페이지 행 수 누락")
@@ -191,19 +194,34 @@ async def collect_pages(
             await asyncio.to_thread(db.save_page, key, start, body)
         return body
 
-    first = await page(1)
-    total = int(first.get("list_total_count", 0))
-    rows = list(first.get("row", []))
-    starts = list(range(1001, total + 1, 1000))
-    for offset in range(0, len(starts), 4):
-        results = await asyncio.gather(
-            *(page(start, total) for start in starts[offset : offset + 4]),
-            return_exceptions=True,
-        )
-        for result in results:
-            if isinstance(result, BaseException):
-                raise result
-            rows.extend(result.get("row", []))
-    if not rows:
-        raise DataValidationError("API 전체 자료가 비었습니다.")
-    return rows, requests
+    for attempt in range(2):
+        cached_first = await asyncio.to_thread(db.page, key, 1)
+        first = await page(1, fresh=True)
+        if cached_first is None or rows_hash([cached_first]) != rows_hash([first]):
+            await asyncio.to_thread(db.clear_pages, [key])
+            await asyncio.to_thread(db.save_page, key, 1, first)
+        total = int(first.get("list_total_count", 0))
+        rows = list(first.get("row", []))
+        starts = list(range(1001, total + 1, 1000))
+        try:
+            for offset in range(0, len(starts), 4):
+                results = await asyncio.gather(
+                    *(page(start, total) for start in starts[offset : offset + 4]),
+                    return_exceptions=True,
+                )
+                changed = next((r for r in results if isinstance(r, TotalChangedError)), None)
+                if changed is not None:
+                    raise changed
+                for result in results:
+                    if isinstance(result, BaseException):
+                        raise result
+                    rows.extend(result.get("row", []))
+        except TotalChangedError:
+            await asyncio.to_thread(db.clear_pages, [key])
+            if attempt:
+                raise
+            continue
+        if not rows:
+            raise DataValidationError("API 전체 자료가 비었습니다.")
+        return rows, requests
+    raise DataValidationError("수집 중 총행 수가 안정되지 않았습니다.")

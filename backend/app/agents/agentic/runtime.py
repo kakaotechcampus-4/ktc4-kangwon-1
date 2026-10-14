@@ -735,9 +735,6 @@ class DecisionLoop:
 def _save_user_facts(scope, answers, question_id, saved):
     from .facts import register_fact
 
-    response = scope.record_sync(
-        source="user", source_type="api", args={}, page="1", status=200, payload={"rows": [answers]}
-    )
     with connect(scope.path) as db:
         db.execute("BEGIN IMMEDIATE")
         question = db.execute(
@@ -746,6 +743,15 @@ def _save_user_facts(scope, answers, question_id, saved):
         ).fetchone()
         if question is None or question[0] != "waiting":
             raise AnalysisConflictError("이미 답변한 질문입니다.")
+        response = scope.record_sync(
+            source="user",
+            source_type="api",
+            args={},
+            page="1",
+            status=200,
+            payload={"rows": [answers]},
+            connection=db,
+        )
         ref = db.execute(
             "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
         ).fetchone()[0]

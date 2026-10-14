@@ -64,6 +64,14 @@ def quarters(latest: str, count: int) -> list[str]:
 
 
 async def refresh(args, db: LocalDataDB) -> list[dict]:
+    try:
+        return await _refresh(args, db)
+    except BaseException:
+        await asyncio.to_thread(db.clear_staged)
+        raise
+
+
+async def _refresh(args, db: LocalDataDB) -> list[dict]:
     selected = args.source or list(SOURCES)
     versions = []
     report = []
@@ -150,6 +158,8 @@ async def refresh(args, db: LocalDataDB) -> list[dict]:
                 for period in needed if source in ("lifecycle", "floating") else [None]:
                     checkpoint = f"v1:{SERVICES[source]}:{period or 'all'}"
                     checkpoints.append(checkpoint)
+                    if args.reset_checkpoint:
+                        await asyncio.to_thread(db.clear_pages, [checkpoint])
 
                     async def fetch(
                         start, end, service=SERVICES[source], extra=period, api_key=key
@@ -221,6 +231,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-vacuum", action="store_true")
     p.add_argument("--api", action="store_true", help="상주/직장은 전체 API에서 선택 분기를 적재")
+    p.add_argument(
+        "--reset-checkpoint", action="store_true", help="선택 원천의 API 페이지를 재수집"
+    )
     return p
 
 

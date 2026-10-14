@@ -230,7 +230,10 @@ class LocalAdapter:
 
         data["area_selection"] = selection
         data["limitations"] = boundary_limitations(
-            self.rows("seoul_boundary"), task.site.latitude, task.site.longitude, task.radius_m
+            self.rows("seoul_boundary"),
+            task.site.latitude,
+            task.site.longitude,
+            max(task.radius_m, data["comparison_radius_m"] or 0),
         )
         from app.agents.commercial_area.franchise import build_franchise, load_cached_brands
         from app.agents.commercial_area.schemas import MiddleCategory
