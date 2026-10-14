@@ -1,4 +1,4 @@
-# Agentic decision 구조 설계안 v0.4 — 분기별 로컬 자료 DB
+# Agentic decision 구조 설계안 v0.5 — 로컬 자료·전체 업종 L
 
 작성: 2026-10-13 · 개정: 2026-10-14 · 구현 통합 브랜치: feat/agentic-decision · 상태: **로컬 읽기 도구·단일 공개 API·평가자 연결 완료, 삭제·리팩토링 후 검증 중**.
 기준: [채점표 v0.8](decision-prompt-rubric.md)의 확정 규칙. 코드 90점 + decision의 L 10점, 단일 모드·fact_id·평가자 네 명은 유지한다.
@@ -13,6 +13,8 @@ v0.4 최초 조사는 문서만 수정했다. 이번 LD1·LD2는 사용자 승�
 평가자 네 명 병렬 → 피드백 한 번 → 최종 fact 렌더링이다. 옛 브리핑·전문가·그래프는 삭제한다.
 실행 모드는 하나이며 요청 DB 버전은 3이다. 자료 DB는 별도이며 초기화 대상이 아니다.
 운영 예산은 입력 400k·출력 60k·모델 40회·600초·호출당 출력 16k다.
+L은 전체 51업종이며 submit_l 분할 제출 → 재계산 → submit_draft 순서로 분리한다.
+역할별 예산·이전 홍대 실측·구현 단계는 [전체 L 구현 계획](whole-industry-l-plan.md)이 현재 기준이다.
 평가자는 출력 선점 최대 4k, 최종 두 호출은 공유 예산에서 보존한다.
 측정은 서버 인자로 켜며 API 본문에서 바꿀 수 없다. 공간 요건 CSV는 미검토 초안이며
 확인 조건·추가 질의에만 활용한다. 이 초안 자체로 L 가감점을 정당화하지 않는다.
@@ -214,7 +216,8 @@ v0.4에서도 도구 아홉 개의 이름·한도와 ToolReply 계약은 유지�
 | check_regulation | {}. 현재 좌표·저장된 구역 snapshot 사용 | {status,queried_at,contains_verified,zones,fact_ids,industry_restrictions,limitations}. 건축물대장은 현재 unavailable | common + REGULATION_UNAVAILABLE | 실제 구역 조회 요청당 1회, actor 호출 각 1회·캐시 공유 | decision·평가자 |
 | ask_advisor | {question:string≤800자,fact_ids:[FactId]≤12,industry_codes?:[Code]≤3} | {consult_id,status,interpretations[{claim,fact_ids,conditions,confidence}],missing_facts,limitations}. 점수 없음 | common + ADVISOR_UNAVAILABLE | 요청당 최대 2회·각 45초·출력≤1,000토큰 | decision만 |
 | ask_user | {questions:[{field:기존 QuestionField,question:string≤200자,reason:string≤200자}]≤3} | {question_session_id,status:waiting_for_input}. 답변은 재개 시 typed user facts | common + QUESTION_NOT_ALLOWED/ALREADY_ANSWERED | 요청당 1세션·질문≤3. 기존 답변 항목 재질문 금지 | decision만 |
-| submit_draft | {phase:draft/final,report:ReportProposal,review_resolutions?:[Resolution]}. 점수 숫자 없음 | {report_id,validation_status,rendered_preview_ref,score_snapshot_id}. final도 같은 구조화 제출 도구 | common + REPORT_INVALID/L_EVIDENCE_INVALID/REVIEW_UNRESOLVED | draft 1회·final 1회, 스키마 오류 교정 총 1회(예산에 포함) | decision만 |
+| submit_l | {L_records≤17,finish?:bool}. 전체51업종·한 업종 한 번 | 제출/미제출 수·closed, 종료 시 새 점수 요약·Top5 | common + L_EVIDENCE_INVALID | 여러 묶음, 같은 업종 중복 금지 | decision만 |
+| submit_draft | {phase:draft/final,report:ReportProposal,review_resolutions?:[Resolution]}. L 입력 없음·후보/제외 각각≤5 | {report_id,validation_status,rendered_preview_ref,score_snapshot_id} | common + REPORT_INVALID/REVIEW_UNRESOLVED | L 종료 뒤 초안·최종, 거절도 예산에 포함 | decision만 |
 | submit_review | {draft_id:ID,verdict:agree/conditional/oppose,issues:[ReviewIssue]≤4} | {review_id,status}. actor는 실행기가 고정 | common + DRAFT_MISMATCH/INVALID_REFERENCE | 평가자 각 1회·지적별 근거 fact_id≤3 | 평가자만 |
 
 common 오류는 INVALID_ARGUMENT / SOURCE_UNAVAILABLE / SNAPSHOT_MISMATCH / BUDGET_EXCEEDED / TIMEOUT이다. 동일 도구·정규화 인자는 재실행하지 않고 이전 응답에 duplicate=true·이미 조회한 결과 표시를 붙인다. 부분 결과는 partial·truncated·누락 필드를 표시하고, '조회 범위 내 확인한 수'만 인용한다. 계약 검증·fact 저장·호출 감사 저장 실패는 일반 error ToolReply로 숨기지 않고 실행 실패로 전파한다(AGENTS.md 3).
@@ -237,36 +240,40 @@ map_search는 PlaceClient·카카오 카테고리·거리 계산을 재사용하
 
 운영 쓰기 연결은 서비스 전용이며 모델 SQL 연결과 분리한다. 자동 fact 등록은 읽기 연결 밖의 서버 검증/트랜잭션으로 한다. 이를 원자료 쓰기 권한으로 해석하지 않는다.
 
-## 4. decision 루프
+## 4. decision 루프 — 전체 51업종 L
 
-| 단계 | 행동·종료 조건 | 저장 |
+코드 순위로 L 대상 업종을 제외하지 않는다. 모든 51업종에 같은 등급 기준을 적용한다.
+구현 순서·테스트·이전 실측·역할 예산의 상세 기준은 [전체 L 구현 계획](whole-industry-l-plan.md)이다.
+
+| 단계 | 행동·종료 | 기록 |
 | --- | --- | --- |
-| 시작 | 고정 시스템 지시문·도구 스키마 + request/run/snapshot 참조·Site 최소 문맥·rubric_version·예산. 전체 분석/원문/브리핑 주입 안 함 | run 설정·모델·도구 버전 |
-| 코드 확인 | get_scorecard로 51업종 코드 하한 B_code·누락 확인 → B_code 상위 10개 선정. decision은 근거를 붙인 추가 업종 최대 2개까지 | selection score version·순위·추가 이유·fact_ids |
-| 해석 | 상충/누락이 결론을 바꿀 때만 SQL·지도·규제. 불확실하면 선택적 자문. 숫자를 직접 재계산하지 않음 | tool_calls·새 facts·자문 |
-| L·초안 | 선정된 10~12개를 최대 3업종씩 묶어 검토. 보조 실패 시 advisor_unavailable 기록 후 decision 단독 채점. 코드 90점은 수정 못 함. submit_draft(draft) | 대상 선정·질문·근거·grade/unknown·자문 상태를 LRecord에 기록 |
-| 평가·수정 | 4명 review 완료/실패 → 각 지적 수용·일부·기각. 필요한 조회만 추가하고 L/문장 변경 | review_resolutions·새 L revision |
-| 최종 | submit_draft(final), 서버가 전체 51업종 최신 채택 점수로 배지·정렬·fact 인용 재검증 | final·적용 스냅샷·완료 |
-| 질문 | ask_user 후 waiting_for_input·state 참조 저장, 실행 종료. 재개 시 같은 자료 release/코드 점수 사용·답변 fact 추가 | 기존 질문/답변 흐름 |
+| 코드 | 초기 점수표 한 번 확인 | 코드 점수 스냅샷·원래 순위(추적용) |
+| 질문 | 층·전용면적·공간 상태를 처음 한 번 묶음 질문 | 답변·fact·예산·이전 대화 |
+| 공통 근거 | 51업종 공간 비교를 코드로 생성, source+metrics로 묶음 조회 | 프로필/답변 부모 fact ID·초안 표시 |
+| 추가 조사 | 기존 근거와 코드가 충돌하는 업종만 지도·SQL·자문 | 실제 성공한 도구·새 근거 |
+| L 제출 | submit_l 최대17개씩 세 묶음. 한 업종 한 번. 전부 제출 또는 finish=true로 닫기 | 미제출은 unknown·판단 미제출, 개별 이유와 총개수 |
+| 재계산 | 종료 시 서버가 코드90+L10·배지·Top5 계산 | 새 채점 스냅샷·요약 응답 |
+| 보고서 | L 종료 뒤 submit_draft. 후보/제외 후보 각각 최대5, L 입력 없음 | fact 슬롯 초안 |
+| 평가·최종 | 네 역할 병렬, 지적 한 번 반영, 코드 최종 검증 | 수용/일부/기각·이유·실패 슬롯 |
 
-LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_scope,code_score_snapshot_id,code_lower_rank,code_lower_B,reason,reason_fact_ids},review_state:reviewed/unreviewed,advisor_unavailable:bool,status,grade|null,new_factors[{direction:favorable/adverse/neutral,claim,fact_ids}],checked_questions,tool_call_ids,advisor_consult_ids,limitations}. points는 코드가 계산한다. 코드 문항 fact_ids만으로 채점한 L은 거절하고, C2/C3·지도·상가 조건의 새 근거가 있어야 한다. 새 요인 없음을 실제 조회로 확인한 등급 2와 미조회 unknown을 구분한다. 보호구역 금지는 L로 상쇄하지 않는다. 최종 후보 선택도 모델이 점수 순서를 임의로 바꾸지 못한다.
+LSelection.basis는 all_industries만 둔다. 코드 점수 스냅샷·원래 순위는 기록이며 범위 제한이 아니다.
+LRecord는 industry_code·selection·review_state·status·grade·new_factors·checked_questions·
+tool_call_ids·advisor_consult_ids·limitations를 보존한다. unknown에는 이유가 필수다.
+새 fact·업종 일치·D/C/S 중복 금지·요인별 근거 겹침 금지·숫자 슬롯·등급별 요인 수 검증은 유지한다.
+프로필에 요건이 없다는 사실을 불리 요인으로 쓰지 못한다. 규제 금지는 L로 상쇄하지 못한다.
 
-**L 검토 범위는 코드 하한 B_code 상위 10개 + decision의 근거 있는 추가 최대 2개(중복 없이 최대 12개)**다. 동점은 v0.8과 같이 coverage→업종 코드로 결정한다. L을 더한 최종 B로 검토 대상을 계속 재선정하지 않는다. 추가 사유·fact_ids를 LRecord에 기록한다. selection.reason_fact_ids는 검토 선정용이라 코드 자료도 사용할 수 있지만, 실제 L 점수의 new_factors.fact_ids와 분리해 중복 채점하지 않는다. 대상 밖은 L unknown·review_state=unreviewed이며 리포트에 **판단 미검토**를 표시한다. 대상 안도 근거/도구 부족이면 unknown(판단 미확인)이다. 보조 모델 미설정·실패만으로 L을 unknown으로 만들지 않는다. 최종 정렬·배지는 v0.8의 B=코드 기여점수+L 기여점수 기준 그대로다.
-
-| 예산 | 초기 확정값·집행 |
+| 자원 | 안전선·격리 |
 | --- | --- |
-| decision 모델 호출 | 초안 8 이하: 코드 확인·대상 선정 2 + L 묶음 검토 4(최대 3업종×4묶음) + 초안 제출 1 + 교정 여유 1. 피드백/최종 4 이하: 반영·추가 확인 2 + 최종 제출 1 + 교정 여유 1. final용 2회 예약 |
-| 도구 | decision 20회(초안 14·최종 6), 평가자 각 4회, 보조 사실 읽기 각 1회. 전체 40회. 시도·거절·중복도 카운트 |
-| 모델 전체 | decision 12 + 평가자 4×3 + 보조 2 = 최대 26회. 실행 상한 28회이며 여유 2회도 자동 소비하지 않음 |
-| 입력/출력 토큰 | 모델 호출당 입력 상한 없음·출력≤3,000, 전체 누적 입력≤160,000·출력≤24,000. 각 role·provider 사용량 실제 기록 |
-| 활성 시간 | 수집/계산 120초 목표 한도 + 추론/평가/최종 180초 한도, 전체≤300초. 임대인 답변 대기 제외, 재개 때 예산 초기화 금지 |
-| 병렬 | 독립 read 도구는 1턴 최대 3개 병렬. 평가자 최대 4명 병렬. 동일 SQL 연결 공유 안 함 |
-| 반복 | actor+tool+정규화 인자+snapshot 해시 동일은 이전 응답을 duplicate=true·이미 조회한 결과 표시와 함께 반환. 중복도 도구 횟수 소비. 반복·오류 연속 3회면 코드 기반 초안으로 종료, 성공 시 연속 횟수 초기화 |
-| 문맥 | 저장된 시스템·사용자·도구 호출/응답 전체를 복원한다. 임대인 답변과 fact_id는 기존 ask_user 도구 응답을 answered로 갱신한다. 응답별 크기 제한과 기존 예산은 유지하며 전체 이력을 최근 응답만으로 바꾸지 않는다 |
+| 전체 | 입력400k·출력60k·40회·600초·호출당 출력16k |
+| decision | 입력230k·출력36k·22회. 그중 최종 입력50k·출력6k·2회 예약 |
+| advisor | 입력10k·출력2k·2회 |
+| 평가자 | 각 입력40k·출력5.5k·4회, 읽기3+제출1 |
+| 측정 | 녹화·바깥 안전선 유지. 네 평가자의 보장 자원을 침범하는 예산 대여는 허용하지 않음 |
+| 반복·오류 | 중복은 재실행하지 않으며 거절도 예산에 포함. 오류 경로·유형을 비밀 없이 짧게 반환 |
+| 재개 | 동일 버전·이전 messages·답변 도구 응답·사용량 누적을 유지 |
 
-토큰은 반복 전송된 시스템·대화 이력까지 누적하며 캐시 할인이 있어도 원 토큰 사용량을 기록한다. 남은 토큰은 사전 추정과 provider usage로 조정한다. 같은 재개·판단 재시도는 저장된 사용량을 이어받는다. API 재시도도 실제 HTTP 한도를 소비한다.
-
-상한·도구 실패는 해당 근거 unknown과 제한 문구로 남겨 부분 보고서 제출을 시도한다. 제출된 초안이 유효하고 최종 정리가 실패하면 '초안·평가 미완료'로 저장하며 final로 가장하지 않는다. 새 schemas/API에 draft_available 실행 결과를 제안한다. 제출 자체·저장·계약 검증이 실패하면 failed다. 임의 성공/중립값·가짜 L을 생성하지 않는다.
+역할 시간은 병렬 실행이므로 합산 분배하지 않고 같은 600초 마감 안에서 집행한다.
+실제 사용량과 진행 중 예약값을 잠금 안에서 검사한다. 미완료 L·평가·반영은 한계로 명시한다.
 
 ## 5. 보조 에이전트와 모델 설정
 
@@ -309,38 +316,33 @@ LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_s
 
 ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했다. 이 연결의 모델 허용 목록 문제이며 Sonnet 자체의 JSON/스트리밍 비호환으로 단정하지 않는다. 별도 Sonnet용 ADVISOR_LLM_BASE_URL/API_KEY 설정 후 다음 승인된 시험에서 재확인해야 한다. 키·URL 원문은 출력·문서에 남기지 않았다. 해당 시험의 재시도 한도를 소진했으므로 그 실행에서 추가 호출하지 않았다. 이후 별도 승인된 기본 ELICE 확인은 HTTP200·스트리밍 8청크·usage 입력38/출력25·JSON 객체 검증 성공(2.86초)이었다. 당시 ADVISOR 모델·키 미설정으로 Sonnet 확인은 실행하지 않았다. v0.3 개정에서는 호출하지 않았다.
 
-## 6. 평가자 4명 — 항상 실행
+## 6. 평가자 네 명
 
-| 역할(현재 ID 유지) | 중점 | 권한 |
+| 역할 | 중점 | 도구 |
 | --- | --- | --- |
-| examiner | 숫자/단위/기간/범위·원문 계보·L 중복·상충 | 같은 score/fact/raw/map/reg 읽기 + submit_review |
-| founder | 폐업·경쟁·작은 표본·업종 일부의 실행 위험 | 동일 |
-| customer | 인구·시간·실제 고객 행동·수요 해석 누락 | 동일 |
-| landlord_advocate | 임대인 답변·층/면적/설비·확인 조건 | 동일. 규제를 독자 법률 판정하지 않고 조회 상태/누락 확인 |
+| examiner | 사실·기간·범위·L 중복·계보 | get_scorecard / get_facts / query_raw / submit_review |
+| founder | 공간·설비·운영 제약, 초안 요건의 과신 | 동일 |
+| customer | 손님·동선·수요·확인 조건 | 동일 |
+| landlord_advocate | 임대 지속성·답변 조건·불확실성 | 동일 |
 
-각 평가자는 고정 페르소나 시스템 프롬프트, draft_id·버전·인용 fact_id 목록·LRecord·확인 조건만 받는다. 다른 평가자의 의견·보조 의견은 초기에 주지 않아 독립 검토한다. 기존 4 ID·지적 최대 4개·실패 격리를 재사용한다(`backend/app/schemas.py:696`, `:702`, `:710`, `backend/app/agents/evaluators/agent.py:175`).
+각 역할은 읽기 최대 세 번과 제출 한 번이며 지도·규제·자문·질문 도구는 받지 않는다.
+필요한 지도·규제의 기존 fact를 읽고 재조회가 필요하면 suggested_check로 남긴다.
+초안·전체 L의 요인/근거·확인 조건을 짧게 전달하고 반복 스냅샷 메타데이터는 뺀다.
+역할별 입력40k·출력5.5k·4호출을 다른 역할이 쓰지 못한다. 실패해도 정확히 네 슬롯을 유지한다.
 
-ReviewIssue={issue_id,industry_code|null,target:fact/score/L/claim/condition,kind:factual_error/duplicate_score/missing_evidence/scope_mismatch/action_condition,comment,fact_ids≤3,suggested_check}. 모델이 점수나 배지를 직접 고치는 출력은 없다. 저장된 사실을 임의 삭제하거나 외부 메시지를 보내는 권한도 없다.
-
-| 반영 규칙 | 처리 |
-| --- | --- |
-| 수용 | 바뀐 claim/L·새 fact·이유 기록, 같은 코드 사실 오류는 서버 검증/재계산 후 새 score snapshot으로 수정 |
-| 일부 | 적용한 부분·적용 안 한 부분·이유를 분리 |
-| 기각 | 근거 fact_id와 이유 요구. 의견과 기계 검증 위반을 구분 |
-| 기계 위반 | 잘못된 fact·코드 점수 변경·L 중복·금지 상쇄는 기각할 수 없음, 제출 validator가 거절 |
-| 실패/시간 초과 | 일부·전체 실패 모두 평가 미완료를 명시하고 기계 검증 통과 결과 제공. failed reviewer 명단·coverage 표시, 동의로 계산하지 않음 |
-| 반복 | **평가 1라운드 + decision 수정 1회**, 수정 후 기계 검증만. 추가 평가가 필요하면 다음 요청으로 분리 |
-
-끄는 스위치 없이 평가자 4명 모두 실행한다. MOCK_MODE에서는 같은 단계·계약을 대역으로 검증하고 예산 상한은 실제 실행과 같이 집행한다. 사용자 목표에 따라 평가자 전원 동의라도 decision의 최종 제출 단계는 수행한다. 현재는 no_comments/all_failed면 final 호출을 건너뛸 수 있으므로 바뀌는 동작이다(`backend/app/agents/orchestration/nodes/evaluation.py:70`).
+ReviewIssue는 issue_id·industry_code·target·kind·comment·fact_ids≤3·suggested_check이다.
+decision은 지적마다 accepted/partial/rejected와 이유·근거를 한 번 제출한다.
+고정된 코드 점수를 모델이 고치지 못하며 L의 최초 채택 기록도 중복 제출로 덮지 않는다.
+최종 report validator가 인용·규제·배지·순위를 다시 검사한다. 평가 실패를 동의로 간주하지 않는다.
 
 ## 7. 보고서 출력 계약
 
-ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments,L_records}. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 registry·v0.8 scores로 계산해 DecisionResult에 붙인다.
+ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitations_segments}. L_records는 별도 submit_l로만 받는다. Candidate={industry_code,reasons_segments,risks_segments,confirmation_conditions_segments,fact_ids}. 점수·배지·금지·순위·숫자 값 필드는 모델 제안에 받지 않는다. 서버가 facts·v0.8 scores로 계산해 DecisionResult에 붙인다.
 
 | 필드 | DecisionResult 서버 출력 |
 | --- | --- |
 | 버전 | schema_version=2.0, rubric_version=v0.8, tool_contract_version, request_id, run_id, report_id, score_snapshot_id, evidence_snapshot_ids |
-| 검토 후보 | code·name·코드 point/90 + L point/10, L 대상/선정 이유·review_state. 대상 밖 unknown=판단 미검토, 대상 안 근거 부족 unknown=판단 미확인. A/B/H·비율·coverage·배지·G |
+| 검토 후보 | code·name·코드 point/90 + L point/10, 전체 업종의 검토 상태·unknown 이유. A/B/H·비율·coverage·배지·G |
 | 근거 문장 | segments=[{type:text,text},{type:fact,fact_id,format:count/percent/rate/distance/text}]. 모델은 값 복사·산술 금지 |
 | L | 새 요인·fact_id·호출 도구·자문 반영·grade/unknown. 새 근거가 없으면 등급 생성 금지 |
 | 검토 상태 | 평가자 4명 상태·지적·수용/일부/기각 로그, review_completeness |
@@ -348,7 +350,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 
 숫자는 서버 renderer가 fact.value·단위로 채운다. grade enum·업종 코드·고정 시간대/연령 라벨은 구조화 제어값이며 측정 숫자 복사와 구분한다. 모델 자유문장에 인용 없는 수치가 있으면 거절한다. 근거는 fact_id만 인용한다. 기존 render_cited·`{i}` 자리표시자·agent/path 인용은 삭제하고 typed fact 슬롯 renderer로 교체한다. 원문 숫자를 텍스트에 붙이는 우회도 검사한다.
 
-최종 배열은 전체 51업종 채택 점수의 원점수 하한→coverage→코드로 재검증한다. L 검토는 상위10+추가2로 제한하고 대상 밖은 unknown·판단 미검토로 남기며 '전체 업종의 L을 검증했다'고 하지 않는다. Top 5에 보류/조건부가 있어도 추천처럼 표시하지 않는다.
+최종 배열은 전체 51업종 채택 점수의 원점수 하한→coverage→코드로 재검증한다. L 범위는 전체51개이며 미제출·근거 부족은 개별 이유와 함께 unknown으로 남긴다. Top5의 보류/조건부를 추천처럼 표시하지 않는다.
 
 ## 8. schemas.py 변경안 — 팀 계약 교체
 
@@ -412,7 +414,7 @@ GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 se
 
 큰 지도/규제 응답과 반복 도구 본문도 저장량에 포함한다. 파일로 빼거나 자료 DB로 옮긴 용량도 실제 저장량에 포함한다. 감사 결과는 한 번 저장하고 대화에는 참조만 둔다. 자료 공간과 요청 공간 증가를 분리해 보고하며, 최초 자료 적재 증가를 요청당 증가와 섞지 않는다. 요청 DB 용량은 실측으로 기록하고 목표 초과로 보고하지 않으며, 필요한 근거를 삭제하지 않는다.
 
-모델 예산은 기존 전체 활성300초·모델26/상한28·누적 입력160k/출력24k·도구40을 유지한다. 호출당 입력12k 상한은 제거하며 출력3,000 상한은 유지한다. L 상위10+추가2, 보조 최대2회, 평가자4명도 동일하다. 요청 앞단 10초는 모델 보고서 전체 시간 약속이 아니다. 실제 사용 model/계열·usage와 SQL/계산/저장/루프 시간을 기록한다. DB/SQL 작업은 to_thread 및 협력적 취소/시간 상한으로 종료하며 예전처럼 취소 후 무한 대기하지 않는다.
+모델 예산은 전체600초·40회·입력400k/출력60k·호출당출력16k이며 역할 몫은 4절을 따른다. L전체51개·선택적자문2회·평가자4명이다. 요청 앞단10초는 보고서 전체 시간 약속이 아니다. 실제 model·usage·단계 시간을 기록한다. DB/SQL은 to_thread와 협력적 취소로 종료한다.
 
 ### LD1·LD2 구현 결정 (2026-10-14)
 

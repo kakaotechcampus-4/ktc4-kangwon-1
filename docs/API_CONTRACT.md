@@ -180,7 +180,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 
 | 필드 | 의미 |
 | --- | --- |
-| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 1. 모델 이름에 V2를 붙이지 않음 |
+| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 2. 모델 이름에 V2를 붙이지 않음 |
 | request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
 | top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지 제외·B 내림차순→coverage→코드 정렬, 부족하면 미충원 |
 | code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
@@ -188,7 +188,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 | lower_ratio / upper_ratio / coverage | B/A·H/A·observed 배점/A. A=0이면 null. D/C 묶음 coverage는 별도 제공 |
 | G / badge | 규제 금지/조건부/해당 없음/unknown, 추천/조건부/보류/비추천. 규제 금지는 점수로 상쇄 불가 |
 | *_segments / facts | text 또는 fact_id 슬롯. 숫자는 facts 레지스트리 값·단위로 렌더링. `{i}`·agent/path 인용 없음 |
-| L_records / review_state | 대상 선정·새 근거·질문·도구·자문 반영 기록. 대상 밖은 판단 미검토, 대상 안 자료 부족은 판단 미확인 |
+| L_records / review_state | 전체 51업종의 새 근거·질문·도구·자문 기록. 최대51·최종은 정확히51개, unknown에는 개별 이유. basis=all_industries |
 | evaluator_reviews / review_completeness | 항상 4명 실행. completed 수/4, 실패는 동의로 간주하지 않음 |
 | review_resolutions | 지적별 수용·일부·기각과 근거/이유 |
 | confirmation_conditions_segments / limitations_segments | 영업 전 확인 조건·시점/공간/예산/평가 한계. 건축물 용도는 확인 조건 |
@@ -206,6 +206,11 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 경로의 결과와 이벤트로 연결합니다. 키·SQL·원문·fact 값은 이벤트에 넣지 않습니다.
 
 ### 도구 function 정의의 내보내기
+
+도구 계약2는 submit_l을 추가한 열 개 function이다. L을 최대17개씩 제출하여 종료한 뒤
+보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
+구현 순서·공통 공간 fact·역할 예산은 [전체 L 계획](whole-industry-l-plan.md)을 따른다.
+아래 내보내기 규칙은 유지하되 개수·필드 예시는 계약2 구현과 함께 갱신한다.
 
 `tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 9개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
