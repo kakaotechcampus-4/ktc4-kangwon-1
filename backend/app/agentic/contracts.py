@@ -84,6 +84,7 @@ Metric = Literal[
     "existing_facilities",
     "industry_preferences",
     "space_requirements",
+    "space_fit",
 ]
 ToolName = Literal[
     "get_scorecard",
@@ -93,6 +94,7 @@ ToolName = Literal[
     "check_regulation",
     "ask_advisor",
     "ask_user",
+    "submit_l",
     "submit_draft",
     "submit_review",
 ]
@@ -139,6 +141,9 @@ ErrorCode = Literal[
     "REVIEW_UNRESOLVED",
     "DRAFT_MISMATCH",
     "INVALID_REFERENCE",
+    "L_STAGE_REQUIRED",
+    "L_STAGE_CLOSED",
+    "DUPLICATE_INDUSTRY",
 ]
 
 
@@ -184,7 +189,17 @@ class FactView(Schema):
 
     @model_validator(mode="after")
     def check_observation(self) -> Self:
-        if self.status != "observed" and (self.value is not None or self.citable):
+        comparison_unknown = (
+            self.metric == "space_fit"
+            and self.status == "unknown"
+            and isinstance(self.value, dict)
+            and not self.citable
+        )
+        if (
+            self.status != "observed"
+            and not comparison_unknown
+            and (self.value is not None or self.citable)
+        ):
             raise ValueError("미확인·미적용 사실은 null이고 인용 불가여야 합니다.")
         if self.status == "observed" and self.value is None:
             raise ValueError("관측 사실에는 값이 필요합니다.")
@@ -274,7 +289,7 @@ class GetFactsInput(Schema):
     industry_code: IndustryCode | None = None
     source: Source | None = None
     metrics: list[Metric] | None = Field(default=None, min_length=1, max_length=8)
-    limit: Annotated[int, Field(ge=1, le=32)] = 32
+    limit: Annotated[int, Field(ge=1, le=51)] = 32
     cursor: Text | None = None
 
     @model_validator(mode="after")
@@ -283,8 +298,12 @@ class GetFactsInput(Schema):
         if self.fact_ids is not None:
             if any(v is not None for v in filters) or self.cursor is not None:
                 raise ValueError("fact_ids와 검색 조건을 함께 넣을 수 없습니다.")
+        elif self.source == "industry_profile" and self.metrics == ["space_fit"]:
+            pass
         elif any(v is None for v in filters):
             raise ValueError("업종·출처·지표를 모두 지정해야 합니다.")
+        elif self.limit > 32:
+            raise ValueError("일반 사실 조회는 최대 32개입니다.")
         return self
 
 
@@ -356,19 +375,11 @@ class Candidate(Schema):
 
 
 class LSelection(Schema):
-    basis: Literal["code_lower_top10", "decision_extra", "outside_scope"]
+    basis: Literal["all_industries"]
     code_score_snapshot_id: Text
     code_lower_rank: Annotated[int, Field(ge=1, le=51)]
     reason: Text
     reason_fact_ids: list[FactId] = Field(default_factory=list, max_length=12)
-
-    @model_validator(mode="after")
-    def check_extra(self) -> Self:
-        if self.basis == "decision_extra" and not self.reason_fact_ids:
-            raise ValueError("추가 검토 선정에는 근거가 필요합니다.")
-        if self.basis == "code_lower_top10" and self.code_lower_rank > 10:
-            raise ValueError("상위 10개 범위를 넘었습니다.")
-        return self
 
 
 class NewFactor(Schema):
@@ -376,6 +387,9 @@ class NewFactor(Schema):
     claim: Text
     fact_ids: list[FactId] = Field(min_length=1, max_length=12)
     major_constraint: bool = False
+    space_fit_component: (
+        Literal["floor", "area", "kitchen", "ventilation", "water_supply"] | None
+    ) = None
 
 
 class LRecord(Schema):
@@ -401,10 +415,8 @@ class LRecord(Schema):
             raise ValueError("판단 등급에는 실제 확인 질문·도구 기록이 필요합니다.")
         if self.status == "observed" and self.grade != 2 and not self.new_factors:
             raise ValueError("중립 이외 등급에는 새 근거가 필요합니다.")
-        if self.selection.basis == "outside_scope" and (
-            self.status != "unknown" or self.review_state != "unreviewed"
-        ):
-            raise ValueError("검토 대상 밖은 판단 미검토입니다.")
+        if self.status == "unknown" and not self.limitations:
+            raise ValueError("판단 미확인에는 이유가 필요합니다.")
         return self
 
 
@@ -442,7 +454,20 @@ class ReportProposal(Schema):
     candidates: list[Candidate] = Field(default_factory=list, max_length=5)
     excluded_candidates: list[Candidate] = Field(default_factory=list, max_length=5)
     limitations_segments: list[FactSegment] = Field(default_factory=list)
-    L_records: list[LRecord] = Field(default_factory=list, max_length=12)
+
+
+class SubmitLInput(Schema):
+    L_records: list[LRecord] = Field(default_factory=list, max_length=17)
+    finish: bool = False
+
+    @model_validator(mode="after")
+    def check_batch(self) -> Self:
+        if not self.L_records and not self.finish:
+            raise ValueError("빈 묶음은 종료를 명시해야 합니다.")
+        codes = [r.industry_code for r in self.L_records]
+        if len(set(codes)) != len(codes):
+            raise ValueError("한 묶음에 같은 업종을 중복 제출할 수 없습니다.")
+        return self
 
 
 class SubmitDraftInput(Schema):
@@ -464,9 +489,17 @@ class ScorecardResult(Schema):
 
 
 class FactsResult(Schema):
-    facts: list[FactView] = Field(max_length=32)
+    facts: list[FactView] = Field(max_length=51)
     provenance_refs: list[Text] = Field(default_factory=list)
     next_cursor: Text | None = None
+
+
+class SubmitLResult(Schema):
+    submitted_count: Annotated[int, Field(ge=0, le=51)]
+    remaining_count: Annotated[int, Field(ge=0, le=51)]
+    closed: bool
+    score_snapshot_id: Text | None = None
+    scorecard: ScorecardResult | None = None
 
 
 class RawQueryRow(Schema):
@@ -591,33 +624,28 @@ TOOL_INPUTS: dict[str, type[Schema]] = {
     "check_regulation": CheckRegulationInput,
     "ask_advisor": AskAdvisorInput,
     "ask_user": AskUserInput,
+    "submit_l": SubmitLInput,
     "submit_draft": SubmitDraftInput,
     "submit_review": SubmitReviewInput,
 }
 _TOOL_DESCRIPTIONS = {
-    "get_scorecard": (
-        "초기 L_top10을 한 번 묶어 조회하고 받은 코드 점수·상태를 재사용합니다. "
-        "상세는 최대 5개입니다."
-    ),
+    "get_scorecard": "코드 점수·근거를 조회합니다. 전체 업종 동일 검토, 상세는 최대 다섯 개입니다.",
     "get_facts": (
-        "받은 fact_ids 또는 업종·source·metrics로 좁혀 조회합니다. 공간 초안은 "
-        "source=industry_profile, metrics=[space_requirements]이며 reviewed=false를 확인하세요."
+        "fact_ids 또는 업종·source·metrics로 조회. industry_profile/space_fit은 전체 묶음 조회."
     ),
     "query_raw": "승인 뷰 SELECT로 원문을 최대 50행 확인합니다. 쓰기·집계 인용은 금지합니다.",
     "map_search": (
         "기존 fact로 설명되지 않는 경쟁·시설 조건이 있을 때 업종 또는 시설 하나만 검색합니다."
     ),
     "check_regulation": "현재 좌표의 교육환경보호구역과 업종 제한을 확인합니다.",
-    "ask_advisor": (
-        "해석 충돌·결측이 후보나 확인 조건을 바꿀 때 질문과 선택한 fact_id만 보내 자문합니다."
-    ),
+    "ask_advisor": "코드와 새 근거가 충돌할 때 질문과 fact_id만 보내 자문합니다.",
     "ask_user": (
         "미확인 핵심 상가 조건을 처음에 한 번 묶어 최대 3개 질문합니다. "
         "이미 답한 항목은 제외합니다."
     ),
+    "submit_l": "전체 업종 L을 최대 열일곱 개씩 분할 제출. finish로 종료·재계산. 후보 제출과 별개.",
     "submit_draft": (
-        "숫자는 fact_id 슬롯으로 인용해 초안/최종을 제출합니다. "
-        "공간 초안은 확인 조건이며 점수 복사는 금지합니다."
+        "L 종료 뒤 재계산 Top5로 보고서 제출. 후보/제외 각각 최대 다섯 개, L 입력 금지."
     ),
     "submit_review": (
         "읽기 최대 3회 뒤 한 번 제출합니다. 실제 fact_id로 최대 4개 지적과 확인 조건을 남깁니다."
@@ -656,7 +684,7 @@ def _function_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_definitions() -> list[dict[str, Any]]:
-    """Chat Completions에 전달할 9개 function 정의입니다. 실행기가 역할 권한을 거릅니다."""
+    """Chat Completions에 전달할 10개 function 정의입니다. 실행기가 역할 권한을 거릅니다."""
     return [
         {
             "type": "function",

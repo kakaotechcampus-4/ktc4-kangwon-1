@@ -165,7 +165,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_denied_actor_attempts_consume_budget(self):
         tool = self.executor().for_actor("examiner")
-        for _ in range(4):
+        for _ in range(3):
             self.assertEqual((await tool.execute("ask_user", {})).error.code, "INVALID_ARGUMENT")
         self.assertEqual(
             (await tool.execute("query_raw", {"sql": "SELECT 1"})).error.code, "BUDGET_EXCEEDED"
@@ -284,7 +284,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         tool.shared.map_client = client
         with patch("app.llm.session._new_client", side_effect=AssertionError("모델 생성 금지")):
             reply = await tool.execute("map_search", {"industry_code": "I202", "radius_m": 500})
-            second = await tool.for_actor("founder").execute(
+            second = await tool.for_actor("decision").execute(
                 "map_search", {"industry_code": "I202", "radius_m": 500}
             )
         data = MapResult.model_validate(reply.data)
@@ -292,6 +292,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
             [p.match_status for p in data.places], ["category_match", "name_match", "unknown"]
         )
         self.assertTrue(data.has_more)
+        self.assertTrue(second.duplicate)
         self.assertEqual(reply.data, second.data)
         self.assertEqual(client.calls, tool.shared.map_http)
         with connect(self.path) as db:

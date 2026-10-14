@@ -1,4 +1,4 @@
-"""측정 모드는 역할 제한을 풀어도 누적 예산과 재개 이력을 지킵니다."""
+"""측정 모드도 역할 예약·누적 예산·재개 이력을 지킵니다."""
 
 import unittest
 from unittest.mock import patch
@@ -8,19 +8,20 @@ from app.llm.budget import BudgetExceeded
 
 
 class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
-    async def test_default_has_no_role_call_limits(self):
+    async def test_default_preserves_role_call_reservations(self):
         for role, final, limit in [
-            ("decision", False, 8),
-            ("decision", True, 4),
+            ("decision", False, 20),
+            ("decision", True, 2),
             ("advisor", False, 2),
-            ("evaluator", False, 3),
+            ("examiner", False, 4),
         ]:
             with self.subTest(role=role, final=final):
                 budget = RuntimeBudget()
                 for attempt in range(1, limit + 1):
                     self.assertEqual(await budget.reserve(role, final=final), attempt)
-                await budget.reserve(role, final=final)
-                self.assertEqual(budget.used, limit + 1)
+                with self.assertRaises(BudgetExceeded):
+                    await budget.reserve(role, final=final)
+                self.assertEqual(budget.used, limit)
 
     async def test_default_cumulative_limits_are_preserved(self):
         for saved in [
@@ -40,24 +41,36 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(BudgetExceeded):
                     await budget.reserve("decision", input_chars=2)
 
-    async def test_measurement_allows_more_than_each_role_limit(self):
-        for role, final in [
-            ("decision", False),
-            ("decision", True),
-            ("advisor", False),
-            ("evaluator", False),
+    async def test_measurement_preserves_role_reservations(self):
+        for role, final, limit in [
+            ("decision", False, 20),
+            ("decision", True, 2),
+            ("advisor", False, 2),
+            ("examiner", False, 4),
         ]:
             with self.subTest(role=role, final=final):
                 budget = RuntimeBudget(measurement=True)
-                for attempt in range(1, 10):
+                for attempt in range(1, limit + 1):
                     self.assertEqual(await budget.reserve(role, final=final), attempt)
+                with self.assertRaises(BudgetExceeded):
+                    await budget.reserve(role, final=final)
 
     async def test_measurement_stops_after_forty_calls(self):
         budget = RuntimeBudget(measurement=True)
-        for attempt in range(1, 41):
-            self.assertEqual(await budget.reserve("decision"), attempt)
+        roles = (
+            [("decision", False)] * 20
+            + [("advisor", False)] * 2
+            + [
+                (role, False)
+                for role in ("examiner", "founder", "customer", "landlord_advocate")
+                for _ in range(4)
+            ]
+            + [("decision", True)] * 2
+        )
+        for attempt, (role, final) in enumerate(roles, 1):
+            self.assertEqual(await budget.reserve(role, final=final), attempt)
         with self.assertRaises(BudgetExceeded):
-            await budget.reserve("decision")
+            await budget.reserve("decision", final=True)
         self.assertEqual(budget.used, 40)
 
     async def test_measurement_cumulative_limits_are_enforced(self):
@@ -82,10 +95,10 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.agentic.budget.monotonic", return_value=100):
             budget = RuntimeBudget({"active_seconds": 599}, measurement=True)
             budget.schema_chars = 10000
-            self.assertEqual(await budget.reserve("decision", input_chars=790000), 1)
+            self.assertEqual(await budget.reserve("decision", input_chars=350000), 1)
             resumed = RuntimeBudget(budget.snapshot(), measurement=True)
             self.assertEqual(resumed.used, 1)
-            self.assertEqual(resumed.totals(), (400000, 0))
+            self.assertEqual(resumed.totals(), (180000, 0))
             self.assertEqual(resumed.active_seconds, 599)
             with self.assertRaises(BudgetExceeded):
                 await resumed.reserve("decision", input_chars=2)
@@ -102,12 +115,18 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_parallel_output_reservations_never_exceed_total(self):
         budget = RuntimeBudget()
-        reservations = [await budget.claim_output() for _ in range(4)]
-        self.assertEqual(reservations, [16000, 16000, 16000, 12000])
+        roles = ["examiner", "founder", "customer", "landlord_advocate"]
+        reservations = [await budget.claim_output(4000, role=role) for role in roles]
+        self.assertEqual(reservations, [4000] * 4)
+        extra = await budget.claim_output(4000, role="examiner")
+        self.assertEqual(extra, 1500)
+        self.assertLessEqual(budget.pending_output, budget.output_limit)
         with self.assertRaises(BudgetExceeded):
-            await budget.claim_output()
-        await budget.release_output(16000)
-        self.assertEqual(await budget.claim_output(), 16000)
+            await budget.claim_output(1, role="examiner")
+        await budget.release_output(extra, role="examiner")
+        for role, reserved in zip(roles, reservations, strict=True):
+            await budget.release_output(reserved, role=role)
+        self.assertEqual(budget.pending_output, 0)
 
 
 if __name__ == "__main__":

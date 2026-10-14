@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import re
 import uuid
 from dataclasses import replace
 
@@ -15,6 +14,7 @@ from app.db.connection import connect
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
+from app.text import has_digit
 
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
@@ -22,7 +22,7 @@ from .sql_tool import error
 
 PERSONAS = {
     "examiner": (
-        "심사관입니다. 근거의 원천·기간·반경, L 중복 채점과 상위 열 업종의 unknown 이유를 "
+        "심사관입니다. 근거의 원천·기간·반경, L 중복 채점과 전체 업종의 unknown 이유를 "
         "검증하세요. 검토 전 공간 초안이 확정 사실이나 점수 근거가 되었는지 확인하세요."
     ),
     "founder": (
@@ -41,7 +41,8 @@ PERSONAS = {
 COMMON = """제공한 초안을 읽고 읽기 도구는 최대 세 번 사용한 뒤 submit_review를 한 번 제출하세요.
 get_facts는 업종·source·metrics 또는 받은 fact_ids로 좁혀 조회하고 같은 요청을 반복하지 마세요.
 공간 요건은 source=industry_profile, metrics=[space_requirements]의 reviewed=false 초안입니다.
-임대인 조건과 대조할 확인 항목으로만 사용하고 법규·확정 시설 요건·L 가감점 근거로 쓰지 마세요.
+공간 비교 space_fit의 확인된 일치·불일치와 초안 표시를 검토하세요.
+해당 없음·미확인을 불리 요인으로 쓰거나 초안을 법규·확정 시설 요건으로 단정하면 지적하세요.
 새 점수·순위를 만들지 마세요. 지적마다 실제 fact_id 근거를 붙이세요.
 문장에 숫자를 직접 쓰지 말고 fact_ids로 인용하세요. 확인하지 못한 것은 확인 조건으로 남기세요.
 실패한 조회를 동의로 해석하지 마세요."""
@@ -61,6 +62,26 @@ def save_review(scope, review):
         )
 
 
+def compact_draft(draft):
+    payload = draft.model_dump(mode="json")
+    contexts = []
+    for record in payload.get("L_records", []):
+        selection = record.pop("selection", {})
+        if selection:
+            payload.setdefault("L_source_snapshot", selection["code_score_snapshot_id"])
+            record["code_lower_rank"] = selection["code_lower_rank"]
+            if selection.get("reason_fact_ids"):
+                record["selection_fact_ids"] = selection["reason_fact_ids"]
+    for fact in payload.get("facts", []):
+        metadata = {key: fact.pop(key) for key in ("spatial_scope", "calc_version") if key in fact}
+        if metadata not in contexts:
+            contexts.append(metadata)
+        fact["context"] = contexts.index(metadata)
+        fact.pop("provenance_ref", None)
+    payload["fact_contexts"] = contexts
+    return payload
+
+
 async def review(loop, actor, executor, draft):
     submitted = None
 
@@ -74,8 +95,7 @@ async def review(loop, actor, executor, draft):
             ids = {f for i in input.issues for f in i.fact_ids}
             facts = await run_in_thread(fact_rows, loop.scope, ids)
             if any(
-                not i.fact_ids or re.search(r"\d", i.comment + i.suggested_check)
-                for i in input.issues
+                not i.fact_ids or has_digit(i.comment + i.suggested_check) for i in input.issues
             ):
                 raise ReportInvalid("지적에는 fact 근거가 필요하며 문장 숫자는 허용하지 않습니다.")
             if any(not f["citable"] or f["status"] != "observed" for f in facts.values()):
@@ -98,10 +118,10 @@ async def review(loop, actor, executor, draft):
         {"role": "system", "content": PERSONAS[actor] + "\n" + COMMON},
         {
             "role": "user",
-            "content": canonical_json({"actor": actor, "draft": draft.model_dump(mode="json")}),
+            "content": canonical_json({"actor": actor, "draft": compact_draft(draft)}),
         },
     ]
-    settings = replace(LLMSettings.from_env("evaluator"), reasoning_effort="none", max_tokens=16000)
+    settings = replace(LLMSettings.from_env("evaluator"), reasoning_effort="none", max_tokens=4000)
     code = "SOURCE_UNAVAILABLE"
     try:
         no_progress = 0

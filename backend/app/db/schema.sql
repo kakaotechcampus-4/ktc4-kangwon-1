@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS facts (
     snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
     industry_code TEXT,
     source TEXT NOT NULL,
-    metric TEXT NOT NULL CHECK(metric IN ('raw_cell','by_time','time_per_hour_share','covered_trade_areas','period_code','mean_daily_per_trade_area','pattern_fit_index','pattern_scale_percentile','pattern_daily_per_trade_area','weekend_index','day_fit_index','age_share','resident_age_share','worker_age_share','target_age_index','yoy_change','density_per_km2','competition_index','seoul_median_density','daily_total_median','distance_m','facility_distance_ratio','recent_year_close_rate','oldest_year_close_rate','net_change_rate','turnover_rate','close_rate_ratio','net_change_index','turnover_ratio','close_trend_ratio','store_exposure','avg_store_count','zero_filled_sources','seoul_close_rate','seoul_turnover_rate','seoul_net_change_rate','seoul_close_trend_ratio','store_count','opening_count','closing_count','lq','differentiation','place_name','kakao_category','match_status','regulation_status','zone_contains','floor','exclusive_area','space_condition','existing_facilities','industry_preferences','space_requirements')),
+    metric TEXT NOT NULL CHECK(metric IN ('raw_cell','by_time','time_per_hour_share','covered_trade_areas','period_code','mean_daily_per_trade_area','pattern_fit_index','pattern_scale_percentile','pattern_daily_per_trade_area','weekend_index','day_fit_index','age_share','resident_age_share','worker_age_share','target_age_index','yoy_change','density_per_km2','competition_index','seoul_median_density','daily_total_median','distance_m','facility_distance_ratio','recent_year_close_rate','oldest_year_close_rate','net_change_rate','turnover_rate','close_rate_ratio','net_change_index','turnover_ratio','close_trend_ratio','store_exposure','avg_store_count','zero_filled_sources','seoul_close_rate','seoul_turnover_rate','seoul_net_change_rate','seoul_close_trend_ratio','store_count','opening_count','closing_count','lq','differentiation','place_name','kakao_category','match_status','regulation_status','zone_contains','floor','exclusive_area','space_condition','existing_facilities','industry_preferences','space_requirements','space_fit')),
     value_json TEXT NOT NULL CHECK(json_valid(value_json)),
     unit TEXT NOT NULL,
     period TEXT NOT NULL,
@@ -166,7 +166,9 @@ CREATE TABLE IF NOT EXISTS facts (
     lineage_hash TEXT NOT NULL,
     identity_hash TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    CHECK((status='observed' AND json_type(value_json) != 'null') OR (status!='observed' AND json_type(value_json)='null' AND citable=0)),
+    CHECK((status='observed' AND json_type(value_json) != 'null') OR
+          (status!='observed' AND json_type(value_json)='null' AND citable=0) OR
+          (metric='space_fit' AND status='unknown' AND json_type(value_json)='object' AND citable=0)),
     UNIQUE(snapshot_id,identity_hash),
     FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
 );
@@ -176,6 +178,55 @@ CREATE TABLE IF NOT EXISTS fact_sources (
     field_pointer TEXT NOT NULL,
     PRIMARY KEY(fact_id,raw_row_id,field_pointer)
 );
+-- 원문 근거는 그대로 두고 파생 사실의 부모 계보와 현재 공간 비교만 추가합니다.
+CREATE TABLE IF NOT EXISTS fact_parents (
+    fact_id TEXT NOT NULL REFERENCES facts(fact_id),
+    parent_fact_id TEXT NOT NULL REFERENCES facts(fact_id),
+    PRIMARY KEY(fact_id,parent_fact_id),
+    CHECK(fact_id != parent_fact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fact_parents_parent ON fact_parents(parent_fact_id);
+CREATE TRIGGER IF NOT EXISTS fact_parents_scope BEFORE INSERT ON fact_parents
+WHEN NOT EXISTS (
+    SELECT 1 FROM facts child JOIN facts parent ON parent.fact_id=NEW.parent_fact_id
+    WHERE child.fact_id=NEW.fact_id AND child.request_id=parent.request_id
+    AND child.snapshot_id=parent.snapshot_id
+    AND (parent.industry_code IS NULL OR parent.industry_code=child.industry_code)
+    AND (child.status!='observed' OR (parent.status='observed' AND parent.citable=1))
+    AND EXISTS (
+        SELECT 1 FROM json_each(child.comparison_json,'$.parent_fact_ids')
+        WHERE value=NEW.parent_fact_id
+    )
+)
+BEGIN SELECT RAISE(ABORT,'parent fact scope differs'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_fact_parents BEFORE UPDATE ON fact_parents
+BEGIN SELECT RAISE(ABORT,'fact_parents are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_fact_parents_delete BEFORE DELETE ON fact_parents
+BEGIN SELECT RAISE(ABORT,'fact_parents are immutable'); END;
+
+CREATE TABLE IF NOT EXISTS space_fit_current (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    industry_code TEXT NOT NULL,
+    fact_id TEXT NOT NULL REFERENCES facts(fact_id),
+    PRIMARY KEY(request_id,snapshot_id,industry_code),
+    FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
+);
+CREATE TRIGGER IF NOT EXISTS space_fit_current_scope BEFORE INSERT ON space_fit_current
+WHEN NOT EXISTS (
+    SELECT 1 FROM facts WHERE fact_id=NEW.fact_id AND request_id=NEW.request_id
+    AND snapshot_id=NEW.snapshot_id AND industry_code=NEW.industry_code
+    AND source='industry_profile' AND metric='space_fit'
+)
+BEGIN SELECT RAISE(ABORT,'space fit scope differs'); END;
+CREATE TRIGGER IF NOT EXISTS space_fit_current_update_scope BEFORE UPDATE ON space_fit_current
+WHEN NOT EXISTS (
+    SELECT 1 FROM facts WHERE fact_id=NEW.fact_id AND request_id=NEW.request_id
+    AND snapshot_id=NEW.snapshot_id AND industry_code=NEW.industry_code
+    AND source='industry_profile' AND metric='space_fit'
+)
+BEGIN SELECT RAISE(ABORT,'space fit scope differs'); END;
+
 CREATE TABLE IF NOT EXISTS score_snapshots (
     score_snapshot_id TEXT PRIMARY KEY NOT NULL,
     request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),

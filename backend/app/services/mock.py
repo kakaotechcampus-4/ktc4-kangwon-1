@@ -32,6 +32,8 @@ def generators(*, ask=False):
                     ]
                 },
             )
+        if "submit_l" in {d["function"]["name"] for d in definitions}:
+            return call("submit_l", {"L_records": [], "finish": True})
         final = any(m["role"] == "user" and '"reviews"' in m.get("content", "") for m in messages)
         return call(
             "submit_draft",

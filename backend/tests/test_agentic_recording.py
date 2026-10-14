@@ -17,6 +17,7 @@ from app.agentic.scoring import WEIGHTS, result, summarize
 from app.agentic.snapshot import persist_report
 from app.db.connection import initialize
 from app.db.repository import create_request
+from app.industries.catalog import INDUSTRIES
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.schemas import Site
@@ -136,7 +137,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
         site = Site(input_address="시험", road_address="시험", latitude=37.5, longitude=127.0)
         rows = [
             summarize(code, {key: result(key) for key in WEIGHTS}, "해당 없음")
-            for code in ["I201", "I202", "I203", "I204", "I210"]
+            for code in INDUSTRIES
         ]
         outputs, loops = [], []
         calls = 0
@@ -150,6 +151,8 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             return (
                 tool_message("get_scorecard", {"limit": 5})
                 if calls == 1
+                else tool_message("submit_l", {"finish": True})
+                if calls == 2
                 else tool_message(
                     "submit_draft",
                     {
@@ -181,14 +184,16 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(loops[0].scope.request_id, loops[1].scope.request_id)
         self.assertNotEqual(loops[0].base_id, loops[1].base_id)
         for loop, output in zip(loops, outputs, strict=True):
-            self.assertEqual(loop.state["tool_sequence"], ["get_scorecard", "submit_draft"])
+            self.assertEqual(
+                loop.state["tool_sequence"], ["get_scorecard", "submit_l", "submit_draft"]
+            )
             self.assertEqual(output.status, "draft_available")
             self.assertEqual(output.result.summary_segments[0].text, "자료를 검토한 후보입니다.")
             self.assertEqual(
-                [row.industry_code for row in output.result.top5], [r["code"] for r in rows]
+                [row.industry_code for row in output.result.top5], [r["code"] for r in rows[:5]]
             )
-            self.assertEqual(loop.budget.totals(), (60, 40))
-        self.assertEqual(len(await self.read_entries()), 2)
+            self.assertEqual(loop.budget.totals(), (90, 60))
+        self.assertEqual(len(await self.read_entries()), 3)
 
     async def test_uuid_refs_are_remapped_in_arguments_and_advisor_json_only(self):
         prefixes = [

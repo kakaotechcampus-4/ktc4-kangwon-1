@@ -28,6 +28,8 @@ def register_fact(
     field_pointer="/",
     connection=None,
     local_cell=None,
+    parent_fact_ids=(),
+    retain_unknown_value=False,
 ):
     """동일 값·계보는 기존 ID를 반환합니다. 값을 바꾸면 새 ID를 생성합니다."""
     local = comparison and comparison.get("input_versions", {}).get("local_snapshot")
@@ -37,7 +39,10 @@ def register_fact(
         comparison = {"input_versions": {"local_snapshot": local}}
     row_ids = sorted(set(row_ids))
     comparison = comparison or {}
-    if status != "observed":
+    if retain_unknown_value and metric != "space_fit":
+        raise ValueError("미확인 객체 값은 공간 비교에만 보존할 수 있습니다.")
+    parent_fact_ids = sorted(set(parent_fact_ids))
+    if status != "observed" and not (status == "unknown" and retain_unknown_value):
         value = None
     identity = {
         "industry": industry_code,
@@ -53,6 +58,8 @@ def register_fact(
         "calc_version": CALC_VERSION,
         "local_cell": local_cell,
     }
+    if parent_fact_ids:
+        identity["parents"] = parent_fact_ids
     identity_hash = canonical_hash(identity)
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
         if not db.in_transaction:
@@ -84,7 +91,19 @@ def register_fact(
                 is None
             ):
                 raise ValueError("응답 계보의 요청 범위가 다릅니다.")
-        citable = status == "observed" and bool(row_ids or response_ids or local)
+        for parent_id in parent_fact_ids:
+            if scope.cancelled.is_set():
+                raise asyncio.CancelledError()
+            parent = db.execute(
+                "SELECT industry_code,status,citable FROM facts WHERE fact_id=? "
+                "AND request_id=? AND snapshot_id=?",
+                (parent_id, scope.request_id, scope.snapshot_id),
+            ).fetchone()
+            if parent is None or parent[0] not in (None, industry_code):
+                raise ValueError("부모 fact의 요청·스냅샷·업종이 다릅니다.")
+            if status == "observed" and (parent[1] != "observed" or not parent[2]):
+                raise ValueError("관측 비교에는 인용 가능한 부모 fact가 필요합니다.")
+        citable = status == "observed" and bool(row_ids or response_ids or local or parent_fact_ids)
         if status == "observed" and not citable:
             raise ValueError("관측 fact에는 검증 가능한 원문 계보가 필요합니다.")
         old = db.execute(
@@ -114,11 +133,17 @@ def register_fact(
                         else comparison.get("input_versions", {}).get("spatial_scope", {})
                     )
                 ),
-                canonical_json(comparison | {"response_ids": list(response_ids)}),
+                canonical_json(
+                    comparison
+                    | {"response_ids": list(response_ids)}
+                    | ({"parent_fact_ids": parent_fact_ids} if parent_fact_ids else {})
+                ),
                 status,
                 int(citable),
                 CALC_VERSION,
-                canonical_hash(row_ids),
+                canonical_hash({"rows": row_ids, "parents": parent_fact_ids})
+                if parent_fact_ids
+                else canonical_hash(row_ids),
                 identity_hash,
                 utc_now_iso(),
             ),
@@ -140,5 +165,10 @@ def register_fact(
             db.executemany(
                 "INSERT INTO fact_sources VALUES(?,?,?)",
                 [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]],
+            )
+        if parent_fact_ids:
+            db.executemany(
+                "INSERT INTO fact_parents VALUES(?,?)",
+                [(fact_id, parent_id) for parent_id in parent_fact_ids],
             )
     return fact_id

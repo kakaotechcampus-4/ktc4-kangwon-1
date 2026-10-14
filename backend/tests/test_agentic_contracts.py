@@ -107,7 +107,7 @@ class AgenticContractsTests(unittest.TestCase):
 
     def test_tool_schemas(self):
         definitions = c.tool_definitions()
-        self.assertEqual(len(definitions), 9)
+        self.assertEqual(len(definitions), 10)
         self.assertEqual({d["function"]["name"] for d in definitions}, set(c.TOOL_INPUTS))
         forbidden = {"$defs", "$ref", "title", "default", "discriminator", "oneOf"}
 
@@ -169,7 +169,7 @@ class AgenticContractsTests(unittest.TestCase):
         final = result["top5"][0]
         summary = {name: final[name] for name in c.ScorecardSummary.model_fields}
         selection = {
-            "basis": "code_lower_top10",
+            "basis": "all_industries",
             "code_score_snapshot_id": "scores",
             "code_lower_rank": 1,
             "reason": "코드 하한 순위",
@@ -257,7 +257,9 @@ class AgenticContractsTests(unittest.TestCase):
                 "disposition": "accepted",
                 "reason": "근거 확인",
             },
-            c.ReportProposal: {"candidates": [{"industry_code": "I201"}], "L_records": [l_record]},
+            c.ReportProposal: {"candidates": [{"industry_code": "I201"}]},
+            c.SubmitLInput: {"L_records": [l_record]},
+            c.SubmitLResult: {"submitted_count": 1, "remaining_count": 50, "closed": False},
             c.ScorecardResult: {"summaries": [summary]},
             c.FactsResult: {"facts": result["facts"]},
             c.RawQueryRow: raw_row,

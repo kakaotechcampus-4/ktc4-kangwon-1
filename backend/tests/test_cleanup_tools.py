@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.agentic.budget import RuntimeBudget
-from app.agentic.contracts import ReportProposal, ReviewResolution, ToolReply
-from app.agentic.report import ReportInvalid, finalize, validate_proposal
+from app.agentic.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
+from app.agentic.report import ReportInvalid, finalize, validate_l_records
 from app.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
 from app.agentic.tools import ToolExecutor, _audit
 from app.db.connection import connect, initialize
@@ -30,10 +30,11 @@ from app.text import has_digit
 class BudgetBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_four_evaluators_reserve_small_output(self):
         budget = RuntimeBudget({"calls": [{"output_tokens": 15000}]})
-        reservations = [await budget.claim_output(4000) for _ in range(4)]
+        roles = ["examiner", "founder", "customer", "landlord_advocate"]
+        reservations = [await budget.claim_output(4000, role=role) for role in roles]
         self.assertEqual(reservations, [4000] * 4)
-        for reservation in reservations:
-            await budget.release_output(reservation)
+        for role, reservation in zip(roles, reservations, strict=True):
+            await budget.release_output(reservation, role=role)
         self.assertEqual(budget.pending_output, 0)
 
     async def test_evaluators_leave_final_calls(self):
@@ -141,7 +142,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
                     "status": "observed",
                     "grade": 3,
                     "selection": {
-                        "basis": "code_lower_top10",
+                        "basis": "all_industries",
                         "code_score_snapshot_id": "base",
                         "code_lower_rank": 1,
                         "reason": "새 근거 확인",
@@ -158,8 +159,11 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
 
     def validate(self, proposal, facts):
         with patch("app.agentic.report.fact_rows", return_value=facts):
-            return validate_proposal(
-                self.scope, ReportProposal.model_validate(proposal), "base", [{"code": "I201"}]
+            return validate_l_records(
+                self.scope,
+                [LRecord.model_validate(r) for r in proposal["L_records"]],
+                "base",
+                [{"code": "I201"}],
             )
 
     async def test_all_L_free_text_fields_reject_numbers(self):

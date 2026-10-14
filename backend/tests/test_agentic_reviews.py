@@ -4,7 +4,7 @@ import asyncio
 import json
 import unittest
 
-from app.agentic.contracts import SubmitDraftInput
+from app.agentic.contracts import SubmitDraftInput, SubmitLInput
 from tests import test_agentic_runtime as fixtures
 
 
@@ -43,6 +43,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         loop = await DecisionLoop.create(
             self.scope, self.site, generate=decision, evaluator_generate=evaluator
         )
+        await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
         outcome = await loop.review_and_finalize()
         self.assertEqual(outcome.status, "completed")

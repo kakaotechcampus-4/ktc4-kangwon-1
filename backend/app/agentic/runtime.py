@@ -13,6 +13,7 @@ from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
 from app.db.repository import append_event
+from app.industries.catalog import INDUSTRIES
 from app.llm.budget import BudgetExceeded, llm_scope
 from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
 from app.llm.config import LLMSettings
@@ -21,28 +22,49 @@ from . import advisor, questions
 from .budget import RuntimeBudget
 from .contracts import (
     EvaluatorReview,
+    LRecord,
     MapResult,
     RegulationResult,
     ReportProposal,
+    ScorecardResult,
+    SubmitLResult,
     SubmitResult,
     TextSegment,
     ToolReply,
 )
 from .evaluators import review
 from .questions import LoopOutcome
-from .report import ReportInvalid, finalize, load_base
+from .read_tools import score_summary
+from .report import (
+    ReportInvalid,
+    complete_l_records,
+    finalize,
+    load_base,
+    recompute_l_scores,
+    validate_l_records,
+)
+from .scoring import rank_candidates
+from .snapshot import persist_space_requirements
+from .space import ensure_space_fits
 from .sql_tool import error
 from .tools import ToolExecutor
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
-계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하고
-get_scorecard는 L_top10을 한 묶음으로 한 번 조회하세요.
-L_top10의 업종을 하나씩 검토하고, 근거가 없으면 unknown 이유를 limitations에 남기세요.
-그 밖에는 fact 근거로 추가한 최대 두 업종만 검토하며 나머지는 판단 미검토입니다.
+계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하세요.
+전체 카탈로그의 모든 업종을 같은 기준으로 검토합니다. 코드 순위로 검토 범위를 제한하지 마세요.
+순서는 초기 점수표 확인 → 필요한 공간 질문 한 번 → 공간 비교 근거 확인 → 필요한 추가 조사
+→ submit_l → 재계산된 Top Five로 submit_draft입니다.
+submit_l로 업종별 판단을 최대 열일곱 개씩 나누어 제출하세요. 같은 업종은 한 번만 제출합니다.
+근거가 없으면 unknown과 개별 이유를 limitations에 남기세요.
+전체 제출 또는 finish=true로 L을 닫습니다.
+L을 닫으면 서버가 전체 점수와 Top Five를 다시 계산합니다. 그 결과로 보고서를 작성하세요.
+submit_draft는 보고서만 제출하며 추천·제외 후보는 각각 최대 다섯 업종입니다.
+L을 다시 제출하지 마세요.
 get_facts는 업종·source·metrics를 지정하거나 받은 fact_ids로 좁혀 읽으세요.
-공간 조건은 source=industry_profile, metrics=[space_requirements]로 조회하세요.
-reviewed=false 공간 요건은 운영 가설 초안입니다. 임대인의 확인된 조건과 대조하고
-확인 조건으로 남기세요. 초안을 법규·필수 시설·확정 사실이나 L 가감점 근거로 쓰지 마세요.
+공간 비교는 source=industry_profile, metrics=[space_fit], limit=51로 한 번 묶어 조회하세요.
+reviewed=false 공간 요건은 운영 가설 초안이며 법규·필수 시설·확정 사실이 아닙니다.
+space_fit을 L 요인에 인용하면 space_fit_component를 지정하세요. 지정한 항목의 확인된 일치·불일치만
+판단 근거입니다. 해당 없음·미확인은 요인으로 쓰지 말고 초안과 미확인 조건을 함께 설명하세요.
 소매업은 주방·조리 배기가 없다는 이유로 불리하게 판단하지 마세요.
 기업 간 거래·예약 중심 업종도 보행 통행이나 층 조건만으로 일괄 탈락시키지 마세요.
 임대인이 아직 확인하지 않은 핵심 공간 조건만 처음에 최대 세 항목을 한 번 묶어 ask_user로
@@ -53,8 +75,9 @@ reviewed=false 공간 요건은 운영 가설 초안입니다. 임대인의 확�
 L에는 실제 조회한 새 fact만 사용하세요. D/C/S 지표 반복과 같은 근거의 중복 채점은 금지합니다.
 L 등급은 새 요인 기준: 유리 둘 이상·불리 없음은 최고, 유리 하나·불리 없음은 그다음,
 중립 또는 유리·불리 상쇄는 중간, 불리 하나는 낮음, 불리 둘 이상 또는 큰 운영 제약은 최저입니다.
-LRecord에는 초기 score_snapshot_id·코드 순위·선정 사유·실제 tool_call_id·확인 질문·
-새 요인·fact_id·등급을 기록하세요. 추가 선정은 decision_extra와 reason_fact_ids가 필요합니다.
+LRecord의 basis는 all_industries입니다.
+초기 score_snapshot_id·코드 순위·검토 사유·실제 tool_call_id·확인 질문·
+새 요인·fact_id·등급을 기록하세요. 초기 순위는 추적 정보이며 업종을 제외하는 기준이 아닙니다.
 모든 보고서 문장 숫자는 text에 직접 쓰지 말고 fact_id 슬롯으로 인용하세요.
 인용 불가 사실·추측은 확인 조건으로 남기세요. 동일 조회를 반복하지 말고
 submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출하지 않습니다."""
@@ -108,6 +131,9 @@ class DecisionLoop:
         }
         self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
         self.state.setdefault("allow_questions", allow_questions)
+        self.state.setdefault("L_records", {})
+        self.state.setdefault("L_closed", False)
+        self.state.setdefault("phase", "L")
         self.recorder = recorder
         self.budget.on_change = self._budget_changed
         self.tools = ToolExecutor(
@@ -117,6 +143,7 @@ class DecisionLoop:
                 "ask_advisor": self.ask_advisor,
                 "ask_user": self.ask_user,
                 "submit_draft": self.submit_draft,
+                "submit_l": self.submit_l,
             },
         )
         self.tools.shared.measurement = self.budget.measurement
@@ -161,7 +188,8 @@ class DecisionLoop:
                                 "columns": ["rank", "code", "B", "A", "coverage"],
                                 "rows": summary,
                             },
-                            "L_top10": [r["code"] for r in base_rows[:10]],
+                            "L_industry_codes": list(INDUSTRIES),
+                            "industry_names": INDUSTRIES,
                         }
                     ),
                 },
@@ -170,6 +198,8 @@ class DecisionLoop:
     @classmethod
     async def create(cls, scope, site, **kwargs):
         base_id, rows = await run_in_thread(load_base, scope)
+        await run_in_thread(persist_space_requirements, scope)
+        await run_in_thread(ensure_space_fits, scope)
         return cls(scope, site, base_id, rows, **kwargs)
 
     def evaluator_executors(self):
@@ -285,7 +315,11 @@ class DecisionLoop:
         requested = min(
             settings.max_tokens or 16000, 4000 if role not in {"decision", "advisor"} else 16000
         )
-        reserved = await self.budget.claim_output(requested)
+        self.budget.schema_chars_by_role[role] = (
+            len(canonical_json(definitions)) if definitions else 0
+        )
+        final = self.state.get("phase") == "final"
+        reserved = await self.budget.claim_output(requested, role=role, final=final)
         try:
             value, receipt = await self.model_call(
                 role, messages, replace(settings, max_tokens=reserved), definitions, receipt
@@ -295,7 +329,7 @@ class DecisionLoop:
             failure = exc
             raise
         finally:
-            await self.budget.release_output(reserved)
+            await self.budget.release_output(reserved, role=role, final=final)
             if self.recorder and (value is not None or self.budget.used > used):
                 await self.recorder.record(
                     role,
@@ -365,7 +399,70 @@ class DecisionLoop:
     async def ask_user(self, input):
         return await questions.ask_user(self, input)
 
+    async def submit_l(self, input):
+        if self.state["L_closed"]:
+            return error("L_STAGE_CLOSED", "L 판단은 이미 확정되어 다시 제출할 수 없습니다.")
+        submitted = self.state["L_records"]
+        try:
+            batch = [record.model_copy(deep=True) for record in input.L_records]
+            if any(record.industry_code in submitted for record in batch):
+                return error("DUPLICATE_INDUSTRY", "이미 제출한 L 업종은 다시 제출할 수 없습니다.")
+            await run_in_thread(
+                validate_l_records,
+                self.scope,
+                batch,
+                self.base_id,
+                self.base_rows,
+                self.state["advisor_unavailable"],
+            )
+            combined = {**submitted, **{r.industry_code: r.model_dump(mode="json") for r in batch}}
+            close = input.finish or len(combined) == len(INDUSTRIES)
+            score_id = None
+            scorecard = None
+            if close:
+                records = complete_l_records(
+                    [LRecord.model_validate(r) for r in combined.values()],
+                    self.base_id,
+                    self.base_rows,
+                    self.state["advisor_unavailable"],
+                )
+                score_id, rows = await run_in_thread(
+                    recompute_l_scores,
+                    self.scope,
+                    records,
+                    self.base_id,
+                    self.base_rows,
+                    self.tools.shared.regulation,
+                )
+                scorecard = ScorecardResult(
+                    summaries=[score_summary(r) for r in rank_candidates(rows)[:5]]
+                )
+                missing = len(INDUSTRIES) - len(combined)
+                if missing:
+                    self.state["limitations"].append(f"L 판단 미제출 업종 수: {missing}")
+                combined = {r.industry_code: r.model_dump(mode="json") for r in records}
+        except ReportInvalid as exc:
+            return error("L_EVIDENCE_INVALID", str(exc))
+        self.state["L_records"] = combined
+        self.state["L_closed"] = close
+        if close:
+            self.state["phase"] = "draft"
+            self.state["L_score_snapshot_id"] = score_id
+        await self.save()
+        return ToolReply(
+            status="ok",
+            data=SubmitLResult(
+                submitted_count=len(submitted) + len(batch),
+                remaining_count=0 if close else len(INDUSTRIES) - len(combined),
+                closed=close,
+                score_snapshot_id=score_id,
+                scorecard=scorecard,
+            ),
+        )
+
     async def submit_draft(self, input):
+        if not self.state["L_closed"]:
+            return error("L_STAGE_REQUIRED", "전체 업종 L 판단을 먼저 확정하세요.")
         phase = self.state.get("phase", "draft")
         if input.phase != phase or (phase == "draft" and input.review_resolutions):
             return error("INVALID_ARGUMENT", "현재 제출 단계와 피드백 형식이 다릅니다.")
@@ -376,6 +473,7 @@ class DecisionLoop:
                     input.report,
                     self.base_id,
                     self.base_rows,
+                    l_records=[LRecord.model_validate(r) for r in self.state["L_records"].values()],
                     advisor_unavailable=self.state["advisor_unavailable"],
                     regulation_result=self.tools.shared.regulation,
                     limitations=self.state["limitations"],
@@ -402,9 +500,20 @@ class DecisionLoop:
         )
 
     async def fallback(self, reason):
+        missing = len(INDUSTRIES) - len(self.state["L_records"])
+        records = complete_l_records(
+            [LRecord.model_validate(r) for r in self.state["L_records"].values()],
+            self.base_id,
+            self.base_rows,
+            self.state["advisor_unavailable"],
+        )
+        self.state["L_records"] = {r.industry_code: r.model_dump(mode="json") for r in records}
+        self.state["L_closed"] = True
+        if missing:
+            self.state["limitations"].append(f"L 판단 미제출 업종 수: {missing}")
         self.state["limitations"].append(reason)
         self.state["limitations"].append(
-            "decision 판단(L)을 끝내지 못해 코드 점수만으로 정렬했습니다"
+            "미제출 L 판단은 unknown으로 남기고 이미 확인한 판단은 보존했습니다"
         )
         proposal = ReportProposal.model_validate(self.state.get("last_draft", {}))
         if not proposal.summary_segments:
@@ -427,6 +536,7 @@ class DecisionLoop:
                 proposal,
                 self.base_id,
                 self.base_rows,
+                l_records=[LRecord.model_validate(r) for r in self.state["L_records"].values()],
                 limitations=self.state["limitations"],
                 advisor_unavailable=self.state["advisor_unavailable"],
                 regulation_result=self.tools.shared.regulation,
@@ -444,11 +554,30 @@ class DecisionLoop:
             d
             for d in self.tools.definitions()
             if not (blocked and d["function"]["name"] == "ask_user")
+            and not (self.state["L_closed"] and d["function"]["name"] == "submit_l")
+            and not (not self.state["L_closed"] and d["function"]["name"] == "submit_draft")
         ]
 
     async def compact_reply(self, reply, name, arguments):
         body = reply.model_dump(mode="json")
         data = body.get("data") or {}
+        space_fits = name == "get_facts" and any(
+            fact.get("metric") == "space_fit" for fact in data.get("facts", [])
+        )
+        if space_fits:
+            data["facts"] = [
+                {
+                    key: value
+                    for key, value in fact.items()
+                    if key in {"fact_id", "industry_code", "value", "status", "citable"}
+                }
+                if fact.get("metric") == "space_fit"
+                else fact
+                for fact in data["facts"]
+            ]
+            data["provenance_refs"] = []
+            data["source"] = "industry_profile"
+            data["metric"] = "space_fit"
         if name == "check_regulation" and data:
             data["zones"] = [{k: v for k, v in z.items() if k != "geometry"} for z in data["zones"]]
             data["industry_restrictions"] = [
@@ -460,6 +589,8 @@ class DecisionLoop:
             if not entries:
                 continue
             original = len(entries)
+            if space_fits and field == "facts":
+                continue
             while entries and len(canonical_json(body)) > 4000:
                 entries.pop()
             if len(entries) < original:

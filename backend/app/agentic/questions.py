@@ -12,6 +12,7 @@ from app.errors import AnalysisConflictError
 
 from .contracts import QuestionSessionRef, ToolReply
 from .facts import register_fact
+from .space import ensure_space_fits
 from .sql_tool import error
 
 
@@ -132,6 +133,7 @@ def save_user_facts(scope, answers, question_id, saved):
                 field_pointer="/" + field,
                 connection=db,
             )
+        ensure_space_fits(scope, connection=db)
         saved["user_answers"] = {"answers": answers, "fact_ids": ids}
         for message in reversed(saved["messages"]):
             if message["role"] != "tool":

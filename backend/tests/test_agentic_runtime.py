@@ -9,11 +9,16 @@ from app.agentic.scoring import WEIGHTS, result, summarize
 from app.agentic.snapshot import persist_report
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
+from app.industries.catalog import INDUSTRIES
 from app.schemas import Site
 from app.storage.raw import capture_scope
 
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def close_l(self, loop):
+        reply = await loop.tools.execute("submit_l", {"finish": True})
+        self.assertEqual(reply.status, "ok", reply.error)
+
     async def test_measurement_continues_past_role_limit_without_forced_submit(self):
         from app.agentic.runtime import DecisionLoop
 
@@ -28,6 +33,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             return self.message("submit_draft", {"phase": "draft", "report": {}})
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate, measurement=True)
+        await self.close_l(loop)
         output = await loop.run()
         self.assertEqual(loop.budget.used, 10)
         self.assertEqual(output.status, "draft_available")
@@ -44,7 +50,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                         "role": "decision",
                         "phase": "draft",
                         "attempt": 1,
-                        "input_tokens": 370000,
+                        "input_tokens": 150000,
                         "output_tokens": 0,
                     }
                 ],
@@ -52,7 +58,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         budget.schema_chars = 10000
         self.assertEqual(await budget.reserve("decision", input_chars=50000), 2)
-        self.assertEqual(budget.totals()[0], 400000)
+        self.assertEqual(budget.totals()[0], 180000)
         with self.assertRaises(BudgetExceeded):
             await budget.reserve("decision", input_chars=2)
         self.assertEqual(budget.used, 2)
@@ -67,21 +73,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.site = Site(input_address="시험", road_address="시험", latitude=37.5, longitude=127.0)
         rows = [
             summarize(code, {key: result(key) for key in WEIGHTS}, "해당 없음")
-            for code in [
-                "I201",
-                "I202",
-                "I203",
-                "I204",
-                "I210",
-                "I211",
-                "I212",
-                "G203",
-                "G204",
-                "G205",
-                "G209",
-                "G210",
-                "G213",
-            ]
+            for code in INDUSTRIES
         ]
         self.score_id = persist_report(self.scope, {"rows": rows, "top5": rows[:5]}, {}, [])
 
@@ -128,6 +120,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
         loop.state["limitations"].append("서울 밖 점포 미반영")
         output = await loop.run()
         self.assertEqual(output.status, "draft_available")
@@ -153,6 +146,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
         output = await loop.run()
         self.assertEqual(output.status, "draft_available")
         self.assertIn("INVALID_ARGUMENT", json.dumps(calls[-1]))
@@ -169,7 +163,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.state["no_progress"], 3)
         self.assertTrue(output.result.summary_segments)
         self.assertIn(
-            "decision 판단(L)을 끝내지 못해 코드 점수만으로 정렬했습니다",
+            "미제출 L 판단은 unknown으로 남기고 이미 확인한 판단은 보존했습니다",
             [s.text for s in output.result.limitations_segments if s.type == "text"],
         )
         self.assertTrue(output.result.limitations_segments)
@@ -225,6 +219,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
         await loop.run()
         stored = json.loads(json.dumps(loop.state["messages"]))
         requests = []
@@ -259,6 +254,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
         output = await loop.run()
         first = json.loads(requests[1][-1]["content"])
         repeated = json.loads(requests[2][-1]["content"])
@@ -396,15 +392,11 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             invalid["new_factors"][0]["direction"] = "adverse"
             cases.append(invalid)
         for invalid in cases:
-            reply = await loop.tools.execute(
-                "submit_draft", {"phase": "draft", "report": {"L_records": [invalid]}}
-            )
+            reply = await loop.tools.execute("submit_l", {"L_records": [invalid]})
             self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
         record["grade"] = 0
         record["new_factors"][0].update(direction="adverse", major_constraint=True)
-        reply = await loop.tools.execute(
-            "submit_draft", {"phase": "draft", "report": {"L_records": [record]}}
-        )
+        reply = await loop.tools.execute("submit_l", {"L_records": [record]})
         self.assertEqual(reply.status, "ok")
 
     def l_record(self, loop, code, fact_id, rank=None, basis=None):
@@ -412,7 +404,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         return {
             "industry_code": code,
             "selection": {
-                "basis": basis or ("code_lower_top10" if actual_rank <= 10 else "decision_extra"),
+                "basis": basis or "all_industries",
                 "code_score_snapshot_id": loop.base_id,
                 "code_lower_rank": rank or actual_rank,
                 "reason": "새 근거 확인",
@@ -436,10 +428,11 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
         code = loop.base_rows[0]["code"]
         reply = await loop.tools.execute(
-            "submit_draft",
-            {"phase": "draft", "report": {"L_records": [self.l_record(loop, code, fact_id)]}},
+            "submit_l",
+            {"L_records": [self.l_record(loop, code, fact_id)], "finish": True},
         )
         self.assertEqual(reply.status, "ok")
+        await loop.tools.execute("submit_draft", {"phase": "draft", "report": {}})
         candidate = loop.done.top5[0]
         self.assertEqual(candidate.L_points, 7.5)
         self.assertEqual(candidate.B, 7.5)
@@ -455,37 +448,34 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             record = self.l_record(loop, loop.base_rows[0]["code"], fact_id)
             if metric == "lq":
                 record.update(grade=2, new_factors=[])
-            reply = await loop.tools.execute(
-                "submit_draft", {"phase": "draft", "report": {"L_records": [record]}}
-            )
+            reply = await loop.tools.execute("submit_l", {"L_records": [record]})
             self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
         fact_id = await self.make_fact()
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
         record = self.l_record(loop, loop.base_rows[-1]["code"], fact_id)
-        record["selection"].update(basis="outside_scope", reason_fact_ids=[])
-        record.update(status="unknown", grade=None, review_state="unreviewed", new_factors=[])
-        reply = await loop.tools.execute(
-            "submit_draft", {"phase": "draft", "report": {"L_records": [record]}}
+        record["selection"].update(basis="all_industries", reason_fact_ids=[])
+        record.update(
+            status="unknown",
+            grade=None,
+            review_state="unreviewed",
+            new_factors=[],
+            limitations=["확인된 새 근거 없음"],
         )
-        self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+        reply = await loop.tools.execute("submit_l", {"L_records": [record]})
+        self.assertEqual(reply.status, "ok")
 
-    async def test_extra_two_allowed_three_denied(self):
+    async def test_three_low_rank_industries_are_equally_allowed(self):
         from app.agentic.runtime import DecisionLoop
 
         fact_id = await self.make_fact()
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
         records = [self.l_record(loop, r["code"], fact_id) for r in loop.base_rows[10:13]]
-        invalid = await loop.tools.execute(
-            "submit_draft", {"phase": "draft", "report": {"L_records": records}}
-        )
-        self.assertEqual(invalid.error.code, "L_EVIDENCE_INVALID")
-        valid = await loop.tools.execute(
-            "submit_draft", {"phase": "draft", "report": {"L_records": records[:2]}}
-        )
+        valid = await loop.tools.execute("submit_l", {"L_records": records, "finish": True})
         self.assertEqual(valid.status, "ok")
-        self.assertEqual(sum(r.status == "observed" for r in loop.done.L_records), 2)
+        await loop.tools.execute("submit_draft", {"phase": "draft", "report": {}})
+        self.assertEqual(sum(r.status == "observed" for r in loop.done.L_records), 3)
 
     async def test_advisor_failure_continues_and_limit_two(self):
         from app.agentic.runtime import DecisionLoop
@@ -508,6 +498,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         loop = await DecisionLoop.create(
             self.scope, self.site, generate=generate, advisor_generate=advisor
         )
+        await self.close_l(loop)
         output = await loop.run()
         self.assertTrue(all(r.advisor_unavailable for r in output.result.L_records))
         loop = await DecisionLoop.create(self.scope, self.site, advisor_generate=advisor)
@@ -526,6 +517,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         fact_id = await self.make_fact()
         loop = await DecisionLoop.create(self.scope, self.site)
+        await self.close_l(loop)
         reply = await loop.tools.execute(
             "submit_draft",
             {
@@ -576,7 +568,9 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
             agents[key] = agent
 
-        async def generate(messages, *args):
+        async def generate(messages, definitions, *args):
+            if "submit_l" in [d["function"]["name"] for d in definitions]:
+                return self.message("submit_l", {"finish": True})
             phase = "final" if "reviews" in messages[-1].get("content", "") else "draft"
             return self.message("submit_draft", {"phase": phase, "report": {}})
 
@@ -596,7 +590,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             evaluator_generate=evaluator,
         )
         self.assertEqual(outcome.status, "completed")
-        self.assertEqual(outcome.budget["used"], 6)
+        self.assertEqual(outcome.budget["used"], 7)
         with connect(self.path) as db:
             self.assertEqual(
                 db.execute(

@@ -46,7 +46,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 {
   "schema_version": "2.0",
   "rubric_version": "v0.8",
-  "tool_contract_version": "1",
+  "tool_contract_version": "2",
   "request_id": "request-demo",
   "run_id": "run-demo",
   "report_id": "report-demo",
@@ -126,7 +126,773 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
       "provenance_ref": "raw-demo"
     }
   ],
-  "L_records": [],
+  "L_records": [
+    {
+      "industry_code": "G202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 1,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 2,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 3,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G205",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 4,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G208",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 5,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G209",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 6,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G210",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 7,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G211",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 8,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G213",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 9,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G215",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 10,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G215B",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 11,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G216",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 12,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G217",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 13,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G218",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 14,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G219",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 15,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G220",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 16,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G222",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 17,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I101",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 18,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 19,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I201",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 20,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 21,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 22,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 23,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I207",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 24,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I210",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 25,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I211",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 26,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I212",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 27,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "L102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 28,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M103",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 29,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M104",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 30,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M107",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 31,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M111",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 32,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M113",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 33,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M114",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 34,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 35,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N105",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 36,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N109",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 37,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N110",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 38,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "P105",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 39,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "Q102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 40,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 41,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R103",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 42,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R104",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 43,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S201",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 44,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 45,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 46,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 47,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S205",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 48,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S207",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 49,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S208",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 50,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S209",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 51,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    }
+  ],
   "evaluator_reviews": [
     {
       "actor": "examiner",
@@ -201,7 +967,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 | 계산·채점 | local_data completed | 조회·코드 점수 저장 완료 |
 | 판정 | decision completed | tool·status |
 | 필수 평가 | evaluation started·completed | 네 평가자 상태·완료 수 |
-| 질문·종료 | questions waiting / final started·completed·failed | 질문 세션·feedback_round·평가 완료 여부 |
+| 질문·종료 | question waiting / final started·completed·failed | 질문 세션·feedback_round·평가 완료 여부 |
 
 seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 경로의 결과와 이벤트로 연결합니다. 키·SQL·원문·fact 값은 이벤트에 넣지 않습니다.
 
@@ -210,9 +976,9 @@ seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 
 도구 계약2는 submit_l을 추가한 열 개 function이다. L을 최대17개씩 제출하여 종료한 뒤
 보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
 구현 순서·공통 공간 fact·역할 예산은 [전체 L 계획](whole-industry-l-plan.md)을 따른다.
-아래 내보내기 규칙은 유지하되 개수·필드 예시는 계약2 구현과 함께 갱신한다.
+아래 내보내기 규칙은 계약2에서도 유지한다.
 
-`tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 9개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
+`tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
 get_facts/map_search의 배타 조건·상세 limit·L/평가 정합성은 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. 이번 PR에서는 API·LLM 호출을 하지 않습니다. SQL 내용/권한/시간·fact 소유/숫자 슬롯·점수 재계산·정렬의 실제 검증은 PR4~PR6 범위입니다.
 

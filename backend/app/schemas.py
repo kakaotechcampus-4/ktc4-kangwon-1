@@ -16,6 +16,7 @@ from app.agentic.contracts import (
     ReviewResolution,
     UserQuestion,
 )
+from app.industries.catalog import INDUSTRIES
 from app.schema_types import *  # noqa: F403
 from app.schema_types import Schema, Site, Text
 
@@ -30,13 +31,13 @@ class DecisionRequest(Schema):
     site: Site
     snapshot_id: Text
     rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["1"] = "1"
+    tool_contract_version: Literal["2"] = "2"
 
 
 class DecisionResult(Schema):
     schema_version: Literal["2.0"] = "2.0"
     rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["1"] = "1"
+    tool_contract_version: Literal["2"] = "2"
     request_id: Text
     run_id: Text
     report_id: Text
@@ -46,7 +47,7 @@ class DecisionResult(Schema):
     top5: list[FinalCandidate] = Field(max_length=5)
     excluded_candidates: list[FinalCandidate] = Field(default_factory=list, max_length=5)
     facts: list[FactView]
-    L_records: list[LRecord] = Field(max_length=51)
+    L_records: list[LRecord] = Field(min_length=51, max_length=51)
     evaluator_reviews: list[EvaluatorReview] = Field(min_length=4, max_length=4)
     review_completeness: Ratio
     review_resolutions: list[ReviewResolution] = Field(default_factory=list, max_length=16)
@@ -55,6 +56,8 @@ class DecisionResult(Schema):
 
     @model_validator(mode="after")
     def check_reviewers(self) -> Self:
+        if {r.industry_code for r in self.L_records} != set(INDUSTRIES):
+            raise ValueError("판단 기록은 전체 업종을 중복 없이 포함해야 합니다.")
         if {r.actor for r in self.evaluator_reviews} != set(get_args(EvaluatorActor)):
             raise ValueError("평가자 네 명이 중복 없이 필요합니다.")
         if (

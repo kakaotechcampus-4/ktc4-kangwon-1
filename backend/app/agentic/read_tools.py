@@ -84,12 +84,17 @@ def _facts(scope, input):
             query += " AND fact_id IN (" + ",".join("?" for _ in input.fact_ids) + ")"
             params.extend(input.fact_ids)
         else:
-            query += (
-                " AND industry_code=? AND source=? AND metric IN ("
-                + ",".join("?" for _ in input.metrics)
-                + ")"
-            )
-            params.extend([input.industry_code, input.source, *input.metrics])
+            if input.industry_code is not None:
+                query += " AND industry_code=?"
+                params.append(input.industry_code)
+            query += " AND source=? AND metric IN (" + ",".join("?" for _ in input.metrics) + ")"
+            params.extend([input.source, *input.metrics])
+            if input.source == "industry_profile" and input.metrics == ["space_fit"]:
+                query += (
+                    " AND fact_id IN (SELECT fact_id FROM space_fit_current "
+                    "WHERE request_id=? AND snapshot_id=?)"
+                )
+                params.extend([scope.request_id, scope.snapshot_id])
         cursor = db.execute(query + " ORDER BY fact_id", params)
         columns = [c[0] for c in cursor.description]
         records = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
@@ -111,7 +116,13 @@ def _facts(scope, input):
                 status="not_applicable" if r["status"] == "n.a." else r["status"],
                 citable=bool(r["citable"]),
                 calc_version=r["calc_version"],
-                provenance_ref=("local_fact_lineage:" if r["local_lineage"] else "fact_sources:")
+                provenance_ref=(
+                    "fact_parents:"
+                    if r["metric"] == "space_fit"
+                    else "local_fact_lineage:"
+                    if r["local_lineage"]
+                    else "fact_sources:"
+                )
                 + r["fact_id"],
             )
             for r in records_page

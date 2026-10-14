@@ -21,6 +21,37 @@ from .sql_tool import error, query_raw
 
 READS = {"get_scorecard", "get_facts", "query_raw", "map_search", "check_regulation"}
 EVALUATORS = {"examiner", "founder", "customer", "landlord_advocate"}
+EVALUATOR_READS = {"get_scorecard", "get_facts", "query_raw"}
+
+
+def validation_message(model, failure):
+    """오류 입력·사용자 키는 제외하고 공개 필드 경로·유형·상한만 돌려줍니다."""
+    fields = set()
+
+    def collect(schema):
+        if isinstance(schema, dict):
+            fields.update(schema.get("properties", {}))
+            for value in schema.values():
+                collect(value)
+        elif isinstance(schema, list):
+            for value in schema:
+                collect(value)
+
+    collect(model.model_json_schema())
+    issues = []
+    for detail in failure.errors(include_input=False, include_url=False)[:3]:
+        path = []
+        freeform = detail["type"] == "extra_forbidden"
+        for part in detail["loc"]:
+            path.append(
+                str(part) if not freeform and (isinstance(part, int) or part in fields) else "?"
+            )
+            freeform = freeform or part == "params"
+        context = detail.get("ctx") or {}
+        upper = next((context[key] for key in ("max_length", "le", "lt") if key in context), None)
+        maximum = f" max={upper}" if type(upper) in (int, float) else ""
+        issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum)
+    return ("입력 오류: " + "; ".join(issues))[:400]
 
 
 @dataclass
@@ -77,6 +108,16 @@ def previous_reply(scope, actor, name, signature):
     return None
 
 
+def space_revision(scope):
+    with connect(scope.path) as db:
+        rows = db.execute(
+            "SELECT fact_id FROM space_fit_current WHERE request_id=? AND snapshot_id=? "
+            "ORDER BY industry_code",
+            (scope.request_id, scope.snapshot_id),
+        ).fetchall()
+    return canonical_hash([row[0] for row in rows])
+
+
 class ToolExecutor:
     def __init__(
         self, scope, site, *, actor="decision", shared=None, advisor_fact_ids=(), handlers=None
@@ -100,7 +141,7 @@ class ToolExecutor:
 
     def definitions(self):
         permitted = (
-            READS | {"submit_review"}
+            EVALUATOR_READS | {"submit_review"}
             if self.actor in EVALUATORS
             else {"get_facts"}
             if self.actor == "advisor"
@@ -111,24 +152,24 @@ class ToolExecutor:
     def _reserve(self, name, args, *, duplicate=False):
         allowed = {d["function"]["name"] for d in self.definitions()}
         calls = self.shared.calls
-        total_actor = 20 if self.actor == "decision" else 1 if self.actor == "advisor" else 4
+        evaluator = self.actor in EVALUATORS
+        enforce = evaluator or not self.shared.measurement
+        total_actor = 20 if self.actor == "decision" else 1 if self.actor == "advisor" else 3
         maxima = {"get_scorecard": 6, "get_facts": 8, "query_raw": 4, "check_regulation": 1}
-        if self.actor in EVALUATORS:
-            maxima.update(get_scorecard=2, get_facts=3, query_raw=2)
+        if evaluator:
+            maxima.update(get_scorecard=3, get_facts=3, query_raw=3, submit_review=1)
         if self.actor == "advisor":
             maxima["get_facts"] = 1
-        if name not in {"submit_review", "submit_draft"}:
-            if not self.shared.measurement and (
-                calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor
-            ):
+        if name not in {"submit_review", "submit_draft", "submit_l"}:
+            if enforce and (calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor):
                 return error("BUDGET_EXCEEDED", "도구 호출 상한을 초과했습니다.")
             calls["total"] += 1
             calls[(self.actor, "total")] += 1
         if name not in allowed:
             return error("INVALID_ARGUMENT", "현재 actor에 허용되지 않은 도구입니다.")
         if (
-            not self.shared.measurement
-            and not duplicate
+            enforce
+            and (not duplicate or name == "submit_review")
             and calls[(self.actor, name)] >= maxima.get(name, 20)
         ):
             return error("BUDGET_EXCEEDED", "도구별 호출 상한을 초과했습니다.")
@@ -137,31 +178,47 @@ class ToolExecutor:
 
     async def execute(self, name, arguments):
         input, signature = None, None
+        current_space = False
+        invalid_message = "도구 입력 형식이나 상한이 잘못되었습니다."
         if name in TOOL_INPUTS:
             try:
                 input = TOOL_INPUTS[name].model_validate(arguments)
-            except ValidationError:
-                pass
+            except ValidationError as exc:
+                invalid_message = validation_message(TOOL_INPUTS[name], exc)
             else:
+                current_space = (
+                    name == "get_facts"
+                    and input.source == "industry_profile"
+                    and input.metrics == ["space_fit"]
+                    and not input.fact_ids
+                )
+                identity = [self.actor, name, input.model_dump(mode="json"), self.scope.snapshot_id]
+                if current_space:
+                    identity.append(await run_in_thread(space_revision, self.scope))
                 try:
-                    signature = canonical_hash(
-                        [self.actor, name, input.model_dump(mode="json"), self.scope.snapshot_id]
-                    )
+                    signature = canonical_hash(identity)
                 except ValueError:
                     input = None
-        duplicate = signature is not None and signature in self.shared.seen
+        duplicate = name != "submit_l" and signature is not None and signature in self.shared.seen
         rejected = self._reserve(name, arguments, duplicate=duplicate)
         call_id = "tc_" + str(uuid.uuid4())
         if rejected is not None:
             reply = rejected
         elif input is None:
-            reply = error("INVALID_ARGUMENT", "도구 입력 형식이나 상한이 잘못되었습니다.")
+            reply = error("INVALID_ARGUMENT", invalid_message)
         elif duplicate:
             original = self.shared.replies.get(signature)
             if original is None:
-                original = await run_in_thread(
-                    previous_reply, self.scope, self.actor, name, signature
+                # 감사 입력에는 포인터 버전이 없으므로 재개한 공간 조회만 현재 DB에서 복구합니다.
+                original = (
+                    await self._execute(name, input)
+                    if current_space
+                    else await run_in_thread(
+                        previous_reply, self.scope, self.actor, name, signature
+                    )
                 )
+                if current_space:
+                    self.shared.replies[signature] = original.model_copy(deep=True)
             reply = (
                 original.model_copy(
                     deep=True,
@@ -175,12 +232,16 @@ class ToolExecutor:
             )
         else:
             reply = await self._execute(name, input)
-            if not reply.error or reply.error.code not in {
-                "MAP_UNAVAILABLE",
-                "SQL_TIMEOUT",
-                "TIMEOUT",
-                "SOURCE_UNAVAILABLE",
-            }:
+            if name != "submit_l" and (
+                not reply.error
+                or reply.error.code
+                not in {
+                    "MAP_UNAVAILABLE",
+                    "SQL_TIMEOUT",
+                    "TIMEOUT",
+                    "SOURCE_UNAVAILABLE",
+                }
+            ):
                 self.shared.seen.add(signature)
                 self.shared.replies[signature] = reply.model_copy(deep=True)
         await run_in_thread(_audit, self.scope, call_id, self.actor, name, arguments, reply)
