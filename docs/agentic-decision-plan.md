@@ -81,8 +81,10 @@ PR2에서는 기존 테이블을 유지하며 원문 테이블·뷰만 추가한
 
 | 테이블 | 핵심 필드·키 | 규칙 |
 | --- | --- | --- |
-| raw_responses | response_id PK, request_id, run_id, snapshot_id, source, source_type(api/file/user), request_args_json, page, http_status, response_json, collected_at, payload_hash | 업무 응답 원문 보존. 인증 키·Authorization·Referer 인증 설정은 저장하지 않음. 캐시 원천·수집/캐시 시각 구분 |
-| raw_rows | raw_row_id PK, response_id FK, row_index, natural_key, raw_json | 매핑 제외 업종·소분류도 원문에는 보존. 자연키 중복·수집 누락을 표시하고 임의 합산 금지 |
+| raw_payloads | payload_hash PK, response_json | 정제한 응답 본문은 해시마다 한 번만 보존 |
+| raw_responses | response_id PK, request_id, run_id, snapshot_id, source, source_type(api/file/user), request_args_json, page, http_status, collected_at, payload_hash FK | 요청·스냅샷과 본문 해시 연결. 인증 키·Authorization·Referer 인증 설정은 저장하지 않음. 캐시 원천·수집/캐시 시각 구분 |
+| raw_rows | raw_row_id PK, payload_hash FK, row_index, natural_key, raw_json, row_hash | 본문 해시별 원문 행 한 벌. 매핑 제외 업종·소분류도 보존 |
+| raw_response_rows | response_id FK, raw_row_id FK, duplicate_of | 관측과 공유 행 연결. 중복 표시는 요청·실행·원천·조회 범위 안에서만 판정 |
 | snapshots | snapshot_id PK, request_id, run_id, base_source_manifest, completeness, source_periods, created_at | 요청당 1개. 기초 수집 완료 후 기준선·프로필·catalog·원천 해시 고정. 지도·규제·답변 관측은 같은 snapshot에 append-only 추가, 기존 행·fact는 덮지 않음 |
 | facts | fact_id PK, request_id, snapshot_id, source, metric, value_json, unit, period, spatial_scope_json, industry_code(nullable), citable, status, calc_version, baseline_version, lineage_hash, created_at | 숫자·문자·관측 여부도 typed fact. unknown은 null·citable=false, 관측 0과 구분 |
 | fact_sources | fact_id FK, raw_row_id FK, field_pointer | 원문 행/열 계보. 집계는 여러 행을 연결, 출력에는 개수·해시·조회 참조만 보내 토큰 절약 |
@@ -490,3 +492,38 @@ PR1 배치 보완: PR1~PR6는 모든 새 계약을 contracts.py에 두고 schema
 | 검증 | ruff check·format·mypy(153개 소스)·전체 unittest 867개·카탈로그 check 통과. 실서비스 모델 루프 연결 검증은 미완료 |
 
 결과·원문은 ignored cache에만 보관한다. 실제 모델 루프 재검증은 별도 승인 실행으로 남기며, 이번 관찰 후 프롬프트를 조정하지 않았다.
+
+#### PR5 실패 기록·원문 저장 보완
+
+- decision_failures 진단과 logger에 예외 클래스·오류 코드·안전한 메시지·원인 예외·수집/채점/루프 단계·시간을 남긴다. 키와 URL은 제거하며 사용자 오류 문구는 유지한다.
+- 본문과 행은 payload_hash별 INSERT OR IGNORE로 공유한다. 요청별 관측 연결은 따로 저장하고 모든 뷰·fact 검증은 현재 요청·스냅샷의 연결을 확인한다.
+- 요청 안 원문 작성자는 스레드 잠금으로 직렬화한다. 한 페이지는 한 트랜잭션이며 SQLite busy_timeout은 30초다. 서버 여러 대의 작성자 조정은 후속 검토 대상이다.
+- 원문 행 중복 조회는 row_hash 인덱스부터 탐색한다. 요청의 모든 원문 행을 반복 훑는 실행 계획을 피한다.
+- 이전 DB 이전은 하지 않는다. 비교용 구 DB는 읽기만 했고 새 실행은 새 SQLite 파일을 쓴다. 운영 DB 초기화는 PR7 범위다.
+
+| 63페이지 오프라인 비교 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| 동시성·네트워크 | 작성 요청 네 개, 외부 호출 없음 | 작성 요청 네 개, 요청 안 직렬화, 외부 호출 없음 |
+| 첫 요청 시간·용량 | 15.53초 / 144.01MiB | 21.97초 / 164.99MiB |
+| 두 번째 요청 시간·증가량 | 23.70초 / 144.00MiB | 13.81초 / 14.35MiB |
+| 두 요청 누적 | 288.01MiB | 179.34MiB |
+| 공유 본문·행 | 요청마다 복사 | 본문 63벌·행 61,278개 유지, 관측 연결만 증가 |
+| 잠금 오류 | 두 요청 모두 재현 안 됨 | 두 요청 모두 없음 |
+
+최초 실패 원인은 미확정이다. 기존 상권 응답 63개는 반경 54개·강남구 9개다. 동시 상주/직장 파일·다른 분석 쓰기가 섞인 잠금 경합, 실제 API 오류/취소, 수집 후 계약 검증·저장 경계가 남은 후보다. 새 진단으로 승인 재실행 결과를 확인하며 이를 추정으로 덮지 않는다.
+
+##### 승인 재실행 결과와 오프라인 보완
+
+| 항목 | 결과 |
+| --- | --- |
+| 실실행 | 새 DB에서 한 번만 재시도. 유동 ok·상권/개폐업 partial 저장, 상권 원문 121개 응답 완료 |
+| 실패 | 채점 단계가 300초 상한을 넘긴 뒤에도 스레드 종료를 기다려 끝나지 않음. 약 646.98초에 외부 종료 |
+| 기록 | decision_failures에 TimeoutError·채점·외부 종료 사실(external_termination=true) 기록. 자연 발생 SQLite 잠금 오류로 기록하지 않음 |
+| 시간 정확도 | 수집은 마지막 원문 시각 기준 91.34초 이상, 채점·정리 시간은 나머지 555.64초 이하 추정. phase_times_estimated=true이며 루프는 미실행 |
+| DB 증가량 | 새 전체 수집 DB 344.51MiB. 63페이지 부분 수집 DB와 직접 비교하지 않음 |
+| 모델 결과 | 모델·도구·자문 호출 영 회, 입력/출력 토큰 영. L 기록·최종 Top 5 없음 |
+| 이번 원인 | 중간 연결 테이블을 통한 계보 검증이 행마다 스냅샷 응답 목록을 반복 탐색. _write의 취소 대기가 장시간 작업을 계속 기다림 |
+| 오프라인 수정 | 계보를 400행 단위·원문 행 인덱스부터 검증. 취소 신호를 스레드에 전달하며 배치 경계에서 현재 fact 트랜잭션 롤백 후 종료 |
+| 저장 자료 검증 | 실실행 DB 복사본으로 채점만 다시 수행: 20.92초, facts 1,006개·scores 561개. API·LLM 호출 없음 |
+
+실실행은 추가로 돌리지 않았고 프롬프트는 고치지 않았다. 마지막 계보·취소 보완 이후 실제 모델 루프 연결은 미검증이다.
