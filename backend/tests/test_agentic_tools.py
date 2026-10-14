@@ -242,12 +242,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
             "INVALID_ARGUMENT",
         )
         await tool.execute("query_raw", {"sql": "SELECT count(*) FROM v_raw_lifecycle"})
-        self.assertEqual(
-            (
-                await tool.execute("query_raw", {"sql": "SELECT count(*) FROM v_raw_lifecycle"})
-            ).error.code,
-            "DUPLICATE_CALL",
-        )
+        repeated = await tool.execute("query_raw", {"sql": "SELECT count(*) FROM v_raw_lifecycle"})
+        self.assertTrue(repeated.duplicate)
+        self.assertEqual(repeated.status, "ok")
 
     async def test_map_no_llm_statuses_and_shared_cache(self):
         from app.agents.agentic.contracts import MapResult

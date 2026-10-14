@@ -4,6 +4,7 @@ import asyncio
 import json
 import uuid
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from time import monotonic
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ from .contracts import (
     RegulationResult,
     ReportProposal,
     SubmitResult,
+    TextSegment,
     ToolReply,
 )
 from .raw_query import error
@@ -387,7 +389,24 @@ class DecisionLoop:
 
     async def fallback(self, reason):
         self.state["limitations"].append(reason)
+        self.state["limitations"].append(
+            "decision 판단(L)을 끝내지 못해 코드 점수만으로 정렬했습니다"
+        )
         proposal = ReportProposal.model_validate(self.state.get("last_draft", {}))
+        if not proposal.summary_segments:
+            proposal = proposal.model_copy(
+                update={
+                    "summary_segments": [
+                        TextSegment(
+                            type="text",
+                            text=(
+                                "확인된 코드 점수의 하한과 자료 충족도를 기준으로 "
+                                "검토 후보를 정렬했습니다."
+                            ),
+                        )
+                    ]
+                }
+            )
         self.done = await _write(
             lambda: finalize(
                 self.scope,
@@ -403,51 +422,11 @@ class DecisionLoop:
         return LoopOutcome("draft_available", result=self.done, budget=self.budget.snapshot())
 
     def model_messages(self):
-        messages = self.state["messages"]
-        if len(messages) == 2:
-            return messages
-        last = next(
-            i for i in range(len(messages) - 1, 1, -1) if messages[i]["role"] == "assistant"
-        )
-        prefix = messages[:2]
-        if self.state.get("user_answers"):
-            prefix = prefix + [
-                {"role": "user", "content": _json({"user_answers": self.state["user_answers"]})}
-            ]
-        memory = self.state.get("working_facts", [])
-        while True:
-            model = (
-                prefix
-                + (
-                    [{"role": "user", "content": _json({"previous_facts": memory})}]
-                    if memory
-                    else []
-                )
-                + messages[last:]
-            )
-            if len(_json(model)) + self.budget.schema_chars <= 24000 or not memory:
-                return model
-            memory = memory[1:]
+        return deepcopy(self.state["messages"])
 
     async def compact_reply(self, reply, name, arguments):
         body = reply.model_dump(mode="json")
-        ids = list(dict.fromkeys(reply.fact_ids))
         data = body.get("data") or {}
-        if "facts" in data:
-            ids.extend(f["fact_id"] for f in data["facts"])
-        if ids:
-            facts = await _write(fact_rows, self.scope, list(dict.fromkeys(ids))[:64])
-            added = [
-                {
-                    "fact_id": f["fact_id"],
-                    "metric": f["metric"],
-                    "value": json.loads(f["value_json"]),
-                    "unit": f["unit"],
-                    "tool_call_id": self.tools.last_call_id,
-                }
-                for f in facts.values()
-            ]
-            self.state["working_facts"] = (self.state.get("working_facts", []) + added)[-64:]
         if name == "check_regulation" and data:
             data["zones"] = [{k: v for k, v in z.items() if k != "geometry"} for z in data["zones"]]
             data["industry_restrictions"] = [
@@ -509,6 +488,9 @@ class DecisionLoop:
                 self.state["messages"].append(
                     {"role": "tool", "tool_call_id": call.id, "content": _json(content)}
                 )
+                self.state["no_progress"] = (
+                    self.state.get("no_progress", 0) + 1 if reply.duplicate or reply.error else 0
+                )
                 if self.done:
                     await self.save("draft_available", self.done)
                     return LoopOutcome(
@@ -517,13 +499,9 @@ class DecisionLoop:
                 if self.waiting:
                     await self.save("waiting_for_input")
                     return self.waiting
-                if reply.error and reply.error.code in {
-                    "DUPLICATE_CALL",
-                    "ALREADY_ANSWERED",
-                    "BUDGET_EXCEEDED",
-                }:
+                if self.state["no_progress"] >= 3:
                     return await self.fallback(
-                        "반복 조회·질문 또는 도구 상한으로 코드 점수와 확인한 근거만 제공합니다."
+                        "새 정보가 없는 반복·오류 호출이 연속 세 번 발생했습니다."
                     )
                 await self.save()
             except (BudgetExceeded, TimeoutError):
@@ -607,8 +585,34 @@ def _save_user_facts(scope, answers, question_id, saved):
                 connection=db,
             )
         saved["user_answers"] = {"answers": answers, "fact_ids": ids}
-        saved["messages"].append(
-            {"role": "user", "content": _json({"user_answers": saved["user_answers"]})}
+        for message in reversed(saved["messages"]):
+            if message["role"] != "tool":
+                continue
+            body = json.loads(message["content"])
+            if (body.get("data") or {}).get("question_session_id") != question_id:
+                continue
+            body["data"] = {
+                "question_session_id": question_id,
+                "status": "answered",
+                **saved["user_answers"],
+            }
+            body["fact_ids"] = list(ids.values())
+            message["content"] = _json(body)
+            break
+        else:
+            raise ValueError("질문 도구 응답 기록 없음")
+        saved["known_fact_ids"] = list(
+            dict.fromkeys([*saved.get("known_fact_ids", []), *ids.values()])
+        )
+        db.execute(
+            "UPDATE tool_calls SET reply_json=? WHERE request_id=? AND snapshot_id=? "
+            "AND tool_name='ask_user' AND json_extract(reply_json,'$.data.question_session_id')=?",
+            (
+                _json({k: v for k, v in body.items() if k != "tool_call_id"}),
+                scope.request_id,
+                scope.snapshot_id,
+                question_id,
+            ),
         )
         db.execute(
             "UPDATE agentic_questions SET status='answered',answers_json=? "

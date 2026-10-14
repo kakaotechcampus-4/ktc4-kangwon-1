@@ -122,7 +122,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
         output = await loop.run()
-        self.assertEqual(loop.budget.used, 2)
+        self.assertEqual(loop.budget.used, 4)
+        self.assertEqual(loop.state["no_progress"], 3)
+        self.assertTrue(output.result.summary_segments)
+        self.assertIn(
+            "decision 판단(L)을 끝내지 못해 코드 점수만으로 정렬했습니다",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
         self.assertTrue(output.result.limitations_segments)
 
     async def test_budget_fallback_has_unknown_L(self):
@@ -155,9 +161,87 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.scope, self.site, {"floor": "지하"}, generate=generate
         )
         output = await resumed.run()
-        self.assertEqual(resumed.budget.used, used + 1)
+        self.assertEqual(resumed.budget.used, used + 3)
         self.assertEqual(output.status, "draft_available")
         self.assertTrue(output.result.limitations_segments)
+
+    async def test_resume_restores_all_tools_and_answers_as_tool_reply(self):
+        from app.agents.agentic.runtime import DecisionLoop
+
+        before = []
+
+        async def generate(messages, *args):
+            before.append(json.loads(json.dumps(messages)))
+            return (
+                self.message("get_scorecard", {"limit": 5})
+                if len(before) == 1
+                else self.message(
+                    "ask_user",
+                    {"questions": [{"field": "floor", "question": "층?", "reason": "조건"}]},
+                )
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await loop.run()
+        stored = json.loads(json.dumps(loop.state["messages"]))
+        requests = []
+
+        async def resumed_generate(messages, *args):
+            requests.append(json.loads(json.dumps(messages)))
+            return self.message("submit_draft", {"phase": "draft", "report": {}})
+
+        resumed = await DecisionLoop.resume(
+            self.scope, self.site, {"floor": "1층"}, generate=resumed_generate
+        )
+        await resumed.run()
+        messages = requests[0]
+        self.assertEqual(messages[:-1], stored[:-1])
+        self.assertEqual(messages[-1]["role"], "tool")
+        body = json.loads(messages[-1]["content"])
+        self.assertEqual(body["data"]["answers"], {"floor": "1층"})
+        self.assertTrue(body["data"]["fact_ids"]["floor"].startswith("f_"))
+        self.assertEqual(resumed.budget.used, loop.budget.used + 1)
+
+    async def test_duplicate_returns_previous_response_and_loop_continues(self):
+        from app.agents.agentic.runtime import DecisionLoop
+
+        requests = []
+
+        async def generate(messages, *args):
+            requests.append(json.loads(json.dumps(messages)))
+            return (
+                self.message("get_scorecard", {"limit": 5})
+                if len(requests) <= 2
+                else self.message("submit_draft", {"phase": "draft", "report": {}})
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        output = await loop.run()
+        first = json.loads(requests[1][-1]["content"])
+        repeated = json.loads(requests[2][-1]["content"])
+        self.assertEqual(first["data"], repeated["data"])
+        self.assertTrue(repeated["duplicate"])
+        self.assertIn("이미 조회한 결과", repeated["warnings"])
+        self.assertEqual(loop.budget.used, 3)
+        self.assertEqual(loop.tools.shared.calls["total"], 3)
+        self.assertEqual(output.status, "draft_available")
+
+    async def test_consecutive_errors_reset_after_success(self):
+        from app.agents.agentic.runtime import DecisionLoop
+
+        requests = []
+
+        async def generate(messages, *args):
+            requests.append(messages)
+            if len(requests) == 3:
+                return self.message("get_scorecard", {"limit": 5})
+            return self.message("query_raw", {"sql": "SELECT 1", "max_rows": 51})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        result = await loop.run()
+        self.assertEqual(loop.budget.used, 6)
+        self.assertEqual(loop.state["no_progress"], 3)
+        self.assertTrue(result.result.summary_segments)
 
     async def make_fact(self, metric="lq"):
         from app.agents.agentic.registry import register_fact
@@ -187,7 +271,6 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_resume_preserves_regulation_and_map_cache(self):
         from app.agents.agentic.contracts import (
-            AskUserInput,
             MapResult,
             RegulationResult,
             ToolReply,
@@ -207,12 +290,15 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             status="ok",
             data=MapResult(observation_id="map", places=[], coverage=1, has_more=False),
         )
-        await loop.ask_user(
-            AskUserInput(
-                questions=[{"field": "floor", "question": "층은?", "reason": "상가 조건"}],
+
+        async def ask(*args):
+            return self.message(
+                "ask_user",
+                {"questions": [{"field": "floor", "question": "층은?", "reason": "상가 조건"}]},
             )
-        )
-        await loop.save("waiting_for_input")
+
+        loop.generate = ask
+        await loop.run()
         resumed = await DecisionLoop.resume(self.scope, self.site, {"floor": "지상"})
         self.assertEqual(resumed.tools.shared.regulation, loop.tools.shared.regulation)
         self.assertEqual(resumed.tools.shared.map_cache, loop.tools.shared.map_cache)

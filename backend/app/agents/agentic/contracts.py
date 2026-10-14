@@ -154,6 +154,7 @@ class ToolReply[T](Schema):
     fact_ids: list[FactId] = Field(default_factory=list)
     warnings: list[Text] = Field(default_factory=list)
     truncated: bool = False
+    duplicate: bool = False
     missing_fields: list[Text] = Field(default_factory=list)
 
     @model_validator(mode="after")
