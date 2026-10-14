@@ -376,6 +376,7 @@ class NewFactor(Schema):
     direction: Literal["favorable", "adverse", "neutral"]
     claim: Text
     fact_ids: list[FactId] = Field(min_length=1, max_length=12)
+    major_constraint: bool = False
 
 
 class LRecord(Schema):

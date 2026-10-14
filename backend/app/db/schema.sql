@@ -337,3 +337,45 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     created_at TEXT NOT NULL,
     FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
 );
+
+CREATE TABLE IF NOT EXISTS agentic_runs (
+    request_id TEXT PRIMARY KEY REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    run_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    state_json TEXT NOT NULL CHECK(json_valid(state_json)),
+    result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json)),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agentic_reports (
+    report_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    proposal_json TEXT NOT NULL CHECK(json_valid(proposal_json)),
+    result_json TEXT NOT NULL CHECK(json_valid(result_json)),
+    rendered_json TEXT NOT NULL CHECK(json_valid(rendered_json)),
+    phase TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS advisor_consults (
+    consult_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    question TEXT NOT NULL,
+    fact_ids_json TEXT NOT NULL CHECK(json_valid(fact_ids_json)),
+    model TEXT,
+    family TEXT NOT NULL,
+    usage_json TEXT NOT NULL CHECK(json_valid(usage_json)),
+    answer_json TEXT NOT NULL CHECK(json_valid(answer_json)),
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agentic_questions (
+    question_session_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    questions_json TEXT NOT NULL CHECK(json_valid(questions_json)),
+    answers_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(answers_json)),
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);

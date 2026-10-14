@@ -45,23 +45,7 @@ def _scorecards(scope, input):
         selected = rows[offset : offset + input.limit]
         summaries, details = [], []
         for row in selected:
-            fields = dict(
-                industry_code=row["code"],
-                code_points=row["lower"],
-                L_points=None,
-                L_status="unknown",
-                A=row["applicable_weight"],
-                B=row["lower"],
-                H=row["upper"],
-                lower_ratio=row["lower_ratio"],
-                upper_ratio=row["upper_ratio"],
-                coverage=row["coverage"],
-                demand_coverage=row["d_coverage"],
-                competition_coverage=row["c_coverage"],
-                G=row["regulation"],
-                badge=row["badge"],
-                confirmation_conditions=row["confirmation_conditions"],
-            )
+            fields = score_summary(row)
             if input.mode == "summary":
                 summaries.append(ScorecardSummary(**fields))
             else:
@@ -138,3 +122,24 @@ async def get_scorecard(scope, input):
 
 async def get_facts(scope, input):
     return await _write(_facts, scope, input)
+
+
+def score_summary(row):
+    fields = dict(
+        industry_code=row["code"],
+        code_points=row["lower"] - (row["items"]["L"]["points"] or 0),
+        L_points=row["items"]["L"]["points"],
+        L_status=row["items"]["L"]["status"],
+        A=row["applicable_weight"],
+        B=row["lower"],
+        H=row["upper"],
+        lower_ratio=row["lower_ratio"],
+        upper_ratio=row["upper_ratio"],
+        coverage=row["coverage"],
+        demand_coverage=row["d_coverage"],
+        competition_coverage=row["c_coverage"],
+        G=row["regulation"],
+        badge=row["badge"],
+        confirmation_conditions=row["confirmation_conditions"],
+    )
+    return fields

@@ -53,11 +53,15 @@ def _audit(scope, call_id, actor, name, arguments, reply):
 
 
 class ToolExecutor:
-    def __init__(self, scope, site, *, actor="decision", shared=None, advisor_fact_ids=()):
+    def __init__(
+        self, scope, site, *, actor="decision", shared=None, advisor_fact_ids=(), handlers=None
+    ):
         self.scope, self.site = scope, site
         self.actor = TypeAdapter(Actor).validate_python(actor)
         self.shared = shared or SharedTools()
         self.advisor_fact_ids = set(advisor_fact_ids)
+        self.handlers = handlers or {}
+        self.last_call_id = None
 
     def for_actor(self, actor, *, advisor_fact_ids=()):
         return ToolExecutor(
@@ -66,6 +70,7 @@ class ToolExecutor:
             actor=actor,
             shared=self.shared,
             advisor_fact_ids=advisor_fact_ids,
+            handlers=self.handlers,
         )
 
     def definitions(self):
@@ -118,10 +123,13 @@ class ToolExecutor:
                     self.shared.seen.add(signature)
                     reply = await self._execute(name, input)
         await _write(_audit, self.scope, call_id, self.actor, name, arguments, reply)
+        self.last_call_id = call_id
         return reply
 
     async def _execute(self, name, input):
         try:
+            if name in self.handlers:
+                return await self.handlers[name](input)
             if name == "query_raw":
                 return await query_raw(self.scope, input.sql, input.params, input.max_rows)
             if name in {"get_facts", "get_scorecard"}:

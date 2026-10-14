@@ -84,7 +84,11 @@ class LLMHTTPError(RuntimeError):
 
 
 async def _complete(
-    messages: list[Any], settings: LLMSettings, *, tools: list[Any] | None = None
+    messages: list[Any],
+    settings: LLMSettings,
+    *,
+    tools: list[Any] | None = None,
+    receipt: dict[str, Any] | None = None,
 ) -> ChatCompletionMessage:
     settings.require_credentials()
     budget, role, final = current_scope()
@@ -98,8 +102,9 @@ async def _complete(
     started = time.monotonic()
     usage: list[Any] = []
     status = "error"
+    metadata: dict[str, Any] = receipt if receipt is not None else {}
     try:
-        result = await _request(messages, settings, tools=tools, usage=usage)
+        result = await _request(messages, settings, tools=tools, usage=usage, receipt=metadata)
         status = "ok"
         return result
     finally:
@@ -109,10 +114,11 @@ async def _complete(
                 status=status,
                 elapsed_ms=int((time.monotonic() - started) * 1000),
                 usage=usage[0] if usage else None,
+                model=metadata.get("model"),
             )
 
 
-async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage:
+async def _request(messages, settings, *, tools, usage, receipt=None) -> ChatCompletionMessage:
     options: dict[str, Any] = {}
     if settings.max_tokens is not None:
         options["max_completion_tokens"] = settings.max_tokens
@@ -157,6 +163,12 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
     ):
         raise LLMResponseError("LLM_INVALID_RESPONSE")
     usage.append(response.usage)
+    if receipt is not None:
+        receipt.update(
+            model=response.model,
+            http_status=200,
+            usage=response.usage.model_dump() if response.usage is not None else None,
+        )
     choice = response.choices[0]
     if not isinstance(choice, Choice) or not isinstance(choice.message, ChatCompletionMessage):
         raise LLMResponseError("LLM_INVALID_RESPONSE")
@@ -176,7 +188,11 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
 
 
 async def complete_json(
-    system_prompt: str, input_json: str, settings: LLMSettings
+    system_prompt: str,
+    input_json: str,
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     message = await _complete(
         [
@@ -184,6 +200,7 @@ async def complete_json(
             {"role": "user", "content": input_json},
         ],
         settings,
+        receipt=receipt,
     )
     try:
         # 표준 JSON에 없는 NaN·Infinity도 모델의 잘못된 응답입니다.
@@ -209,6 +226,10 @@ async def complete_json(
 
 
 async def complete_tools(
-    messages: list[Any], definitions: list[Any], settings: LLMSettings
+    messages: list[Any],
+    definitions: list[Any],
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
 ) -> ChatCompletionMessage:
-    return await _complete(messages, settings, tools=definitions)
+    return await _complete(messages, settings, tools=definitions, receipt=receipt)
