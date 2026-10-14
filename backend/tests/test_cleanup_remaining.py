@@ -161,8 +161,8 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run["reasons"], ["기존 수집 실패"])
 
     async def pending_question(self):
-        from app.services.agentic_analysis import execute_agentic_analysis
-        from app.services.agentic_mock import dependencies
+        from app.services.analysis import execute_agentic_analysis
+        from app.services.mock import dependencies
 
         waiting = await execute_agentic_analysis(
             "질문",
@@ -179,7 +179,7 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         return scope, waiting.question_session_id, json.loads(run[2])
 
     async def test_concurrent_answer_loser_leaves_no_raw_response(self):
-        from app.agents.agentic.runtime import _save_user_facts as save_user_facts
+        from app.agents.agentic.questions import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         replies = await asyncio.gather(
@@ -200,11 +200,11 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count, 1)
 
     async def test_answer_fact_failure_rolls_back_raw_response(self):
-        from app.agents.agentic.runtime import _save_user_facts as save_user_facts
+        from app.agents.agentic.questions import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         with (
-            patch("app.agents.agentic.facts.register_fact", side_effect=OSError("저장 실패")),
+            patch("app.agents.agentic.questions.register_fact", side_effect=OSError("저장 실패")),
             self.assertRaises(OSError),
         ):
             await asyncio.to_thread(save_user_facts, scope, {"floor": "지상"}, question_id, state)

@@ -44,7 +44,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(
-    *, settings: ExecutionSettings | None = None, load_env: bool = True, recording_dir=None
+    *,
+    settings: ExecutionSettings | None = None,
+    load_env: bool = True,
+    recording_dir=None,
+    measurement: bool = False,
 ) -> FastAPI:
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
     if load_env:
@@ -57,6 +61,7 @@ def create_app(
     )
     app.state.execution_settings = settings or ExecutionSettings.from_env()
     app.state.recording_dir = recording_dir
+    app.state.measurement = measurement
     app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
     app.add_middleware(
         CORSMiddleware,

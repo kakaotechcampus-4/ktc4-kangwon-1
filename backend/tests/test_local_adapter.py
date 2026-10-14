@@ -169,7 +169,7 @@ class LocalAdapterTests(unittest.TestCase):
                             unit="텍스트",
                         )
                         from app.agents.agentic.contracts import GetFactsInput
-                        from app.agents.agentic.reads import get_facts
+                        from app.agents.agentic.read_tools import get_facts
 
                         reply = await get_facts(scope, GetFactsInput(fact_ids=[fact]))
                         self.assertEqual(reply.facts[0].spatial_scope["radius_m"], 500)
@@ -207,7 +207,7 @@ class LocalAdapterTests(unittest.TestCase):
                     from types import SimpleNamespace
                     from unittest.mock import AsyncMock
 
-                    from app.services.agentic_analysis import execute_agentic_analysis
+                    from app.services.analysis import execute_agentic_analysis
 
                     outcome = SimpleNamespace(
                         status="draft_available",
@@ -222,7 +222,7 @@ class LocalAdapterTests(unittest.TestCase):
                         save=AsyncMock(),
                     )
                     with patch(
-                        "app.services.agentic_analysis.DecisionLoop.create",
+                        "app.services.analysis.DecisionLoop.create",
                         AsyncMock(return_value=loop),
                     ):
                         received = await execute_agentic_analysis(

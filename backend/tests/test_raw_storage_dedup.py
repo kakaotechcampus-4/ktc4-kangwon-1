@@ -100,7 +100,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 12)
 
     async def test_failure_diagnostics_scrub_secrets_and_keep_public_message(self):
-        from app.services.agentic_analysis import _failure
+        from app.services.analysis import _failure
 
         mark_running("one", db_path=self.path)
         with patch.dict("os.environ", {"ELICE_API_KEY": "private-key"}):
@@ -166,7 +166,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancelled_write_notifies_worker_and_waits_for_exit(self):
         from threading import Event
 
-        from app.storage.raw import _write
+        from app.concurrency import run_in_thread
 
         started, stop, finished = Event(), Event(), Event()
 
@@ -176,7 +176,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
             finished.set()
             raise asyncio.CancelledError()
 
-        task = asyncio.create_task(_write(worker, on_cancel=stop.set))
+        task = asyncio.create_task(run_in_thread(worker, on_cancel=stop.set))
         await asyncio.to_thread(started.wait, 1)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
@@ -186,8 +186,8 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
     async def test_service_failure_records_scoring_and_loop_stage(self):
         from contextlib import nullcontext
 
-        from app.services.agentic_analysis import execute_agentic_analysis
-        from app.services.agentic_mock import dependencies
+        from app.services.analysis import execute_agentic_analysis
+        from app.services.mock import dependencies
 
         async def generate(*args):
             raise OSError("모델 대역 오류")
@@ -195,7 +195,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         for stage in ("채점", "루프"):
             mocked = (
                 patch(
-                    "app.services.agentic_analysis.persist_snapshot_scores",
+                    "app.services.analysis.persist_snapshot_scores",
                     side_effect=OSError("채점 오류"),
                 )
                 if stage == "채점"

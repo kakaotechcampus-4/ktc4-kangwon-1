@@ -1,8 +1,8 @@
 """새 구조의 검증 계약과 OpenAI 호환 function 정의입니다.
 
-PR1~PR6에는 최종 이름의 모델을 모두 이 모듈에 둡니다. PR7에서 팀 계약
-DecisionRequest/DecisionResult/Evidence/QuestionSnapshot을 app.schemas로 옮겨
-기존 모델을 교체합니다. 공통 Schema·Site·시설/질문 어휘만 재사용하며 실행은 연결하지 않습니다.
+도구 입출력·채점·검토 계약을 정의합니다. 공개 팀 계약인
+DecisionRequest/DecisionResult/Evidence/QuestionSnapshot은 app.schemas에 둡니다.
+공통 Schema·Site·시설/질문 어휘는 app.schema_types에서 재사용합니다.
 """
 
 from copy import deepcopy
@@ -418,7 +418,6 @@ class ReviewIssue(Schema):
     comment: Text
     fact_ids: list[FactId] = Field(default_factory=list, max_length=3)
     suggested_check: Text
-    blocking: bool
 
 
 class ReviewResolution(Schema):
@@ -556,14 +555,6 @@ class ReviewRef(Schema):
     status: Literal["submitted"] = "submitted"
 
 
-class RemainingBudget(Schema):
-    model_calls: Annotated[int, Field(ge=0, le=40)] = 40
-    tool_calls: Annotated[int, Field(ge=0, le=40)] = 40
-    input_tokens: Annotated[int, Field(ge=0, le=400000)] = 400000
-    output_tokens: Annotated[int, Field(ge=0, le=60000)] = 60000
-    active_seconds: Annotated[float, Field(ge=0, le=600)] = 600.0
-
-
 class FinalCandidate(ScorecardSummary):
     industry_name: Text
     reasons_segments: list[FactSegment]
@@ -604,18 +595,33 @@ TOOL_INPUTS: dict[str, type[Schema]] = {
     "submit_review": SubmitReviewInput,
 }
 _TOOL_DESCRIPTIONS = {
-    "get_scorecard": "초기 L_top10을 한 번 묶어 조회하고 받은 코드 점수·상태를 재사용합니다. 상세는 최대 5개입니다.",
+    "get_scorecard": (
+        "초기 L_top10을 한 번 묶어 조회하고 받은 코드 점수·상태를 재사용합니다. "
+        "상세는 최대 5개입니다."
+    ),
     "get_facts": (
         "받은 fact_ids 또는 업종·source·metrics로 좁혀 조회합니다. 공간 초안은 "
         "source=industry_profile, metrics=[space_requirements]이며 reviewed=false를 확인하세요."
     ),
     "query_raw": "승인 뷰 SELECT로 원문을 최대 50행 확인합니다. 쓰기·집계 인용은 금지합니다.",
-    "map_search": "기존 fact로 설명되지 않는 경쟁·시설 조건이 있을 때 업종 또는 시설 하나만 검색합니다.",
+    "map_search": (
+        "기존 fact로 설명되지 않는 경쟁·시설 조건이 있을 때 업종 또는 시설 하나만 검색합니다."
+    ),
     "check_regulation": "현재 좌표의 교육환경보호구역과 업종 제한을 확인합니다.",
-    "ask_advisor": "해석 충돌·결측이 후보나 확인 조건을 바꿀 때 질문과 선택한 fact_id만 보내 자문합니다.",
-    "ask_user": "미확인 핵심 상가 조건을 처음에 한 번 묶어 최대 3개 질문합니다. 이미 답한 항목은 제외합니다.",
-    "submit_draft": "숫자는 fact_id 슬롯으로 인용해 초안/최종을 제출합니다. 공간 초안은 확인 조건이며 점수 복사는 금지합니다.",
-    "submit_review": "읽기 최대 3회 뒤 한 번 제출합니다. 실제 fact_id로 최대 4개 지적과 확인 조건을 남깁니다.",
+    "ask_advisor": (
+        "해석 충돌·결측이 후보나 확인 조건을 바꿀 때 질문과 선택한 fact_id만 보내 자문합니다."
+    ),
+    "ask_user": (
+        "미확인 핵심 상가 조건을 처음에 한 번 묶어 최대 3개 질문합니다. "
+        "이미 답한 항목은 제외합니다."
+    ),
+    "submit_draft": (
+        "숫자는 fact_id 슬롯으로 인용해 초안/최종을 제출합니다. "
+        "공간 초안은 확인 조건이며 점수 복사는 금지합니다."
+    ),
+    "submit_review": (
+        "읽기 최대 3회 뒤 한 번 제출합니다. 실제 fact_id로 최대 4개 지적과 확인 조건을 남깁니다."
+    ),
 }
 
 
@@ -650,7 +656,7 @@ def _function_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_definitions() -> list[dict[str, Any]]:
-    """Chat Completions에 전달할 9개 function 정의입니다. 역할 권한 필터는 PR4 범위입니다."""
+    """Chat Completions에 전달할 9개 function 정의입니다. 실행기가 역할 권한을 거릅니다."""
     return [
         {
             "type": "function",

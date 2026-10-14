@@ -2,38 +2,36 @@
 
 import asyncio
 import json
-import uuid
 from collections import Counter
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from time import monotonic
 from types import SimpleNamespace
 
-from pydantic import ValidationError
-
+from app.canonical import canonical_json
+from app.clock import utc_now_iso
+from app.concurrency import run_in_thread
 from app.db.connection import connect
 from app.db.repository import append_event
-from app.errors import AnalysisConflictError
 from app.llm.budget import BudgetExceeded, llm_scope
 from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
 from app.llm.config import LLMSettings
-from app.storage.raw import _json, _now, _write
 
+from . import advisor, questions
 from .budget import RuntimeBudget
 from .contracts import (
-    AdvisorAnswer,
     EvaluatorReview,
     MapResult,
-    QuestionSessionRef,
     RegulationResult,
     ReportProposal,
     SubmitResult,
     TextSegment,
     ToolReply,
 )
-from .raw_query import error
-from .report import ReportInvalid, fact_rows, finalize, load_base
-from .reviews import review
+from .evaluators import review
+from .questions import LoopOutcome
+from .report import ReportInvalid, finalize, load_base
+from .sql_tool import error
 from .tools import ToolExecutor
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
@@ -60,23 +58,6 @@ LRecord에는 초기 score_snapshot_id·코드 순위·선정 사유·실제 too
 모든 보고서 문장 숫자는 text에 직접 쓰지 말고 fact_id 슬롯으로 인용하세요.
 인용 불가 사실·추측은 확인 조건으로 남기세요. 동일 조회를 반복하지 말고
 submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출하지 않습니다."""
-ADVISOR_PROMPT = """당신은 decision의 상권 자문역입니다. 질문과 제공한 fact만 읽으며
-도구는 없습니다.
-점수·순위는 매기지 않습니다. 대안 해석·성립 조건·확신도·부족한 사실을 짧은
-JSON으로 반환하세요.
-형식은 consult_id, status(ok),
-interpretations[{claim,fact_ids,conditions,confidence(high/medium/low)}],
-missing_facts, limitations입니다.
-제공되지 않은 fact_id나 수치를 만들지 마세요."""
-
-
-@dataclass
-class LoopOutcome:
-    status: str
-    result: object = None
-    question_session_id: str | None = None
-    questions: list | None = None
-    budget: dict | None = None
 
 
 def _save(scope, state, status, result_model=None):
@@ -90,9 +71,9 @@ def _save(scope, state, status, result_model=None):
                 scope.snapshot_id,
                 scope.run_id,
                 status,
-                _json(state),
+                canonical_json(state),
                 result_model.model_dump_json() if result_model else None,
-                _now(),
+                utc_now_iso(),
             ),
         )
 
@@ -170,7 +151,7 @@ class DecisionLoop:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": _json(
+                    "content": canonical_json(
                         {
                             "request_id": scope.request_id,
                             "site": site.model_dump(mode="json"),
@@ -188,7 +169,7 @@ class DecisionLoop:
 
     @classmethod
     async def create(cls, scope, site, **kwargs):
-        base_id, rows = await _write(load_base, scope)
+        base_id, rows = await run_in_thread(load_base, scope)
         return cls(scope, site, base_id, rows, **kwargs)
 
     def evaluator_executors(self):
@@ -203,7 +184,7 @@ class DecisionLoop:
 
     async def event(self, stage, event, detail):
         try:
-            await _write(
+            await run_in_thread(
                 lambda: append_event(
                     self.scope.request_id, stage, event, detail, db_path=self.scope.path
                 )
@@ -230,7 +211,7 @@ class DecisionLoop:
         self.state["messages"].append(
             {
                 "role": "user",
-                "content": _json(
+                "content": canonical_json(
                     {
                         "instruction": (
                             "평가 결과를 한 번 반영하여 submit_draft(phase=final)로 제출하세요. "
@@ -261,7 +242,7 @@ class DecisionLoop:
                 }
             )
             result = type(result).model_validate(result.model_dump(mode="json"))
-            await _write(self._save_final_result, result)
+            await run_in_thread(self._save_final_result, result)
             outcome.result = result
         outcome.status = "completed"
         await self.save("completed", outcome.result)
@@ -292,7 +273,7 @@ class DecisionLoop:
             map_cache={k: v.model_dump(mode="json") for k, v in shared.map_cache.items()},
             budget=self.budget.snapshot(),
         )
-        await _write(_save, self.scope, self.state, status, result_model)
+        await run_in_thread(_save, self.scope, self.state, status, result_model)
 
     async def _model(self, role, messages, settings, definitions=None, receipt=None):
         started = monotonic()
@@ -353,7 +334,9 @@ class DecisionLoop:
                     )
         else:
             attempt = await self.budget.reserve(
-                role, final=self.state.get("phase") == "final", input_chars=len(_json(messages))
+                role,
+                final=self.state.get("phase") == "final",
+                input_chars=len(canonical_json(messages)),
             )
             status = "error"
             try:
@@ -377,137 +360,17 @@ class DecisionLoop:
         return value, receipt
 
     async def ask_advisor(self, input):
-        if not self.budget.measurement and self.state.get("advisor_calls", 0) >= 2:
-            return error("BUDGET_EXCEEDED", "자문은 요청당 두 회까지입니다.")
-        self.state["advisor_calls"] = self.state.get("advisor_calls", 0) + 1
-        try:
-            facts = await _write(fact_rows, self.scope, input.fact_ids)
-        except ReportInvalid:
-            return error("UNKNOWN_FACT", "현재 요청의 fact만 자문에 전달할 수 있습니다.")
-        if any(f["status"] != "observed" or not f["citable"] for f in facts.values()):
-            return error("UNCITABLE", "관측된 fact만 자문에 전달할 수 있습니다.")
-        consult_id = "consult_" + str(uuid.uuid4())
-        receipt = {}
-        settings = LLMSettings.from_env("advisor", max_tokens=1000, timeout_seconds=45)
-        payload = {
-            "consult_id": consult_id,
-            "question": input.question,
-            "industry_codes": input.industry_codes,
-            "facts": [
-                {
-                    "fact_id": f["fact_id"],
-                    "metric": f["metric"],
-                    "value": json.loads(f["value_json"]),
-                    "unit": f["unit"],
-                    "status": f["status"],
-                    "citable": bool(f["citable"]),
-                    "period": f["period"],
-                    "spatial_scope": json.loads(f["spatial_scope_json"]),
-                }
-                for f in facts.values()
-            ],
-        }
-        try:
-            async with asyncio.timeout(
-                max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
-                if self.budget.measurement
-                else min(45, max(0.01, 300 - self.budget.active_seconds))
-            ):
-                value, receipt = await self._model(
-                    "advisor",
-                    [
-                        {"role": "system", "content": ADVISOR_PROMPT},
-                        {"role": "user", "content": _json(payload)},
-                    ],
-                    settings,
-                    receipt=receipt,
-                )
-            answer = AdvisorAnswer.model_validate(value)
-            if answer.consult_id != consult_id or any(
-                not set(i.fact_ids) <= set(input.fact_ids) for i in answer.interpretations
-            ):
-                raise ValueError("자문 근거 범위 오류")
-        except (
-            LLMHTTPError,
-            LLMResponseError,
-            TimeoutError,
-            ValidationError,
-            ValueError,
-            BudgetExceeded,
-        ):
-            self.state["advisor_unavailable"] = True
-            answer = AdvisorAnswer(
-                consult_id=consult_id,
-                status="unavailable",
-                limitations=["자문을 확인하지 못해 decision이 단독 판단합니다."],
-            )
-        await _write(self._save_advisor, input, answer, receipt, settings)
-        return ToolReply(status="ok", data=answer, warnings=answer.limitations)
-
-    def _save_advisor(self, input, answer, receipt, settings):
-        actual = receipt.get("model")
-        family = (
-            "anthropic"
-            if "claude" in (actual or settings.model or "").lower()
-            else "openai"
-            if "gpt" in (actual or settings.model or "").lower()
-            else "unknown"
-        )
-        with connect(self.scope.path) as db:
-            db.execute(
-                "INSERT INTO advisor_consults VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    answer.consult_id,
-                    self.scope.request_id,
-                    self.scope.snapshot_id,
-                    input.question,
-                    _json(input.fact_ids),
-                    actual,
-                    family,
-                    _json(receipt.get("usage")),
-                    answer.model_dump_json(),
-                    answer.status,
-                    _now(),
-                ),
-            )
+        return await advisor.ask_advisor(self, input)
 
     async def ask_user(self, input):
-        if not self.state["allow_questions"] or self.state.get("phase") == "final":
-            return error("QUESTION_NOT_ALLOWED", "현재 요청·단계에서 질문할 수 없습니다.")
-        if self.state["asked"]:
-            return error("ALREADY_ANSWERED", "질문 세션을 반복할 수 없습니다.")
-        self.state["asked"] = True
-        session_id = "question_" + str(uuid.uuid4())
-        await _write(self._save_question, session_id, input)
-        self.waiting = LoopOutcome(
-            "waiting_for_input",
-            question_session_id=session_id,
-            questions=input.questions,
-            budget=self.budget.snapshot(),
-        )
-        return ToolReply(status="ok", data=QuestionSessionRef(question_session_id=session_id))
-
-    def _save_question(self, session_id, input):
-        with connect(self.scope.path) as db:
-            db.execute(
-                "INSERT INTO agentic_questions VALUES(?,?,?,?,?,?,?)",
-                (
-                    session_id,
-                    self.scope.request_id,
-                    self.scope.snapshot_id,
-                    _json([q.model_dump(mode="json") for q in input.questions]),
-                    "{}",
-                    "waiting",
-                    _now(),
-                ),
-            )
+        return await questions.ask_user(self, input)
 
     async def submit_draft(self, input):
         phase = self.state.get("phase", "draft")
         if input.phase != phase or (phase == "draft" and input.review_resolutions):
             return error("INVALID_ARGUMENT", "현재 제출 단계와 피드백 형식이 다릅니다.")
         try:
-            self.done = await _write(
+            self.done = await run_in_thread(
                 lambda: finalize(
                     self.scope,
                     input.report,
@@ -558,7 +421,7 @@ class DecisionLoop:
                     ]
                 }
             )
-        self.done = await _write(
+        self.done = await run_in_thread(
             lambda: finalize(
                 self.scope,
                 proposal,
@@ -597,7 +460,7 @@ class DecisionLoop:
             if not entries:
                 continue
             original = len(entries)
-            while entries and len(_json(body)) > 4000:
+            while entries and len(canonical_json(body)) > 4000:
                 entries.pop()
             if len(entries) < original:
                 body["truncated"] = True
@@ -614,7 +477,7 @@ class DecisionLoop:
         while True:
             try:
                 definitions = self.definitions()
-                self.budget.schema_chars = len(_json(definitions))
+                self.budget.schema_chars = len(canonical_json(definitions))
                 if (
                     self.budget.totals()[1] >= self.budget.output_limit
                     or self.budget.active_seconds >= self.budget.seconds_limit
@@ -646,7 +509,7 @@ class DecisionLoop:
                 content = await self.compact_reply(reply, name, arguments)
                 await self.event("decision", "completed", {"tool": name, "status": reply.status})
                 self.state["messages"].append(
-                    {"role": "tool", "tool_call_id": call.id, "content": _json(content)}
+                    {"role": "tool", "tool_call_id": call.id, "content": canonical_json(content)}
                 )
                 self.state["no_progress"] = (
                     self.state.get("no_progress", 0) + 1 if reply.duplicate or reply.error else 0
@@ -696,128 +559,10 @@ class DecisionLoop:
 
     @staticmethod
     async def validate_resume(scope, answers):
-        def load():
-            with connect(scope.path) as db:
-                row = db.execute(
-                    "SELECT state_json,status FROM agentic_runs WHERE request_id=? AND "
-                    "snapshot_id=?",
-                    (scope.request_id, scope.snapshot_id),
-                ).fetchone()
-                question = db.execute(
-                    "SELECT question_session_id,questions_json,status FROM "
-                    "agentic_questions WHERE request_id=? AND snapshot_id=?",
-                    (scope.request_id, scope.snapshot_id),
-                ).fetchone()
-                if (
-                    row is None
-                    or row[1] != "waiting_for_input"
-                    or question is None
-                    or question[2] != "waiting"
-                ):
-                    raise ValueError("재개할 질문 세션이 없습니다.")
-                fields = {q["field"] for q in json.loads(question[1])}
-                if set(answers) != fields or any(
-                    not isinstance(v, str) or not v.strip() or len(v) > 500
-                    for v in answers.values()
-                ):
-                    raise ValueError("답변 항목·길이가 잘못되었습니다.")
-                return json.loads(row[0]), question[0]
-
-        return await _write(load)
+        return await questions.validate_resume(scope, answers)
 
     @classmethod
     async def resume(cls, scope, site, answers, *, resume_state=None, **kwargs):
-        saved, question_id = resume_state or await cls.validate_resume(scope, answers)
-        saved = await _write(_save_user_facts, scope, answers, question_id, saved)
-        return await cls.create(scope, site, saved=saved, **kwargs)
-
-
-def _save_user_facts(scope, answers, question_id, saved):
-    from .facts import register_fact
-
-    with connect(scope.path) as db:
-        db.execute("BEGIN IMMEDIATE")
-        question = db.execute(
-            "SELECT status FROM agentic_questions WHERE question_session_id=?",
-            (question_id,),
-        ).fetchone()
-        if question is None or question[0] != "waiting":
-            raise AnalysisConflictError("이미 답변한 질문입니다.")
-        response = scope.record_sync(
-            source="user",
-            source_type="api",
-            args={},
-            page="1",
-            status=200,
-            payload={"rows": [answers]},
-            connection=db,
+        return await questions.resume(
+            cls, scope, site, answers, resume_state=resume_state, **kwargs
         )
-        ref = db.execute(
-            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
-        ).fetchone()[0]
-        ids = {}
-        for field, value in answers.items():
-            metric = (
-                field
-                if field
-                in {"floor", "exclusive_area", "existing_facilities", "industry_preferences"}
-                else "space_condition"
-            )
-            ids[field] = register_fact(
-                scope,
-                industry_code=None,
-                source="user",
-                metric=metric,
-                value=value,
-                unit="임대인 답변",
-                status="observed",
-                row_ids=[ref],
-                field_pointer="/" + field,
-                connection=db,
-            )
-        saved["user_answers"] = {"answers": answers, "fact_ids": ids}
-        for message in reversed(saved["messages"]):
-            if message["role"] != "tool":
-                continue
-            body = json.loads(message["content"])
-            if (body.get("data") or {}).get("question_session_id") != question_id:
-                continue
-            body["data"] = {
-                "question_session_id": question_id,
-                "status": "answered",
-                **saved["user_answers"],
-            }
-            body["fact_ids"] = list(ids.values())
-            message["content"] = _json(body)
-            break
-        else:
-            raise ValueError("질문 도구 응답 기록 없음")
-        saved["known_fact_ids"] = list(
-            dict.fromkeys([*saved.get("known_fact_ids", []), *ids.values()])
-        )
-        db.execute(
-            "UPDATE tool_calls SET reply_json=? WHERE request_id=? AND snapshot_id=? "
-            "AND tool_name='ask_user' AND json_extract(reply_json,'$.data.question_session_id')=?",
-            (
-                _json({k: v for k, v in body.items() if k != "tool_call_id"}),
-                scope.request_id,
-                scope.snapshot_id,
-                question_id,
-            ),
-        )
-        db.execute(
-            "UPDATE agentic_questions SET status='answered',answers_json=? "
-            "WHERE question_session_id=?",
-            (_json(answers), question_id),
-        )
-        db.execute(
-            "UPDATE agentic_runs SET status='running',state_json=? "
-            "WHERE request_id=? AND snapshot_id=?",
-            (_json(saved), scope.request_id, scope.snapshot_id),
-        )
-        db.execute(
-            "UPDATE analysis_requests SET status='running' WHERE request_id=? "
-            "AND status='waiting_for_input'",
-            (scope.request_id,),
-        )
-    return saved

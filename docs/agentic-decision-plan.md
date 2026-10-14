@@ -1,6 +1,6 @@
 # Agentic decision 구조 설계안 v0.4 — 분기별 로컬 자료 DB
 
-작성: 2026-10-13 · 개정: 2026-10-14 · 구현 통합 브랜치: feat/agentic-decision · 상태: **LD1~LD3 구현, 로컬 도구 뷰/최종 API 전환은 후속 단계**.
+작성: 2026-10-13 · 개정: 2026-10-14 · 구현 통합 브랜치: feat/agentic-decision · 상태: **로컬 읽기 도구·단일 공개 API·평가자 연결 완료, 삭제·리팩토링 후 검증 중**.
 기준: [채점표 v0.8](decision-prompt-rubric.md)의 확정 규칙. 코드 90점 + decision의 L 10점, 단일 모드·fact_id·평가자 네 명은 유지한다.
 
 사용자 결정: 상가·개폐업·유동·상주·직장은 요청 시 API 수집하지 않는다. 수동 분기 갱신으로 서울 전체 자료를 미리 적재하고, 요청은 가진 최신 활성 버전을 SQL로 읽는다. 카카오 지도(기존 주소 변환 포함)·V-World 규제만 실시간이다. RAG·벡터 검색은 사용하지 않는다.
@@ -8,6 +8,16 @@
 v0.4 최초 조사는 문서만 수정했다. 이번 LD1·LD2는 사용자 승인 범위의 서울 API 확인/적재와 자료 DB 코드·테스트·.env.example을 추가한다. schemas.py·.env·규제 코드와 요청 경로는 바꾸지 않으며 LLM 호출은 없다. 다운로드 사이트는 새로 조회하지 않았다. 문서 끝의 PR2~PR5 메모는 **이전 구현·실패 기록**이며 v0.4 구현 지시가 아니다. 최초 실패 원인 추적은 종료한다.
 
 ## 1. 한 장 요약
+
+현재 실행은 주소 → 고정 로컬 자료 버전 → facts·코드 90점 → decision 읽기 도구·L →
+평가자 네 명 병렬 → 피드백 한 번 → 최종 fact 렌더링이다. 옛 브리핑·전문가·그래프는 삭제한다.
+실행 모드는 하나이며 요청 DB 버전은 3이다. 자료 DB는 별도이며 초기화 대상이 아니다.
+운영 예산은 입력 400k·출력 60k·모델 40회·600초·호출당 출력 16k다.
+평가자는 출력 선점 최대 4k, 최종 두 호출은 공유 예산에서 보존한다.
+측정은 서버 인자로 켜며 API 본문에서 바꿀 수 없다. 공간 요건 CSV는 미검토 초안이며
+확인 조건·추가 질의에만 활용한다. 이 초안 자체로 L 가감점을 정당화하지 않는다.
+정리 범위·단계 검증은 [cleanup-plan](cleanup-plan.md), 프롬프트 변경 이유는
+[prompt-change-notes](prompt-change-notes.md)를 기준으로 한다.
 
 ```text
 [요청과 분리: 운영자 수동 분기 갱신]
@@ -310,7 +320,7 @@ ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했
 
 각 평가자는 고정 페르소나 시스템 프롬프트, draft_id·버전·인용 fact_id 목록·LRecord·확인 조건만 받는다. 다른 평가자의 의견·보조 의견은 초기에 주지 않아 독립 검토한다. 기존 4 ID·지적 최대 4개·실패 격리를 재사용한다(`backend/app/schemas.py:696`, `:702`, `:710`, `backend/app/agents/evaluators/agent.py:175`).
 
-ReviewIssue={issue_id,industry_code|null,target:fact/score/L/claim/condition,kind:factual_error/duplicate_score/missing_evidence/scope_mismatch/action_condition,comment,fact_ids≤3,suggested_check,blocking:bool}. 모델이 점수나 배지를 직접 고치는 출력은 없다. 저장된 사실을 임의 삭제하거나 외부 메시지를 보내는 권한도 없다.
+ReviewIssue={issue_id,industry_code|null,target:fact/score/L/claim/condition,kind:factual_error/duplicate_score/missing_evidence/scope_mismatch/action_condition,comment,fact_ids≤3,suggested_check}. 모델이 점수나 배지를 직접 고치는 출력은 없다. 저장된 사실을 임의 삭제하거나 외부 메시지를 보내는 권한도 없다.
 
 | 반영 규칙 | 처리 |
 | --- | --- |
@@ -347,7 +357,7 @@ ReportProposal={summary_segments,candidates≤5,excluded_candidates≤5,limitati
 | schemas.py 모델 | 변경안·이유 |
 | --- | --- |
 | AnalysisTask / AgentAnalysis | 그대로 유지. snapshot·계산 metadata는 AgentAnalysis.data 내부에만 추가 |
-| DecisionRequest | request/run/site/snapshot 참조·rubric/tool version·remaining_budget. 전체 analyses/digest 입력과 모드 dispatch 제거 |
+| DecisionRequest | request/run/site/snapshot 참조·rubric/tool version. 예산은 런타임 상태에서 관리하고 전체 analyses/digest 입력과 모드 dispatch 제거 |
 | DecisionResult 및 IndustryAssessment/DecisionContent | 코드 ○/90 + L ○/10, 점수 구간·비율·coverage·배지·검토 후보 Top 5·fact 슬롯·L 검토 상태·평가 요약. 기존 보고서 계약 교체 |
 | Evidence | {fact_id} 참조로 교체. agent/path·EvidenceRef 인용 계약 제거, registry가 요청·snapshot·업종·citable 검증 |
 | QuestionSnapshot | run/snapshot/score/draft refs·도구 hash·누적 예산·채택 fact 목록·질문 세션. 기존 QuestionSnapshotV2 통합 제거, 구 세션 재개 불가 |

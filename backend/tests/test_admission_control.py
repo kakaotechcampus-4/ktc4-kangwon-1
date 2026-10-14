@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import httpx
 
-from app.api.v1.agentic import analysis_runner
+from app.api.v1.analyses import analysis_runner
 from app.main import create_app
 from app.services.settings import ExecutionSettings
 

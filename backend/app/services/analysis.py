@@ -1,4 +1,4 @@
-"""새 단일 도구 루프 서비스입니다. 기존 API·모드 전환은 PR7에서 합니다."""
+"""로컬 자료·도구 루프·평가·최종 저장을 연결하는 단일 분석 서비스입니다."""
 
 import asyncio
 import json
@@ -12,6 +12,8 @@ from app.agents.agentic.budget import RuntimeBudget
 from app.agents.agentic.recording import CallRecording
 from app.agents.agentic.runtime import DecisionLoop
 from app.agents.agentic.snapshot import persist_snapshot_scores
+from app.clock import utc_now_iso
+from app.concurrency import run_in_thread
 from app.config import BACKEND_DIR
 from app.db import repository
 from app.db.connection import connect, initialize
@@ -21,7 +23,7 @@ from app.local_data.adapter import LocalAdapter
 from app.local_data.persistence import persist_local
 from app.local_data.provenance import validate_snapshot
 from app.schemas import AgentError, AnalysisTask, Site
-from app.storage.raw import CaptureScope, _now, _write, capture_scope
+from app.storage.raw import CaptureScope, capture_scope
 from app.storage.scrub import env_secrets, scrub_text
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 async def _event(path, request_id, stage, event):
     try:
-        await _write(lambda: repository.append_event(request_id, stage, event, {}, db_path=path))
+        await run_in_thread(
+            lambda: repository.append_event(request_id, stage, event, {}, db_path=path)
+        )
     except Exception as exc:
         logger.warning("진행 이벤트 저장 실패: %s", type(exc).__name__)
 
@@ -46,7 +50,7 @@ def _persist_outcome(path, request_id, outcome):
                 "UPDATE analysis_requests SET "
                 "status='completed',result_json=?,completed_at=? WHERE "
                 "request_id=?",
-                (outcome.result.model_dump_json(), _now(), request_id),
+                (outcome.result.model_dump_json(), utc_now_iso(), request_id),
             )
 
 
@@ -86,7 +90,7 @@ async def _failure(path, request_id, exc, stage, timings=None):
 
     def save():
         error = AgentError(code="AGENTIC_FAILED", message="새 판단 실행을 완료하지 못했습니다.")
-        failed_at = _now()
+        failed_at = utc_now_iso()
         with connect(path) as db:
             changed = db.execute(
                 "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
@@ -105,7 +109,7 @@ async def _failure(path, request_id, exc, stage, timings=None):
                 ),
             )
 
-    await _write(save)
+    await run_in_thread(save)
 
 
 @with_client_session
@@ -126,8 +130,8 @@ async def execute_agentic_analysis(
     allow_questions=False,
 ):
     request_id = request_id or uuid.uuid4().hex
-    path = await _write(initialize, db_path)
-    await _write(
+    path = await run_in_thread(initialize, db_path)
+    await run_in_thread(
         lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
     )
     budget = RuntimeBudget(measurement=measurement)
@@ -138,21 +142,21 @@ async def execute_agentic_analysis(
     )
     stage, started, timings = "수집", monotonic(), {}
     try:
-        await _write(lambda: repository.mark_running(request_id, db_path=path))
+        await run_in_thread(lambda: repository.mark_running(request_id, db_path=path))
         await _event(path, request_id, "address", "started")
         async with capture_scope(request_id, path) as scope:
-            adapter = await _write(LocalAdapter, local_data_path) if not mock else None
+            adapter = await run_in_thread(LocalAdapter, local_data_path) if not mock else None
             async with asyncio.timeout(600 if measurement else 120):
                 site = await (resolve or resolve_site)(address)
                 task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
-                await _write(lambda: repository.save_site(task, db_path=path))
+                await run_in_thread(lambda: repository.save_site(task, db_path=path))
                 await _event(path, request_id, "address", "completed")
                 await _event(path, request_id, "local_data", "started")
 
                 timings[stage] = monotonic() - started
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
                 if adapter is not None:
-                    data, _, _ = await _write(persist_local, task, scope, adapter)
+                    data, _, _ = await run_in_thread(persist_local, task, scope, adapter)
                 else:
                     await persist_snapshot_scores(task)
                     data = {}
@@ -177,7 +181,7 @@ async def execute_agentic_analysis(
                 outcome = await loop.review_and_finalize()
             timings[stage] = monotonic() - started
             await loop.save(outcome.status, outcome.result)
-            await _write(_persist_outcome, path, request_id, outcome)
+            await run_in_thread(_persist_outcome, path, request_id, outcome)
             return outcome
     except (Exception, asyncio.CancelledError) as exc:
         timings[stage] = monotonic() - started
@@ -198,7 +202,7 @@ async def resume_agentic_analysis(
     measurement=False,
     recording_path=None,
 ):
-    path = await _write(initialize, db_path)
+    path = await run_in_thread(initialize, db_path)
 
     def context():
         with connect(path) as db:
@@ -211,7 +215,7 @@ async def resume_agentic_analysis(
                 raise ValueError("새 판단 요청을 찾을 수 없습니다.")
         return Site.model_validate_json(row[0]), row[1], row[2]
 
-    site, snapshot, run_id = await _write(context)
+    site, snapshot, run_id = await run_in_thread(context)
     scope = CaptureScope(request_id, path, run_id, snapshot)
     try:
         resume_state = await DecisionLoop.validate_resume(scope, answers)
@@ -223,7 +227,7 @@ async def resume_agentic_analysis(
         else None
     )
     try:
-        await _write(validate_snapshot, scope)
+        await run_in_thread(validate_snapshot, scope)
         loop = await DecisionLoop.resume(
             scope,
             site,
@@ -239,7 +243,7 @@ async def resume_agentic_analysis(
         if outcome.status == "draft_available":
             outcome = await loop.review_and_finalize()
         await scope.finish()
-        await _write(_persist_outcome, path, request_id, outcome)
+        await run_in_thread(_persist_outcome, path, request_id, outcome)
         return outcome
     except AnalysisConflictError:
         raise

@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 from app.agents.agentic.budget import RuntimeBudget
 from app.agents.agentic.contracts import ReportProposal, ReviewResolution, ToolReply
-from app.agents.agentic.raw_query import LOCAL_VIEWS, _authorizer, error, query_raw
 from app.agents.agentic.report import ReportInvalid, finalize, validate_proposal
+from app.agents.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
 from app.agents.agentic.tools import ToolExecutor, _audit
 from app.db.connection import connect, initialize
 from app.llm.budget import BudgetExceeded

@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import repository  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.services.agentic_mock import dependencies as mock_dependencies  # noqa: E402
+from app.services.mock import dependencies as mock_dependencies  # noqa: E402
 from app.services.settings import ExecutionSettings  # noqa: E402
 
 
@@ -79,6 +79,7 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
     db_path = await asyncio.to_thread(prepare_file)
     counts: Counter = Counter()
     fake: Counter = Counter(dict.fromkeys(("model", "api", "api_ok", "external_failures"), 0))
+    model_started = asyncio.Event()
     outcomes: Counter = Counter(dict.fromkeys(("completed", "rejected", "cancelled", "failed"), 0))
     latencies: list[float] = []
     completed_latencies: list[float] = []
@@ -113,6 +114,8 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
         def wrap(fn, kind):
             async def invoke(*inputs, **options):
                 fake[kind] += 1
+                if kind == "model":
+                    model_started.set()
                 await asyncio.sleep(0.03 if kind == "model" else 0.005)
                 if kind == "api" and str(inputs[0]).endswith("failure"):
                     fake["external_failures"] += 1
@@ -137,7 +140,7 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
     settings = ExecutionSettings(db_path=db_path, max_concurrency=2)
     with (
         patch("sqlite3.connect", side_effect=connect),
-        patch("app.api.v1.agentic.dependencies", side_effect=dependencies),
+        patch("app.api.v1.analyses.dependencies", side_effect=dependencies),
         patch("openai.AsyncOpenAI", side_effect=AssertionError("실제 LLM 생성 금지")),
         patch.object(socket.socket, "connect", side_effect=AssertionError("외부 연결 금지")),
     ):
@@ -202,7 +205,8 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
 
                 tasks = [asyncio.create_task(send(index)) for index in range(concurrency)]
                 if scenario == "execution":
-                    await asyncio.sleep(0.02)
+                    # DB 준비 속도와 무관하게 실제 모델 대역에 진입한 실행을 취소합니다.
+                    await asyncio.wait_for(model_started.wait(), timeout=10)
                     tasks[1].cancel()
                 await asyncio.gather(*tasks)
             sampler.cancel()

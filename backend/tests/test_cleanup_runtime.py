@@ -13,7 +13,7 @@ class CleanupRuntimeTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def test_resume_value_error_is_saved_failed(self):
-        from app.services.agentic_analysis import execute_agentic_analysis, resume_agentic_analysis
+        from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
 
         async def resolve(address):
             return self.site

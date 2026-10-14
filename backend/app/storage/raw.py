@@ -17,12 +17,6 @@ from app.storage.scrub import _AUTH_KEYS as _AUTH_KEYS
 from app.storage.scrub import _auth as _auth
 from app.storage.scrub import scrub as scrub
 
-# 기존 검사와 이전 단계 호출의 임시 호환 이름입니다.
-_json = canonical_json
-_hash = canonical_hash
-_now = utc_now_iso
-_write = run_in_thread
-
 
 class RawStorageError(sqlite3.DatabaseError):
     """원문 저장 실패는 에이전트 실패로 변환하지 않고 서비스까지 전파합니다."""

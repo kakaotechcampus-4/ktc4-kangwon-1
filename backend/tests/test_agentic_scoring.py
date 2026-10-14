@@ -188,8 +188,8 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_scoring_failure_marks_service_failed(self):
-        from app.services.agentic_analysis import execute_agentic_analysis
-        from app.services.agentic_mock import dependencies
+        from app.services.analysis import execute_agentic_analysis
+        from app.services.mock import dependencies
 
         with (
             patch("app.agents.agentic.snapshot._persist", side_effect=ValueError("secret")),

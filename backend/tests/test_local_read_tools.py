@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.agentic.raw_query import query_raw
+from app.agents.agentic.sql_tool import query_raw
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.local_data.adapter import LocalAdapter
@@ -169,7 +169,7 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     scope, "SELECT store_count FROM v_raw_lifecycle WHERE request_id='other'"
                 )
                 self.assertEqual(foreign.data.rows, [])
-                with patch("app.agents.agentic.raw_query.monotonic", side_effect=[0, 3]):
+                with patch("app.agents.agentic.sql_tool.monotonic", side_effect=[0, 3]):
                     timeout = await query_raw(scope, "SELECT count(*) FROM v_raw_lifecycle")
                 self.assertEqual(timeout.error.code, "SQL_TIMEOUT")
 

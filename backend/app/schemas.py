@@ -13,7 +13,6 @@ from app.agents.agentic.contracts import (
     FinalCandidate,
     LRecord,
     Ratio,
-    RemainingBudget,
     ReviewResolution,
     UserQuestion,
 )
@@ -32,7 +31,6 @@ class DecisionRequest(Schema):
     snapshot_id: Text
     rubric_version: Literal["v0.8"] = "v0.8"
     tool_contract_version: Literal["1"] = "1"
-    remaining_budget: RemainingBudget
 
 
 class DecisionResult(Schema):
@@ -74,7 +72,5 @@ class QuestionSnapshot(Schema):
     request: DecisionRequest
     score_snapshot_id: Text
     draft_id: Text | None = None
-    adopted_fact_ids: list[FactId] = Field(max_length=64)
-    tool_call_hashes: list[Text] = Field(max_length=40)
     question_session_id: Text
     questions: list[UserQuestion] = Field(min_length=1, max_length=3)

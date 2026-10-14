@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.agents.agentic.contracts import GetFactsInput
-from app.agents.agentic.reads import get_facts
+from app.agents.agentic.read_tools import get_facts
 from app.agents.agentic.snapshot import persist_space_requirements
 from app.db.connection import connect, initialize
 from app.db.repository import create_request

@@ -12,7 +12,7 @@ APP = Path(__file__).resolve().parents[1] / "app"
 class DependencyBoundaryTests(unittest.TestCase):
     def test_mock_imports_in_fresh_process(self):
         result = subprocess.run(
-            [sys.executable, "-c", "import app.services.agentic_mock"],
+            [sys.executable, "-c", "import app.services.mock"],
             cwd=APP.parent,
             capture_output=True,
             text=True,

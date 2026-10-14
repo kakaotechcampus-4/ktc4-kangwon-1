@@ -47,11 +47,13 @@ cd backend
 python -m uvicorn app.main:create_app --factory --reload
 ```
 
-실제 키는 `backend/.env`에만 둡니다. 변수 이름과 기본값은 [.env.example](.env.example)을 확인합니다.
+실제 키는 `backend/.env`에만 둡니다. 변수 이름은 [.env.example](.env.example), 기본값은 각 설정 모듈을 확인합니다.
+예시 파일에는 변수 이름만 둡니다. 기본값을 덮어쓸 선택 변수는 값을 채우고 주석을 풀어 사용하세요.
 사용하지 않는 과거 실행 모드·에이전트별 모델·분석 타임아웃 환경변수는 예시 설정에서 제거합니다.
 현재 모델 역할은 공통 `ELICE_*`와 선택적 `DECISION_LLM_*`, `EVALUATOR_LLM_*`, `ADVISOR_LLM_*`입니다.
 주소·지도는 `GEOCODING_API_KEY`, 규제 조회는 `VWORLD_API_KEY`와 `VWORLD_REFERER`를 사용합니다.
 `ANALYSIS_MAX_CONCURRENCY`는 백그라운드 동시 분석 수, `CORS_ALLOW_ORIGINS`는 프론트 주소입니다.
+주소는 공백을 정리한 뒤 200자 이내만 허용하며 제한을 넘으면 외부 조회 전에 거절합니다.
 
 `POST /api/v1/analyses?mock=true` 또는 `MOCK_MODE=true`로 외부 호출 없이 동일한 평가·보고서 계약을 확인합니다.
 상태는 `GET /api/v1/analyses/{request_id}`, 진행은 `/events`, 답변은 `/answers`에서 다룹니다.

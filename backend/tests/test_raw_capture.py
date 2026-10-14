@@ -155,8 +155,8 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(args["quarter"])
 
     async def test_storage_failure_is_not_an_agent_result(self):
-        from app.services.agentic_analysis import execute_agentic_analysis
-        from app.services.agentic_mock import dependencies
+        from app.services.analysis import execute_agentic_analysis
+        from app.services.mock import dependencies
 
         mock = dependencies()
 
@@ -257,8 +257,8 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 3)
 
     async def test_snapshot_finish_failure_prevents_completion(self):
-        from app.services.agentic_analysis import execute_agentic_analysis
-        from app.services.agentic_mock import dependencies
+        from app.services.analysis import execute_agentic_analysis
+        from app.services.mock import dependencies
 
         with (
             patch("app.storage.raw._finish", side_effect=OSError("secret")),

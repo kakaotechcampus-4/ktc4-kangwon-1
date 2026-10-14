@@ -11,7 +11,7 @@ from app.schemas import DecisionResult
 from app.text import has_digit
 
 from .contracts import FactView, FinalCandidate, LRecord, LSelection
-from .reads import score_summary
+from .read_tools import score_summary
 from .scoring import WEIGHTS, rank_candidates, result, summarize
 
 NEW_METRICS = {

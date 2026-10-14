@@ -353,7 +353,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.agentic.runtime import DecisionLoop
         from app.db.repository import mark_running, save_site
         from app.schemas import AnalysisTask
-        from app.services.agentic_analysis import resume_agentic_analysis
+        from app.services.analysis import resume_agentic_analysis
 
         mark_running("loop", db_path=self.path)
         save_site(AnalysisTask(request_id="loop", site=self.site, radius_m=500), db_path=self.path)
@@ -366,7 +366,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
         )
         await loop.save("waiting_for_input")
-        with patch("app.agents.agentic.facts.register_fact", side_effect=OSError("저장 실패")):
+        with patch("app.agents.agentic.questions.register_fact", side_effect=OSError("저장 실패")):
             with self.assertRaises(OSError):
                 await resume_agentic_analysis("loop", {"floor": "지상"}, db_path=self.path)
         with connect(self.path) as db:
@@ -557,7 +557,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         MOCK_SCOPE = Scope(area="목업", period="목업")
         from app.schemas import AgentAnalysis
-        from app.services.agentic_analysis import execute_agentic_analysis
+        from app.services.analysis import execute_agentic_analysis
 
         async def resolve(address):
             return self.site

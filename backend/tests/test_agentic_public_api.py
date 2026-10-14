@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.address import GeocodeError
-from app.api.v1.agentic import analysis_runner
+from app.api.v1.analyses import analysis_runner
 from app.db import repository
 from app.db.connection import initialize
 from app.main import create_app

@@ -17,8 +17,8 @@ from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
-from .raw_query import error
 from .report import ReportInvalid, fact_rows
+from .sql_tool import error
 
 PERSONAS = {
     "examiner": (
@@ -44,7 +44,7 @@ get_facts는 업종·source·metrics 또는 받은 fact_ids로 좁혀 조회하�
 임대인 조건과 대조할 확인 항목으로만 사용하고 법규·확정 시설 요건·L 가감점 근거로 쓰지 마세요.
 새 점수·순위를 만들지 마세요. 지적마다 실제 fact_id 근거를 붙이세요.
 문장에 숫자를 직접 쓰지 말고 fact_ids로 인용하세요. 확인하지 못한 것은 확인 조건으로 남기세요.
-검토를 마치면 submit_review로 제출하세요. 실패한 조회를 동의로 해석하지 마세요."""
+실패한 조회를 동의로 해석하지 마세요."""
 
 
 def save_review(scope, review):

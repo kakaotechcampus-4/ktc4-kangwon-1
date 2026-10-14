@@ -14,7 +14,7 @@ from .contracts import (
     ScorecardSummary,
     ScoreItem,
 )
-from .raw_query import error
+from .sql_tool import error
 
 
 class InvalidCursor(ValueError):

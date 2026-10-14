@@ -190,7 +190,6 @@ class AgenticContractsTests(unittest.TestCase):
             "comment": "확인 필요",
             "fact_ids": [FACT],
             "suggested_check": "지도 확인",
-            "blocking": False,
         }
         request = {
             "request_id": "request-demo",
@@ -202,7 +201,6 @@ class AgenticContractsTests(unittest.TestCase):
                 "latitude": 37.5,
                 "longitude": 127.0,
             },
-            "remaining_budget": {},
         }
         score = {"item": "D1", "status": "unknown", "grade": None, "points": None, "fact_ids": []}
         card = summary | {
@@ -289,7 +287,6 @@ class AgenticContractsTests(unittest.TestCase):
                 "score_snapshot_id": "scores",
             },
             c.ReviewRef: {"review_id": "review"},
-            c.RemainingBudget: {},
             s.DecisionRequest: request,
             c.FinalCandidate: final,
             c.EvaluatorReview: result["evaluator_reviews"][0],
@@ -297,8 +294,6 @@ class AgenticContractsTests(unittest.TestCase):
             s.QuestionSnapshot: {
                 "request": request,
                 "score_snapshot_id": "scores",
-                "adopted_fact_ids": [FACT],
-                "tool_call_hashes": [],
                 "question_session_id": "q",
                 "questions": [{"field": "floor", "question": "층?", "reason": "동선"}],
             },

@@ -12,8 +12,8 @@ from pydantic import Field
 
 from app.db.connection import connect
 from app.schemas import DecisionResult, Schema, Text
-from app.services.agentic_analysis import execute_agentic_analysis, resume_agentic_analysis
-from app.services.agentic_mock import dependencies, generators
+from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
+from app.services.mock import dependencies, generators
 
 from .errors import run_or_http
 from .jobs import (
@@ -64,6 +64,7 @@ def options(request, request_id):
     return {
         "db_path": request.app.state.execution_settings.db_path,
         "recording_path": Path(directory) / f"{request_id}-model-calls.json" if directory else None,
+        "measurement": request.app.state.measurement,
     }
 
 
@@ -146,8 +147,6 @@ def detail(request_id, path):
             ((output["result"] or {}).get("report_id"),),
         ).fetchone()
         output["rendered"] = json.loads(report[0]) if report else None
-        output.pop("analysis_mode", None)
-        output.pop("execution_json", None)
         if output["result"] is not None:
             output["result"] = DecisionResult.model_validate(output["result"]).model_dump(
                 mode="json"

@@ -48,7 +48,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def test_direct_field_registered_and_request_isolation(self):
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
         reply = await query_raw(
             self.scope, "SELECT raw_row_id, store_count FROM v_raw_lifecycle WHERE store_count=5"
@@ -65,7 +65,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(foreign.data.rows, [])
 
     async def test_aggregate_uncitable_and_row_limit(self):
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
         aggregate = await query_raw(
             self.scope, "SELECT sum(store_count) AS total FROM v_raw_lifecycle"
@@ -77,7 +77,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(limited.truncated)
 
     async def test_denied_statements_and_functions(self):
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
         for sql in [
             "DELETE FROM raw_rows",
@@ -97,9 +97,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(reply.error.code, "SQL_DENIED")
 
     async def test_sql_timeout(self):
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
-        with patch("app.agents.agentic.raw_query.monotonic", side_effect=[0, 0, 3, 3, 3]):
+        with patch("app.agents.agentic.sql_tool.monotonic", side_effect=[0, 0, 3, 3, 3]):
             reply = await query_raw(
                 self.scope,
                 "SELECT sum(a.store_count*b.store_count) "
@@ -108,7 +108,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.error.code, "SQL_TIMEOUT")
 
     async def test_implicit_lineage_alias_and_expression_not_citable(self):
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
         reply = await query_raw(
             self.scope, "SELECT store_count AS amount FROM v_raw_lifecycle WHERE store_count=5"
@@ -126,10 +126,10 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_fact_storage_error_is_not_tool_error(self):
         import sqlite3
 
-        from app.agents.agentic.raw_query import query_raw
+        from app.agents.agentic.sql_tool import query_raw
 
         with patch(
-            "app.agents.agentic.raw_query.register_fact",
+            "app.agents.agentic.sql_tool.register_fact",
             side_effect=sqlite3.OperationalError("저장 실패"),
         ):
             with self.assertRaises(sqlite3.OperationalError):
@@ -172,7 +172,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_all_views_are_request_scoped(self):
-        from app.agents.agentic.raw_query import VIEWS, query_raw
+        from app.agents.agentic.sql_tool import VIEWS, query_raw
 
         for view, source in VIEWS.items():
             await self.scope.record(

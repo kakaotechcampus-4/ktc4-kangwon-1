@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from app.agents.business_lifecycle.client import get_recent_quarters
@@ -12,8 +13,8 @@ from app.agents.commercial_area.metrics import haversine_m as old_distance
 from app.agents.floating_population.geo import overlapping_areas
 from app.agents.floating_population.metrics import aggregate, daily_benchmark, trend
 from app.agents.floating_population.population import age_share
-from app.geo import haversine_m
 from app.db.connection import readonly
+from app.geo import haversine_m
 from app.seoul import previous_quarter, shift_quarter
 
 
@@ -21,7 +22,7 @@ class SharedHelperTests(unittest.TestCase):
     def test_readonly_connection_cannot_write_or_create_missing_database(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.sqlite3"
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute("CREATE TABLE sample(value INTEGER)")
                 db.execute("INSERT INTO sample VALUES(1)")
             with readonly(path) as db:

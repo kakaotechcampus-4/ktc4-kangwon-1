@@ -19,7 +19,7 @@ from app.industries.catalog import INDUSTRIES
 from app.storage.raw import RawStorageError, current_capture
 
 from .facts import CALC_VERSION, register_fact
-from .formatter import format_snapshot
+from .inputs import format_snapshot
 from .scoring import WEIGHTS, evaluate
 
 METRICS = {
