@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.schemas import DecisionResult
+from app.legacy_schemas import DecisionResult
 from examples import run_api_mock
 
 

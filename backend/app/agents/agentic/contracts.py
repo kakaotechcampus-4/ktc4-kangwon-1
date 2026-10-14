@@ -11,8 +11,8 @@ from typing import Annotated, Any, Literal, Self, get_args
 from pydantic import AfterValidator, Field, JsonValue, model_validator
 
 from app.industries.catalog import INDUSTRIES
-from app.schemas import FacilityCode as FacilityCode
-from app.schemas import QuestionField, Schema, Site, Text
+from app.legacy_schemas import FacilityCode as FacilityCode
+from app.legacy_schemas import QuestionField, Schema, Text
 
 FactId = Annotated[
     str,
@@ -165,10 +165,6 @@ class ToolReply[T](Schema):
         elif self.data is None or self.error is not None:
             raise ValueError("정상·부분 응답은 자료가 필요합니다.")
         return self
-
-
-class Evidence(Schema):
-    fact_id: FactId
 
 
 class FactView(Schema):
@@ -567,16 +563,6 @@ class RemainingBudget(Schema):
     active_seconds: Annotated[float, Field(ge=0, le=600)] = 600.0
 
 
-class DecisionRequest(Schema):
-    request_id: Text
-    run_id: Text
-    site: Site
-    snapshot_id: Text
-    rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["1"] = "1"
-    remaining_budget: RemainingBudget
-
-
 class FinalCandidate(ScorecardSummary):
     industry_name: Text
     reasons_segments: list[FactSegment]
@@ -603,49 +589,6 @@ class EvaluatorReview(Schema):
         if self.status == "failed" and (self.verdict is not None or self.issues):
             raise ValueError("실패 평가는 동의나 검토 의견으로 취급하지 않습니다.")
         return self
-
-
-class DecisionResult(Schema):
-    schema_version: Literal["2.0"] = "2.0"
-    rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["1"] = "1"
-    request_id: Text
-    run_id: Text
-    report_id: Text
-    snapshot_id: Text
-    score_snapshot_id: Text
-    summary_segments: list[FactSegment]
-    top5: list[FinalCandidate] = Field(max_length=5)
-    excluded_candidates: list[FinalCandidate] = Field(default_factory=list, max_length=5)
-    facts: list[FactView]
-    L_records: list[LRecord] = Field(max_length=51)
-    evaluator_reviews: list[EvaluatorReview] = Field(min_length=4, max_length=4)
-    review_completeness: Ratio
-    review_resolutions: list[ReviewResolution] = Field(default_factory=list, max_length=16)
-    confirmation_conditions_segments: list[FactSegment]
-    limitations_segments: list[FactSegment]
-
-    @model_validator(mode="after")
-    def check_reviewers(self) -> Self:
-        if {r.actor for r in self.evaluator_reviews} != set(get_args(EvaluatorActor)):
-            raise ValueError("평가자 4명이 중복 없이 필요합니다.")
-        complete = sum(r.status == "completed" for r in self.evaluator_reviews) / 4
-        if self.review_completeness != complete:
-            raise ValueError("평가 완료 비율이 상태와 맞지 않습니다.")
-        codes = [r.industry_code for r in self.top5]
-        if len(codes) != len(set(codes)) or any(r.G == "금지" for r in self.top5):
-            raise ValueError("Top 5는 업종 중복·규제 금지를 포함할 수 없습니다.")
-        return self
-
-
-class QuestionSnapshot(Schema):
-    request: DecisionRequest
-    score_snapshot_id: Text
-    draft_id: Text | None = None
-    adopted_fact_ids: list[FactId] = Field(max_length=64)
-    tool_call_hashes: list[Text] = Field(max_length=40)
-    question_session_id: Text
-    questions: list[UserQuestion] = Field(min_length=1, max_length=3)
 
 
 TOOL_INPUTS: dict[str, type[Schema]] = {

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from app.db.connection import connect
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     AgentAnalysis,
     DecisionRequest,

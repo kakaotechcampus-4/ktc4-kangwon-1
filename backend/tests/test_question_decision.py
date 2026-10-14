@@ -8,8 +8,8 @@ from test_questions import question
 
 from app.agents.decision.agent import evaluate
 from app.agents.decision.llm import generate_decision
+from app.legacy_schemas import AnalysisTask, DecisionRequest, LandlordAnswer, QuestionPlan
 from app.mocks import mock_agents, mock_generate, mock_site
-from app.schemas import AnalysisTask, DecisionRequest, LandlordAnswer, QuestionPlan
 
 
 class QuestionDecisionTests(unittest.IsolatedAsyncioTestCase):

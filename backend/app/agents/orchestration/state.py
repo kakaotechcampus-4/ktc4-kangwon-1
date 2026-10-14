@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 from app.agents.orchestration import tools
 from app.agents.orchestration.supplement import OnSupplement
 from app.education_zone import EducationZoneScan
-from app.schemas import (
+from app.legacy_schemas import (
     EVALUATOR_IDS,
     AgentAnalysis,
     AgentBrief,

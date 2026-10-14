@@ -14,10 +14,10 @@ from llm_stream_fixture import stream_response
 
 from app.db import repository as repo
 from app.llm.config import LLMSettings
-from app.main import create_app
 from app.mocks import mock_agents, mock_generate, mock_resolve
 from app.services.analysis import execute_analysis, retry_decision
 from app.services.settings import ExecutionSettings
+from tests.legacy_app import create_app
 
 
 class MultiFlowTests(unittest.TestCase):

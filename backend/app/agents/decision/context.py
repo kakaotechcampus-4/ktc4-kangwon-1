@@ -11,7 +11,7 @@ from app.evidence import (
     validate_findings,
 )
 from app.industries.catalog import INDUSTRIES
-from app.schemas import AgentBrief, DecisionRequest, MapData, SpecialistAnswer
+from app.legacy_schemas import AgentBrief, DecisionRequest, MapData, SpecialistAnswer
 
 _METRICS = {
     "count",

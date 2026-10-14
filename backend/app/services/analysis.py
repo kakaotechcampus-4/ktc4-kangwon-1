@@ -46,17 +46,7 @@ from app.execution.errors import (
     failure_diagnostics,
 )
 from app.execution.validation import validate_execution_state
-from app.llm.budget import (
-    EVALUATED_MAX_CALLS,
-    MAX_CALLS,
-    BudgetExceeded,
-    BudgetStorageError,
-    LLMBudget,
-    llm_scope,
-)
-from app.llm.session import with_client_session
-from app.logging import log_exception
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     DEFAULT_RADIUS_M,
     AgentError,
@@ -72,6 +62,16 @@ from app.schemas import (
     WaitingForInput,
     validate_radius,
 )
+from app.llm.budget import (
+    EVALUATED_MAX_CALLS,
+    MAX_CALLS,
+    BudgetExceeded,
+    BudgetStorageError,
+    LLMBudget,
+    llm_scope,
+)
+from app.llm.session import with_client_session
+from app.logging import log_exception
 from app.services.generators import build_evaluator_generators, build_specialist_generators
 from app.services.persistence import _emit, _settle, _storage_hooks
 from app.services.settings import ExecutionSettings, validate_timeout

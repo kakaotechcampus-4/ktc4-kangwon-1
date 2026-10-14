@@ -10,8 +10,8 @@ from unittest.mock import Mock, patch
 from app.agents.decision.agent import DecisionContractError, evaluate
 from app.db import repository
 from app.db.connection import initialize
+from app.legacy_schemas import AgentError, AnalysisTask, AnswerSubmission, DecisionRequest
 from app.mocks import mock_agents, mock_generate, mock_resolve, mock_site
-from app.schemas import AgentError, AnalysisTask, AnswerSubmission, DecisionRequest
 from app.services import analysis
 from app.services.settings import ExecutionSettings
 

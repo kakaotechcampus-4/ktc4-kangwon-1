@@ -5,7 +5,7 @@ from typing import Any, TypedDict
 
 from app.execution.types import ExecutionCapabilities as ExecutionCapabilities
 from app.execution.types import ExecutionState as ExecutionState
-from app.schemas import (
+from app.legacy_schemas import (
     AgentBrief,
     AnalysisMode,
     AnalysisTask,

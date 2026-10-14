@@ -7,8 +7,14 @@ from pathlib import Path
 from app.agents.decision.context import build_context
 from app.agents.specialists.agent import answer_query
 from app.evidence import validate_findings
+from app.legacy_schemas import (
+    AnalysisTask,
+    DecisionRequest,
+    Finding,
+    MapObservation,
+    SpecialistQuery,
+)
 from app.mocks import mock_agents
-from app.schemas import AnalysisTask, DecisionRequest, Finding, MapObservation, SpecialistQuery
 
 
 class MapFindingRadiusTests(unittest.IsolatedAsyncioTestCase):

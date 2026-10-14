@@ -12,7 +12,7 @@ from test_questions import question
 
 from app.agents.map_analysis.agent import failed_observation
 from app.db import repository as repo
-from app.db.connection import connect, initialize
+from app.db.connection import connect
 from app.mocks import mock_site
 from app.schemas import (
     AGENT_IDS,
@@ -26,6 +26,7 @@ from app.schemas import (
     SupplementRequest,
     WaitingForInput,
 )
+from tests.legacy_db import initialize
 
 
 class DeliberationRepositoryTests(unittest.TestCase):

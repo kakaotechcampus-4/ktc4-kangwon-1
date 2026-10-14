@@ -37,7 +37,7 @@ from app.agents.floating_population.population import (
 )
 from app.agents.floating_population.selection import SelectionUnavailable
 from app.geo import to_epsg5181
-from app.schemas import AnalysisTask, DecisionRequest, Site
+from app.legacy_schemas import AnalysisTask, DecisionRequest, Site
 
 QUARTER = "20262"
 QUARTER_DAYS = 91  # 2026년 2분기

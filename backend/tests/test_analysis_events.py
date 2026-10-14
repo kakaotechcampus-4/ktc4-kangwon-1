@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 
 from app.db import repository
 from app.db.connection import initialize
-from app.main import create_app
 from app.services.settings import ExecutionSettings
+from tests.legacy_app import create_app
 
 
 class AnalysisEventTests(unittest.TestCase):

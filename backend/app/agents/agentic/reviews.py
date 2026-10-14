@@ -102,7 +102,7 @@ async def review(loop, actor, executor, draft):
             reply = await executor.execute(call.function.name, arguments)
             await loop.event(
                 "evaluation",
-                "progress",
+                "completed",
                 {"actor": actor, "tool": call.function.name, "status": reply.status},
             )
             messages.append(

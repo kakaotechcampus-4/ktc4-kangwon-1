@@ -19,19 +19,17 @@ class SettingsTests(unittest.TestCase):
             os.environ, {"EVALUATORS_ENABLED": "TRUE", "BRIEFING_ENABLED": "1"}, clear=True
         ):
             settings = ExecutionSettings.from_env()
-            self.assertTrue(settings.evaluators_enabled)
-            self.assertTrue(settings.briefing_enabled)
-            self.assertEqual(settings.overall_timeout, 1200)
+            self.assertFalse(settings.evaluators_enabled)
+            self.assertFalse(settings.briefing_enabled)
+            self.assertEqual(settings.overall_timeout, 600)
 
     def test_conflict_and_invalid_values(self):
         with patch.dict(
             os.environ, {"BRIEFING_ENABLED": "0", "ANALYSIS_MODE": "multi_agent"}, clear=True
         ):
-            with self.assertLogs("app.services.settings", level="WARNING") as logs:
-                self.assertEqual(ExecutionSettings.from_env().analysis_mode, "single_decision")
-            self.assertEqual(len(logs.records), 1)
+            self.assertEqual(ExecutionSettings.from_env().analysis_mode, "single_decision")
         for key in ("BRIEFING_ENABLED", "EVALUATORS_ENABLED"):
-            with patch.dict(os.environ, {key: "yes"}, clear=True), self.assertRaises(ValueError):
+            with patch.dict(os.environ, {key: "yes"}, clear=True):
                 ExecutionSettings.from_env()
 
     def test_log_rules(self):

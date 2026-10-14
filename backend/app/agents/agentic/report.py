@@ -6,9 +6,10 @@ import uuid
 from copy import deepcopy
 
 from app.db.connection import connect
+from app.schemas import DecisionResult
 from app.storage.raw import _now
 
-from .contracts import DecisionResult, FactView, FinalCandidate, LRecord, LSelection
+from .contracts import FactView, FinalCandidate, LRecord, LSelection
 from .reads import score_summary
 from .scoring import WEIGHTS, rank_candidates, result, summarize
 

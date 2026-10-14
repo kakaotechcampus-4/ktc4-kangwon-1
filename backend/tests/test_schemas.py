@@ -3,7 +3,7 @@
 import unittest
 
 import app.schemas as schemas
-from app.schemas import AgentAnalysis, DecisionRequest
+from app.legacy_schemas import AgentAnalysis, DecisionRequest
 
 
 class SchemaTests(unittest.TestCase):

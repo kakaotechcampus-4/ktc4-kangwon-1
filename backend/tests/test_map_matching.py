@@ -176,8 +176,8 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.specialists.agent import answer_query
         from app.api.v1 import mock
         from app.evidence import valid_map_path
+        from app.legacy_schemas import DecisionRequest, SpecialistQuery
         from app.mocks import mock_agents
-        from app.schemas import DecisionRequest, SpecialistQuery
 
         context = {}
         query = SpecialistQuery(
@@ -257,8 +257,8 @@ class MatchingObserveTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_single_decision_receives_all_terms_only_when_map_allowed(self):
         from app.agents.decision.agent import evaluate
+        from app.legacy_schemas import DecisionRequest
         from app.mocks import mock_agents, mock_generate
-        from app.schemas import DecisionRequest
 
         request = DecisionRequest(
             request_id=task().request_id,

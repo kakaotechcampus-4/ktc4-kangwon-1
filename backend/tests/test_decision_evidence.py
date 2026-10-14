@@ -10,6 +10,7 @@ from app.agents.business_lifecycle.formatter import format_scored_industry
 from app.agents.decision.agent import DecisionContractError, evaluate
 from app.evidence import index_paths
 from app.industries import lookup
+from app.legacy_schemas import AnalysisTask, DecisionRequest
 from app.mocks import (
     mock_agents,
     mock_business_lifecycle_data,
@@ -17,7 +18,6 @@ from app.mocks import (
     mock_generate,
     mock_site,
 )
-from app.schemas import AnalysisTask, DecisionRequest
 
 
 def lifecycle_row(code, **fields):

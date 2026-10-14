@@ -9,7 +9,7 @@ from app.db.types import (
     ResumeBundle,
 )
 from app.industries.catalog import CATALOG_VERSION
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     AgentAnalysis,
     AnalysisTask,

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from app.schemas import (
+from app.legacy_schemas import (
     AgentAnalysis,
     AgentBrief,
     AnalysisTask,

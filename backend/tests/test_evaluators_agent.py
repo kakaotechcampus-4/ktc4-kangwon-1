@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from app.agents.decision.agent import evaluate
+from app.legacy_schemas import AnalysisTask, DecisionRequest
 from app.mocks import mock_agents, mock_generate, mock_site
-from app.schemas import AnalysisTask, DecisionRequest
 
 
 async def sample():

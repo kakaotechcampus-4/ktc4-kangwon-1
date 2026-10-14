@@ -149,6 +149,16 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
         patch.object(socket.socket, "connect", side_effect=AssertionError("외부 연결 금지")),
     ):
         app = create_app(settings=settings, load_env=False)
+        # PR8 삭제 전 옛 경로의 부하 회귀 전용이며 공개 서버에는 등록하지 않습니다.
+        from app.api.v1.routes import router as legacy_router
+
+        app.router.routes[:] = [
+            r
+            for r in app.router.routes
+            if getattr(r, "path", "")
+            in {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc", "/health"}
+        ]
+        app.include_router(legacy_router)
         async with app.router.lifespan_context(app):
             if scenario == "events":
                 for state in ("running", "completed"):

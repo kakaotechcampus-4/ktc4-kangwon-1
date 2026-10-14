@@ -14,7 +14,7 @@ from app.agents.orchestration.constants import (
 )
 from app.agents.orchestration.deps import GraphDeps
 from app.agents.orchestration.state import GraphState, GraphUpdate
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     QUESTION_FIELDS,
     ConsultPlan,

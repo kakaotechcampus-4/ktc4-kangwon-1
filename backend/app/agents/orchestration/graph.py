@@ -12,8 +12,7 @@ from app.agents.decision.agent import GenerateDecision
 from app.agents.evaluators.agent import GenerateEvaluation
 from app.agents.orchestration import tools, workflow
 from app.agents.specialists.agent import GenerateSpecialist
-from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS, LLMBudget, current_scope, llm_scope
-from app.schemas import (
+from app.legacy_schemas import (
     AnalysisMode,
     DecisionResult,
     EvaluatorId,
@@ -22,6 +21,7 @@ from app.schemas import (
     SpecialistId,
     WaitingForInput,
 )
+from app.llm.budget import EVALUATED_MAX_CALLS, MAX_CALLS, LLMBudget, current_scope, llm_scope
 
 from .constants import DEFAULT_AGENT_TIMEOUT, RECURSION_LIMIT
 from .deps import GraphDeps

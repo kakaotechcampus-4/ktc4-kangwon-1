@@ -12,8 +12,8 @@ from app.agents.evaluators.agent import _evaluation_payload, prepare_evaluation_
 from app.agents.orchestration.nodes.evaluation import evaluate_draft_node
 from app.agents.specialists.tools import fallback_brief
 from app.evidence import SourceIndex
+from app.legacy_schemas import EVALUATOR_IDS, AnalysisTask, DecisionRequest, DecisionResult
 from app.mocks import mock_site
-from app.schemas import EVALUATOR_IDS, AnalysisTask, DecisionRequest, DecisionResult
 
 
 class EvaluationIndexReuseTests(unittest.IsolatedAsyncioTestCase):

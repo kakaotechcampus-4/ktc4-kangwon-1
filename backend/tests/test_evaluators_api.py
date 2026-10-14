@@ -10,8 +10,8 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
 from app.api.v1.mock import interactive_decision
-from app.main import create_app
 from app.services.settings import ExecutionSettings
+from tests.legacy_app import create_app
 
 
 class ApiTests(unittest.TestCase):

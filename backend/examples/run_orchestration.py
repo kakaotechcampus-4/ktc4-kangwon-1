@@ -13,8 +13,8 @@ from pathlib import Path
 from prepare_task import MOCK_ADDRESS, mock_resolve
 
 from app.config import load_environment
+from app.legacy_schemas import DecisionRequest
 from app.mocks import mock_generate, zone_scan
-from app.schemas import DecisionRequest
 from app.services.analysis import execute_analysis
 from app.services.settings import ExecutionSettings
 

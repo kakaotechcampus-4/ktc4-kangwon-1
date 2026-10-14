@@ -447,8 +447,8 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repo.get_request("r", db_path=self.path)["status"], "failed")
 
     async def test_legacy_migration_preserves_rows_and_is_repeatable(self):
-        from app.db.connection import initialize
         from app.schemas import SpecialistAnswer
+        from tests.legacy_db import initialize
 
         schema = (
             await asyncio.to_thread(Path("app/db/schema.sql").read_text, encoding="utf-8")

@@ -8,7 +8,7 @@ from app.db.types import (
     ExecutionState,
 )
 from app.execution import policy
-from app.schemas import (
+from app.legacy_schemas import (
     EVALUATOR_IDS,
     DecisionResult,
     Evaluation,

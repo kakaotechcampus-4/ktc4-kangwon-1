@@ -6,7 +6,7 @@ from app.agents.evaluators.agent import _evaluate_prepared, prepare_evaluation_i
 from app.agents.orchestration.deps import GraphDeps
 from app.agents.orchestration.state import GraphState, GraphUpdate
 from app.agents.orchestration.workflow import collect
-from app.schemas import (
+from app.legacy_schemas import (
     EVALUATOR_IDS,
     DecisionRequest,
     DecisionResult,

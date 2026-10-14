@@ -2,7 +2,7 @@
 
 import unittest
 
-from app import schemas as s
+from app import legacy_schemas as s
 
 
 def question(field="floor"):

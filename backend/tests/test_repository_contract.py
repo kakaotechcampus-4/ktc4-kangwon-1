@@ -9,8 +9,8 @@ from pathlib import Path
 from app.db import repository
 from app.db.analysis_repository import SqliteAnalysisRepository
 from app.db.connection import connect, initialize
+from app.legacy_schemas import AnalysisTask, AnswerSubmission, DecisionResult
 from app.mocks import mock_agents, mock_site
-from app.schemas import AnalysisTask, AnswerSubmission, DecisionResult
 from app.services.analysis import execute_analysis
 from app.services.mocking import mock_dependencies
 from app.services.settings import ExecutionSettings

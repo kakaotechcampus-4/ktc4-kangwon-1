@@ -16,8 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.address import GeocodeError
 from app.agents.orchestration.workflow import build_supplement_tools
 from app.db import repository
-from app.logging import log_exception
-from app.schemas import (
+from app.legacy_schemas import (
     DEFAULT_RADIUS_M,
     AnswerSubmission,
     DecisionResult,
@@ -25,6 +24,7 @@ from app.schemas import (
     WaitingForInput,
     normalize_answers,
 )
+from app.logging import log_exception
 from app.services.analysis import (
     AnalysisAlreadyFailedError,
     AnalysisAlreadyRunningError,

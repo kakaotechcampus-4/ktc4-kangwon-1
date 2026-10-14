@@ -66,14 +66,6 @@ class ExecutionSettings:
 
     @classmethod
     def from_env(cls) -> "ExecutionSettings":
-        mode = os.getenv("ANALYSIS_MODE", "single_decision")
-        if "BRIEFING_ENABLED" in os.environ:
-            mode = "multi_agent" if _flag("BRIEFING_ENABLED") else "single_decision"
-            if "ANALYSIS_MODE" in os.environ and os.environ["ANALYSIS_MODE"] != mode:
-                logger.warning(
-                    "BRIEFING_ENABLED와 ANALYSIS_MODE가 다릅니다. BRIEFING_ENABLED를 따릅니다."
-                )
-        evaluators = _flag("EVALUATORS_ENABLED")
         return cls(
             address=AddressSettings.from_env(),
             floating=FloatingSettings.from_env(),
@@ -82,15 +74,7 @@ class ExecutionSettings:
             decision_llm=LLMSettings.from_env("DECISION"),
             db_path=resolve_path(),
             agent_timeout=float(os.getenv("ANALYSIS_AGENT_TIMEOUT_SECONDS", "180")),
-            overall_timeout=float(
-                os.getenv("ANALYSIS_TIMEOUT_SECONDS", "1200" if evaluators else "600")
-            ),
-            analysis_mode=mode,  # type: ignore[arg-type]
-            evaluators_enabled=evaluators,
+            overall_timeout=float(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "600")),
             evaluator_llm=LLMSettings.from_env("EVALUATOR"),
             max_concurrency=int(os.getenv("ANALYSIS_MAX_CONCURRENCY", "2")),
-            specialist_llms={
-                role: LLMSettings.from_env(f"SPECIALIST_{role.upper()}")
-                for role in get_args(SpecialistId)
-            },
         )

@@ -7,8 +7,8 @@ from orchestration_support import run_flow
 from test_questions import question
 
 from app.agents.decision import agent as decision
+from app.legacy_schemas import DecisionRequest, DecisionResult, LandlordAnswer, WaitingForInput
 from app.mocks import mock_agents, mock_generate, mock_resolve
-from app.schemas import DecisionRequest, DecisionResult, LandlordAnswer, WaitingForInput
 
 
 class QuestionGraphTests(unittest.IsolatedAsyncioTestCase):

@@ -11,12 +11,7 @@ from app.agents.commercial_area.schemas import (
 from app.evidence import validate_findings
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES
-from app.mocks import (
-    mock_business_lifecycle_data,
-    mock_commercial_area_data,
-    mock_floating_population_data,
-)
-from app.schemas import (
+from app.legacy_schemas import (
     AgentAnalysis,
     AnalysisTask,
     DecisionRequest,
@@ -24,6 +19,11 @@ from app.schemas import (
     Finding,
     Scope,
     Site,
+)
+from app.mocks import (
+    mock_business_lifecycle_data,
+    mock_commercial_area_data,
+    mock_floating_population_data,
 )
 
 

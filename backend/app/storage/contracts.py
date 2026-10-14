@@ -2,7 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
-from app.schemas import (
+from app.legacy_schemas import (
     AgentAnalysis,
     AgentBrief,
     AnalysisTask,

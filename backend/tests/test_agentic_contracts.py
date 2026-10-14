@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app import schemas as s
 from app.agents.agentic import contracts as c
 from app.industries.catalog import INDUSTRIES
 
@@ -73,10 +74,10 @@ class AgenticContractsTests(unittest.TestCase):
                 c.MapSearchInput.model_validate(value)
 
     def test_fact_id_and_catalog(self):
-        c.Evidence(fact_id=FACT)
+        s.Evidence(fact_id=FACT)
         for value in ("f_nope", FACT + "x", FACT[2:]):
             with self.subTest(value=value), self.assertRaises(ValidationError):
-                c.Evidence(fact_id=value)
+                s.Evidence(fact_id=value)
         schema = c.MapSearchInput.model_json_schema()
         self.assertEqual(
             set(schema["properties"]["industry_code"]["anyOf"][0]["enum"]), set(INDUSTRIES)
@@ -156,8 +157,8 @@ class AgenticContractsTests(unittest.TestCase):
         )
         section = document.split("## 새 결과 형태(PR7 전환 후)", 1)[1]
         example = json.loads(re.search(r"```json\s*(.*?)\s*```", section, re.S).group(1))
-        result = c.DecisionResult.model_validate_json(json.dumps(example, ensure_ascii=False))
-        self.assertEqual(result, c.DecisionResult.model_validate_json(result.model_dump_json()))
+        result = s.DecisionResult.model_validate_json(json.dumps(example, ensure_ascii=False))
+        self.assertEqual(result, s.DecisionResult.model_validate_json(result.model_dump_json()))
 
     def test_output_model_roundtrips(self):
         document = (Path(__file__).resolve().parents[2] / "docs/API_CONTRACT.md").read_text(
@@ -241,7 +242,7 @@ class AgenticContractsTests(unittest.TestCase):
         examples = {
             c.ToolError: {"code": "TIMEOUT", "message": "시간 초과"},
             c.ToolReply[c.MapResult]: {"status": "ok", "data": map_result},
-            c.Evidence: {"fact_id": FACT},
+            s.Evidence: {"fact_id": FACT},
             c.FactView: result["facts"][0],
             c.ScoreItem: score,
             c.ScorecardSummary: summary,
@@ -289,11 +290,11 @@ class AgenticContractsTests(unittest.TestCase):
             },
             c.ReviewRef: {"review_id": "review"},
             c.RemainingBudget: {},
-            c.DecisionRequest: request,
+            s.DecisionRequest: request,
             c.FinalCandidate: final,
             c.EvaluatorReview: result["evaluator_reviews"][0],
-            c.DecisionResult: result,
-            c.QuestionSnapshot: {
+            s.DecisionResult: result,
+            s.QuestionSnapshot: {
                 "request": request,
                 "score_snapshot_id": "scores",
                 "adopted_fact_ids": [FACT],

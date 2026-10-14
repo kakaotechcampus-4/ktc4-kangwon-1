@@ -14,9 +14,10 @@ from app import main
 from app.address import GeocodeError
 from app.db import repository
 from app.db.connection import connect
+from app.legacy_schemas import DecisionResult
 from app.main import allowed_origins
-from app.schemas import DecisionResult
 from app.services.settings import ExecutionSettings
+from tests.legacy_app import create_app
 
 
 class ApiTests(unittest.TestCase):
@@ -24,7 +25,7 @@ class ApiTests(unittest.TestCase):
         from dataclasses import replace
 
         settings = replace(self.settings, analysis_mode="multi_agent", evaluators_enabled=True)
-        with TestClient(main.create_app(settings=settings, load_env=False)) as client:
+        with TestClient(create_app(settings=settings, load_env=False)) as client:
             created = client.post("/api/v1/analyses?mock=true", json={"address": "시험 주소"})
             self.assertEqual(created.status_code, 200, created.text)
             request_id = created.headers["X-Request-ID"]
@@ -140,7 +141,7 @@ class ApiTests(unittest.TestCase):
             patch("httpx.AsyncClient.send", side_effect=AssertionError("외부 연결 금지"))
         )
         self.client = self.enterContext(
-            TestClient(main.create_app(settings=self.settings, load_env=False))
+            TestClient(create_app(settings=self.settings, load_env=False))
         )
 
     def test_health_is_open(self):
@@ -251,7 +252,7 @@ class ApiTests(unittest.TestCase):
             patch.dict(os.environ, {}, clear=True),
             patch.object(main, "load_environment", side_effect=load),
         ):
-            with TestClient(main.create_app(settings=self.settings)) as client:
+            with TestClient(create_app(settings=self.settings)) as client:
                 response = client.get("/health", headers={"Origin": "https://loaded.example"})
         self.assertEqual(response.headers["access-control-allow-origin"], "https://loaded.example")
         self.assertIn("X-Request-ID", response.headers["access-control-expose-headers"])

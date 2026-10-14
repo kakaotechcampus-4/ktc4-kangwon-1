@@ -19,8 +19,8 @@ from app.agents.floating_population.models import (
 )
 from app.geo import to_epsg5181
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
+from app.legacy_schemas import AnalysisTask, DecisionRequest, Site
 from app.mocks import mock_business_lifecycle_data
-from app.schemas import AnalysisTask, DecisionRequest, Site
 
 
 class DecisionIntegrityTests(unittest.IsolatedAsyncioTestCase):

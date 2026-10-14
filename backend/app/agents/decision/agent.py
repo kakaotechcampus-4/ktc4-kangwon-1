@@ -30,8 +30,7 @@ from app.execution.errors import (
 from app.industries import lookup
 from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
 from app.industries.lookup import industry_terms
-from app.llm.budget import current_scope
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     AgentAnalysis,
     ConsultPlan,
@@ -49,6 +48,7 @@ from app.schemas import (
     SupplementOperation,
     SupplementPlan,
 )
+from app.llm.budget import current_scope
 
 from .context import build_context
 from .llm import InvalidDecisionCategory, generate_decision, split_evaluation_log, validate_content

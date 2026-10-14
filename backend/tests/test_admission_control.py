@@ -7,8 +7,8 @@ import httpx
 from fastapi import Response
 
 from app.api.v1.routes import analysis_runner
-from app.main import create_app
 from app.services.settings import ExecutionSettings
+from tests.legacy_app import create_app
 
 
 class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):

@@ -14,8 +14,8 @@ from app.agents.commercial_area.client import StoreClient
 from app.agents.commercial_area.config import Settings
 from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.agents.orchestration.workflow import run_agents
+from app.legacy_schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope
 from app.mocks import mock_agents, mock_generate, mock_site
-from app.schemas import AgentAnalysis, AnalysisTask, DecisionResult, Scope
 
 MASTER = [
     MiddleCode(code="I201", name="한식 음식점", major_code="I2", major_name="음식점업"),

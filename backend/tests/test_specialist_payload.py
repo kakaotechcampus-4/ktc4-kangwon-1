@@ -11,8 +11,14 @@ from app.agents.specialists.agent import answer_query, write_brief
 from app.evidence import SourceIndex, can_cite, index_paths, scalar_records
 from app.industries import TAXONOMY, lookup
 from app.industries.catalog import INDUSTRY_SOURCE_MIDDLES, SPLIT_MIDDLES
+from app.legacy_schemas import (
+    AgentAnalysis,
+    AgentBrief,
+    AnalysisTask,
+    DecisionRequest,
+    SpecialistQuery,
+)
 from app.mocks import mock_site
-from app.schemas import AgentAnalysis, AgentBrief, AnalysisTask, DecisionRequest, SpecialistQuery
 from scripts.measure_payloads import capture_payload
 
 

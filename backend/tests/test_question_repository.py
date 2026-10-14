@@ -11,8 +11,8 @@ from pathlib import Path
 from test_questions import question
 
 from app.db import repository as repo
-from app.db.connection import connect, initialize
-from app.schemas import (
+from app.db.connection import connect
+from app.legacy_schemas import (
     AGENT_IDS,
     AgentAnalysis,
     AnalysisTask,
@@ -24,6 +24,7 @@ from app.schemas import (
     SupplementRequest,
     WaitingForInput,
 )
+from tests.legacy_db import initialize
 
 
 class QuestionRepositoryTests(unittest.TestCase):

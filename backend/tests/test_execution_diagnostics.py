@@ -10,8 +10,8 @@ from app.execution.errors import (
     capture_decision_failures,
     failure_diagnostics,
 )
+from app.legacy_schemas import AnalysisTask, DecisionRequest
 from app.mocks import mock_agents, mock_generate, mock_site
-from app.schemas import AnalysisTask, DecisionRequest
 
 
 class ExecutionDiagnosticsTests(unittest.IsolatedAsyncioTestCase):

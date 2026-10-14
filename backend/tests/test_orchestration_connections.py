@@ -19,7 +19,7 @@ from test_orchestrator_e2e import MASTER, sample_stores
 from app.agents.business_lifecycle.area_resolver import BusinessAreaNoDataError
 from app.agents.orchestration import build_react_agents, workflow
 from app.industries.catalog import INDUSTRIES
-from app.schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
+from app.legacy_schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, DecisionResult, Scope, Site
 
 floating = importlib.import_module("app.agents.floating_population.agent")
 commercial = importlib.import_module("app.agents.commercial_area.agent")

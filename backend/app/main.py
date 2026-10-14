@@ -43,7 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await registry.shutdown()
 
 
-def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = True) -> FastAPI:
+def create_app(
+    *, settings: ExecutionSettings | None = None, load_env: bool = True, recording_dir=None
+) -> FastAPI:
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
     if load_env:
         load_environment()
@@ -54,6 +56,7 @@ def create_app(*, settings: ExecutionSettings | None = None, load_env: bool = Tr
         description="공실 주소를 받아 업종 추천 리포트를 돌려주는 API입니다.",
     )
     app.state.execution_settings = settings or ExecutionSettings.from_env()
+    app.state.recording_dir = recording_dir
     app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
     app.add_middleware(
         CORSMiddleware,

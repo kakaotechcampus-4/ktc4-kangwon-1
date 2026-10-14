@@ -13,7 +13,7 @@ from app.schemas import AGENT_IDS, AgentAnalysis, AnalysisTask, Scope, Site
 
 
 class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
-    def test_specialist_models_are_independent_and_mode_defaults_safe(self):
+    def test_removed_mode_and_specialist_environment_is_ignored(self):
         from app.services.settings import ExecutionSettings
 
         with patch.dict(
@@ -23,11 +23,9 @@ class ExecutionSettingsTests(unittest.IsolatedAsyncioTestCase):
         ):
             settings = ExecutionSettings.from_env()
         self.assertEqual(settings.analysis_mode, "single_decision")
-        self.assertEqual(settings.specialist_llms["commercial_area"].model, "expert")
-        self.assertEqual(settings.specialist_llms["floating_population"].model, "common")
+        self.assertEqual(settings.specialist_llms, {})
         with patch.dict(os.environ, {"ANALYSIS_MODE": "misspelled"}, clear=True):
-            with self.assertRaises(ValueError):
-                ExecutionSettings.from_env()
+            self.assertEqual(ExecutionSettings.from_env().analysis_mode, "single_decision")
 
     def test_unused_analysis_model_options_do_not_block_execution_settings(self):
         from app.services.settings import ExecutionSettings

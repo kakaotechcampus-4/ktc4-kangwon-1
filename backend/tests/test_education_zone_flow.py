@@ -13,8 +13,8 @@ from app import education_zone as ez
 from app.agents.decision.agent import _zone_limitations, evaluate
 from app.agents.orchestration.graph import RunHooks
 from app.agents.orchestration.nodes.analysis import prepare_address
+from app.legacy_schemas import DecisionRequest
 from app.mocks import mock_site, zone_scan
-from app.schemas import DecisionRequest
 
 BACKEND = Path(__file__).resolve().parents[1]
 EXAMPLES = BACKEND / "examples" / "decision"

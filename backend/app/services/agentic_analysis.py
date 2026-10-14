@@ -27,6 +27,13 @@ from app.storage.raw import CaptureScope, _now, _write, capture_scope, scrub
 logger = logging.getLogger(__name__)
 
 
+async def _event(path, request_id, stage, event):
+    try:
+        await _write(lambda: repository.append_event(request_id, stage, event, {}, db_path=path))
+    except Exception as exc:
+        logger.warning("진행 이벤트 저장 실패: %s", type(exc).__name__)
+
+
 def _persist_outcome(path, request_id, outcome):
     with connect(path) as db:
         if outcome.status == "waiting_for_input":
@@ -137,12 +144,15 @@ async def execute_agentic_analysis(
     stage, started, timings = "수집", monotonic(), {}
     try:
         await _write(lambda: repository.mark_running(request_id, db_path=path))
+        await _event(path, request_id, "address", "started")
         async with capture_scope(request_id, path) as scope:
             adapter = await _write(LocalAdapter, local_data_path) if agents is None else None
             async with asyncio.timeout(600 if measurement else 120):
                 site = await (resolve or resolve_site)(address)
                 task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
                 await _write(lambda: repository.save_site(task, db_path=path))
+                await _event(path, request_id, "address", "completed")
+                await _event(path, request_id, "local_data", "started")
 
                 async def completed(analysis):
                     await _write(lambda: repository.save_agent(analysis, db_path=path))
@@ -161,6 +171,7 @@ async def execute_agentic_analysis(
                 await scope.finish()
                 timings[stage] = monotonic() - started
             stage, started = "루프", monotonic()
+            await _event(path, request_id, "local_data", "completed")
             loop = await DecisionLoop.create(
                 scope,
                 site,
@@ -182,6 +193,7 @@ async def execute_agentic_analysis(
     except (Exception, asyncio.CancelledError) as exc:
         timings[stage] = monotonic() - started
         await _failure(path, request_id, exc, stage, timings)
+        await _event(path, request_id, "final", "failed")
         raise
 
 

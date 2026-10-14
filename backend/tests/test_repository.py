@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from app.db import repository as repo
 from app.db.connection import BACKEND_DIR, connect, initialize, resolve_path
-from app.schemas import (
+from app.legacy_schemas import (
     AGENT_IDS,
     EVALUATOR_IDS,
     AgentAnalysis,

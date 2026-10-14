@@ -624,7 +624,7 @@ class DecisionLoop:
                 except ReportInvalid:
                     reply = error("UNKNOWN_FACT", "현재 요청의 fact만 조회할 수 있습니다.")
                 content = await self.compact_reply(reply, name, arguments)
-                await self.event("decision", "progress", {"tool": name, "status": reply.status})
+                await self.event("decision", "completed", {"tool": name, "status": reply.status})
                 self.state["messages"].append(
                     {"role": "tool", "tool_call_id": call.id, "content": _json(content)}
                 )
@@ -768,5 +768,10 @@ def _save_user_facts(scope, answers, question_id, saved):
             "UPDATE agentic_runs SET status='running',state_json=? "
             "WHERE request_id=? AND snapshot_id=?",
             (_json(saved), scope.request_id, scope.snapshot_id),
+        )
+        db.execute(
+            "UPDATE analysis_requests SET status='running' WHERE request_id=? "
+            "AND status='waiting_for_input'",
+            (scope.request_id,),
         )
     return saved

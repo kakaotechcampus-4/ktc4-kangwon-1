@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app import schemas
+from app import legacy_schemas as schemas
 
 
 class SpecialistContractTests(unittest.TestCase):

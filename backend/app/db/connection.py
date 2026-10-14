@@ -11,6 +11,7 @@ from threading import Lock
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 # ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
 _INITIALIZE_LOCK = Lock()
+SCHEMA_VERSION = 2
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:
@@ -47,6 +48,16 @@ def _initialize(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=5)
     try:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        populated = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1"
+        ).fetchone()
+        if populated and version != SCHEMA_VERSION:
+            raise RuntimeError(
+                f"요청 DB 스키마 버전 {version}은 지원하지 않습니다. 서버를 중지하고 "
+                f"{path.name} 및 -wal/-shm 파일을 백업·이동한 뒤 재시작하여 초기화하세요. "
+                "LOCAL_DATA_DB_PATH의 자료 DB는 삭제하지 마세요."
+            )
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         schema = files("app.db").joinpath("schema.sql").read_text(encoding="utf-8")
@@ -68,6 +79,7 @@ def _initialize(path: Path) -> Path:
                 connection.execute("ALTER TABLE analysis_requests ADD COLUMN catalog_version TEXT")
         _migrate_deliberation(connection, schema)
         _migrate_evaluation_rounds(connection, schema)
+        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     finally:
         connection.close()
     return path

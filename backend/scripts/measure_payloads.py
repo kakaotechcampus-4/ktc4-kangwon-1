@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.agents.decision.context import build_context
 from app.agents.orchestration.consult import build_specialist_tools
 from app.agents.specialists.agent import answer_query, write_brief
-from app.schemas import (
+from app.legacy_schemas import (
     AgentAnalysis,
     AgentBrief,
     AnalysisTask,

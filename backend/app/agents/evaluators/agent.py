@@ -11,11 +11,7 @@ from pydantic import ValidationError
 
 from app.agents.decision.context import _build_context
 from app.evidence import MAP_AGENT_ID, SourceIndex, can_cite, index_paths, usable_analyses
-from app.llm.budget import BudgetStorageError, current_scope, llm_scope
-from app.llm.client import complete_json
-from app.llm.config import LLMSettings
-from app.logging import log_exception
-from app.schemas import (
+from app.legacy_schemas import (
     DecisionRequest,
     DecisionResult,
     Evaluation,
@@ -24,6 +20,10 @@ from app.schemas import (
     EvaluatorId,
     MapData,
 )
+from app.llm.budget import BudgetStorageError, current_scope, llm_scope
+from app.llm.client import complete_json
+from app.llm.config import LLMSettings
+from app.logging import log_exception
 
 logger = logging.getLogger(__name__)
 
