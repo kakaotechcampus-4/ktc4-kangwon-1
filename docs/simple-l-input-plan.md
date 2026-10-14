@@ -43,12 +43,15 @@ neutral은 확인한 새 fact가 반드시 필요하며 코드 지표만으로 �
 
 ## 구현 순서·파일
 
-1. [ ] 사전 관측: app/agentic/preflight.py, services/analysis.py, local_data/persistence.py 및 성공/실패 대역 시험.
-2. [ ] 공간 표: industries/data/industry_space_requirements.csv, space.py, snapshot.py 및 51업종 분포 시험.
-3. [ ] 계약·별칭·L: contracts.py, schemas.py, schema.sql/connection.py, aliases.py, runtime.py/report.py, tools.py 모델 경계 및 개별 채택/거절/별칭 시험.
-4. [ ] 평가: evaluators.py/budget.py/tools.py, 패킷·무조건 제출·두 번 오류 수정 시험.
-5. [ ] 기존 fixtures/녹화 대역을 새 입력으로 맞춘다. 전체ruff/format/mypy/unittest/catalog,408건 일치 후 구현2~4커밋.
-6. [ ] 새 DB·새 녹화로 홍대 공개 API 한 회. 질문 답변 자동 재개. 실패·품질 부족이면 원인만 기록하고 수정/재실행하지 않는다.
+1. [x] 사전 관측: app/agentic/preflight.py, services/analysis.py, local_data/persistence.py 및 성공/실패 대역 시험.
+2. [x] 공간 표: industries/data/industry_space_requirements.csv, space.py, snapshot.py 및 51업종 분포 시험.
+3. [x] 계약·별칭·L: contracts.py, schemas.py, schema.sql/connection.py, aliases.py, runtime.py/report.py, tools.py 모델 경계 및 개별 채택/거절/별칭 시험.
+4. [x] 평가: evaluators.py/budget.py/tools.py, 패킷·무조건 제출·두 번 오류 수정 시험.
+5. [x] 기존 fixtures/녹화 대역을 새 입력으로 맞춘다. 전체ruff/format/mypy/unittest/catalog,408건 일치 후 구현2~4커밋.
+6. [x] 실테스트 한 회 시도·기록. 초기 pending GET 404로 취소되어 모델·질문·최종 미검증. 재실행하지 않는다.
+
+실행 게이트와 실패 근거는 [단순 L 실측 기록](simple-l-live-report.md)에 정리했다.
+실제 판단·평가 품질 검증은 남아 있으며 위 체크는 실테스트 성공을 뜻하지 않는다.
 
 검토 초점: 미존재 별칭·scope혼입, 원천 실패와 저장 실패 구분, 공간 요건 없음 감점 방지,
 새 L 중복 요인, 평가 패킷에서 핵심 fact 누락. 각 단위 대역 시험으로 고정한다.
