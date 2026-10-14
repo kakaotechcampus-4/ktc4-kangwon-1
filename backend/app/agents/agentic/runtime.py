@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from pydantic import ValidationError
 
 from app.db.connection import connect
+from app.db.repository import append_event
 from app.llm.budget import BudgetExceeded, llm_scope
 from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
 from app.llm.config import LLMSettings
@@ -20,6 +21,7 @@ from app.storage.raw import _json, _now, _write
 from .budget import RuntimeBudget
 from .contracts import (
     AdvisorAnswer,
+    EvaluatorReview,
     MapResult,
     QuestionSessionRef,
     RegulationResult,
@@ -30,6 +32,7 @@ from .contracts import (
 )
 from .raw_query import error
 from .report import ReportInvalid, fact_rows, finalize, load_base
+from .reviews import review
 from .tools import ToolExecutor
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다. 코드 점수는
@@ -102,6 +105,7 @@ class DecisionLoop:
         *,
         generate=None,
         advisor_generate=None,
+        evaluator_generate=None,
         saved=None,
         budget=None,
         measurement=False,
@@ -109,6 +113,7 @@ class DecisionLoop:
     ):
         self.scope, self.site, self.base_id, self.base_rows = scope, site, base_id, base_rows
         self.generate, self.advisor_generate = generate, advisor_generate
+        self.evaluator_generate = evaluator_generate
         self.state = saved or {
             "messages": [],
             "advisor_unavailable": False,
@@ -150,7 +155,7 @@ class DecisionLoop:
         self.settings = replace(
             LLMSettings.from_env("decision"),
             reasoning_effort="none",
-            max_tokens=16000 if self.budget.measurement else 3000,
+            max_tokens=16000,
         )
         if not self.state["messages"]:
             summary = [
@@ -192,6 +197,81 @@ class DecisionLoop:
         self.state["budget"] = budget
         await self.save()
 
+    async def event(self, stage, event, detail):
+        try:
+            await _write(
+                lambda: append_event(
+                    self.scope.request_id, stage, event, detail, db_path=self.scope.path
+                )
+            )
+        except Exception:
+            # 진행 기록만 격리합니다. 결과·예산 저장 실패는 호출자에게 전파합니다.
+            pass
+
+    async def review_and_finalize(self):
+        draft = self.done
+        if draft is None:
+            raise ValueError("평가할 초안이 없습니다.")
+        await self.event("evaluation", "started", {})
+        reviewers = self.evaluator_executors()
+        reviews = await asyncio.gather(
+            *(review(self, actor, executor, draft) for actor, executor in reviewers.items())
+        )
+        self.state["reviews"] = [r.model_dump(mode="json") for r in reviews]
+        self.state["phase"] = "final"
+        self.state["feedback_rounds"] = 1
+        self.state["messages"].append(
+            {
+                "role": "user",
+                "content": _json(
+                    {
+                        "instruction": (
+                            "평가 결과를 한 번 반영하여 submit_draft(phase=final)로 제출하세요. "
+                            "모든 issue_id에 accepted/partial/rejected와 이유·근거를 "
+                            "review_resolutions에 기록하세요. 추가 임대인 질문은 하지 마세요."
+                        ),
+                        "reviews": self.state["reviews"],
+                    }
+                ),
+            }
+        )
+        self.done = None
+        self.state["no_progress"] = 0
+        await self.event("final", "started", {"feedback_round": 1})
+        outcome = await self.run()
+        if outcome.result is None:
+            raise ValueError("최종 결과가 없습니다.")
+        if outcome.result.evaluator_reviews != reviews:
+            # 최종 모델 실패에도 완료된 검토를 보존하며 반영 실패를 명시합니다.
+            result = outcome.result.model_copy(
+                update={
+                    "evaluator_reviews": reviews,
+                    "review_completeness": sum(r.status == "completed" for r in reviews) / 4,
+                    "limitations_segments": [
+                        *outcome.result.limitations_segments,
+                        TextSegment(type="text", text="피드백 최종 반영을 완료하지 못했습니다."),
+                    ],
+                }
+            )
+            result = type(result).model_validate(result.model_dump(mode="json"))
+            await _write(self._save_final_result, result)
+            outcome.result = result
+        outcome.status = "completed"
+        await self.save("completed", outcome.result)
+        await self.event(
+            "final",
+            "completed",
+            {"feedback_rounds": 1, "review_completeness": outcome.result.review_completeness},
+        )
+        return outcome
+
+    def _save_final_result(self, result):
+        with connect(self.scope.path) as db:
+            db.execute(
+                "UPDATE agentic_reports SET result_json=?,phase='final' WHERE report_id=?",
+                (result.model_dump_json(), result.report_id),
+            )
+
     async def save(self, status="running", result_model=None):
         shared = self.tools.shared
         self.state.update(
@@ -214,13 +294,17 @@ class DecisionLoop:
             receipt["_record_raw"] = True
         value, failure = None, None
         used = self.budget.used
+        reserved = await self.budget.claim_output()
         try:
-            value, receipt = await self.model_call(role, messages, settings, definitions, receipt)
+            value, receipt = await self.model_call(
+                role, messages, replace(settings, max_tokens=reserved), definitions, receipt
+            )
             return value, receipt
         except BaseException as exc:
             failure = exc
             raise
         finally:
+            await self.budget.release_output(reserved)
             if self.recorder and (value is not None or self.budget.used > used):
                 await self.recorder.record(
                     role,
@@ -239,17 +323,19 @@ class DecisionLoop:
             raise BudgetExceeded()
         settings = replace(
             settings,
-            max_tokens=min(
-                16000 if self.budget.measurement else settings.max_tokens or 3000, remaining
-            ),
-            timeout_seconds=max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
-            if self.budget.measurement
-            else settings.timeout_seconds,
+            max_tokens=min(settings.max_tokens or 16000, remaining),
+            timeout_seconds=max(0.01, self.budget.seconds_limit - self.budget.active_seconds),
         )
-        generator = self.generate if role == "decision" else self.advisor_generate
+        generator = (
+            self.generate
+            if role == "decision"
+            else self.advisor_generate
+            if role == "advisor"
+            else self.evaluator_generate
+        )
         if generator is None:
             with llm_scope(self.budget, role):
-                if role == "decision":
+                if definitions is not None:
                     value = await complete_tools(messages, definitions, settings, receipt=receipt)
                 else:
                     value = await complete_json(
@@ -403,8 +489,9 @@ class DecisionLoop:
             )
 
     async def submit_draft(self, input):
-        if input.phase != "draft" or input.review_resolutions:
-            return error("INVALID_ARGUMENT", "PR5는 피드백 없는 초안만 제출합니다.")
+        phase = self.state.get("phase", "draft")
+        if input.phase != phase or (phase == "draft" and input.review_resolutions):
+            return error("INVALID_ARGUMENT", "현재 제출 단계와 피드백 형식이 다릅니다.")
         try:
             self.done = await _write(
                 lambda: finalize(
@@ -415,13 +502,17 @@ class DecisionLoop:
                     advisor_unavailable=self.state["advisor_unavailable"],
                     regulation_result=self.tools.shared.regulation,
                     limitations=self.state["limitations"],
+                    reviews=[EvaluatorReview.model_validate(r) for r in self.state["reviews"]]
+                    if phase == "final"
+                    else None,
+                    resolutions=input.review_resolutions,
                 )
             )
             self.state["last_draft"] = input.report.model_dump(mode="json")
-        except ReportInvalid:
+        except ReportInvalid as exc:
             return error(
                 "L_EVIDENCE_INVALID",
-                "새 근거·중복·검토 범위·fact 슬롯·실제 호출 기록을 확인하세요.",
+                str(exc),
             )
         return ToolReply(
             status="ok",
@@ -501,11 +592,8 @@ class DecisionLoop:
         while True:
             try:
                 definitions = self.tools.definitions()
-                decision_used = sum(c["role"] == "decision" for c in self.budget.calls)
-                if not self.budget.measurement and decision_used >= 7:
-                    definitions = [
-                        d for d in definitions if d["function"]["name"] == "submit_draft"
-                    ]
+                if self.state.get("phase") == "final":
+                    definitions = [d for d in definitions if d["function"]["name"] != "ask_user"]
                 self.budget.schema_chars = len(_json(definitions))
                 if (
                     self.budget.totals()[1] >= self.budget.output_limit
@@ -514,8 +602,6 @@ class DecisionLoop:
                     raise BudgetExceeded()
                 async with asyncio.timeout(
                     max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
-                    if self.budget.measurement
-                    else max(0.01, min(180, 300 - self.budget.active_seconds))
                 ):
                     message, _ = await self._model(
                         "decision", self.model_messages(), self.settings, definitions
@@ -538,6 +624,7 @@ class DecisionLoop:
                 except ReportInvalid:
                     reply = error("UNKNOWN_FACT", "현재 요청의 fact만 조회할 수 있습니다.")
                 content = await self.compact_reply(reply, name, arguments)
+                await self.event("decision", "progress", {"tool": name, "status": reply.status})
                 self.state["messages"].append(
                     {"role": "tool", "tool_call_id": call.id, "content": _json(content)}
                 )
@@ -550,6 +637,11 @@ class DecisionLoop:
                         "draft_available", result=self.done, budget=self.budget.snapshot()
                     )
                 if self.waiting:
+                    await self.event(
+                        "question",
+                        "waiting",
+                        {"question_session_id": self.waiting.question_session_id},
+                    )
                     await self.save("waiting_for_input")
                     return self.waiting
                 if not self.budget.measurement and self.state["no_progress"] >= 3:

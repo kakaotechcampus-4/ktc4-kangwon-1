@@ -560,11 +560,11 @@ class ReviewRef(Schema):
 
 
 class RemainingBudget(Schema):
-    model_calls: Annotated[int, Field(ge=0, le=28)] = 26
+    model_calls: Annotated[int, Field(ge=0, le=40)] = 40
     tool_calls: Annotated[int, Field(ge=0, le=40)] = 40
-    input_tokens: Annotated[int, Field(ge=0, le=160000)] = 160000
-    output_tokens: Annotated[int, Field(ge=0, le=24000)] = 24000
-    active_seconds: Annotated[float, Field(ge=0, le=300)] = 300.0
+    input_tokens: Annotated[int, Field(ge=0, le=400000)] = 400000
+    output_tokens: Annotated[int, Field(ge=0, le=60000)] = 60000
+    active_seconds: Annotated[float, Field(ge=0, le=600)] = 600.0
 
 
 class DecisionRequest(Schema):

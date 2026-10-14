@@ -94,7 +94,7 @@ class ToolExecutor:
 
     def definitions(self):
         permitted = (
-            READS
+            READS | {"submit_review"}
             if self.actor in EVALUATORS
             else {"get_facts"}
             if self.actor == "advisor"

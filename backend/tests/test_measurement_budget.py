@@ -8,7 +8,7 @@ from app.llm.budget import BudgetExceeded
 
 
 class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
-    async def test_default_role_limits_are_preserved(self):
+    async def test_default_has_no_role_call_limits(self):
         for role, final, limit in [
             ("decision", False, 8),
             ("decision", True, 4),
@@ -19,21 +19,20 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
                 budget = RuntimeBudget()
                 for attempt in range(1, limit + 1):
                     self.assertEqual(await budget.reserve(role, final=final), attempt)
-                with self.assertRaises(BudgetExceeded):
-                    await budget.reserve(role, final=final)
-                self.assertEqual(budget.used, limit)
+                await budget.reserve(role, final=final)
+                self.assertEqual(budget.used, limit + 1)
 
     async def test_default_cumulative_limits_are_preserved(self):
         for saved in [
-            {"used": 26},
-            {"active_seconds": 300},
+            {"used": 40},
+            {"active_seconds": 600},
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 160000, "output_tokens": 0}],
+                "calls": [{"role": "decision", "input_tokens": 400000, "output_tokens": 0}],
             },
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 24000}],
+                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 60000}],
             },
         ]:
             with self.subTest(saved=saved):
@@ -98,8 +97,17 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
         budget = RuntimeBudget({"measurement": True})
         for _ in range(8):
             await budget.reserve("decision")
+        await budget.reserve("decision")
+        self.assertFalse(budget.measurement)
+
+    async def test_parallel_output_reservations_never_exceed_total(self):
+        budget = RuntimeBudget()
+        reservations = [await budget.claim_output() for _ in range(4)]
+        self.assertEqual(reservations, [16000, 16000, 16000, 12000])
         with self.assertRaises(BudgetExceeded):
-            await budget.reserve("decision")
+            await budget.claim_output()
+        await budget.release_output(16000)
+        self.assertEqual(await budget.claim_output(), 16000)
 
 
 if __name__ == "__main__":

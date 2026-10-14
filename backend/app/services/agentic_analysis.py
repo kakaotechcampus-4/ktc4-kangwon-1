@@ -118,6 +118,7 @@ async def execute_agentic_analysis(
     agents=None,
     generate=None,
     advisor_generate=None,
+    evaluator_generate=None,
     local_data_path=None,
     measurement=False,
     recording_path=None,
@@ -165,12 +166,15 @@ async def execute_agentic_analysis(
                 site,
                 generate=generate,
                 advisor_generate=advisor_generate,
+                evaluator_generate=evaluator_generate,
                 budget=budget,
                 recorder=recorder,
             )
             loop.state["limitations"].extend(data.get("limitations", []))
             loop.state["phase_seconds"] = timings
             outcome = await loop.run()
+            if outcome.status == "draft_available":
+                outcome = await loop.review_and_finalize()
             timings[stage] = monotonic() - started
             await loop.save(outcome.status, outcome.result)
             await _write(_persist_outcome, path, request_id, outcome)
@@ -189,6 +193,7 @@ async def resume_agentic_analysis(
     db_path=None,
     generate=None,
     advisor_generate=None,
+    evaluator_generate=None,
     measurement=False,
     recording_path=None,
 ):
@@ -220,10 +225,13 @@ async def resume_agentic_analysis(
             answers,
             generate=generate,
             advisor_generate=advisor_generate,
+            evaluator_generate=evaluator_generate,
             measurement=measurement,
             recorder=recorder,
         )
         outcome = await loop.run()
+        if outcome.status == "draft_available":
+            outcome = await loop.review_and_finalize()
         await scope.finish()
         await _write(_persist_outcome, path, request_id, outcome)
         return outcome

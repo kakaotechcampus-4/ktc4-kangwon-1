@@ -390,6 +390,14 @@ CREATE TABLE IF NOT EXISTS agentic_questions (
     status TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agentic_reviews (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    actor TEXT NOT NULL,
+    review_json TEXT NOT NULL CHECK(json_valid(review_json)),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(request_id,snapshot_id,actor)
+);
 -- LD3: 분기 자료는 요청에 복사하지 않고 고정 버전과 조회 레시피만 저장합니다.
 CREATE TABLE IF NOT EXISTS local_snapshots (
     snapshot_id TEXT PRIMARY KEY REFERENCES snapshots(snapshot_id),

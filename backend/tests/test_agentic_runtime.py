@@ -44,7 +44,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                         "role": "decision",
                         "phase": "draft",
                         "attempt": 1,
-                        "input_tokens": 130000,
+                        "input_tokens": 370000,
                         "output_tokens": 0,
                     }
                 ],
@@ -52,7 +52,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         budget.schema_chars = 10000
         self.assertEqual(await budget.reserve("decision", input_chars=50000), 2)
-        self.assertEqual(budget.totals()[0], 160000)
+        self.assertEqual(budget.totals()[0], 400000)
         with self.assertRaises(BudgetExceeded):
             await budget.reserve("decision", input_chars=2)
         self.assertEqual(budget.used, 2)
@@ -178,7 +178,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         from app.agents.agentic.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=lambda *args: None)
-        loop.budget.used = 26
+        loop.budget.used = 40
         output = await loop.run()
         self.assertTrue(all(r.status == "unknown" for r in output.result.L_records))
         self.assertTrue(output.result.limitations_segments)
@@ -574,8 +574,15 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
             agents[key] = agent
 
-        async def generate(*args):
-            return self.message("submit_draft", {"phase": "draft", "report": {}})
+        async def generate(messages, *args):
+            phase = "final" if "reviews" in messages[-1].get("content", "") else "draft"
+            return self.message("submit_draft", {"phase": phase, "report": {}})
+
+        async def evaluator(messages, *args):
+            draft = json.loads(messages[1]["content"])["draft"]
+            return self.message(
+                "submit_review", {"draft_id": draft["report_id"], "verdict": "agree", "issues": []}
+            )
 
         outcome = await execute_agentic_analysis(
             "시험",
@@ -584,9 +591,10 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             resolve=resolve,
             agents=agents,
             generate=generate,
+            evaluator_generate=evaluator,
         )
-        self.assertEqual(outcome.status, "draft_available")
-        self.assertEqual(outcome.budget["used"], 1)
+        self.assertEqual(outcome.status, "completed")
+        self.assertEqual(outcome.budget["used"], 6)
         with connect(self.path) as db:
             self.assertEqual(
                 db.execute(
@@ -611,16 +619,16 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         from app.llm.budget import BudgetExceeded
 
         for saved in [
-            {"active_seconds": 300},
+            {"active_seconds": 600},
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 160000, "output_tokens": 0}
+                    {"role": "decision", "attempt": 1, "input_tokens": 400000, "output_tokens": 0}
                 ],
                 "used": 1,
             },
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 24000}
+                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 60000}
                 ],
                 "used": 1,
             },

@@ -204,6 +204,7 @@ class LocalAdapterTests(unittest.TestCase):
                     loop = SimpleNamespace(
                         state={"limitations": []},
                         run=AsyncMock(return_value=outcome),
+                        review_and_finalize=AsyncMock(return_value=outcome),
                         save=AsyncMock(),
                     )
                     with patch(

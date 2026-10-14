@@ -10,11 +10,12 @@ class RuntimeBudget(LLMBudget):
     def __init__(self, saved=None, on_change=None, *, measurement: bool = False):
         saved = saved or {}
         self.measurement = measurement
-        self.input_limit = 400000 if measurement else 160000
-        self.output_limit = 60000 if measurement else 24000
-        self.seconds_limit = 600 if measurement else 300
+        self.input_limit = 400000
+        self.output_limit = 60000
+        self.seconds_limit = 600
+        self.pending_output = 0
         super().__init__(
-            limit=40 if measurement else 26,
+            limit=40,
             used=saved.get("used", 0),
             calls=saved.get("calls", []),
             on_change=on_change,
@@ -49,25 +50,12 @@ class RuntimeBudget(LLMBudget):
     async def reserve(self, role, *, final=False, input_chars=None):
         async with self._lock:
             phase = "final" if final else "draft"
-            role_used = sum(
-                c["role"] == role and c.get("phase", "draft") == phase for c in self.calls
-            )
-            role_limit = (
-                4
-                if role == "decision" and final
-                else 8
-                if role == "decision"
-                else 2
-                if role == "advisor"
-                else 3
-            )
             estimate = math.ceil(
-                ((input_chars or 0) + (self.schema_chars if role == "decision" else 0)) / 2
+                ((input_chars or 0) + (self.schema_chars if role != "advisor" else 0)) / 2
             )
             inputs, outputs = self.totals()
             if (
                 self.used >= self.limit
-                or (not self.measurement and role_used >= role_limit)
                 or inputs + estimate > self.input_limit
                 or outputs >= self.output_limit
                 or self.active_seconds >= self.seconds_limit
@@ -88,3 +76,16 @@ class RuntimeBudget(LLMBudget):
             )
             await self._save()
             return self.used
+
+    async def claim_output(self):
+        async with self._lock:
+            available = self.output_limit - self.totals()[1] - self.pending_output
+            if available <= 0:
+                raise BudgetExceeded()
+            reserved = min(16000, available)
+            self.pending_output += reserved
+            return reserved
+
+    async def release_output(self, reserved):
+        async with self._lock:
+            self.pending_output -= reserved

@@ -206,8 +206,20 @@ def finalize(
     limitations=(),
     advisor_unavailable=False,
     regulation_result=None,
+    reviews=None,
+    resolutions=(),
 ):
     facts = validate_proposal(scope, proposal, base_id, base_rows, advisor_unavailable)
+    if reviews is not None:
+        expected = {i.issue_id for r in reviews for i in r.issues}
+        if len(resolutions) != len(expected) or {r.issue_id for r in resolutions} != expected:
+            raise ReportInvalid("모든 평가 지적에 중복 없는 반영 결정이 필요합니다.")
+        ids = {f for r in reviews for i in r.issues for f in i.fact_ids}
+        ids.update(f for r in resolutions for f in r.fact_ids)
+        extra = fact_rows(scope, ids)
+        if any(f["status"] != "observed" or not f["citable"] for f in extra.values()):
+            raise ReportInvalid("검토 반영 근거를 인용할 수 없습니다.")
+        facts.update(extra)
     records = {r.industry_code: r for r in proposal.L_records}
     rows = []
     all_records = []
@@ -292,18 +304,25 @@ def finalize(
         top5=top,
         facts=views,
         L_records=all_records,
-        evaluator_reviews=[
+        evaluator_reviews=reviews
+        if reviews is not None
+        else [
             {"actor": actor, "status": "failed", "issues": [], "error_code": "SOURCE_UNAVAILABLE"}
             for actor in ["examiner", "founder", "customer", "landlord_advocate"]
         ],
-        review_completeness=0,
+        review_completeness=sum(r.status == "completed" for r in reviews) / 4 if reviews else 0,
+        review_resolutions=list(resolutions),
         confirmation_conditions_segments=[],
         limitations_segments=proposal.limitations_segments
         + [
             TextSegment(type="text", text=t)
             for t in [
                 *limitations,
-                "평가자는 후속 단계에서 실행합니다. 현재 결과는 초안 후보입니다.",
+                *(
+                    ["평가 미완료: 실패한 평가를 동의로 간주하지 않습니다."]
+                    if reviews and any(r.status == "failed" for r in reviews)
+                    else []
+                ),
             ]
         ],
     )
@@ -370,7 +389,7 @@ def finalize(
                 proposal.model_dump_json(),
                 result_model.model_dump_json(),
                 json.dumps(rendered, ensure_ascii=False),
-                "draft_candidate",
+                "final" if reviews is not None else "draft_candidate",
                 _now(),
             ),
         )
