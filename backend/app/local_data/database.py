@@ -14,7 +14,7 @@ from uuid import uuid4
 from app.industries.catalog import INDUSTRIES
 from app.seoul import previous_quarter
 
-SOURCES = ("stores", "lifecycle", "floating", "resident", "worker", "areas")
+SOURCES = ("stores", "lifecycle", "floating", "resident", "worker", "areas", "seoul_boundary")
 
 
 class DataValidationError(ValueError):

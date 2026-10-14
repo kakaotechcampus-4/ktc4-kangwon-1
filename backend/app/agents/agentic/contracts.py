@@ -30,6 +30,7 @@ IndustryCode = Annotated[
     str, AfterValidator(_industry), Field(json_schema_extra={"enum": sorted(INDUSTRIES)})
 ]
 Metric = Literal[
+    "raw_cell",
     "by_time",
     "time_per_hour_share",
     "covered_trade_areas",

@@ -29,7 +29,7 @@ def persist_local(task, scope, adapter, data=None):
     return data, report, score_id
 
 
-def register_cell(scope, source, version_id, row_key, column, *, metric, unit):
+def register_cell(scope, source, version_id, row_key, column, *, metric, unit, expected_value=None):
     from app.agents.agentic.registry import register_fact
 
     from .adapter import SOURCE_NAMES
@@ -50,6 +50,8 @@ def register_cell(scope, source, version_id, row_key, column, *, metric, unit):
     raw = dict(zip(json.loads(row[1]), json.loads(row[0]), strict=True))
     if column not in raw or raw[column] is None:
         raise ValueError("원문 열 없음")
+    if expected_value is not None and raw[column] != expected_value:
+        raise ValueError("SQL 반환값과 원문 셀 값 불일치")
     return register_fact(
         scope,
         industry_code=None,

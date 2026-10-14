@@ -17,6 +17,7 @@ from app.agents.commercial_area.agent import _nearest_district
 from app.agents.commercial_area.client import CSV_FIELDS, to_store
 from app.agents.commercial_area.industries import map_stores
 from app.agents.commercial_area.metrics import haversine_m
+from app.local_data.boundary import boundary_limitations
 from app.local_data.database import DataValidationError, default_path
 
 SOURCE_NAMES = {
@@ -26,6 +27,7 @@ SOURCE_NAMES = {
     "resident": "resident_population",
     "worker": "worker_population",
     "areas": "areas",
+    "seoul_boundary": "seoul_boundary",
 }
 
 
@@ -115,7 +117,7 @@ class LocalAdapter:
         ]
 
     def analyze(self, task):
-        if set(SOURCE_NAMES) - {v["source"] for v in self.versions}:
+        if (set(SOURCE_NAMES) - {"seoul_boundary"}) - {v["source"] for v in self.versions}:
             raise DataValidationError("DATA_NOT_READY: 기본 6원천 묶음이 필요합니다.")
         areas = self.rows("areas")
         features = [
@@ -225,10 +227,9 @@ class LocalAdapter:
         data["district_code"] = district
 
         data["area_selection"] = selection
-        data["limitations"] = [
-            "서울 밖 점포 미반영",
-            "서울 행정경계 도형 미보유: 반경 경계 교차는 미확인",
-        ]
+        data["limitations"] = boundary_limitations(
+            self.rows("seoul_boundary"), task.site.latitude, task.site.longitude, task.radius_m
+        )
         from app.agents.commercial_area.franchise import build_franchise, load_cached_brands
         from app.agents.commercial_area.schemas import MiddleCategory
 

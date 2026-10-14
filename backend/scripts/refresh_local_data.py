@@ -27,6 +27,7 @@ from app.agents.floating_population.config import (  # noqa: E402
     WORKER_SERVICE,
 )
 from app.config import BACKEND_DIR, load_environment  # noqa: E402
+from app.local_data.boundary import fetch_boundary  # noqa: E402
 from app.local_data.database import (  # noqa: E402
     SOURCES,
     DataValidationError,
@@ -75,7 +76,18 @@ async def refresh(args, db: LocalDataDB) -> list[dict]:
                 12 if source == "lifecycle" else 5 if source == "floating" else 1
             )
             needed = quarters(args.quarter, count)
-            if source in ("stores", "areas", "resident", "worker") and not (
+            if source == "seoul_boundary":
+                if args.dry_run:
+                    report.append({"source": source, "status": "API 필요·dry-run 미호출"})
+                    continue
+                rows = await fetch_boundary(http)
+                requests = 1
+                version = await asyncio.to_thread(
+                    db.stage, source, "", rows, await asyncio.to_thread(rows_hash, rows)
+                )
+                versions.append(version)
+                total_rows = len(rows)
+            elif source in ("stores", "areas", "resident", "worker") and not (
                 args.api and source in ("resident", "worker")
             ):
                 path = (
