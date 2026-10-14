@@ -114,6 +114,8 @@ def _rows(payload):
         return [], None
     if isinstance(payload.get("rows"), list):
         return payload["rows"], len(payload["rows"])
+    if isinstance(payload.get("documents"), list):
+        return payload["documents"], len(payload["documents"])
     response = payload.get("response", payload)
     body = response.get("body") if isinstance(response, dict) else None
     if isinstance(body, dict):

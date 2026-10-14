@@ -255,6 +255,18 @@ WHERE p.source='worker_population' AND p.request_id=raw_request_id() AND p.snaps
 
 CREATE INDEX IF NOT EXISTS raw_row_natural_key ON raw_rows(natural_key);
 
+CREATE VIEW IF NOT EXISTS v_raw_map AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.snapshot_id,r.raw_json,
+       json_extract(r.raw_json,'$.place_name') AS name,
+       json_extract(r.raw_json,'$.category_name') AS kakao_category,
+       json_extract(r.raw_json,'$.distance') AS distance_m
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='map' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+CREATE VIEW IF NOT EXISTS v_raw_regulation AS
+SELECT r.raw_row_id,p.response_id,p.request_id,p.snapshot_id,r.raw_json
+FROM raw_rows r JOIN raw_responses p USING(response_id)
+WHERE p.source='regulation' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
+
 
 -- PR3 사실·코드 점수는 불변 레코드로 보존합니다.
 CREATE TABLE IF NOT EXISTS facts (
@@ -312,3 +324,16 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 CREATE TRIGGER IF NOT EXISTS immutable_facts BEFORE UPDATE ON facts
 BEGIN SELECT RAISE(ABORT,'facts are immutable'); END;
+
+CREATE TABLE IF NOT EXISTS tool_calls (
+    tool_call_id TEXT PRIMARY KEY NOT NULL,
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    run_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    input_json TEXT NOT NULL CHECK(json_valid(input_json)),
+    reply_json TEXT NOT NULL CHECK(json_valid(reply_json)),
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(request_id,snapshot_id) REFERENCES snapshots(request_id,snapshot_id)
+);

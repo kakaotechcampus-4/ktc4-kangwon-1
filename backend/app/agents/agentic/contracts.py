@@ -41,6 +41,7 @@ Metric = Literal[
     "weekend_index",
     "day_fit_index",
     "age_share",
+    "by_time",
     "resident_age_share",
     "worker_age_share",
     "target_age_index",
