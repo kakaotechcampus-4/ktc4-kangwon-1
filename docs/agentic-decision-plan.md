@@ -207,7 +207,7 @@ v0.4에서도 도구 아홉 개의 이름·한도와 ToolReply 계약은 유지�
 | submit_draft | {phase:draft/final,report:ReportProposal,review_resolutions?:[Resolution]}. 점수 숫자 없음 | {report_id,validation_status,rendered_preview_ref,score_snapshot_id}. final도 같은 구조화 제출 도구 | common + REPORT_INVALID/L_EVIDENCE_INVALID/REVIEW_UNRESOLVED | draft 1회·final 1회, 스키마 오류 교정 총 1회(예산에 포함) | decision만 |
 | submit_review | {draft_id:ID,verdict:agree/conditional/oppose,issues:[ReviewIssue]≤4} | {review_id,status}. actor는 실행기가 고정 | common + DRAFT_MISMATCH/INVALID_REFERENCE | 평가자 각 1회·지적별 근거 fact_id≤3 | 평가자만 |
 
-common 오류는 INVALID_ARGUMENT / SOURCE_UNAVAILABLE / SNAPSHOT_MISMATCH / BUDGET_EXCEEDED / TIMEOUT / DUPLICATE_CALL이다. 부분 결과는 partial·truncated·누락 필드를 표시하고, '조회 범위 내 확인한 수'만 인용한다. 계약 검증·fact 저장·호출 감사 저장 실패는 일반 error ToolReply로 숨기지 않고 실행 실패로 전파한다(AGENTS.md 3).
+common 오류는 INVALID_ARGUMENT / SOURCE_UNAVAILABLE / SNAPSHOT_MISMATCH / BUDGET_EXCEEDED / TIMEOUT이다. 동일 도구·정규화 인자는 재실행하지 않고 이전 응답에 duplicate=true·이미 조회한 결과 표시를 붙인다. 부분 결과는 partial·truncated·누락 필드를 표시하고, '조회 범위 내 확인한 수'만 인용한다. 계약 검증·fact 저장·호출 감사 저장 실패는 일반 error ToolReply로 숨기지 않고 실행 실패로 전파한다(AGENTS.md 3).
 
 map_search는 PlaceClient·카카오 카테고리·거리 계산을 재사용하며 LLM 호출은 0회다. 코드 규칙의 category_match를 우선 적용하고, 명시적인 업종 검색어 규칙이 맞으면 name_match, 그 밖에는 unknown을 반환한다. 일치 상태는 검색 규칙의 결과이며 실제 경쟁점 여부의 확정 판정이 아니다. 애매한 장소의 해석은 decision이 새 fact_id를 근거로 L에서 판단한다. judge_matches·GenerateMapping·모델 프롬프트·모델별 mappings 캐시 및 설정을 제거한다(`backend/app/agents/map_analysis/mapping.py:64`, `agent.py:254`). 검색 응답 캐시를 유지할 때는 좌표·반경·검색어·규칙 버전·조회 시점을 키/출처로 남긴다. 0건·has_more를 실제 동종 가게 없음으로 확대하지 않는다. 모델 클라이언트 생성 시 실패하는 대역으로 지도 LLM 0회를 검증한다.
 
@@ -251,8 +251,8 @@ LRecord={industry_code,selection{basis:code_lower_top10/decision_extra/outside_s
 | 입력/출력 토큰 | 모델 호출당 입력≤12,000·출력≤3,000, 전체 누적 입력≤160,000·출력≤24,000. 각 role·provider 사용량 실제 기록 |
 | 활성 시간 | 수집/계산 120초 목표 한도 + 추론/평가/최종 180초 한도, 전체≤300초. 임대인 답변 대기 제외, 재개 때 예산 초기화 금지 |
 | 병렬 | 독립 read 도구는 1턴 최대 3개 병렬. 평가자 최대 4명 병렬. 동일 SQL 연결 공유 안 함 |
-| 반복 | tool+정규화 인자+snapshot/허용 observation cutoff 해시 동일은 DUPLICATE_CALL·이전 fact/call 참조만 반환. 새 사실 없는 2연속 턴이면 draft/final로 이동 |
-| 문맥 | 전체 기록은 DB에 보관. 모델 작업집합은 필요한 typed facts 최대 64개·4,000토큰, 최근 도구 응답만. 인용/현재 L에 쓰는 fact는 요약 제거 금지 |
+| 반복 | actor+tool+정규화 인자+snapshot 해시 동일은 이전 응답을 duplicate=true·이미 조회한 결과 표시와 함께 반환. 중복도 도구 횟수 소비. 반복·오류 연속 3회면 코드 기반 초안으로 종료, 성공 시 연속 횟수 초기화 |
+| 문맥 | 저장된 시스템·사용자·도구 호출/응답 전체를 복원한다. 임대인 답변과 fact_id는 기존 ask_user 도구 응답을 answered로 갱신한다. 응답별 크기 제한과 기존 예산은 유지하며 전체 이력을 최근 응답만으로 바꾸지 않는다 |
 
 토큰은 반복 전송된 시스템·대화 이력까지 누적하며 캐시 할인이 있어도 원 토큰 사용량을 기록한다. 남은 토큰은 사전 추정과 provider usage로 조정한다. 같은 재개·판단 재시도는 저장된 사용량을 이어받는다. API 재시도도 실제 HTTP 한도를 소비한다.
 
@@ -514,6 +514,48 @@ LD4는 새 함수 내부 import와 다른 모듈의 비공개 함수 사용을 �
 | 검사 | ruff check/format, mypy160모듈, unittest887개, 카탈로그 일치. 인증 방식 차이 회귀 테스트 추가 |
 
 이 재개 요청은 경계 적재 전 21개 버전을 고정했으므로 기존 경계 미확인 limitation을 유지한다. 새 활성 경계로 진행 중 스냅샷을 바꾸지 않는다. 프롬프트 수정·재실행은 하지 않았다. 구조화 fallback 생성은 확인했지만 실제 L·자문·근거 문장 작성은 검증되지 않았으며, 중복 조회 후 즉시 종료하는 현재 동작을 다음 프롬프트/루프 검토 대상으로 남긴다.
+
+### PR5 대화 복원·반복 응답 수정과 새 요청 1회 (2026-10-14)
+
+기존 첫 재개 입력은 저장된 메시지와 당시 model_messages 함수로 오프라인 재구성했다. 표의 길이는 값 원문을 제외한 메시지 JSON의 문자 수이며 provider 토큰 수가 아니다. 실제 첫 재개 패킷을 새로 호출해 확인하지 않았다.
+
+| 메시지 | 저장 상태 | 기존 재개 전송 | 수정 후 재구성 |
+| --- | ---: | ---: | ---: |
+| system | 798 | 798 | 798 |
+| user(요청) | 2,486 | 2,486 | 2,486 |
+| assistant(get_scorecard) / tool | 299 / 3,948 | 빠짐 | 모두 유지 |
+| assistant(get_facts) / tool | 299 / 369 | 빠짐 | 모두 유지 |
+| assistant(ask_user) / tool | 519 / 362 | 519 / 362 | 519 / 788(답변·fact_id 포함) |
+| 추가 user(답변) | 답변 저장 시 1개 추가 | 355·369로 두 번 전달 | 추가하지 않음 |
+| 메시지 수 | 답변 전8·답변 저장 후9 | 6 | 8 |
+
+- 새 도구 중복은 동일 actor·요청·snapshot·정규화 입력의 감사 응답을 재사용한다. 모델/외부 도구를 다시 실행하지 않고 duplicate=true·이미 조회한 결과 표시를 붙이며 시도 횟수는 소비한다. 재개는 요청 DB에서 이전 응답을 복원한다.
+- 반복/오류 연속3회 종료, 정상/부분 응답 성공 시 연속 횟수 초기화. fallback에는 코드 요약 한 문장과 **decision 판단(L)을 끝내지 못해 코드 점수만으로 정렬했습니다**를 넣는다. 문맥 압축용 중복 working_facts 생성은 제거했다.
+- 대역은 재개 첫 모델 입력의 전체 도구 응답·답변 fact_id·예산 연속, 응답 재사용 후 계속 실행, 연속3회/성공 후 초기화, fallback 설명을 검증한다. ruff check/format·mypy160모듈·unittest890개·카탈로그 일치. 독립 리뷰에서 중대한 결함 없음.
+
+| 새 테헤란로152 실제 요청 | 관찰 |
+| --- | --- |
+| 결과·시간 | draft_available(code fallback), 8.750초. 주소/버전 준비0.140초, 로컬 조회·채점2.297초, 루프6.266초 |
+| 도구 | get_scorecard(ok) → get_facts(ok) → get_scorecard(ok, 다른 인자). 반복0회 |
+| 모델 | gpt-6-luna 3회, 입력22,194/출력120. Sonnet0회. 모델3/26(11.5%), 입력13.9%, 출력0.5%, 도구3/40(7.5%), 활성시간8.703/300초(2.90%) |
+| 종료 원인 | 다음 호출의 대화11,996자+도구 정의15,136자로 추정13,566토큰 > 기존 호출당12,000. provider 호출 전에 예산 차단. 실제 다음 입력 토큰 수는 측정되지 않음 |
+| L·자문·질문 | L observed0, 51개 unknown, 새 L 근거0, 제출/거절0, 자문/지도/규제/ask_user 미호출. 질문이 없어 시험 답변 자동 재개 경로는 실제로 진입하지 않았으며 대역에서 검증 |
+| 초안 | 요약과 L 미완료 limitation 존재. 상위5 G20454.375조건부, P10549.375보류, R10248.75보류, G21348.125보류, S20746.875보류. L 반영 전후 변화 없음 |
+| DB | 초기화 후 증가1,253,376bytes(1.195MiB), 파일 전체1,576,960bytes(1.504MiB). 기본자료 원문 복사0. 전체1MiB 목표 초과 |
+
+항목별 용량은 이 Python SQLite에 dbstat가 없어 **인덱스·페이지 헤더를 제외한 저장 열 값의 UTF-8 바이트 합**이다. 파일 증가 실측과 같은 단위의 물리 페이지 분해로 해석하지 않는다. dbstat 계측의 준비 단계 실패는 외부/LLM 호출 전이었으며 승인된 실제 요청은 위1건뿐이다.
+
+| 항목 | 논리 용량(bytes) |
+| --- | ---: |
+| 사실·계보 | 517,202 |
+| 채점(초기·fallback) | 287,089 |
+| 대화·질문 | 39,799 |
+| 요청·기타 | 33,841 |
+| 보고서 | 25,741 |
+| 도구·자문 | 13,830 |
+| 원문·참조 복사 | 0 |
+
+사용자 지시대로 프롬프트·예산 수치를 수정하지 않고 추가 실행을 멈췄다. 다음 단계에는 전체 대화 복원과 호출당12k 사전 추정 상한의 충돌(특히 도구 정의의 토큰 추정)을 다뤄야 한다. 이번 실행으로 L/자문 품질이 나쁘다고 판정할 수는 없다. 요청 용량은 대화보다 사실·계보와 중복 저장되는 채점 자료 비중이 크며, 필요한 근거는 합의 없이 삭제하지 않는다.
 
 408건 기준은 `scripts/verify_rubric_reproduction.py`를 유지한다. 엔진 단독 검증뿐 아니라 **저장된 동일 원천 fixture → 로컬 SQL → 계산 입력 → 점수** 비교를 추가해야 한다. API와 새 분기 CSV의 원래 값 차이를 숨겨 등급을 맞추지 않는다. CSV의 1.014배 유사성은 408건 완전 일치 검증을 대체하지 않는다.
 
