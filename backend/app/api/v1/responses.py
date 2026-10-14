@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 class AcceptedAnalysis(BaseModel):
     request_id: str
-    status: Literal["running"]
+    status: Literal["pending", "running"]
 
 
 class AnalysisEvent(BaseModel):

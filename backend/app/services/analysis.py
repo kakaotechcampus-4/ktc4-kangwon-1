@@ -129,12 +129,14 @@ async def execute_agentic_analysis(
     measurement=False,
     recording_path=None,
     allow_questions=False,
+    request_prepared=False,
 ):
     request_id = request_id or uuid.uuid4().hex
     path = await run_in_thread(initialize, db_path)
-    await run_in_thread(
-        lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
-    )
+    if not request_prepared:
+        await run_in_thread(
+            lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
+        )
     budget = RuntimeBudget(measurement=measurement)
     recorder = (
         CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")

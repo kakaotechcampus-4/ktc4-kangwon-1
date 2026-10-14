@@ -1,5 +1,6 @@
 """단일 공개 API와 요청 DB 버전 경계를 검증합니다."""
 
+import asyncio
 import sqlite3
 import tempfile
 import unittest
@@ -41,6 +42,32 @@ class PublicApiTests(unittest.TestCase):
                     db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall(),
                     [("old_rows",)],
                 )
+
+    def test_accepted_request_is_visible_before_background_runs(self):
+        async def blocked(*args, **kwargs):
+            await asyncio.Event().wait()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "accepted.sqlite3"
+            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
+            app.dependency_overrides[analysis_runner] = lambda: blocked
+            with TestClient(app) as client:
+                app.state.job_registry.max_concurrency = 1
+                accepted = client.post("/api/v1/analyses?wait=false", json={"address": "시험"})
+                self.assertEqual(accepted.status_code, 202)
+                request_id = accepted.json()["request_id"]
+                detail = client.get(f"/api/v1/analyses/{request_id}")
+                self.assertEqual(detail.status_code, 200, detail.text)
+                self.assertEqual(detail.json()["status"], "pending")
+                self.assertIsNone(detail.json()["site"])
+                self.assertIsNone(detail.json()["result"])
+                self.assertEqual(client.get("/api/v1/analyses/missing").status_code, 404)
+                rejected = client.post("/api/v1/analyses?wait=false", json={"address": "초과"})
+                self.assertEqual(rejected.status_code, 429)
+                with closing(sqlite3.connect(path)) as db:
+                    self.assertEqual(
+                        db.execute("SELECT count(*) FROM analysis_requests").fetchone()[0], 1
+                    )
 
     def test_public_mock_question_resume_final_events(self):
         with tempfile.TemporaryDirectory() as directory:

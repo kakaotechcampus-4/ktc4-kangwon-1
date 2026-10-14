@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
 from app.db.connection import connect
+from app.db.repository import create_request
 from app.schemas import DecisionResult, Schema, Text
 from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
 from app.services.mock import dependencies, generators
@@ -99,23 +101,43 @@ async def create_analysis(
         raise HTTPException(400, "주소를 입력해 주세요.")
     request_id = uuid.uuid4().hex
     response.headers.update(request_headers(request_id))
+    ready = asyncio.Event()
 
     async def work():
+        await ready.wait()
         outcome = await runner(
             body.address,
             request_id=request_id,
             radius_m=body.radius_m,
             allow_questions=body.allow_questions,
+            request_prepared=True,
             **options(request, request_id),
             **(dependencies(ask=body.allow_questions) if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
 
+    # 슬롯을 먼저 확보하고 저장이 끝난 뒤 분석을 시작해 429와 초기 GET을 함께 보장합니다.
+    task = start_task(request, request_id, work())
+    try:
+        await asyncio.to_thread(
+            create_request,
+            request_id,
+            body.address,
+            radius_m=body.radius_m,
+            db_path=request.app.state.execution_settings.db_path,
+        )
+    except BaseException:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        raise
+    ready.set()
     if not wait:
-        return start_job(request, request_id, work())
-    return await run_or_http(
-        await_task(start_task(request, request_id, work())), request_id, kind="analysis"
-    )
+        return JSONResponse(
+            {"request_id": request_id, "status": "pending"},
+            status_code=202,
+            headers=request_headers(request_id),
+        )
+    return await run_or_http(await_task(task), request_id, kind="analysis")
 
 
 def detail(request_id, path):

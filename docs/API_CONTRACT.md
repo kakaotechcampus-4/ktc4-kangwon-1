@@ -14,6 +14,11 @@
 | POST /api/v1/analyses/{id}/answers | question_session_id와 answers 객체. 저장된 질문 field와 정확히 같은 항목, 값은 비어 있지 않은 문자열·최대 500자 |
 
 질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
+
+POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다. 동시 작업 슬롯은 저장 전에
+확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.
+접수된 ID의 GET은 pending/running/waiting_for_input/completed/failed 상태를200으로 반환한다.
+자료가 아직 없으면 site/result/error/rendered/questions는 null이다. 미존재 ID만404다.
 답변 뒤 같은 요청 ID로 재개하며 자료 버전·모델 예산·이전 대화를 유지한다.
 wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를 오류 추적에 쓴다.
 
@@ -25,7 +30,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 | 422 | 입력 스키마·답변 항목 검증 오류 |
 | 502 | 외부 서비스·실행 실패 |
 | 500 | 내부 오류 |
-| 503 | 작업 수용 상한 |
+| 429 | 동시 작업 수용 상한 또는 종료 중 |
 
 평가자는 항상 네 슬롯이다. 실패 슬롯도 유지하며 평가 미완료를 표시한다.
 프론트 담당은 rendered 문장, 검토 후보 Top 5, 코드·L 점수와 구간·coverage,

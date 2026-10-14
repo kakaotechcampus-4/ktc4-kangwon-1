@@ -1,19 +1,31 @@
 """응답 대기 방식과 무관한 분석 접수 제한을 검사합니다."""
 
 import asyncio
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 
 from app.api.v1.analyses import analysis_runner
+from app.db.connection import initialize
 from app.main import create_app
 from app.services.settings import ExecutionSettings
 
 
 class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.path = await asyncio.to_thread(initialize, Path(self.temp.name) / "requests.sqlite3")
+
+    async def asyncTearDown(self):
+        self.temp.cleanup()
+
     async def test_wait_true_and_false_share_capacity(self):
-        app = create_app(settings=ExecutionSettings(max_concurrency=2), load_env=False)
+        app = create_app(
+            settings=ExecutionSettings(db_path=self.path, max_concurrency=2), load_env=False
+        )
         started: asyncio.Queue = asyncio.Queue()
         release = asyncio.Event()
 
@@ -52,7 +64,9 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
                 await app.state.job_registry.shutdown()
 
     async def test_wait_true_failure_releases_capacity(self):
-        app = create_app(settings=ExecutionSettings(max_concurrency=1), load_env=False)
+        app = create_app(
+            settings=ExecutionSettings(db_path=self.path, max_concurrency=1), load_env=False
+        )
 
         async def execute(*args, **kwargs):
             raise RuntimeError("대역 실패")
