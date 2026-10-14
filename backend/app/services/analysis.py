@@ -9,6 +9,7 @@ from time import monotonic
 
 from app.address import resolve_site
 from app.agentic.budget import RuntimeBudget
+from app.agentic.preflight import collect_preflight
 from app.agentic.recording import CallRecording
 from app.agentic.runtime import DecisionLoop
 from app.agentic.snapshot import persist_snapshot_scores
@@ -155,8 +156,12 @@ async def execute_agentic_analysis(
 
                 timings[stage] = monotonic() - started
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
+                shared = None
                 if adapter is not None:
-                    data, _, _ = await run_in_thread(persist_local, task, scope, adapter)
+                    observations, shared = await collect_preflight(scope, site)
+                    data, _, _ = await run_in_thread(
+                        persist_local, task, scope, adapter, None, observations
+                    )
                 else:
                     await persist_snapshot_scores(task)
                     data = {}
@@ -174,6 +179,11 @@ async def execute_agentic_analysis(
                 recorder=recorder,
                 allow_questions=allow_questions,
             )
+            if shared is not None:
+                loop.tools.shared.map_cache = shared.map_cache
+                loop.tools.shared.map_keys = shared.map_keys
+                loop.tools.shared.map_http = shared.map_http
+                loop.tools.shared.regulation = shared.regulation
             loop.state["limitations"].extend(data.get("limitations", []))
             loop.state["phase_seconds"] = timings
             outcome = await loop.run()

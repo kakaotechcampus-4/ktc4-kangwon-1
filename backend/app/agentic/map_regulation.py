@@ -160,7 +160,8 @@ async def map_search(scope, site, input, shared):
     )
 
 
-def _regulation(scope, site, scan):
+def verified_education_scan(site, scan):
+    """실제 다각형 포함 여부를 확인한 채점 입력을 만듭니다."""
     raw = scan.model_dump(mode="json") if hasattr(scan, "model_dump") else scan
     if "center" in raw and raw["center"] != {
         "latitude": site.latitude,
@@ -194,7 +195,14 @@ def _regulation(scope, site, scan):
                     contained.append(zone)
         except (ValueError, TypeError, IndexError, KeyError, OverflowError):
             verified = False
-    effective = raw | {"zones": contained if verified else zones, "contains_verified": verified}
+    return raw | {"zones": contained if verified else zones, "contains_verified": verified}
+
+
+def _regulation(scope, site, scan):
+    raw = scan.model_dump(mode="json") if hasattr(scan, "model_dump") else scan
+    effective = verified_education_scan(site, raw)
+    verified = effective["contains_verified"]
+    zones = raw.get("zones", [])
     response = scope.record_sync(
         source="regulation",
         source_type="api",
@@ -213,7 +221,7 @@ def _regulation(scope, site, scan):
         industry_code=None,
         source="regulation",
         metric="zone_contains",
-        value=bool(contained) if verified else None,
+        value=bool(effective["zones"]) if verified else None,
         unit="포함 여부",
         status="observed" if verified else "unknown",
         row_ids=[ref],
@@ -270,4 +278,5 @@ async def check_regulation(scope, site, shared):
             lookup = shared.regulation_lookup or find_education_zones
             scan = await lookup(site.latitude, site.longitude, with_geometry=True)
         shared.regulation = await run_in_thread(_regulation, scope, site, scan)
+        shared.regulation_scan = verified_education_scan(site, scan)
     return shared.regulation

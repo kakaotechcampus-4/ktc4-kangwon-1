@@ -137,6 +137,7 @@ def persist_space_requirements(scope):
         "industry_name",
         "kitchen_needed",
         "ventilation_needed",
+        "water_supply_needed",
         "floor_preference",
         "area_band",
         "confidence",
@@ -153,6 +154,7 @@ def persist_space_requirements(scope):
             or row["reviewed"] != "false"
             or row["confidence"] != "low"
             or not all(row.values())
+            or row["water_supply_needed"] not in {"true", "false"}
             or any(
                 row[key] not in {"true", "false", "conditional"}
                 for key in ("kitchen_needed", "ventilation_needed")

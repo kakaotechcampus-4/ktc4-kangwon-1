@@ -221,9 +221,15 @@ class LocalAdapterTests(unittest.TestCase):
                         review_and_finalize=AsyncMock(return_value=outcome),
                         save=AsyncMock(),
                     )
-                    with patch(
-                        "app.services.analysis.DecisionLoop.create",
-                        AsyncMock(return_value=loop),
+                    with (
+                        patch(
+                            "app.services.analysis.DecisionLoop.create",
+                            AsyncMock(return_value=loop),
+                        ),
+                        patch(
+                            "app.services.analysis.collect_preflight",
+                            AsyncMock(return_value=({}, None)),
+                        ),
                     ):
                         received = await execute_agentic_analysis(
                             site.input_address,

@@ -103,7 +103,7 @@ class CompareSpaceTests(unittest.TestCase):
             {"floor": "아마 1층", "exclusive_area": "30평"},
         )
         self.assertEqual(result["floor"], "미확인")
-        self.assertEqual(result["area"], "미확인")
+        self.assertEqual(result["area"], "불일치")
 
 
 class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
@@ -148,12 +148,23 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(first), 51)
         self.assertEqual(first, await asyncio.to_thread(ensure_space_fits, self.scope))
         with connect(self.path) as db:
+            profiles = {
+                row[0]: json.loads(row[1])
+                for row in db.execute(
+                    "SELECT industry_code,value_json FROM facts WHERE metric='space_requirements'"
+                )
+            }
+            self.assertEqual(len(profiles), 51)
+            self.assertEqual(profiles["G204"]["water_supply_needed"], "false")
+            self.assertEqual(profiles["I212"]["water_supply_needed"], "true")
             rows = db.execute(
                 "SELECT status,citable,value_json FROM facts WHERE metric='space_fit'"
             ).fetchall()
             self.assertEqual(len(rows), 51)
             self.assertTrue(all(row[0] == "unknown" and row[1] == 0 for row in rows))
-            self.assertTrue(all(json.loads(row[2])["water_supply"] == "미확인" for row in rows))
+            self.assertTrue(
+                all(json.loads(row[2])["water_supply"] in {"미확인", "해당 없음"} for row in rows)
+            )
             self.assertEqual(db.execute("SELECT count(*) FROM fact_parents").fetchone()[0], 51)
             self.assertEqual(db.execute("SELECT count(*) FROM space_fit_current").fetchone()[0], 51)
             retail = json.loads(

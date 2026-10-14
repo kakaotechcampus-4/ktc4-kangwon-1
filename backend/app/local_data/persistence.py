@@ -10,14 +10,21 @@ from app.agentic.snapshot import (
     persist_space_requirements,
     snapshot_config,
 )
+from app.db.connection import connect
 from app.local_data.adapter import SOURCE_NAMES
 from app.local_data.provenance import save_snapshot, validate_snapshot
 
 
-def persist_local(task, scope, adapter, data=None):
+def persist_local(task, scope, adapter, data=None, observations=None):
     persist_space_requirements(scope)
     profiles, hashes, _ = snapshot_config(scope, local=True)
     data = data if data is not None else adapter.analyze(task)
+    if observations is not None:
+        data = (
+            data
+            | observations
+            | {"limitations": data.get("limitations", []) + observations.get("limitations", [])}
+        )
     save_snapshot(scope, adapter, task, hashes, data)
     periods = {}
     for version in adapter.versions:
@@ -31,7 +38,14 @@ def persist_local(task, scope, adapter, data=None):
     }
     persist_input_facts(scope, data, {}, [], metadata)
     report = evaluate(data, profile_rows=profiles)
-    score_id = persist_report(scope, report, {}, [], metadata)
+    with connect(scope.path) as db:
+        map_rows = db.execute(
+            "SELECT DISTINCT r.raw_row_id FROM raw_response_rows r "
+            "JOIN raw_responses p USING(response_id) WHERE p.request_id=? "
+            "AND p.snapshot_id=? AND p.source='map'",
+            (scope.request_id, scope.snapshot_id),
+        ).fetchall()
+    score_id = persist_report(scope, report, {"map": [row[0] for row in map_rows]}, [], metadata)
     return data, report, score_id
 
 
