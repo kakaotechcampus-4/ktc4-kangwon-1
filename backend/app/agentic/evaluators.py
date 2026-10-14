@@ -162,6 +162,7 @@ def review_packet(scope, draft):
 
 async def review(loop, actor, executor, draft):
     submitted = None
+    accepted = {}
 
     async def submit(input):
         nonlocal submitted
@@ -169,23 +170,32 @@ async def review(loop, actor, executor, draft):
             return error("DRAFT_MISMATCH", "검토할 초안 ID가 다릅니다.")
         if len({i.issue_id for i in input.issues}) != len(input.issues):
             return error("INVALID_REFERENCE", "지적 ID가 중복됩니다.")
-        try:
-            ids = {f for i in input.issues for f in i.fact_ids}
-            facts = await run_in_thread(fact_rows, loop.scope, ids)
-            if any(
-                not i.fact_ids or has_digit(i.comment + i.suggested_check) for i in input.issues
-            ):
-                raise ReportInvalid("지적에는 fact 근거가 필요하며 문장 숫자는 허용하지 않습니다.")
-            if any(not f["citable"] or f["status"] != "observed" for f in facts.values()):
-                raise ReportInvalid("인용할 수 없는 근거입니다.")
-        except ReportInvalid as exc:
-            return error("INVALID_REFERENCE", str(exc))
+        if len(set(accepted) | {i.issue_id for i in input.issues}) > 4:
+            return error("INVALID_REFERENCE", "지적은 수정 제출을 포함해 최대 네 개입니다.")
+        rejected = []
+        for issue in input.issues:
+            try:
+                if not issue.fact_ids:
+                    raise ReportInvalid("fact 근거를 붙이거나 이 지적을 제외하세요.")
+                if has_digit(issue.comment + issue.suggested_check):
+                    raise ReportInvalid("측정 숫자는 문장 대신 fact 근거로 인용하세요.")
+                facts = await run_in_thread(fact_rows, loop.scope, set(issue.fact_ids))
+                if any(not f["citable"] or f["status"] != "observed" for f in facts.values()):
+                    raise ReportInvalid("관측된 인용 가능 근거로 바꾸세요.")
+            except ReportInvalid as exc:
+                rejected.append({"issue_id": issue.issue_id, "reason": str(exc)})
+                continue
+            accepted[issue.issue_id] = issue
+        if rejected:
+            reply = error("INVALID_REFERENCE", "거절된 지적만 수정하거나 제외해 다시 제출하세요.")
+            reply.data = {"accepted": list(accepted), "rejected": rejected}
+            return reply
         submitted = EvaluatorReview(
             actor=actor,
             status="completed",
             review_id="review_" + str(uuid.uuid4()),
             verdict=input.verdict,
-            issues=input.issues,
+            issues=list(accepted.values()),
         )
         for issue in submitted.issues:
             issue.issue_id = actor + ":" + issue.issue_id
