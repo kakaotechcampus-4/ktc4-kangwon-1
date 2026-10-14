@@ -24,7 +24,7 @@ def resolve_path(db_path: str | Path | None = None) -> Path:
 @contextmanager
 def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     """초기화된 파일만 열고 트랜잭션 종료 후 연결을 닫습니다."""
-    connection = sqlite3.connect(resolve_path(db_path).as_uri() + "?mode=rw", uri=True, timeout=5)
+    connection = sqlite3.connect(resolve_path(db_path).as_uri() + "?mode=rw", uri=True, timeout=30)
     try:
         connection.row_factory = sqlite3.Row
         connection.create_function("raw_request_id", 0, lambda: None)

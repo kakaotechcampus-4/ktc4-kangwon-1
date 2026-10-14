@@ -26,7 +26,9 @@ from .scoring import regulation
 def _place_facts(scope, response_id, documents):
     with connect(scope.path) as db:
         rows = db.execute(
-            "SELECT raw_row_id,raw_json FROM raw_rows WHERE response_id=?", (response_id,)
+            "SELECT r.raw_row_id,r.raw_json FROM raw_rows r "
+            "JOIN raw_response_rows e USING(raw_row_id) WHERE e.response_id=?",
+            (response_id,),
         ).fetchall()
 
         refs = {_json(json.loads(r[1])): r[0] for r in rows}
@@ -204,7 +206,7 @@ def _regulation(scope, site, scan):
     )
     with connect(scope.path) as db:
         ref = db.execute(
-            "SELECT raw_row_id FROM raw_rows WHERE response_id=?", (response,)
+            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
         ).fetchone()[0]
     fact = register_fact(
         scope,
@@ -246,7 +248,8 @@ def _regulation(scope, site, scan):
 def _stored_regulation(scope):
     with connect(scope.path) as db:
         rows = db.execute(
-            "SELECT r.raw_json FROM raw_rows r JOIN raw_responses p USING(response_id) "
+            "SELECT r.raw_json FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) "
+            "JOIN raw_responses p USING(response_id) "
             "WHERE p.request_id=? AND p.snapshot_id=? AND p.source='regulation' "
             "ORDER BY p.collected_at DESC LIMIT 1",
             (scope.request_id, scope.snapshot_id),

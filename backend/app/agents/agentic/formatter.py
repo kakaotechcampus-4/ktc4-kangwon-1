@@ -40,7 +40,9 @@ def load_raw(scope):
         responses = [
             dict(r)
             for r in db.execute(
-                "SELECT * FROM raw_responses WHERE snapshot_id=? AND duplicate_of IS NULL",
+                "SELECT p.*,b.response_json FROM raw_responses p "
+                "JOIN raw_payloads b USING(payload_hash) "
+                "WHERE p.snapshot_id=? AND p.duplicate_of IS NULL",
                 (scope.snapshot_id,),
             )
         ]
@@ -48,8 +50,9 @@ def load_raw(scope):
             dict(r)
             for r in db.execute(
                 "SELECT r.*,p.source,p.run_id,p.request_args_json,p.group_key FROM "
-                "raw_rows r JOIN raw_responses p USING(response_id) WHERE p.snapshot_id=? "
-                "AND p.duplicate_of IS NULL AND r.duplicate_of IS NULL",
+                "raw_rows r JOIN raw_response_rows e USING(raw_row_id) "
+                "JOIN raw_responses p USING(response_id) WHERE p.snapshot_id=? "
+                "AND p.duplicate_of IS NULL AND e.duplicate_of IS NULL",
                 (scope.snapshot_id,),
             )
         ]

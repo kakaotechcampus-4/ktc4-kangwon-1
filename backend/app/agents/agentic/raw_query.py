@@ -56,7 +56,8 @@ def _authorizer(action, arg1, arg2, database, origin):
         return sqlite3.SQLITE_OK
     if action == sqlite3.SQLITE_READ:
         allowed = database == "main" and (
-            arg1 in VIEWS or (arg1 in {"raw_rows", "raw_responses"} and origin in VIEWS)
+            arg1 in VIEWS
+            or (arg1 in {"raw_rows", "raw_response_rows", "raw_responses"} and origin in VIEWS)
         )
         return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
     if action == sqlite3.SQLITE_FUNCTION:
@@ -140,6 +141,7 @@ def _query(scope, input):
             original = (
                 db.execute(
                     "SELECT r.raw_json,p.source FROM raw_rows r "
+                    "JOIN raw_response_rows e USING(raw_row_id) "
                     "JOIN raw_responses p USING(response_id) "
                     "WHERE r.raw_row_id=? AND p.request_id=? AND p.snapshot_id=?",
                     (ref, scope.request_id, scope.snapshot_id),

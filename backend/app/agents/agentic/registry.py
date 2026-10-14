@@ -1,5 +1,6 @@
 """원문 계보를 가진 불변 fact·코드 점수 저장입니다. SQLite는 호출자가 스레드로 격리합니다."""
 
+import asyncio
 import csv
 import hashlib
 import io
@@ -73,13 +74,22 @@ def register_fact(
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
         if not db.in_transaction:
             db.execute("BEGIN IMMEDIATE")
-        for row_id in row_ids:
-            exists = db.execute(
-                "SELECT 1 FROM raw_rows r JOIN raw_responses p USING(response_id) WHERE "
-                "r.raw_row_id=? AND p.request_id=? AND p.snapshot_id=?",
-                (row_id, scope.request_id, scope.snapshot_id),
-            ).fetchone()
-            if exists is None:
+        for offset in range(0, len(row_ids), 400):
+            if scope.cancelled.is_set():
+                raise asyncio.CancelledError()
+            batch = row_ids[offset : offset + 400]
+            found = {
+                r[0]
+                for r in db.execute(
+                    "SELECT DISTINCT e.raw_row_id FROM raw_response_rows e "
+                    "INDEXED BY raw_response_row_ref CROSS JOIN raw_responses p "
+                    "ON p.response_id=e.response_id WHERE e.raw_row_id IN ("
+                    + ",".join("?" for _ in batch)
+                    + ") AND p.request_id=? AND p.snapshot_id=?",
+                    [*batch, scope.request_id, scope.snapshot_id],
+                )
+            }
+            if set(batch) != found:
                 raise ValueError("다른 요청·스냅샷의 원문을 fact 근거로 사용할 수 없습니다.")
         for response in response_ids:
             if (
@@ -126,10 +136,13 @@ def register_fact(
                 _now(),
             ),
         )
-        db.executemany(
-            "INSERT INTO fact_sources VALUES(?,?,?)",
-            [(fact_id, row, field_pointer) for row in row_ids],
-        )
+        for offset in range(0, len(row_ids), 400):
+            if scope.cancelled.is_set():
+                raise asyncio.CancelledError()
+            db.executemany(
+                "INSERT INTO fact_sources VALUES(?,?,?)",
+                [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]],
+            )
     return fact_id
 
 
@@ -206,9 +219,10 @@ def _config(scope):
         profile_refs = {}
         shared = []
         for row in db.execute(
-            "SELECT r.raw_row_id,r.raw_json FROM raw_rows r JOIN raw_responses p "
+            "SELECT r.raw_row_id,r.raw_json FROM raw_rows r "
+            "JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p "
             "USING(response_id) WHERE p.snapshot_id=? AND p.source='baseline' AND "
-            "r.duplicate_of IS NULL",
+            "e.duplicate_of IS NULL",
             (scope.snapshot_id,),
         ):
             value = json.loads(row[1])
@@ -481,6 +495,6 @@ async def persist_snapshot_scores(task, education_scan=None):
     if scope is None:
         return None
     try:
-        return await _write(_persist, task, scope, education_scan)
-    except Exception:
-        raise RawStorageError("사실·코드 점수 생성 또는 저장에 실패했습니다.") from None
+        return await _write(_persist, task, scope, education_scan, on_cancel=scope.cancelled.set)
+    except Exception as exc:
+        raise RawStorageError("사실·코드 점수 생성 또는 저장에 실패했습니다.") from exc

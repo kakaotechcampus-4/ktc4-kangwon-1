@@ -583,7 +583,7 @@ def _save_user_facts(scope, answers, question_id, saved):
         if question is None or question[0] != "waiting":
             raise ValueError("이미 답변한 질문입니다.")
         ref = db.execute(
-            "SELECT raw_row_id FROM raw_rows WHERE response_id=?", (response,)
+            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
         ).fetchone()[0]
         ids = {}
         for field, value in answers.items():

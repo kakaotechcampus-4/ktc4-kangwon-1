@@ -11,6 +11,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event, Lock
 from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 
 from app.db.connection import connect
@@ -86,7 +87,7 @@ def _hash(value) -> str:
     return hashlib.sha256(_json(value).encode()).hexdigest()
 
 
-async def _write(fn, *args):
+async def _write(fn, *args, on_cancel=None):
     """스레드 쓰기가 끝난 뒤 취소를 전파해 늦은 저장·마무리 경합을 막습니다."""
     task = asyncio.create_task(asyncio.to_thread(fn, *args))
     cancelled = False
@@ -95,6 +96,8 @@ async def _write(fn, *args):
             await asyncio.shield(task)
         except asyncio.CancelledError:
             cancelled = True
+            if on_cancel is not None:
+                on_cancel()
     result = task.result()
     if cancelled:
         raise asyncio.CancelledError
@@ -180,15 +183,35 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
         grouping["query"] = {k: v for k, v in query.items() if k not in {"pageNo", "numOfRows"}}
     group_key = _hash(grouping)
     response_id = "r_" + str(uuid.uuid4())
+    payload_hash = _hash(payload)
     with connect(scope.path) as db:
         db.execute("BEGIN IMMEDIATE")
+        inserted = db.execute(
+            "INSERT OR IGNORE INTO raw_payloads VALUES(?,?)", (payload_hash, _json(payload))
+        ).rowcount
+        if inserted:
+            db.executemany(
+                "INSERT OR IGNORE INTO raw_rows VALUES(?,?,?,?,?,?)",
+                [
+                    (
+                        "rr_" + str(uuid.uuid4()),
+                        payload_hash,
+                        index,
+                        _natural(row),
+                        _json(row),
+                        _hash(row),
+                    )
+                    for index, row in enumerate(rows)
+                    if isinstance(row, dict)
+                ],
+            )
         duplicate = db.execute(
             "SELECT response_id FROM raw_responses WHERE snapshot_id=? AND run_id=? AND "
             "source=? AND group_key=? AND page=? ORDER BY collected_at LIMIT 1",
             (scope.snapshot_id, scope.run_id, source, group_key, str(page)),
         ).fetchone()
         db.execute(
-            "INSERT INTO raw_responses VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO raw_responses VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 response_id,
                 scope.request_id,
@@ -199,34 +222,29 @@ def _save_response(scope, *, source, source_type, args, page, status, payload, s
                 _json(args),
                 str(page),
                 status,
-                _json(payload),
                 _now(),
-                _hash(payload),
+                payload_hash,
                 group_key,
                 expected,
                 duplicate[0] if duplicate else None,
             ),
         )
-        for index, row in enumerate(rows):
-            if not isinstance(row, dict):
-                continue
-            natural = _natural(row)
+        for row_id, row_hash in db.execute(
+            "SELECT raw_row_id,row_hash FROM raw_rows WHERE payload_hash=? ORDER BY row_index",
+            (payload_hash,),
+        ).fetchall():
             previous = db.execute(
-                "SELECT r.raw_row_id FROM raw_rows r JOIN raw_responses p "
-                "USING(response_id) WHERE p.snapshot_id=? AND p.run_id=? AND p.source=? "
-                "AND p.group_key=? AND r.natural_key=? AND r.raw_json=? LIMIT 1",
-                (scope.snapshot_id, scope.run_id, source, group_key, natural, _json(row)),
+                # 요청 전체 행 대신 같은 해시의 행부터 찾아 대용량 페이지의 반복 탐색을 막습니다.
+                "SELECT r.raw_row_id FROM raw_rows r INDEXED BY raw_row_hash "
+                "CROSS JOIN raw_response_rows e ON e.raw_row_id=r.raw_row_id "
+                "CROSS JOIN raw_responses p ON p.response_id=e.response_id "
+                "WHERE p.snapshot_id=? AND p.run_id=? "
+                "AND p.source=? AND p.group_key=? AND r.row_hash=? LIMIT 1",
+                (scope.snapshot_id, scope.run_id, source, group_key, row_hash),
             ).fetchone()
             db.execute(
-                "INSERT INTO raw_rows VALUES(?,?,?,?,?,?)",
-                (
-                    "rr_" + str(uuid.uuid4()),
-                    response_id,
-                    index,
-                    natural,
-                    _json(row),
-                    previous[0] if previous else None,
-                ),
+                "INSERT INTO raw_response_rows VALUES(?,?,?)",
+                (response_id, row_id, previous[0] if previous else None),
             )
         snap = db.execute(
             "SELECT base_source_manifest,source_periods FROM snapshots WHERE snapshot_id=?",
@@ -250,8 +268,8 @@ def _finish(scope):
     with connect(scope.path) as db:
         groups = db.execute(
             "SELECT p.source,p.group_key,max(p.expected_rows),count(CASE WHEN "
-            "r.duplicate_of IS NULL THEN r.raw_row_id END) FROM raw_responses p LEFT JOIN "
-            "raw_rows r USING(response_id) WHERE p.snapshot_id=? AND p.run_id=? AND "
+            "e.duplicate_of IS NULL THEN e.raw_row_id END) FROM raw_responses p LEFT JOIN "
+            "raw_response_rows e USING(response_id) WHERE p.snapshot_id=? AND p.run_id=? AND "
             "p.duplicate_of IS NULL GROUP BY p.source,p.group_key",
             (scope.snapshot_id, scope.run_id),
         ).fetchall()
@@ -289,6 +307,9 @@ class CaptureScope:
     partial: bool = False
     finished: bool = False
     reasons: set[str] = field(default_factory=set)
+    # ponytail: 프로세스 내 요청 잠금입니다. 서버 여러 대면 작성자 조정을 재검토합니다.
+    write_lock: object = field(default_factory=Lock, repr=False)
+    cancelled: Event = field(default_factory=Event, repr=False)
 
     def incomplete(self, reason):
         self.partial = True
@@ -297,21 +318,26 @@ class CaptureScope:
 
     def record_sync(self, **kwargs):
         try:
-            response_id = _save_response(self, **kwargs)
-            self.finished = False
+            with self.write_lock:
+                response_id = _save_response(self, **kwargs)
+                self.finished = False
             return response_id
-        except Exception:
-            raise RawStorageError("원문 저장에 실패했습니다.") from None
+        except Exception as exc:
+            raise RawStorageError("원문 저장에 실패했습니다.") from exc
 
     async def record(self, **kwargs):
         return await _write(lambda: self.record_sync(**kwargs))
 
     async def finish(self):
+        def finish_locked():
+            with self.write_lock:
+                _finish(self)
+
         try:
-            await _write(_finish, self)
+            await _write(finish_locked)
             self.finished = True
-        except Exception:
-            raise RawStorageError("원문 스냅샷 마무리에 실패했습니다.") from None
+        except Exception as exc:
+            raise RawStorageError("원문 스냅샷 마무리에 실패했습니다.") from exc
 
 
 @asynccontextmanager
@@ -319,8 +345,8 @@ async def capture_scope(request_id: str, path: Path):
     run_id = "run_" + str(uuid.uuid4())
     try:
         snapshot = await _write(_snapshot, request_id, run_id, path)
-    except Exception:
-        raise RawStorageError("원문 스냅샷 생성에 실패했습니다.") from None
+    except Exception as exc:
+        raise RawStorageError("원문 스냅샷 생성에 실패했습니다.") from exc
     scope = CaptureScope(request_id, path, run_id, snapshot)
     token = _SCOPE.set(scope)
     try:
@@ -333,8 +359,8 @@ async def capture_scope(request_id: str, path: Path):
         try:
             if not scope.finished:
                 await scope.finish()
-        except Exception:
-            raise RawStorageError("원문 스냅샷 마무리에 실패했습니다.") from None
+        except Exception as exc:
+            raise RawStorageError("원문 스냅샷 마무리에 실패했습니다.") from exc
         finally:
             _SCOPE.reset(token)
 

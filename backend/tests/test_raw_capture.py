@@ -57,7 +57,7 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
                 ).fetchone()[0],
                 1,
             )
-            self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 1)
 
     async def test_partial_pages(self):
         async with capture_scope("one", self.path) as scope:
@@ -100,7 +100,10 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
                 page="1",
             )
         with connect(self.path) as db:
-            row = db.execute("SELECT request_args_json,response_json FROM raw_responses").fetchone()
+            row = db.execute(
+                "SELECT p.request_args_json,b.response_json FROM raw_responses p "
+                "JOIN raw_payloads b USING(payload_hash)"
+            ).fetchone()
             stored = " ".join(row)
             self.assertNotIn(secret, stored)
             self.assertNotIn("Authorization", stored)
@@ -243,7 +246,8 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
                 await store.stores_in_radius(37.5, 127.0, 500, use_cache=False)
         with connect(self.path) as db:
             rows = db.execute(
-                "SELECT source,request_args_json,response_json FROM raw_responses"
+                "SELECT p.source,p.request_args_json,b.response_json FROM raw_responses p "
+                "JOIN raw_payloads b USING(payload_hash)"
             ).fetchall()
             self.assertEqual(
                 {r[0] for r in rows},
@@ -351,7 +355,7 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
                 ),
             )
         with connect(self.path) as db:
-            rows = db.execute("SELECT response_json FROM raw_responses").fetchall()
+            rows = db.execute("SELECT response_json FROM raw_payloads").fetchall()
             self.assertEqual(len(rows), 2)
             self.assertIn("unparsed_text", rows[1][0])
             self.assertEqual(
@@ -371,7 +375,7 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
         async with capture_scope("one", self.path):
             await capture_http("commercial_area", response)
         with connect(self.path) as db:
-            row = db.execute("SELECT response_json FROM raw_responses").fetchone()
+            row = db.execute("SELECT response_json FROM raw_payloads").fetchone()
             self.assertNotIn("header-only-secret", row[0])
 
     async def test_resume_without_collection_keeps_complete_snapshot(self):

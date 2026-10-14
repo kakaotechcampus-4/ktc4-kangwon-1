@@ -300,7 +300,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         with connect(self.path) as db:
             self.assertEqual(
                 db.execute("SELECT count(*) FROM facts WHERE source='map'").fetchone()[0],
-                9 * client.calls,
+                len({f for place in data.places for f in place.fact_ids}),
             )
 
     async def test_map_limits_and_empty_not_absence(self):

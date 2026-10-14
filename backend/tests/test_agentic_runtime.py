@@ -167,7 +167,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         with connect(self.path) as db:
             ref = db.execute(
-                "SELECT raw_row_id FROM raw_rows WHERE response_id=?", (response,)
+                "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
             ).fetchone()[0]
         return register_fact(
             self.scope,

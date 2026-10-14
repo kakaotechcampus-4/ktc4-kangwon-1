@@ -175,7 +175,8 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
                 [r[0] for r in db.execute("SELECT completeness FROM snapshots")],
                 ["complete", "complete"],
             )
-            self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT count(*) FROM raw_response_rows").fetchone()[0], 2)
             args = json.loads(
                 db.execute(
                     "SELECT request_args_json FROM raw_responses WHERE request_id='cached'"

@@ -184,6 +184,10 @@ CREATE TABLE IF NOT EXISTS snapshots (
     source_periods TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(source_periods)),
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS raw_payloads (
+    payload_hash TEXT PRIMARY KEY NOT NULL,
+    response_json TEXT NOT NULL CHECK (json_valid(response_json))
+);
 CREATE TABLE IF NOT EXISTS raw_responses (
     response_id TEXT PRIMARY KEY NOT NULL,
     request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
@@ -194,9 +198,8 @@ CREATE TABLE IF NOT EXISTS raw_responses (
     request_args_json TEXT NOT NULL CHECK (json_valid(request_args_json)),
     page TEXT NOT NULL,
     http_status INTEGER,
-    response_json TEXT NOT NULL CHECK (json_valid(response_json)),
     collected_at TEXT NOT NULL,
-    payload_hash TEXT NOT NULL,
+    payload_hash TEXT NOT NULL REFERENCES raw_payloads(payload_hash),
     group_key TEXT NOT NULL,
     expected_rows INTEGER,
     duplicate_of TEXT REFERENCES raw_responses(response_id),
@@ -206,13 +209,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS snapshot_request_pair ON snapshots(request_id,
 CREATE INDEX IF NOT EXISTS raw_response_page ON raw_responses(snapshot_id,run_id,source,group_key,page);
 CREATE TABLE IF NOT EXISTS raw_rows (
     raw_row_id TEXT PRIMARY KEY NOT NULL,
-    response_id TEXT NOT NULL REFERENCES raw_responses(response_id),
+    payload_hash TEXT NOT NULL REFERENCES raw_payloads(payload_hash),
     row_index INTEGER NOT NULL,
     natural_key TEXT,
     raw_json TEXT NOT NULL CHECK (json_valid(raw_json)),
-    duplicate_of TEXT REFERENCES raw_rows(raw_row_id),
-    UNIQUE(response_id,row_index)
+    row_hash TEXT NOT NULL,
+    UNIQUE(payload_hash,row_index)
 );
+CREATE INDEX IF NOT EXISTS raw_row_hash ON raw_rows(row_hash);
+CREATE TABLE IF NOT EXISTS raw_response_rows (
+    response_id TEXT NOT NULL REFERENCES raw_responses(response_id),
+    raw_row_id TEXT NOT NULL REFERENCES raw_rows(raw_row_id),
+    duplicate_of TEXT REFERENCES raw_rows(raw_row_id),
+    PRIMARY KEY(response_id,raw_row_id)
+);
+CREATE INDEX IF NOT EXISTS raw_response_row_ref ON raw_response_rows(raw_row_id);
 
 -- 실행기가 바인딩하는 함수가 없거나 범위를 지정하지 않으면 행을 노출하지 않습니다.
 CREATE VIEW IF NOT EXISTS v_raw_stores AS
@@ -222,7 +233,7 @@ SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json
        json_extract(r.raw_json,'$.indsSclsCd') AS small_code,
        json_extract(r.raw_json,'$.lat') AS latitude,
        json_extract(r.raw_json,'$.lon') AS longitude
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='commercial_area' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 CREATE VIEW IF NOT EXISTS v_raw_lifecycle AS
 SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
@@ -232,25 +243,25 @@ SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json
        json_extract(r.raw_json,'$.SIMILR_INDUTY_STOR_CO') AS store_count,
        json_extract(r.raw_json,'$.OPBIZ_STOR_CO') AS opening_count,
        json_extract(r.raw_json,'$.CLSBIZ_STOR_CO') AS closing_count
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='business_lifecycle' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 CREATE VIEW IF NOT EXISTS v_raw_floating AS
 SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
        json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
        json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='floating_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 CREATE VIEW IF NOT EXISTS v_raw_resident AS
 SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
        json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
        json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='resident_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 CREATE VIEW IF NOT EXISTS v_raw_worker AS
 SELECT r.raw_row_id,p.response_id,p.request_id,p.run_id,p.snapshot_id,r.raw_json,
        json_extract(r.raw_json,'$.STDR_YYQU_CD') AS quarter,
        json_extract(r.raw_json,'$.TRDAR_CD') AS trade_area_code
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='worker_population' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 
 CREATE INDEX IF NOT EXISTS raw_row_natural_key ON raw_rows(natural_key);
@@ -260,11 +271,11 @@ SELECT r.raw_row_id,p.response_id,p.request_id,p.snapshot_id,r.raw_json,
        json_extract(r.raw_json,'$.place_name') AS name,
        json_extract(r.raw_json,'$.category_name') AS kakao_category,
        json_extract(r.raw_json,'$.distance') AS distance_m
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='map' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 CREATE VIEW IF NOT EXISTS v_raw_regulation AS
 SELECT r.raw_row_id,p.response_id,p.request_id,p.snapshot_id,r.raw_json
-FROM raw_rows r JOIN raw_responses p USING(response_id)
+FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p USING(response_id)
 WHERE p.source='regulation' AND p.request_id=raw_request_id() AND p.snapshot_id=raw_snapshot_id();
 
 
