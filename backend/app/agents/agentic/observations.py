@@ -74,7 +74,7 @@ async def map_search(scope, site, input, shared):
     try:
         async with asyncio.timeout(15):
             for query in queries:
-                if shared.map_http >= 20:
+                if not shared.measurement and shared.map_http >= 20:
                     from .raw_query import error
 
                     return error("BUDGET_EXCEEDED", "지도 HTTP 20회 상한입니다.")

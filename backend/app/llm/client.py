@@ -2,6 +2,7 @@
 
 import json
 import time
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -91,6 +92,8 @@ async def _complete(
     receipt: dict[str, Any] | None = None,
 ) -> ChatCompletionMessage:
     settings.require_credentials()
+    if receipt is not None and receipt.get("_record_raw"):
+        receipt["sent_messages"] = deepcopy(messages)
     budget, role, final = current_scope()
     attempt = (
         await budget.reserve(
@@ -164,6 +167,8 @@ async def _request(messages, settings, *, tools, usage, receipt=None) -> ChatCom
         raise LLMResponseError("LLM_INVALID_RESPONSE")
     usage.append(response.usage)
     if receipt is not None:
+        if receipt.get("_record_raw"):
+            receipt["raw_response"] = response.model_dump(mode="json")
         receipt.update(
             model=response.model,
             http_status=200,

@@ -22,6 +22,7 @@ EVALUATORS = {"examiner", "founder", "customer", "landlord_advocate"}
 
 @dataclass
 class SharedTools:
+    measurement: bool = False
     calls: Counter = field(default_factory=Counter)
     seen: set = field(default_factory=set)
     replies: dict = field(default_factory=dict)
@@ -110,13 +111,19 @@ class ToolExecutor:
             maxima.update(get_scorecard=2, get_facts=3, query_raw=2)
         if self.actor == "advisor":
             maxima["get_facts"] = 1
-        if calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor:
+        if not self.shared.measurement and (
+            calls["total"] >= 40 or calls[(self.actor, "total")] >= total_actor
+        ):
             return error("BUDGET_EXCEEDED", "도구 호출 상한을 초과했습니다.")
         calls["total"] += 1
         calls[(self.actor, "total")] += 1
         if name not in allowed:
             return error("INVALID_ARGUMENT", "현재 actor에 허용되지 않은 도구입니다.")
-        if not duplicate and calls[(self.actor, name)] >= maxima.get(name, 20):
+        if (
+            not self.shared.measurement
+            and not duplicate
+            and calls[(self.actor, name)] >= maxima.get(name, 20)
+        ):
             return error("BUDGET_EXCEEDED", "도구별 호출 상한을 초과했습니다.")
         calls[(self.actor, name)] += 1
         return None
@@ -185,7 +192,11 @@ class ToolExecutor:
                 key = _hash(input.model_dump(mode="json"))
                 async with self.shared.observation_lock:
                     if key not in self.shared.map_cache:
-                        if key not in self.shared.map_keys and len(self.shared.map_keys) >= 6:
+                        if (
+                            not self.shared.measurement
+                            and key not in self.shared.map_keys
+                            and len(self.shared.map_keys) >= 6
+                        ):
                             return error("BUDGET_EXCEEDED", "서로 다른 지도 검색 6개 상한입니다.")
                         self.shared.map_keys.add(key)
                         self.shared.map_cache[key] = await map_search(

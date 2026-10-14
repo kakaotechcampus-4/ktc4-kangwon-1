@@ -14,6 +14,49 @@ from app.storage.raw import capture_scope
 
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_measurement_continues_past_role_limit_without_forced_submit(self):
+        from app.agents.agentic.runtime import DecisionLoop
+
+        seen = []
+
+        async def generate(messages, definitions, settings, receipt):
+            seen.append(settings.max_tokens)
+            self.assertEqual(settings.max_tokens, 16000)
+            if len(seen) <= 9:
+                self.assertIn("get_scorecard", [d["function"]["name"] for d in definitions])
+                return self.message("get_scorecard", {"limit": len(seen)})
+            return self.message("submit_draft", {"phase": "draft", "report": {}})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate, measurement=True)
+        output = await loop.run()
+        self.assertEqual(loop.budget.used, 10)
+        self.assertEqual(output.status, "draft_available")
+
+    async def test_large_single_input_allowed_until_cumulative_limit(self):
+        from app.agents.agentic.budget import RuntimeBudget
+        from app.llm.budget import BudgetExceeded
+
+        budget = RuntimeBudget(
+            {
+                "used": 1,
+                "calls": [
+                    {
+                        "role": "decision",
+                        "phase": "draft",
+                        "attempt": 1,
+                        "input_tokens": 130000,
+                        "output_tokens": 0,
+                    }
+                ],
+            }
+        )
+        budget.schema_chars = 10000
+        self.assertEqual(await budget.reserve("decision", input_chars=50000), 2)
+        self.assertEqual(budget.totals()[0], 160000)
+        with self.assertRaises(BudgetExceeded):
+            await budget.reserve("decision", input_chars=2)
+        self.assertEqual(budget.used, 2)
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.path = Path(self.temp.name) / "db.sqlite3"

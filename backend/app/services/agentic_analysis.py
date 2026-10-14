@@ -10,9 +10,11 @@ from time import monotonic
 
 from app.address import resolve_site
 from app.agents.agentic.budget import RuntimeBudget
+from app.agents.agentic.recording import CallRecording
 from app.agents.agentic.registry import persist_snapshot_scores
 from app.agents.agentic.runtime import DecisionLoop
 from app.agents.orchestration.workflow import run_agents
+from app.config import BACKEND_DIR
 from app.db import repository
 from app.db.connection import connect, initialize
 from app.llm.session import with_client_session
@@ -117,19 +119,26 @@ async def execute_agentic_analysis(
     generate=None,
     advisor_generate=None,
     local_data_path=None,
+    measurement=False,
+    recording_path=None,
 ):
     request_id = request_id or uuid.uuid4().hex
     path = await _write(initialize, db_path)
     await _write(
         lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
     )
-    budget = RuntimeBudget()
+    budget = RuntimeBudget(measurement=measurement)
+    recorder = (
+        CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
+        if measurement or recording_path
+        else None
+    )
     stage, started, timings = "수집", monotonic(), {}
     try:
         await _write(lambda: repository.mark_running(request_id, db_path=path))
         async with capture_scope(request_id, path) as scope:
             adapter = await _write(LocalAdapter, local_data_path) if agents is None else None
-            async with asyncio.timeout(120):
+            async with asyncio.timeout(600 if measurement else 120):
                 site = await (resolve or resolve_site)(address)
                 task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
                 await _write(lambda: repository.save_site(task, db_path=path))
@@ -152,7 +161,12 @@ async def execute_agentic_analysis(
                 timings[stage] = monotonic() - started
             stage, started = "루프", monotonic()
             loop = await DecisionLoop.create(
-                scope, site, generate=generate, advisor_generate=advisor_generate, budget=budget
+                scope,
+                site,
+                generate=generate,
+                advisor_generate=advisor_generate,
+                budget=budget,
+                recorder=recorder,
             )
             loop.state["limitations"].extend(data.get("limitations", []))
             loop.state["phase_seconds"] = timings
@@ -169,7 +183,14 @@ async def execute_agentic_analysis(
 
 @with_client_session
 async def resume_agentic_analysis(
-    request_id, answers, *, db_path=None, generate=None, advisor_generate=None
+    request_id,
+    answers,
+    *,
+    db_path=None,
+    generate=None,
+    advisor_generate=None,
+    measurement=False,
+    recording_path=None,
 ):
     path = await _write(initialize, db_path)
 
@@ -186,10 +207,21 @@ async def resume_agentic_analysis(
 
     site, snapshot, run_id = await _write(context)
     scope = CaptureScope(request_id, path, run_id, snapshot)
+    recorder = (
+        CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
+        if measurement or recording_path
+        else None
+    )
     try:
         await _write(validate_snapshot, scope)
         loop = await DecisionLoop.resume(
-            scope, site, answers, generate=generate, advisor_generate=advisor_generate
+            scope,
+            site,
+            answers,
+            generate=generate,
+            advisor_generate=advisor_generate,
+            measurement=measurement,
+            recorder=recorder,
         )
         outcome = await loop.run()
         await scope.finish()

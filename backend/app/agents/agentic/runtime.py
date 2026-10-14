@@ -104,6 +104,8 @@ class DecisionLoop:
         advisor_generate=None,
         saved=None,
         budget=None,
+        measurement=False,
+        recorder=None,
     ):
         self.scope, self.site, self.base_id, self.base_rows = scope, site, base_id, base_rows
         self.generate, self.advisor_generate = generate, advisor_generate
@@ -115,7 +117,8 @@ class DecisionLoop:
             "tool_sequence": [],
             "known_fact_ids": [],
         }
-        self.budget = budget or RuntimeBudget(self.state.get("budget"))
+        self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
+        self.recorder = recorder
         self.budget.on_change = self._budget_changed
         self.tools = ToolExecutor(
             scope,
@@ -126,6 +129,7 @@ class DecisionLoop:
                 "submit_draft": self.submit_draft,
             },
         )
+        self.tools.shared.measurement = self.budget.measurement
         self.tools.shared.calls = Counter(
             {
                 tuple(k.split("|")) if "|" in k else k: v
@@ -144,7 +148,9 @@ class DecisionLoop:
         self.done = None
         self.waiting = None
         self.settings = replace(
-            LLMSettings.from_env("decision"), reasoning_effort="none", max_tokens=3000
+            LLMSettings.from_env("decision"),
+            reasoning_effort="none",
+            max_tokens=16000 if self.budget.measurement else 3000,
         )
         if not self.state["messages"]:
             summary = [
@@ -202,12 +208,44 @@ class DecisionLoop:
         await _write(_save, self.scope, self.state, status, result_model)
 
     async def _model(self, role, messages, settings, definitions=None, receipt=None):
+        started = monotonic()
+        receipt = receipt if receipt is not None else {}
+        if self.recorder:
+            receipt["_record_raw"] = True
+        value, failure = None, None
+        used = self.budget.used
+        try:
+            value, receipt = await self.model_call(role, messages, settings, definitions, receipt)
+            return value, receipt
+        except BaseException as exc:
+            failure = exc
+            raise
+        finally:
+            if self.recorder and (value is not None or self.budget.used > used):
+                await self.recorder.record(
+                    role,
+                    messages,
+                    value,
+                    receipt,
+                    int((monotonic() - started) * 1000),
+                    error=failure,
+                )
+
+    async def model_call(self, role, messages, settings, definitions=None, receipt=None):
         receipt = receipt if receipt is not None else {}
         started = monotonic()
-        remaining = 24000 - self.budget.totals()[1]
+        remaining = self.budget.output_limit - self.budget.totals()[1]
         if remaining <= 0:
             raise BudgetExceeded()
-        settings = replace(settings, max_tokens=min(settings.max_tokens or 3000, remaining))
+        settings = replace(
+            settings,
+            max_tokens=min(
+                16000 if self.budget.measurement else settings.max_tokens or 3000, remaining
+            ),
+            timeout_seconds=max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
+            if self.budget.measurement
+            else settings.timeout_seconds,
+        )
         generator = self.generate if role == "decision" else self.advisor_generate
         if generator is None:
             with llm_scope(self.budget, role):
@@ -226,6 +264,10 @@ class DecisionLoop:
                     value = await value
                 status = "ok"
             finally:
+                if receipt.get("replay_elapsed_ms"):
+                    self.budget.active_base += max(
+                        0, receipt["replay_elapsed_ms"] / 1000 - (monotonic() - started)
+                    )
                 usage = receipt.get("usage")
                 await self.budget.finish(
                     attempt,
@@ -237,7 +279,7 @@ class DecisionLoop:
         return value, receipt
 
     async def ask_advisor(self, input):
-        if self.state.get("advisor_calls", 0) >= 2:
+        if not self.budget.measurement and self.state.get("advisor_calls", 0) >= 2:
             return error("BUDGET_EXCEEDED", "자문은 요청당 두 회까지입니다.")
         self.state["advisor_calls"] = self.state.get("advisor_calls", 0) + 1
         try:
@@ -268,7 +310,11 @@ class DecisionLoop:
             ],
         }
         try:
-            async with asyncio.timeout(min(45, max(0.01, 300 - self.budget.active_seconds))):
+            async with asyncio.timeout(
+                max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
+                if self.budget.measurement
+                else min(45, max(0.01, 300 - self.budget.active_seconds))
+            ):
                 value, receipt = await self._model(
                     "advisor",
                     [
@@ -456,14 +502,21 @@ class DecisionLoop:
             try:
                 definitions = self.tools.definitions()
                 decision_used = sum(c["role"] == "decision" for c in self.budget.calls)
-                if decision_used >= 7:
+                if not self.budget.measurement and decision_used >= 7:
                     definitions = [
                         d for d in definitions if d["function"]["name"] == "submit_draft"
                     ]
                 self.budget.schema_chars = len(_json(definitions))
-                if self.budget.totals()[1] >= 24000 or self.budget.active_seconds >= 300:
+                if (
+                    self.budget.totals()[1] >= self.budget.output_limit
+                    or self.budget.active_seconds >= self.budget.seconds_limit
+                ):
                     raise BudgetExceeded()
-                async with asyncio.timeout(max(0.01, min(180, 300 - self.budget.active_seconds))):
+                async with asyncio.timeout(
+                    max(0.01, self.budget.seconds_limit - self.budget.active_seconds)
+                    if self.budget.measurement
+                    else max(0.01, min(180, 300 - self.budget.active_seconds))
+                ):
                     message, _ = await self._model(
                         "decision", self.model_messages(), self.settings, definitions
                     )
@@ -499,7 +552,7 @@ class DecisionLoop:
                 if self.waiting:
                     await self.save("waiting_for_input")
                     return self.waiting
-                if self.state["no_progress"] >= 3:
+                if not self.budget.measurement and self.state["no_progress"] >= 3:
                     return await self.fallback(
                         "새 정보가 없는 반복·오류 호출이 연속 세 번 발생했습니다."
                     )

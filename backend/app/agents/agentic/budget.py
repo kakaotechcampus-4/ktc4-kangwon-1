@@ -7,10 +7,17 @@ from app.llm.budget import BudgetExceeded, LLMBudget
 
 
 class RuntimeBudget(LLMBudget):
-    def __init__(self, saved=None, on_change=None):
+    def __init__(self, saved=None, on_change=None, *, measurement: bool = False):
         saved = saved or {}
+        self.measurement = measurement
+        self.input_limit = 400000 if measurement else 160000
+        self.output_limit = 60000 if measurement else 24000
+        self.seconds_limit = 600 if measurement else 300
         super().__init__(
-            limit=26, used=saved.get("used", 0), calls=saved.get("calls", []), on_change=on_change
+            limit=40 if measurement else 26,
+            used=saved.get("used", 0),
+            calls=saved.get("calls", []),
+            on_change=on_change,
         )
         self.active_base = saved.get("active_seconds", 0)
         self.started = monotonic()
@@ -33,6 +40,7 @@ class RuntimeBudget(LLMBudget):
 
     def snapshot(self):
         return super().snapshot() | {
+            "measurement": self.measurement,
             "active_seconds": self.active_seconds,
             "input_tokens": self.totals()[0],
             "output_tokens": self.totals()[1],
@@ -59,11 +67,10 @@ class RuntimeBudget(LLMBudget):
             inputs, outputs = self.totals()
             if (
                 self.used >= self.limit
-                or role_used >= role_limit
-                or inputs + estimate > 160000
-                or outputs >= 24000
-                or estimate > 12000
-                or self.active_seconds >= 300
+                or (not self.measurement and role_used >= role_limit)
+                or inputs + estimate > self.input_limit
+                or outputs >= self.output_limit
+                or self.active_seconds >= self.seconds_limit
             ):
                 raise BudgetExceeded()
             self.used += 1
