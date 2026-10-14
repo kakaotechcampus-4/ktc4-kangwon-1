@@ -5,6 +5,7 @@ import json
 import unittest
 
 from app.agentic.contracts import SubmitDraftInput, SubmitLInput
+from app.agentic.evaluators import PERSONAS
 from tests import test_agentic_runtime as fixtures
 
 
@@ -22,7 +23,11 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
 
         async def evaluator(messages, definitions, settings, receipt):
             payload = json.loads(messages[1]["content"])
-            actor = payload["actor"]
+            actor = next(
+                actor
+                for actor, persona in PERSONAS.items()
+                if messages[0]["content"].startswith(persona)
+            )
             entered.add(actor)
             if len(entered) == 4:
                 ready.set()
@@ -31,7 +36,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
                 raise TimeoutError()
             return self.message(
                 "submit_review",
-                {"draft_id": payload["draft"]["report_id"], "verdict": "agree", "issues": []},
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
             )
 
         async def decision(messages, definitions, settings, receipt):

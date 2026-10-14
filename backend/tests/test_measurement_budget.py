@@ -100,8 +100,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resumed.used, 1)
             self.assertEqual(resumed.totals(), (180000, 0))
             self.assertEqual(resumed.active_seconds, 599)
-            with self.assertRaises(BudgetExceeded):
-                await resumed.reserve("decision", input_chars=2)
+            self.assertEqual(await resumed.reserve("decision", input_chars=2), 2)
         with patch("app.agentic.budget.monotonic", return_value=101):
             with self.assertRaises(BudgetExceeded):
                 await resumed.reserve("decision")

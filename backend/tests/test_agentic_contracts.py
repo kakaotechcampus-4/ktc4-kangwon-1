@@ -31,6 +31,12 @@ class AgenticContractsTests(unittest.TestCase):
                 "report": {"summary_segments": [{"type": "text", "text": "초안"}]},
             },
             c.SubmitReviewInput: {"draft_id": "draft", "verdict": "agree", "issues": []},
+            c.SubmitLInput: {"L_records": [{"industry_code": "I201", "note": "추가 조건 없음"}]},
+            c.LInput: {
+                "industry_code": "I201",
+                "factors": [{"fact_id": "1234abcd", "direction": "favorable"}],
+            },
+            c.LFactorInput: {"fact_id": "1234abcd", "direction": "adverse", "severe": True},
         }
         for model, value in examples.items():
             with self.subTest(model=model.__name__):
@@ -51,6 +57,7 @@ class AgenticContractsTests(unittest.TestCase):
             (c.QueryRawInput, {"sql": "x" * 4001}),
             (c.MapSearchInput, {"industry_code": "I201", "radius_m": 501}),
             (c.AskAdvisorInput, {"question": "x" * 801, "fact_ids": [FACT]}),
+            (c.LInput, {"industry_code": "I201", "note": "가" * 81}),
         ]
         for model, value in examples:
             with self.subTest(model=model.__name__), self.assertRaises(ValidationError):
@@ -258,7 +265,9 @@ class AgenticContractsTests(unittest.TestCase):
                 "reason": "근거 확인",
             },
             c.ReportProposal: {"candidates": [{"industry_code": "I201"}]},
-            c.SubmitLInput: {"L_records": [l_record]},
+            c.SubmitLInput: {
+                "L_records": [{"industry_code": "I201", "neutral": True, "fact_ids": ["1234abcd"]}]
+            },
             c.SubmitLResult: {"submitted_count": 1, "remaining_count": 50, "closed": False},
             c.ScorecardResult: {"summaries": [summary]},
             c.FactsResult: {"facts": result["facts"]},

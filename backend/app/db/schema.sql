@@ -350,3 +350,14 @@ CREATE TRIGGER IF NOT EXISTS immutable_local_fact_lineage_delete BEFORE DELETE O
 BEGIN SELECT RAISE(ABORT,'local_fact_lineage are immutable'); END;
 CREATE INDEX IF NOT EXISTS idx_tool_calls_req ON tool_calls(request_id,snapshot_id,actor,tool_name);
 CREATE INDEX IF NOT EXISTS idx_advisor_consults_req ON advisor_consults(request_id,snapshot_id);
+CREATE TABLE IF NOT EXISTS fact_aliases (
+    request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
+    alias TEXT NOT NULL CHECK(length(alias)=8),
+    fact_id TEXT NOT NULL REFERENCES facts(fact_id),
+    PRIMARY KEY(request_id,alias), UNIQUE(request_id,fact_id)
+);
+CREATE TRIGGER IF NOT EXISTS scoped_fact_alias BEFORE INSERT ON fact_aliases
+WHEN NOT EXISTS(SELECT 1 FROM facts f WHERE f.fact_id=NEW.fact_id AND f.request_id=NEW.request_id)
+BEGIN SELECT RAISE(ABORT,'fact alias scope mismatch'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_fact_alias BEFORE UPDATE ON fact_aliases
+BEGIN SELECT RAISE(ABORT,'fact aliases are immutable'); END;

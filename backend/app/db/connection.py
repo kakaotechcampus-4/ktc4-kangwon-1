@@ -11,7 +11,7 @@ from threading import Lock
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 # ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
 _INITIALIZE_LOCK = Lock()
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:

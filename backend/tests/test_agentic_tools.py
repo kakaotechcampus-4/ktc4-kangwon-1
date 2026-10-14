@@ -233,7 +233,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         unknown = await tool.for_actor("founder").execute(
             "get_facts", {"fact_ids": ["f_00000000-0000-0000-0000-000000000000"]}
         )
-        self.assertEqual(unknown.error.code, "UNKNOWN_FACT")
+        self.assertEqual(unknown.error.code, "INVALID_ARGUMENT")
 
     async def test_duplicate_and_invalid_argument(self):
         tool = self.executor()

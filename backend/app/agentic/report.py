@@ -34,6 +34,18 @@ class ReportInvalid(ValueError):
     """모델 제출 오류는 수정 가능한 도구 오류로 반환합니다."""
 
 
+def l_grade(factors):
+    favorable = sum(f["direction"] == "favorable" for f in factors)
+    adverse = sum(f["direction"] == "adverse" for f in factors)
+    if adverse >= 2 or any(f.get("major_constraint") for f in factors):
+        return 0
+    if favorable and adverse or not favorable and not adverse:
+        return 2
+    if adverse:
+        return 1
+    return 4 if favorable >= 2 else 3
+
+
 def load_base(scope):
     with connect(scope.path) as db:
         row = db.execute(
@@ -201,21 +213,7 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
                         raise ReportInvalid(
                             "공간 요건의 확인된 일치·불일치만 L 요인으로 쓸 수 있습니다."
                         )
-            favorable = sum(f.direction == "favorable" for f in record.new_factors)
-            adverse = sum(f.direction == "adverse" for f in record.new_factors)
-            major = any(f.major_constraint for f in record.new_factors)
-            if (
-                record.grade == 4
-                and (favorable < 2 or adverse)
-                or record.grade == 3
-                and (favorable < 1 or adverse)
-                or record.grade == 2
-                and bool(favorable) != bool(adverse)
-                or record.grade == 1
-                and (adverse != 1 or major)
-                or record.grade == 0
-                and (adverse < 2 and not major)
-            ):
+            if record.grade != l_grade([factor.model_dump() for factor in record.new_factors]):
                 raise ReportInvalid("L 등급과 새 유리·불리 요인 개수가 맞지 않습니다.")
             if record.advisor_consult_ids:
                 found = db.execute(

@@ -46,7 +46,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 {
   "schema_version": "2.0",
   "rubric_version": "v0.8",
-  "tool_contract_version": "2",
+  "tool_contract_version": "3",
   "request_id": "request-demo",
   "run_id": "run-demo",
   "report_id": "report-demo",
@@ -946,7 +946,7 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 
 | 필드 | 의미 |
 | --- | --- |
-| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 2. 모델 이름에 V2를 붙이지 않음 |
+| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 3. 모델 이름에 V2를 붙이지 않음 |
 | request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
 | top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지 제외·B 내림차순→coverage→코드 정렬, 부족하면 미충원 |
 | code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
@@ -973,10 +973,19 @@ seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 
 
 ### 도구 function 정의의 내보내기
 
-도구 계약2는 submit_l을 추가한 열 개 function이다. L을 최대17개씩 제출하여 종료한 뒤
+도구 계약3은 열 개 function이다. 행별 L 근거를 제출하여 종료한 뒤
 보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
-구현 순서·공통 공간 fact·역할 예산은 [전체 L 계획](whole-industry-l-plan.md)을 따른다.
-아래 내보내기 규칙은 계약2에서도 유지한다.
+
+도구 계약3: submit_l은 업종·factors(fact_id 별칭/direction/severe)·neutral/fact_ids·note만 받는다.
+등급·상태는 서버가 계산하며 묶음 상한 없이 행별로 채택·거절한다. 중복 업종은 무시한다.
+응답에는 accepted/ignored/rejected(이유·수정법)/unsubmitted가 있다. 기존 최종 L_records 형태는 유지한다.
+모델 경계의 fact 별칭은 요청별8자이며 DB·GET의 fact_id는 기존 불변ID다.
+없는 별칭은 해당 L 행 또는 보고서 인용 문장만 제외하고 알림을 반환한다.
+평가자 입력은 Top5·후보 L요인·등급 분포·한계·핵심 fact의 약6k토큰 검토 패킷이다.
+지적 근거는 최대5개이며 제출 오류는 추가 두 번 수정할 수 있다.
+G·C4는 채점 전 코드가 관측한다. 외부 실패는 해당 항목만 unknown으로 남긴다.
+현재 구현 순서·공통 공간 fact·측정 예산은 [단순 L 계획](simple-l-input-plan.md)을 따른다.
+아래 내보내기 규칙은 계약3에서도 유지한다.
 
 `tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 

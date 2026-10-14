@@ -21,6 +21,7 @@ class RuntimeBudget(LLMBudget):
     def __init__(self, saved=None, on_change=None, *, measurement: bool = False):
         saved = saved or {}
         self.measurement = measurement
+        self.submitting: set[str] = set()
         self.input_limit = 400000
         self.output_limit = 60000
         self.seconds_limit = 600
@@ -64,6 +65,8 @@ class RuntimeBudget(LLMBudget):
     def quota(self, role, final=False):
         if role not in ROLE_LIMITS:
             raise ValueError("모델 역할이 올바르지 않습니다.")
+        if role in self.submitting:
+            return self.input_limit, self.output_limit, self.limit
         return DECISION_PHASE_LIMITS[final] if role == "decision" else ROLE_LIMITS[role]
 
     def usage(self, role, final=None):
@@ -108,7 +111,7 @@ class RuntimeBudget(LLMBudget):
                 or outputs >= self.output_limit
                 or outputs + self.pending_output > self.output_limit
                 or role_calls >= quota_calls
-                or role_inputs + estimate > quota_input
+                or (not self.measurement and role_inputs + estimate > quota_input)
                 or role_outputs >= quota_output
                 or role_outputs + self.pending_by_role[slot] > quota_output
                 or self.active_seconds >= self.seconds_limit

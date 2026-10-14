@@ -8,6 +8,8 @@ from dataclasses import replace
 from time import monotonic
 from types import SimpleNamespace
 
+from pydantic import ValidationError
+
 from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
@@ -19,9 +21,11 @@ from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, comple
 from app.llm.config import LLMSettings
 
 from . import advisor, questions
+from .aliases import encode, encode_messages
 from .budget import RuntimeBudget
 from .contracts import (
     EvaluatorReview,
+    LInput,
     LRecord,
     MapResult,
     RegulationResult,
@@ -33,6 +37,7 @@ from .contracts import (
     ToolReply,
 )
 from .evaluators import review
+from .l_input import build_record
 from .questions import LoopOutcome
 from .read_tools import score_summary
 from .report import (
@@ -47,15 +52,19 @@ from .scoring import rank_candidates
 from .snapshot import persist_space_requirements
 from .space import ensure_space_fits
 from .sql_tool import error
-from .tools import ToolExecutor
+from .tools import ToolExecutor, validation_message
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
 계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하세요.
 전체 카탈로그의 모든 업종을 같은 기준으로 검토합니다. 코드 순위로 검토 범위를 제한하지 마세요.
 순서는 초기 점수표 확인 → 필요한 공간 질문 한 번 → 공간 비교 근거 확인 → 필요한 추가 조사
 → submit_l → 재계산된 Top Five로 submit_draft입니다.
-submit_l로 업종별 판단을 최대 열일곱 개씩 나누어 제출하세요. 같은 업종은 한 번만 제출합니다.
-근거가 없으면 unknown과 개별 이유를 limitations에 남기세요.
+submit_l은 industry_code와 factors(fact_id의 짧은 별칭·direction·severe)만 받습니다.
+중립으로 검토했으면 neutral=true와 확인한 새 근거 fact_ids를 쓰세요.
+근거가 없으면 factors 없이 제출하고 짧은 note에 이유를 남기세요.
+등급·상태·선정 사유·도구 호출 ID는 쓰지 마세요. 코드가 계산합니다.
+모든 업종을 제출하세요. 묶음 크기 제한은 없고 이미 채택한 업종은 무시됩니다.
+거절 목록의 업종만 고쳐서 다시 제출하세요. note의 숫자는 코드가 설명으로 대체합니다.
 전체 제출 또는 finish=true로 L을 닫습니다.
 L을 닫으면 서버가 전체 점수와 Top Five를 다시 계산합니다. 그 결과로 보고서를 작성하세요.
 submit_draft는 보고서만 제출하며 추천·제외 후보는 각각 최대 다섯 업종입니다.
@@ -75,9 +84,7 @@ space_fit을 L 요인에 인용하면 space_fit_component를 지정하세요. �
 L에는 실제 조회한 새 fact만 사용하세요. D/C/S 지표 반복과 같은 근거의 중복 채점은 금지합니다.
 L 등급은 새 요인 기준: 유리 둘 이상·불리 없음은 최고, 유리 하나·불리 없음은 그다음,
 중립 또는 유리·불리 상쇄는 중간, 불리 하나는 낮음, 불리 둘 이상 또는 큰 운영 제약은 최저입니다.
-LRecord의 basis는 all_industries입니다.
-초기 score_snapshot_id·코드 순위·검토 사유·실제 tool_call_id·확인 질문·
-새 요인·fact_id·등급을 기록하세요. 초기 순위는 추적 정보이며 업종을 제외하는 기준이 아닙니다.
+fact는 도구에서 받은 여덟 자리 별칭만 쓰세요. 별칭을 만들거나 추측하지 마세요.
 모든 보고서 문장 숫자는 text에 직접 쓰지 말고 fact_id 슬롯으로 인용하세요.
 인용 불가 사실·추측은 확인 조건으로 남기세요. 동일 조회를 반복하지 말고
 submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출하지 않습니다."""
@@ -306,6 +313,8 @@ class DecisionLoop:
         await run_in_thread(_save, self.scope, self.state, status, result_model)
 
     async def _model(self, role, messages, settings, definitions=None, receipt=None):
+        if role != "advisor":
+            messages = await run_in_thread(encode_messages, self.scope, messages)
         started = monotonic()
         receipt = receipt if receipt is not None else {}
         if self.recorder:
@@ -401,20 +410,63 @@ class DecisionLoop:
 
     async def submit_l(self, input):
         if self.state["L_closed"]:
-            return error("L_STAGE_CLOSED", "L 판단은 이미 확정되어 다시 제출할 수 없습니다.")
-        submitted = self.state["L_records"]
-        try:
-            batch = [record.model_copy(deep=True) for record in input.L_records]
-            if any(record.industry_code in submitted for record in batch):
-                return error("DUPLICATE_INDUSTRY", "이미 제출한 L 업종은 다시 제출할 수 없습니다.")
-            await run_in_thread(
-                validate_l_records,
-                self.scope,
-                batch,
-                self.base_id,
-                self.base_rows,
-                self.state["advisor_unavailable"],
+            return ToolReply(
+                status="ok",
+                data=SubmitLResult(
+                    submitted_count=len(self.state["L_records"]),
+                    remaining_count=0,
+                    closed=True,
+                    ignored=[
+                        raw["industry_code"]
+                        for raw in input.L_records
+                        if raw.get("industry_code") in self.state["L_records"]
+                    ],
+                ),
             )
+        submitted = self.state["L_records"]
+        accepted, ignored, rejected, warnings, batch = [], [], [], [], []
+        for raw in input.L_records:
+            code = raw.get("industry_code", "미지정")
+            if not isinstance(code, str):
+                code = "미지정"
+            if code in submitted or code in accepted:
+                ignored.append(code)
+                continue
+            try:
+                record, note_dropped = await run_in_thread(
+                    build_record, self.scope, raw, self.base_id, self.base_rows
+                )
+                await run_in_thread(
+                    validate_l_records,
+                    self.scope,
+                    [record],
+                    self.base_id,
+                    self.base_rows,
+                    self.state["advisor_unavailable"],
+                )
+                batch.append(record)
+                accepted.append(record.industry_code)
+                if note_dropped:
+                    warnings.append(
+                        code + ": 숫자 note를 버리고 검증한 근거 설명으로 대체했습니다."
+                    )
+            except ValidationError as exc:
+                rejected.append(
+                    {
+                        "industry_code": str(code),
+                        "reason": validation_message(LInput, exc),
+                        "correction": "업종·factors 또는 neutral/fact_ids만 제출하세요.",
+                    }
+                )
+            except (ValueError, ReportInvalid) as exc:
+                rejected.append(
+                    {
+                        "industry_code": str(code),
+                        "reason": str(exc)[:400],
+                        "correction": "도구가 반환한 같은 업종의 새 근거 별칭만 제출하세요.",
+                    }
+                )
+        try:
             combined = {**submitted, **{r.industry_code: r.model_dump(mode="json") for r in batch}}
             close = input.finish or len(combined) == len(INDUSTRIES)
             score_id = None
@@ -457,7 +509,14 @@ class DecisionLoop:
                 closed=close,
                 score_snapshot_id=score_id,
                 scorecard=scorecard,
+                accepted=accepted,
+                ignored=ignored,
+                rejected=rejected,
+                unsubmitted=[
+                    code for code in INDUSTRIES if code not in submitted and code not in accepted
+                ],
             ),
+            warnings=warnings,
         )
 
     async def submit_draft(self, input):
@@ -602,7 +661,9 @@ class DecisionLoop:
                     data["next_cursor"] = str(int(arguments.get("cursor") or 0) + len(entries))
                 if field == "places":
                     data["has_more"] = True
-        return {"tool_call_id": self.tools.last_call_id} | body
+        return await run_in_thread(
+            encode, self.scope, {"tool_call_id": self.tools.last_call_id} | body
+        )
 
     async def run(self):
         while True:

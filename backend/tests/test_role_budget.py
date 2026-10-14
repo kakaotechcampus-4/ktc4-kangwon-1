@@ -84,13 +84,12 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
             usage=SimpleNamespace(prompt_tokens=180000, completion_tokens=30000),
         )
         resumed = RuntimeBudget(budget.snapshot(), measurement=True)
-        with self.assertRaises(BudgetExceeded):
-            await resumed.reserve("decision", input_chars=2)
+        self.assertEqual(await resumed.reserve("customer", input_chars=80002), 2)
         with self.assertRaises(BudgetExceeded):
             await resumed.claim_output(1, role="decision")
         self.assertEqual(await resumed.claim_output(16000, role="decision", final=True), 6000)
-        self.assertEqual(await resumed.reserve("decision", final=True, input_chars=100000), 2)
-        self.assertEqual(await resumed.reserve("customer", input_chars=80000), 3)
+        self.assertEqual(await resumed.reserve("decision", final=True, input_chars=100000), 3)
+        self.assertEqual(await resumed.reserve("customer", input_chars=80000), 4)
 
     async def test_role_schema_is_used_without_decision_schema(self):
         budget = RuntimeBudget()
@@ -99,8 +98,34 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
         await budget.reserve("examiner", input_chars=1000)
         self.assertEqual(budget.calls[0]["estimated_input"], 1000)
 
+    async def test_submit_reservations_bypass_role_limits_but_keep_global_limit(self):
+        budget = RuntimeBudget(
+            {
+                "used": 4,
+                "calls": [{"role": "examiner", "input_tokens": 45000, "output_tokens": 5500}] * 4,
+            }
+        )
+        budget.submitting.add("examiner")
+        self.assertEqual(await budget.reserve("examiner", input_chars=1), 5)
+        reserved = await budget.claim_output(4000, role="examiner")
+        self.assertEqual(reserved, 4000)
+        await budget.release_output(reserved, role="examiner")
+        budget.input_limit = 180000
+        with self.assertRaises(BudgetExceeded):
+            await budget.reserve("examiner", input_chars=1)
+
 
 class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        decode = patch("app.agentic.tools.decode", side_effect=lambda scope, value: value)
+        decode.start()
+        self.addCleanup(decode.stop)
+        report = patch(
+            "app.agentic.tools.decode_report", side_effect=lambda scope, value: (value, [])
+        )
+        report.start()
+        self.addCleanup(report.stop)
+
     def executor(self, actor="examiner", measurement=False, handlers=None):
         executor = ToolExecutor(
             SimpleNamespace(snapshot_id="snapshot"), None, actor=actor, handlers=handlers
@@ -135,7 +160,8 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
                 repeated = await executor.execute(
                     "submit_review", {"draft_id": "other", "verdict": "agree", "issues": []}
                 )
-                self.assertEqual(repeated.error.code, "BUDGET_EXCEEDED")
+                self.assertEqual(repeated.status, "ok")
+                self.assertEqual(executor.shared.calls[("examiner", "submit_review")], 0)
 
     async def test_submit_l_handler_is_allowed_and_not_a_read(self):
         executor = self.executor(
@@ -183,6 +209,11 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        decode = patch("app.agentic.tools.decode", side_effect=lambda scope, value: value)
+        decode.start()
+        self.addCleanup(decode.stop)
+
     def draft(self):
         records = [
             {
@@ -208,6 +239,7 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         data = {
             "report_id": "draft",
             "snapshot_id": "snapshot",
+            "top5": [{"industry_code": "I201", "code_points": 60, "L_points": 7.5}],
             "L_records": records,
             "facts": [
                 {
@@ -226,14 +258,15 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             report_id="draft", model_dump=MagicMock(return_value=json.loads(canonical_json(data)))
         )
 
-    async def test_compact_context_preserves_L_evidence_and_unique_metadata(self):
+    async def test_packet_preserves_candidate_evidence_and_grade_counts(self):
         draft = self.draft()
         full = json.loads(canonical_json(draft.model_dump(mode="json")))
         compressed = evaluators.compact_draft(draft)
-        self.assertNotIn("selection", compressed["L_records"][0])
+        self.assertNotIn("L_records", compressed)
         for key in ("new_factors", "industry_code", "status", "grade"):
-            self.assertEqual(compressed["L_records"][0][key], full["L_records"][0][key])
-        self.assertEqual(len(compressed["fact_contexts"]), 1)
+            self.assertEqual(compressed["candidate_factors"][0][key], full["L_records"][0][key])
+        self.assertEqual(compressed["L_counts"], {"3": 1})
+        self.assertTrue(all(f["fact_id"] == "fact" for f in compressed["facts"]))
         self.assertLess(len(canonical_json(compressed)), len(canonical_json(full)))
 
     async def test_four_evaluators_complete_with_role_reservations(self):
@@ -265,6 +298,7 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.fact_rows", return_value={}),
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
+            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
         ):
             reviews = await asyncio.gather(
                 *(
@@ -275,6 +309,83 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(reviews), 4)
         self.assertTrue(all(item.status == "completed" for item in reviews))
         self.assertEqual(budget.pending_output, 0)
+
+    async def test_three_reads_then_invalid_submission_gets_two_corrections(self):
+        budget = RuntimeBudget()
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        executor = ToolExecutor(scope, None, actor="examiner")
+        sequence = [call("get_scorecard", {"limit": limit}) for limit in (1, 2, 3)] + [
+            call("submit_review", {"draft_id": draft_id, "verdict": "agree", "issues": []})
+            for draft_id in ("wrong", "wrong", "draft")
+        ]
+        definitions_seen = []
+
+        async def model(role, messages, settings, definitions):
+            definitions_seen.append({d["function"]["name"] for d in definitions})
+            reservation = await budget.claim_output(settings.max_tokens, role=role)
+            attempt = await budget.reserve(role, input_chars=len(canonical_json(messages)))
+            await budget.finish(
+                attempt,
+                status="completed",
+                elapsed_ms=1,
+                usage=SimpleNamespace(prompt_tokens=100, completion_tokens=100),
+            )
+            await budget.release_output(reservation, role=role)
+            return sequence.pop(0), {}
+
+        loop = SimpleNamespace(scope=scope, budget=budget, _model=model, event=AsyncMock())
+        with (
+            patch(
+                "app.agentic.tools.get_scorecard",
+                AsyncMock(return_value=ToolReply(status="ok", data={})),
+            ),
+            patch("app.agentic.evaluators.fact_rows", return_value={}),
+            patch("app.agentic.evaluators.save_review"),
+            patch("app.agentic.tools._audit"),
+            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+        ):
+            result = await evaluators.review(loop, "examiner", executor, self.draft())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(budget.used, 6)
+        self.assertEqual(definitions_seen[3:], [{"submit_review"}] * 3)
+        self.assertEqual(executor.shared.calls[("examiner", "total")], 3)
+        self.assertFalse(budget.submitting)
+
+    async def test_packet_all_industry_counts_without_all_industry_records(self):
+        draft = self.draft()
+        payload = draft.model_dump(mode="json")
+        original = payload["L_records"][0]
+        payload["L_records"] = [
+            dict(original, industry_code=f"X{index:03}") for index in range(50)
+        ] + [original]
+        draft.model_dump.return_value = payload
+        with patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value):
+            packet = evaluators.review_packet(None, draft)
+        self.assertEqual(packet["L_counts"], {"3": 51})
+        self.assertEqual(len(packet["candidate_factors"]), 1)
+        self.assertEqual(len(packet["facts"]), 1)
+        self.assertLessEqual(len(canonical_json(packet)), 12000)
+
+    async def test_invalid_submission_stops_after_three_failures(self):
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        executor = ToolExecutor(scope, None, actor="examiner")
+        message = call("submit_review", {"draft_id": "wrong", "verdict": "agree", "issues": []})
+        loop = SimpleNamespace(
+            scope=scope,
+            budget=RuntimeBudget(),
+            _model=AsyncMock(return_value=(message, {})),
+            event=AsyncMock(),
+        )
+        with (
+            patch("app.agentic.evaluators.save_review"),
+            patch("app.agentic.tools._audit"),
+            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+        ):
+            result = await evaluators.review(loop, "examiner", executor, self.draft())
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "DRAFT_MISMATCH")
+        self.assertEqual(loop._model.await_count, 3)
+        self.assertEqual(executor.shared.calls[("examiner", "submit_review")], 0)
 
 
 class SpaceFitCacheTests(unittest.IsolatedAsyncioTestCase):

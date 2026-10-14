@@ -428,7 +428,7 @@ class ReviewIssue(Schema):
         "factual_error", "duplicate_score", "missing_evidence", "scope_mismatch", "action_condition"
     ]
     comment: Text
-    fact_ids: list[FactId] = Field(default_factory=list, max_length=3)
+    fact_ids: list[FactId] = Field(default_factory=list, max_length=5)
     suggested_check: Text
 
 
@@ -456,17 +456,35 @@ class ReportProposal(Schema):
     limitations_segments: list[FactSegment] = Field(default_factory=list)
 
 
+class LFactorInput(Schema):
+    fact_id: Annotated[str, Field(min_length=1, max_length=40)]
+    direction: Literal["favorable", "adverse"]
+    severe: bool = False
+
+
+class LInput(Schema):
+    industry_code: IndustryCode
+    factors: list[LFactorInput] = Field(default_factory=list)
+    neutral: bool = False
+    fact_ids: list[str] = Field(default_factory=list)
+    note: Annotated[str, Field(max_length=80)] = ""
+
+    @model_validator(mode="after")
+    def check_neutral(self) -> Self:
+        if self.neutral and (self.factors or not self.fact_ids):
+            raise ValueError("중립은 factors 없이 확인한 fact_ids가 필요합니다.")
+        return self
+
+
 class SubmitLInput(Schema):
-    L_records: list[LRecord] = Field(default_factory=list, max_length=17)
+    # 한 행의 오류가 다른 업종을 막지 않도록 handler에서 행별로 검증합니다.
+    L_records: list[dict[str, Any]] = Field(default_factory=list)
     finish: bool = False
 
     @model_validator(mode="after")
     def check_batch(self) -> Self:
         if not self.L_records and not self.finish:
             raise ValueError("빈 묶음은 종료를 명시해야 합니다.")
-        codes = [r.industry_code for r in self.L_records]
-        if len(set(codes)) != len(codes):
-            raise ValueError("한 묶음에 같은 업종을 중복 제출할 수 없습니다.")
         return self
 
 
@@ -500,6 +518,10 @@ class SubmitLResult(Schema):
     closed: bool
     score_snapshot_id: Text | None = None
     scorecard: ScorecardResult | None = None
+    accepted: list[IndustryCode] = Field(default_factory=list)
+    ignored: list[IndustryCode] = Field(default_factory=list)
+    rejected: list[dict[str, str]] = Field(default_factory=list)
+    unsubmitted: list[IndustryCode] = Field(default_factory=list)
 
 
 class RawQueryRow(Schema):
@@ -643,7 +665,7 @@ _TOOL_DESCRIPTIONS = {
         "미확인 핵심 상가 조건을 처음에 한 번 묶어 최대 3개 질문합니다. "
         "이미 답한 항목은 제외합니다."
     ),
-    "submit_l": "전체 업종 L을 최대 열일곱 개씩 분할 제출. finish로 종료·재계산. 후보 제출과 별개.",
+    "submit_l": "업종·근거 별칭·유리/불리만 제출. 상태·등급은 코드 계산. 행별 채택, 중복 무시.",
     "submit_draft": (
         "L 종료 뒤 재계산 Top5로 보고서 제출. 후보/제외 각각 최대 다섯 개, L 입력 금지."
     ),
@@ -692,8 +714,31 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "name": name,
                 "description": _TOOL_DESCRIPTIONS[name],
                 "strict": False,
-                "parameters": _function_schema(model.model_json_schema()),
+                "parameters": _tool_schema(name, model),
             },
         }
         for name, model in TOOL_INPUTS.items()
     ]
+
+
+def _tool_schema(name, model):
+    schema = model.model_json_schema()
+    if name == "submit_l":
+        row = LInput.model_json_schema()
+        schema.setdefault("$defs", {}).update(row.pop("$defs", {}))
+        schema["properties"]["L_records"]["items"] = row
+    schema = _function_schema(schema)
+
+    def references(node):
+        if isinstance(node, dict):
+            pattern = node.get("pattern", "")
+            if pattern.startswith("^f_"):
+                node["pattern"] = "^(?:[0-9a-f]{8}|" + pattern[1:-1] + ")$"
+            for child in node.values():
+                references(child)
+        elif isinstance(node, list):
+            for child in node:
+                references(child)
+
+    references(schema)
+    return schema

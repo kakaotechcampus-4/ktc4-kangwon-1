@@ -14,6 +14,7 @@ from app.concurrency import run_in_thread
 from app.db.connection import connect
 from app.storage.scrub import env_secrets, scrub
 
+from .aliases import decode, decode_report
 from .contracts import TOOL_INPUTS, Actor, ToolReply, tool_definitions
 from .map_regulation import check_regulation, map_search
 from .read_tools import InvalidCursor, get_facts, get_scorecard
@@ -167,6 +168,8 @@ class ToolExecutor:
             calls[(self.actor, "total")] += 1
         if name not in allowed:
             return error("INVALID_ARGUMENT", "현재 actor에 허용되지 않은 도구입니다.")
+        if name == "submit_review":
+            return None
         if (
             enforce
             and (not duplicate or name == "submit_review")
@@ -180,11 +183,20 @@ class ToolExecutor:
         input, signature = None, None
         current_space = False
         invalid_message = "도구 입력 형식이나 상한이 잘못되었습니다."
+        alias_warnings = []
         if name in TOOL_INPUTS:
             try:
+                if name == "submit_draft":
+                    arguments, alias_warnings = await run_in_thread(
+                        decode_report, self.scope, arguments
+                    )
+                elif name != "submit_l":
+                    arguments = await run_in_thread(decode, self.scope, arguments)
                 input = TOOL_INPUTS[name].model_validate(arguments)
             except ValidationError as exc:
                 invalid_message = validation_message(TOOL_INPUTS[name], exc)
+            except ValueError as exc:
+                invalid_message = str(exc)
             else:
                 current_space = (
                     name == "get_facts"
@@ -199,7 +211,11 @@ class ToolExecutor:
                     signature = canonical_hash(identity)
                 except ValueError:
                     input = None
-        duplicate = name != "submit_l" and signature is not None and signature in self.shared.seen
+        duplicate = (
+            name not in {"submit_l", "submit_review"}
+            and signature is not None
+            and signature in self.shared.seen
+        )
         rejected = self._reserve(name, arguments, duplicate=duplicate)
         call_id = "tc_" + str(uuid.uuid4())
         if rejected is not None:
@@ -232,7 +248,7 @@ class ToolExecutor:
             )
         else:
             reply = await self._execute(name, input)
-            if name != "submit_l" and (
+            if name not in {"submit_l", "submit_review"} and (
                 not reply.error
                 or reply.error.code
                 not in {
@@ -244,6 +260,8 @@ class ToolExecutor:
             ):
                 self.shared.seen.add(signature)
                 self.shared.replies[signature] = reply.model_copy(deep=True)
+        if alias_warnings:
+            reply.warnings.extend(alias_warnings)
         await run_in_thread(_audit, self.scope, call_id, self.actor, name, arguments, reply)
         self.last_call_id = call_id
         return reply

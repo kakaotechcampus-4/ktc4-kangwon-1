@@ -31,13 +31,13 @@ class DecisionRequest(Schema):
     site: Site
     snapshot_id: Text
     rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["2"] = "2"
+    tool_contract_version: Literal["3"] = "3"
 
 
 class DecisionResult(Schema):
     schema_version: Literal["2.0"] = "2.0"
     rubric_version: Literal["v0.8"] = "v0.8"
-    tool_contract_version: Literal["2"] = "2"
+    tool_contract_version: Literal["3"] = "3"
     request_id: Text
     run_id: Text
     report_id: Text

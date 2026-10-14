@@ -203,6 +203,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(output.result.limitations_segments)
 
     async def test_resume_restores_all_tools_and_answers_as_tool_reply(self):
+        from app.agentic.aliases import decode, encode_messages
         from app.agentic.runtime import DecisionLoop
 
         before = []
@@ -233,11 +234,12 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         await resumed.run()
         messages = requests[0]
-        self.assertEqual(messages[:-1], stored[:-1])
+        self.assertEqual(messages[:-1], encode_messages(self.scope, stored[:-1]))
         self.assertEqual(messages[-1]["role"], "tool")
         body = json.loads(messages[-1]["content"])
         self.assertEqual(body["data"]["answers"], {"floor": "1층"})
-        self.assertTrue(body["data"]["fact_ids"]["floor"].startswith("f_"))
+        self.assertRegex(body["data"]["fact_ids"]["floor"], r"^[0-9a-f]{8}$")
+        self.assertTrue(decode(self.scope, body)["data"]["fact_ids"]["floor"].startswith("f_"))
         self.assertEqual(resumed.budget.used, loop.budget.used + 1)
 
     async def test_duplicate_returns_previous_response_and_loop_continues(self):
@@ -376,6 +378,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_L_duplicate_factors_and_grade_constraints(self):
         from copy import deepcopy
 
+        from app.agentic.contracts import LRecord
+        from app.agentic.report import ReportInvalid, validate_l_records
         from app.agentic.runtime import DecisionLoop
 
         fact_id = await self.make_fact()
@@ -392,12 +396,15 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             invalid["new_factors"][0]["direction"] = "adverse"
             cases.append(invalid)
         for invalid in cases:
-            reply = await loop.tools.execute("submit_l", {"L_records": [invalid]})
-            self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+            with self.assertRaises(ReportInvalid):
+                validate_l_records(
+                    self.scope, [LRecord.model_validate(invalid)], loop.base_id, loop.base_rows
+                )
         record["grade"] = 0
         record["new_factors"][0].update(direction="adverse", major_constraint=True)
-        reply = await loop.tools.execute("submit_l", {"L_records": [record]})
-        self.assertEqual(reply.status, "ok")
+        validate_l_records(
+            self.scope, [LRecord.model_validate(record)], loop.base_id, loop.base_rows
+        )
 
     def l_record(self, loop, code, fact_id, rank=None, basis=None):
         actual_rank = next(i for i, r in enumerate(loop.base_rows, 1) if r["code"] == code)
@@ -420,6 +427,17 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             "tool_call_ids": [loop.tools.last_call_id],
         }
 
+    def l_input(self, code, fact_id):
+        from app.agentic.aliases import encode
+
+        return encode(
+            self.scope,
+            {
+                "industry_code": code,
+                "factors": [{"direction": "favorable", "fact_id": fact_id}],
+            },
+        )
+
     async def test_L_observed_recomputes_points_and_rank(self):
         from app.agentic.runtime import DecisionLoop
 
@@ -429,7 +447,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         code = loop.base_rows[0]["code"]
         reply = await loop.tools.execute(
             "submit_l",
-            {"L_records": [self.l_record(loop, code, fact_id)], "finish": True},
+            {"L_records": [self.l_input(code, fact_id)], "finish": True},
         )
         self.assertEqual(reply.status, "ok")
         await loop.tools.execute("submit_draft", {"phase": "draft", "report": {}})
@@ -445,25 +463,22 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             fact_id = await self.make_fact(metric)
             loop = await DecisionLoop.create(self.scope, self.site)
             await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
-            record = self.l_record(loop, loop.base_rows[0]["code"], fact_id)
+            record = self.l_input(loop.base_rows[0]["code"], fact_id)
             if metric == "lq":
-                record.update(grade=2, new_factors=[])
+                record.update(neutral=True, factors=[])
             reply = await loop.tools.execute("submit_l", {"L_records": [record]})
-            self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+            self.assertEqual(reply.status, "ok")
+            self.assertEqual(reply.data.accepted, [])
+            self.assertEqual(len(reply.data.rejected), 1)
+            self.assertTrue(reply.data.rejected[0]["correction"])
         fact_id = await self.make_fact()
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
-        record = self.l_record(loop, loop.base_rows[-1]["code"], fact_id)
-        record["selection"].update(basis="all_industries", reason_fact_ids=[])
-        record.update(
-            status="unknown",
-            grade=None,
-            review_state="unreviewed",
-            new_factors=[],
-            limitations=["확인된 새 근거 없음"],
-        )
+        record = {"industry_code": loop.base_rows[-1]["code"], "note": "확인된 새 근거 없음"}
         reply = await loop.tools.execute("submit_l", {"L_records": [record]})
         self.assertEqual(reply.status, "ok")
+        self.assertEqual(reply.data.accepted, [record["industry_code"]])
+        self.assertEqual(loop.state["L_records"][record["industry_code"]]["status"], "unknown")
 
     async def test_three_low_rank_industries_are_equally_allowed(self):
         from app.agentic.runtime import DecisionLoop
@@ -471,7 +486,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         fact_id = await self.make_fact()
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
-        records = [self.l_record(loop, r["code"], fact_id) for r in loop.base_rows[10:13]]
+        records = [self.l_input(r["code"], fact_id) for r in loop.base_rows[10:13]]
         valid = await loop.tools.execute("submit_l", {"L_records": records, "finish": True})
         self.assertEqual(valid.status, "ok")
         await loop.tools.execute("submit_draft", {"phase": "draft", "report": {}})
@@ -575,9 +590,9 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             return self.message("submit_draft", {"phase": phase, "report": {}})
 
         async def evaluator(messages, *args):
-            draft = json.loads(messages[1]["content"])["draft"]
+            draft_id = json.loads(messages[1]["content"])["draft_id"]
             return self.message(
-                "submit_review", {"draft_id": draft["report_id"], "verdict": "agree", "issues": []}
+                "submit_review", {"draft_id": draft_id, "verdict": "agree", "issues": []}
             )
 
         outcome = await execute_agentic_analysis(

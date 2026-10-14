@@ -47,9 +47,9 @@ def generators(*, ask=False):
 
     async def evaluator(messages, definitions, settings, receipt):
         receipt.update(model="mock", usage={"prompt_tokens": 0, "completion_tokens": 0})
-        draft = json.loads(messages[1]["content"])["draft"]
+        packet = json.loads(messages[1]["content"])
         return call(
-            "submit_review", {"draft_id": draft["report_id"], "verdict": "agree", "issues": []}
+            "submit_review", {"draft_id": packet["draft_id"], "verdict": "agree", "issues": []}
         )
 
     return {"generate": decision, "evaluator_generate": evaluator}
