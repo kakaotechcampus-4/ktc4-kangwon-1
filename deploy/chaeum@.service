@@ -24,6 +24,10 @@ WorkingDirectory=/opt/chaeum/current/backend
 # 공유 저장소를 절대경로로 못 박습니다.
 Environment=SQLITE_PATH=/opt/chaeum/shared/storage/chaeum.sqlite3
 
+# 분기 자료(자료 DB)도 같은 공유 저장소에 둡니다.
+# 비우면 홈의 .chaeum 으로 가서 요청 DB와 자리가 갈립니다.
+Environment=LOCAL_DATA_DB_PATH=/opt/chaeum/shared/storage/market_data.sqlite3
+
 # python -m 으로 실행해야 현재 디렉터리가 import 경로 맨 앞에 붙습니다.
 # 그래야 구·신 프로세스가 각자 자기 릴리스의 코드를 씁니다.
 # --workers 는 쓰지 않습니다. 분석 작업표가 프로세스 메모리에 있어 워커는 1개여야 합니다.
