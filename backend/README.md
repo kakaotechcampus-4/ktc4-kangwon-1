@@ -1,40 +1,71 @@
 # 채움 백엔드
 
-Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx/AsyncOpenAI
+Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
-주소 하나에서 고정된 자료 버전을 읽고 업종 51종을 코드로 채점합니다.
-단일 decision이 추가 근거와 임대인 답변을 확인해 설명과 L 판단을 만들고,
-네 평가자가 초안을 병렬 검토한 뒤 decision이 최종 반영합니다.
+주소 하나에서 고정된 분기 자료를 읽어 서비스 업종 51종을 채점하고, decision이 근거를 도구로 확인해 판단한 뒤, 평가자 4명이 검토한 최종 리포트를 돌려줍니다.
+프로젝트 개요는 [루트 README](../README.md), 입력·결과 형태는 [API 계약](../docs/API_CONTRACT.md)을 따릅니다.
 
-```text
-주소·좌표 → 로컬 자료 버전 고정 → 코드 D35/C25/S30
-         → decision L10·근거 조회·질문 → 초안
-         → 네 평가자 → 최종 검증·렌더링 → 요청 DB·API
-```
+## 요청 한 건의 흐름
 
-근거는 fact ID와 원문 셀·계산 계보로 검증합니다. 모델이 쓴 숫자를 자유 문장으로 채택하지 않습니다.
-`unknown`, 실제 영, 미적용, 자료 오류를 구분합니다.
+| 단계 | 하는 일 | LLM |
+| --- | --- | --- |
+| 1. 주소 | 주소를 좌표로 바꿉니다(주소는 공백 정리 후 200자 이내). | 없음 |
+| 2. 자료 조회 | 활성 자료 버전을 고정하고 반경·상권 안의 자료만 SQL로 읽습니다. 기본 자료 API는 호출하지 않습니다. | 없음 |
+| 3. 코드 채점 | 수요(D) 35 · 경쟁(C) 25 · 안정성(S) 30을 51업종 모두에 계산해 fact와 점수로 저장합니다. 규제(G)와 시설 거리(C4)도 이 단계에서 조회합니다. | 없음 |
+| 4. decision | 도구로 근거를 확인하고, 임대인에게 질문하고, 51업종 전체에 L(10점)을 제출한 뒤 보고서 초안(후보 최대 5개)을 제출합니다. | 있음 |
+| 5. 평가자 | examiner · founder · customer · landlord_advocate 4명이 병렬로 초안을 검토합니다. | 있음 |
+| 6. 최종 | decision이 지적을 한 번 반영하고, 서버가 근거·숫자·계약을 검증해 결과를 저장합니다. | 있음 |
+
+![decision 도구 루프와 평가자](../docs/images/decision-tool-loop.png)
+
+채점 규칙은 [채점표](../docs/decision-prompt-rubric.md)가 기준이고, 코드에서는 `app/agentic/scoring.py`가 계산합니다.
+
+### decision이 쓰는 도구
+
+| 도구 | 하는 일 |
+| --- | --- |
+| `get_scorecard` | 업종별 점수·상태·근거 |
+| `get_facts` | fact 값과 출처 계보 |
+| `query_raw` | 승인된 뷰에 읽기 전용 SQL (한 번에 50행·2초·64KB 이내) |
+| `map_search` | 카카오 주변 장소·거리 |
+| `check_regulation` | 교육환경보호구역 등 규제(`education_zone.py`를 호출만 합니다) |
+| `ask_user` | 임대인에게 층·면적·공간 상태 질문 |
+| `ask_advisor` | 애매할 때만 다른 모델에게 자문(요청당 2회, 실패해도 계속) |
+| `submit_l` | 업종별 L 근거 제출. 등급은 코드가 계산 |
+| `submit_draft` | 보고서 초안 제출 |
+
+평가자는 `get_scorecard`, `get_facts`, `query_raw`와 `submit_review`만 씁니다.
+도구 입력은 `app/agentic/contracts.py`의 모델이 검증합니다. 모델은 요청 안에서만 유일한 8자 fact 별칭으로 근거를 가리키고, 저장과 결과에는 원래 `fact_id`가 남습니다.
+
+### 모델이 지켜야 하는 규칙 (서버가 검증)
+
+- 문장에 측정값(숫자)을 직접 쓰지 않고 fact를 가리킵니다. 값은 서버가 채웁니다.
+- 인용한 fact는 해당 업종의 것이거나 업종과 무관한 것이어야 하고, 같은 요인을 두 번 세지 않습니다.
+- L은 코드 채점(D·C·S)과 같은 요인을 다시 세지 않습니다. 새 근거가 없으면 `unknown`입니다.
+- 한 업종의 위반이 나머지 업종의 제출을 막지 않습니다. 레코드 단위로 채택·거절하며 제출하지 않은 업종은 이유와 함께 `unknown`으로 채워집니다.
+- 값의 상태는 `observed`(관측) · `unknown`(미확인) · `n.a.`(해당 없음)이고, 실제 0과 자료 없음은 구분합니다.
 
 ## 구조
 
 ```text
 app/
-  schemas.py · address.py · geo.py · config.py · seoul.py
-  api/v1/       분석·질문·답변·이벤트 HTTP 경계
-  services/     실행·재개·작업 슬롯과 실패 저장
-  agentic/      decision, 자문, 질문, 네 평가자, 채점·fact·SQL·보고서
-  local_data/   자료 적재·활성화·버전 고정·계산 어댑터·계보
-  agents/       인구·개폐업·상권 계산과 수집 클라이언트·지도 일치 규칙
-  industries/   공통 51업종·프로필·매핑·밀도 기준선 CSV
-  db/ · storage/ 요청 DB와 원문·출처 저장
-  education_zone.py
-scripts/        자료 갱신·기준선 생성·재현 검증
-tests/          임시 DB·API/모델 대역 회귀
+  main.py · config.py · schemas.py · errors.py · address.py · geo.py · seoul.py
+  api/v1/        분석·질문·답변·이벤트 HTTP 경계와 작업 슬롯
+  services/      실행·재개·mock과 실패 저장
+  agentic/       decision, 자문, 질문, 평가자, 채점·fact·SQL·보고서 (최종 판단 코드는 여기에 모읍니다)
+  local_data/    자료 적재·활성화·버전 고정·계산 어댑터·계보
+  agents/        인구·개폐업·상권 계산과 수집 클라이언트, 지도 일치 규칙
+  industries/    공통 51업종·프로필·공간 요건·매핑·밀도 기준선 CSV
+  llm/           모델 호출, 예산, 역할별 설정
+  db/            요청 DB 연결·스키마·저장소
+  storage/       요청별 원문 보관과 비밀값 마스킹
+  education_zone.py   교육환경보호구역 조회 (다른 팀원 담당, 호출만 합니다)
+scripts/         자료 갱신, 기준선 생성, 재현 검증
+tests/           임시 DB와 API·모델 대역으로 도는 회귀 시험
 ```
 
-최종 판단 코드는 `app/agentic/`에 모읍니다.
-수집 클라이언트는 자료 갱신·연구용으로 유지하며 일반 분석 요청에서 기본 자료 API를 다시 호출하지 않습니다.
-API 입력과 결과는 [API 계약](../docs/API_CONTRACT.md)을 따릅니다.
+수집 클라이언트(`app/agents/*/client.py`)는 자료 갱신과 기준선 연구에만 쓰며, 일반 분석 요청은 기본 자료 API를 다시 호출하지 않습니다.
+업종 체계와 매핑은 [업종 README](app/industries/README.md), 인구·상권·지도 계산은 각 폴더의 README를 참고하세요.
 
 ## 설치·실행
 
@@ -47,74 +78,89 @@ cd backend
 python -m uvicorn app.main:create_app --factory --reload
 ```
 
-실제 키는 `backend/.env`에만 둡니다. 변수 이름은 [.env.example](.env.example), 기본값은 각 설정 모듈을 확인합니다.
-예시 파일에는 변수 이름만 둡니다. 기본값을 덮어쓸 선택 변수는 값을 채우고 주석을 풀어 사용하세요.
-사용하지 않는 과거 실행 모드·에이전트별 모델·분석 타임아웃 환경변수는 예시 설정에서 제거합니다.
-현재 모델 역할은 공통 `ELICE_*`와 선택적 `DECISION_LLM_*`, `EVALUATOR_LLM_*`, `ADVISOR_LLM_*`입니다.
-주소·지도는 `GEOCODING_API_KEY`, 규제 조회는 `VWORLD_API_KEY`와 `VWORLD_REFERER`를 사용합니다.
-`ANALYSIS_MAX_CONCURRENCY`는 백그라운드 동시 분석 수, `CORS_ALLOW_ORIGINS`는 프론트 주소입니다.
-주소는 공백을 정리한 뒤 200자 이내만 허용하며 제한을 넘으면 외부 조회 전에 거절합니다.
+## API
 
-`POST /api/v1/analyses?mock=true` 또는 `MOCK_MODE=true`로 외부 호출 없이 동일한 평가·보고서 계약을 확인합니다.
-상태는 `GET /api/v1/analyses/{request_id}`, 진행은 `/events`, 답변은 `/answers`에서 다룹니다.
-녹화는 `create_app(recording_dir=...)` 서버 설정으로만 켭니다.
+기본 경로는 `/api/v1`이며 자세한 형태는 [API 계약](../docs/API_CONTRACT.md)에 있습니다.
 
-## 서로 다른 두 DB
+| 메서드 · 경로 | 설명 |
+| --- | --- |
+| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. |
+| `GET /analyses/{request_id}` | 상태와 결과. 접수 직후에도 404가 아니라 현재 상태를 돌려줍니다. |
+| `GET /analyses/{request_id}/events?after=N` | 진행 단계. 1초 간격 폴링용입니다. |
+| `POST /analyses/{request_id}/answers` | `waiting_for_input`일 때 임대인 답변을 보내 재개합니다. |
+| `GET /health` | 상태 확인 |
+
+요청 상태는 `pending` → `running` → (`waiting_for_input` ↔ `running`) → `completed` 또는 `failed`입니다.
+`allow_questions=false`(기본)면 임대인 질문 없이 진행합니다. 동시 실행 상한을 넘으면 429입니다.
+
+## 설정
+
+실제 키는 `backend/.env`에만 둡니다. 변수 이름은 [.env.example](.env.example)에 있고 값은 커밋하지 않습니다.
+
+| 변수 | 역할 |
+| --- | --- |
+| `ELICE_API_KEY` · `ELICE_BASE_URL` · `ELICE_MODEL` | 공통 모델 접속. 모델마다 엔드포인트가 다르므로 모델과 주소를 함께 바꿉니다. |
+| `DECISION_LLM_*` · `EVALUATOR_LLM_*` · `ADVISOR_LLM_*` | 역할별 모델·키·주소·토큰·시간·reasoning. 비우면 공통 값을 씁니다. |
+| `GEOCODING_API_KEY` | 주소 변환과 지도 검색(카카오) |
+| `VWORLD_API_KEY` · `VWORLD_REFERER` | 규제·서울 경계 조회(V-World) |
+| `LOCAL_DATA_DB_PATH` | 자료 DB 경로 |
+| `SQLITE_PATH` | 요청 DB 경로 |
+| `FLOATING_POPULATION_API_KEY` · `BUSINESS_LIFECYCLE_API_KEY` · `SEOUL_OPEN_API_KEY` · `COMMERCIAL_AREA_API_KEY` · `FRANCHISE_API_KEY` | **자료 갱신과 연구 스크립트용** 키. 일반 요청에는 쓰지 않습니다. |
+| `MOCK_MODE` | 켜면 외부 호출 없이 고정 응답 |
+| `ANALYSIS_MAX_CONCURRENCY` · `CORS_ALLOW_ORIGINS` | 백그라운드 동시 분석 수, 프론트 주소 |
+
+모델 설정에서 주의할 점입니다.
+
+- decision과 평가자는 도구를 쓰므로 `reasoning_effort`를 **`none`**으로 둡니다(reasoning과 도구 호출을 함께 쓸 수 없는 모델이 있습니다). 기본값은 `LLM_REASONING_EFFORT=none`입니다.
+- 자문(`ADVISOR_LLM_*`)은 다른 계열 모델을 권장하며, 그 모델이 지원하지 않는 옵션은 비워 둡니다(`ADVISOR_LLM_REASONING_EFFORT`는 비우면 보내지 않습니다).
+
+운영 예산은 한 요청에 입력 400k · 출력 60k · 모델 호출 40회 · 활성 시간 600초 · 호출당 출력 16k입니다.
+
+## 두 DB
 
 | 설정 | 역할 | 기본 경로 |
 | --- | --- | --- |
-| `SQLITE_PATH` | 요청·fact·채점·질문·최종 결과 | `backend/storage/chaeum.sqlite3` |
-| `LOCAL_DATA_DB_PATH` | 서울 전체 자료와 분기별 활성 release | 사용자 홈의 `.chaeum/market_data.sqlite3` |
+| `LOCAL_DATA_DB_PATH` | 서울 전체 자료와 분기별 활성 release | 사용자 홈 `.chaeum/market_data.sqlite3` |
+| `SQLITE_PATH` | 요청·fact·채점·질문·평가·최종 결과 | `backend/storage/chaeum.sqlite3` |
 
-실제 분석에는 자료 DB가 반드시 필요합니다. 환경변수를 생략할 수는 있지만 기본 경로에 완전한 활성 자료가 있어야 합니다.
-자료 DB와 원문 CSV는 저장소 밖에 두세요. 요청 실행은 자료 버전을 고정하므로 활성 release가 바뀌어도 같은 버전을 읽습니다.
-삭제된 옛 버전을 고정한 대기 요청은 재개 시 실패로 저장됩니다.
-
-요청 DB는 **스키마 버전 5**입니다. 이전 버전은 자동 이전하지 않고 시작 시 거절합니다.
-서버를 중지하고 기존 요청 DB와 해당 `-wal`·`-shm` 파일을 저장소 밖에 백업·이동한 뒤 다시 시작하세요.
-새 요청 DB가 생성됩니다. **자료 DB(`LOCAL_DATA_DB_PATH`)는 그대로 보존하며 이 절차로 삭제하지 않습니다.**
+실제 분석에는 자료 DB에 완전한 활성 묶음이 있어야 합니다. 구조와 ERD, 스키마 버전, 백업·초기화 절차는 [DATABASE.md](../docs/DATABASE.md)를 보세요.
+요청 DB는 이전 스키마를 자동 이전하지 않고 시작할 때 거절합니다. **자료 DB는 어떤 초기화 절차로도 삭제하지 않습니다.**
 
 ## 자료 갱신
 
-`scripts/refresh_local_data.py`는 적재 후 한 트랜잭션으로 새 release를 활성화합니다.
-필수 원천은 stores·lifecycle·floating·resident·worker·areas이며 서울 경계는 별도로 추가할 수 있습니다.
-개폐업 12분기, 유동 5분기는 연속이어야 하고 점포·개폐업·유동·상주·직장의 최신 분기가 일치해야 합니다.
-잘못된 묶음은 활성 자료를 바꾸지 않으며 실패한 staged 적재를 정리합니다. 활성·직전 release를 보존합니다.
+`scripts/refresh_local_data.py`가 원천을 적재하고 검증한 뒤 한 트랜잭션으로 새 release를 활성화합니다. 활성·직전 release만 보존합니다.
 
 ```powershell
 python scripts/refresh_local_data.py --quarter 20262 --seoul-csv D:/data/seoul.csv --shp D:/data/area.shp
 python scripts/refresh_local_data.py --source floating --quarter 20262 --reset-checkpoint
 ```
 
-갱신 명령은 외부 API·자료 DB를 변경하므로 필요한 파일과 키를 준비한 뒤 직접 실행합니다.
-체크포인트는 하루 동안 재사용하고 첫 페이지를 다시 검증합니다. 총행 수가 바뀌면 한 번 전체를 재수집합니다.
-`--reset-checkpoint`는 선택 원천의 API 페이지를 지우고 수집하며 `--dry-run`은 임시 DB에서 파일을 검증합니다.
-부분 원천의 첫 적재나 필요한 분기 수를 줄인 활성화는 허용하지 않습니다.
-51업종 밀도 기준선은 `app/industries/data/density_percentiles.csv`입니다.
-`build_density_baseline.py --industries --emit`은 완전한 표본만 이 CSV에 저장합니다.
+- 필수 원천: stores · lifecycle · floating · resident · worker · areas. 서울 경계는 선택입니다.
+- 개폐업 12분기, 유동 5분기가 연속이어야 하고 최신 분기가 원천 사이에 일치해야 합니다. 어긋난 묶음은 활성 자료를 바꾸지 않습니다.
+- API 페이지는 하루 동안 이어받기에 재사용하며, 총 행 수가 바뀌면 처음부터 다시 받습니다. `--reset-checkpoint`는 선택 원천의 페이지 기록을 지우고 수집하고, `--dry-run`은 임시 DB에서 파일만 검증합니다.
+- 상주·직장인구는 기본이 CSV이고, `--source resident --api`처럼 주면 전체 API에서 선택 분기를 받습니다. 활성화 뒤에는 파일을 줄이는 VACUUM을 실행하며 `--no-vacuum`으로 끌 수 있습니다.
+- 갱신은 외부 API와 자료 DB를 바꾸므로 파일과 키를 준비한 뒤 직접 실행합니다.
+- 51업종 밀도 기준선은 `app/industries/data/density_percentiles.csv`이고, `scripts/build_density_baseline.py --industries --emit`이 완전한 표본일 때만 갱신합니다.
 
 ## 자료 범위와 판단 한계
 
-점포는 요청·비교 반경 안의 서울 CSV, 개폐업은 선택한 상권 폴리곤,
-인구는 요청 반경과 겹치는 상권 자료를 사용합니다. 같은 반경이어도 모집단은 다릅니다.
-지도는 조회 시점의 카카오 등록 표본이며 분기 점포 전수와 더하지 않습니다.
-추천 점수는 성공 확률·매출·수익 예측이 아닙니다. 지역·기간·누락·매핑 한계를 결과에 남깁니다.
+- 점포는 요청·비교 반경 안의 서울 CSV, 개폐업은 선택한 상권 폴리곤, 인구는 요청 반경과 겹치는 상권 자료를 씁니다. 같은 반경이어도 모집단은 다릅니다.
+- 지도는 조회 시점의 카카오 등록 표본이며 분기 점포 전수와 더하지 않습니다.
+- 서울 경계를 넘는 반경은 서울 밖 점포가 빠진다는 한계를 결과에 남깁니다.
+- 업종별 공간 요건(`industry_space_requirements.csv`)은 검토 전 추정값입니다.
+- 추천 점수는 성공 확률·매출·수익 예측이 아닙니다.
 
-운영 예산은 입력 400k·출력 60k·모델 40회·활성 시간 600초·호출당 출력 최대 16k입니다.
-읽기 전용 SQL에는 실행 시간·행 수·64KB 결과 한도가 있습니다.
-
-## 검증과 참고
+## 검증
 
 ```powershell
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy
 python -m unittest discover -s tests
+python scripts/build_industry_catalog.py --check
 python scripts/verify_rubric_reproduction.py
 ```
 
-자동 시험은 임시 DB와 API·모델 대역을 사용합니다.
-실제 API와 모델 품질 검증은 별도 승인된 실행에서만 확인합니다.
-[인구](app/agents/floating_population/README.md), [상권](app/agents/commercial_area/README.md),
-[지도](app/agents/map_analysis/README.md), [채점표](../docs/decision-prompt-rubric.md)를 참고하세요.
-[이전 설계 기록](../docs/archive/README.md)은 당시 구현의 기록입니다.
+자동 시험은 임시 DB와 API·모델 대역만 씁니다. 실제 API·모델 품질은 별도로 승인한 실행에서만 확인하고, 모델 호출은 `create_app(recording_dir=...)` 서버 설정으로 녹화해 같은 실행을 네트워크 없이 재생(`scripts/replay_agentic.py`)할 수 있습니다.
+
+이전 설계 기록은 [docs/archive](../docs/archive/README.md)에 있고 당시 구현의 기록입니다.
