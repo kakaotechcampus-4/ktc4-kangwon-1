@@ -41,9 +41,11 @@ class LLMSettings:
             if name in overrides:
                 values[name] = overrides[name]
                 continue
-            raw = (
-                os.getenv(f"{agent.upper()}_LLM_{suffix}", "").strip()
-                or os.getenv(legacy, "").strip()
+            # advisor에는 Luna의 reasoning 설정을 상속하지 않습니다. 빈 역할 값은 옵션 생략입니다.
+            raw = os.getenv(f"{agent.upper()}_LLM_{suffix}", "").strip() or (
+                ""
+                if agent.upper() == "ADVISOR" and name == "reasoning_effort"
+                else os.getenv(legacy, "").strip()
             )
             if not raw:
                 continue

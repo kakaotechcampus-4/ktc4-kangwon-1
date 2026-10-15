@@ -1,5 +1,1 @@
-"""유동인구 분석 에이전트."""
-
-from .agent import AGENT_ID, analyze
-
-__all__ = ["AGENT_ID", "analyze"]
+"""계산·수집 하위 모듈을 필요할 때 직접 가져옵니다."""

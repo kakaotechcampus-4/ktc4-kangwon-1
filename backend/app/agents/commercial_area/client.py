@@ -13,6 +13,9 @@ from weakref import WeakKeyDictionary
 
 import httpx
 
+from app.clock import utc_now_iso
+from app.storage.raw import RawStorageError, capture_http, current_capture, scrub
+
 from .config import (
     SBIZ_BASE_URL,
     SBIZ_DISTRICT_OPERATION,
@@ -26,22 +29,7 @@ NODATA_RESULT_CODES = {"03"}
 NODATA_KEYWORDS = ("NODATA", "NO_DATA", "데이터없음", "데이터가_없")
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DEFAULT_RETRY_BACKOFF_S = 1.5
-STORE_CACHE_FIELDS = (
-    "bizesId",
-    "bizesNm",
-    "brchNm",
-    "indsLclsCd",
-    "indsLclsNm",
-    "indsMclsCd",
-    "indsMclsNm",
-    "indsSclsCd",
-    "indsSclsNm",
-    "lat",
-    "lon",
-    "rdnmAdr",
-    "signguCd",
-    "signguNm",
-)
+RAW_CACHE_VERSION = 2
 
 
 class SbizApiError(Exception):
@@ -60,7 +48,7 @@ class NoDataError(SbizApiError):
 
 
 def _cache_path(settings: Settings, key: str) -> Path:
-    return settings.cache_dir / f"{key}.json"
+    return settings.cache_dir / f"raw-v{RAW_CACHE_VERSION}_{key}.json"
 
 
 def _read_cache(path: Path, ttl_hours: int) -> Any | None:
@@ -68,30 +56,65 @@ def _read_cache(path: Path, ttl_hours: int) -> Any | None:
         if not path.exists() or time.time() - path.stat().st_mtime > ttl_hours * 3600:
             return None
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        if not isinstance(payload, dict) or payload.get("version") != RAW_CACHE_VERSION:
             return None
-        if not all(isinstance(item, dict) for item in payload["items"]):
+        if (
+            not isinstance(payload.get("meta"), dict)
+            or not isinstance(payload.get("pages"), list)
+            or not payload["pages"]
+        ):
             return None
-        if not isinstance(payload.get("meta"), dict):
+        items = []
+        for page in payload["pages"]:
+            if (
+                not isinstance(page, dict)
+                or not isinstance(page.get("payload"), dict)
+                or not isinstance(page.get("request_args"), dict)
+                or not isinstance(page.get("collected_at"), str)
+            ):
+                return None
+            check_header(page["payload"])
+            items.extend(extract_items(page["payload"])[0])
+        if len(items) != payload["meta"].get("fetched"):
             return None
-        return payload
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return {**payload, "items": items}
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError, SbizApiError, TypeError, KeyError):
         return None
 
 
 def _write_cache(path: Path, payload: Any) -> None:
+    if not payload["pages"]:
+        return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        compact = {
-            "items": [
-                {key: row[key] for key in STORE_CACHE_FIELDS if key in row}
-                for row in payload["items"]
-            ],
-            "meta": payload["meta"],
-        }
-        path.write_text(json.dumps(compact, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(
+                {"version": RAW_CACHE_VERSION, "pages": payload["pages"], "meta": payload["meta"]},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
     except OSError:
         pass
+
+
+async def _capture_cache(cached, cache_key):
+    capture = current_capture()
+    if capture is not None:
+        for page in cached["pages"]:
+            await capture.record(
+                source="commercial_area",
+                source_type="api",
+                args={
+                    **page["request_args"],
+                    "cache_hit": True,
+                    "cache_key": cache_key,
+                    "original_collected_at": page["collected_at"],
+                },
+                page=page["page"],
+                status=page["http_status"],
+                payload=page["payload"],
+            )
 
 
 def snap_to_grid(value: float, grid_m: int) -> float:
@@ -107,7 +130,7 @@ def _unwrap(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _check_header(payload: dict[str, Any]) -> None:
+def check_header(payload: dict[str, Any]) -> None:
     header = _unwrap(payload).get("header")
     if header is None:
         header = {}
@@ -124,7 +147,7 @@ def _check_header(payload: dict[str, Any]) -> None:
         raise SbizApiError(code, message or "unknown error")
 
 
-def _extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+def extract_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
     body = _unwrap(payload).get("body")
     if not isinstance(body, dict) or "items" not in body:
         raise SbizApiError("BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다.")
@@ -297,6 +320,13 @@ class StoreClient:
                 async with _request_limit(self.settings.max_concurrency):
                     response = await self._http().get(url, params=params)
                 self.calls_made += 1
+                await capture_http(
+                    "commercial_area",
+                    response,
+                    secrets=[self.settings.sbiz_service_key],
+                    page=str(page),
+                    args={"url": url, "operation": operation, "query": params},
+                )
                 if response.status_code in RETRY_STATUS_CODES:
                     wait_s = _retry_after_seconds(response) or wait_s
                     raise httpx.HTTPStatusError(
@@ -315,7 +345,7 @@ class StoreClient:
                     raise SbizApiError(
                         "BAD_RESPONSE", "상가정보 API 응답 형식이 올바르지 않습니다."
                     )
-                _check_header(payload)
+                check_header(payload)
                 return payload
             except SbizApiError:
                 raise
@@ -348,7 +378,7 @@ class StoreClient:
         except NoDataError:
             return [], 0
 
-        items, total_count = _extract_items(payload)
+        items, total_count = extract_items(payload)
         if not items or len(items) >= total_count:
             return items, total_count
 
@@ -367,7 +397,7 @@ class StoreClient:
                 except NoDataError:
                     results[page] = []
                 else:
-                    results[page] = _extract_items(page_payload)[0]
+                    results[page] = extract_items(page_payload)[0]
 
         # 한 페이지가 실패하면 남은 요청을 취소한다.
         # gather 는 예외만 올려보내고 나머지를 계속 돌려서, 어차피 버릴 조회에
@@ -377,12 +407,41 @@ class StoreClient:
             async with asyncio.TaskGroup() as group:
                 for _ in range(min(last_page - 1, max(1, self.settings.max_concurrency))):
                     group.create_task(worker())
+        except* RawStorageError as storage_failures:
+            raise storage_failures.exceptions[0] from None
         except* SbizApiError as failures:
             raise failures.exceptions[0] from None
 
         for page in range(2, last_page + 1):
             items.extend(results[page])
         return items, total_count
+
+    async def _collect_raw(self, fetch_page, max_pages, operation, query):
+        pages = []
+
+        async def fetch(page):
+            payload = await fetch_page(page)
+            pages.append(
+                {
+                    "page": str(page),
+                    "http_status": 200,
+                    "collected_at": utc_now_iso(),
+                    "request_args": {
+                        "operation": operation,
+                        "query": {
+                            **query,
+                            "type": "json",
+                            "numOfRows": self.settings.page_size,
+                            "pageNo": page,
+                        },
+                    },
+                    "payload": scrub(payload, [self.settings.sbiz_service_key]),
+                }
+            )
+            return payload
+
+        items, total = await self._collect_pages(fetch, max_pages)
+        return items, total, sorted(pages, key=lambda p: int(p["page"]))
 
     async def stores_in_radius(
         self,
@@ -400,12 +459,15 @@ class StoreClient:
         if use_cache:
             cached = await asyncio.to_thread(_read_cache, path, self.settings.cache_ttl_hours)
             if cached is not None:
+                await _capture_cache(cached, cache_key)
                 stores = await asyncio.to_thread(_to_stores, cached["items"])
                 return stores, {**cached["meta"], "from_cache": True}
 
-        items, total_count = await self._collect_pages(
+        items, total_count, pages = await self._collect_raw(
             lambda page: self._request_page(cache_lat, cache_lon, radius_m, page),
             self.settings.max_pages,
+            SBIZ_RADIUS_OPERATION,
+            {"radius": radius_m, "cx": cache_lon, "cy": cache_lat},
         )
 
         meta = {
@@ -417,7 +479,7 @@ class StoreClient:
             "from_cache": False,
         }
         if use_cache:
-            await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
+            await asyncio.to_thread(_write_cache, path, {"pages": pages, "meta": meta})
 
         stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta
@@ -448,12 +510,15 @@ class StoreClient:
         path = await asyncio.to_thread(_cache_path, self.settings, cache_key)
         cached = await asyncio.to_thread(_read_cache, path, self.settings.district_cache_ttl_hours)
         if cached is not None:
+            await _capture_cache(cached, cache_key)
             stores = await asyncio.to_thread(_to_stores, cached["items"])
             return stores, {**cached["meta"], "from_cache": True}
 
-        items, total_count = await self._collect_pages(
+        items, total_count, pages = await self._collect_raw(
             lambda page: self._request_district_page(signgu_cd, page),
             self.settings.district_max_pages,
+            SBIZ_DISTRICT_OPERATION,
+            {"divId": "signguCd", "key": signgu_cd},
         )
 
         meta = {
@@ -464,7 +529,25 @@ class StoreClient:
             "reference_date": await asyncio.to_thread(reference_date_of, items),
             "from_cache": False,
         }
-        await asyncio.to_thread(_write_cache, path, {"items": items, "meta": meta})
+        await asyncio.to_thread(_write_cache, path, {"pages": pages, "meta": meta})
 
         stores = await asyncio.to_thread(_to_stores, items)
         return stores, meta
+
+
+CSV_FIELDS = {
+    "bizesId": "상가업소번호",
+    "bizesNm": "상호명",
+    "brchNm": "지점명",
+    "indsLclsCd": "상권업종대분류코드",
+    "indsLclsNm": "상권업종대분류명",
+    "indsMclsCd": "상권업종중분류코드",
+    "indsMclsNm": "상권업종중분류명",
+    "indsSclsCd": "상권업종소분류코드",
+    "indsSclsNm": "상권업종소분류명",
+    "lat": "위도",
+    "lon": "경도",
+    "rdnmAdr": "도로명주소",
+    "signguCd": "시군구코드",
+    "signguNm": "시군구명",
+}

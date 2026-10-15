@@ -6,6 +6,8 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
+from app.geo import haversine_m as haversine_m
+
 from .baseline import seoul_percentile
 from .config import RESTAURANT_MAJOR_NAMES, Settings
 from .schemas import (
@@ -20,8 +22,6 @@ from .schemas import (
     SpecializationRank,
     Store,
 )
-
-EARTH_RADIUS_M = 6_371_000.0
 
 
 def area_km2(radius_m: int) -> float:
@@ -205,14 +205,6 @@ def build_diversity(
     )
 
 
-def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    d_phi = phi2 - phi1
-    d_lambda = math.radians(lon2 - lon1)
-    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
-
-
 def stores_within(
     stores: Sequence[Store],
     center_lat: float,
@@ -359,6 +351,7 @@ def build_radius_slices(
     settings: Settings,
     baseline_counts: dict[str, int] | None = None,
     baseline_radius_m: int | None = None,
+    blocked_lq_codes: set[str] | None = None,
 ) -> list[RadiusSlice]:
     radii = sorted(
         {r for r in settings.breakdown_radii if r <= settings.analysis_radius_m}
@@ -370,6 +363,9 @@ def build_radius_slices(
     for radius_m in radii:
         subset = stores_within(stores, center_lat, center_lon, radius_m)
         rows = build_middle_rows(subset, radius_m, master, baseline_counts)
+        for row in rows:
+            if row.code in (blocked_lq_codes or ()):
+                row.lq = None
         total = len(subset)
         absent_count = sum(1 for r in rows if r.count == 0)
 

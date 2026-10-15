@@ -20,7 +20,7 @@ ITEM = {
     "indsLclsCd": "I2",
     "indsLclsNm": "음식점업",
     "indsMclsCd": "I201",
-    "indsMclsNm": "한식 음식점업",
+    "indsMclsNm": "한식 음식점",
     "indsSclsCd": "I20101",
     "indsSclsNm": "백반",
     "lat": "37.5",
@@ -37,7 +37,9 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.settings = Settings(cache_dir=Path(self.tmp.name), sbiz_service_key="test")
+        self.settings = Settings(
+            cache_dir=Path(self.tmp.name), sbiz_service_key="cache-private-key"
+        )
 
     def test_invalid_utf8_cache_is_ignored(self):
         with (
@@ -87,7 +89,7 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(meta["reference_date"], "2026-09-01")
                 self.assertTrue(cached["from_cache"])
 
-    async def test_cache_saves_only_store_fields_and_metadata(self):
+    async def test_cache_saves_full_raw_pages_and_metadata(self):
         http = httpx.AsyncClient(
             transport=httpx.MockTransport(
                 lambda _: httpx.Response(200, json={"body": {"items": [ITEM], "totalCount": 1}})
@@ -98,11 +100,13 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
         expected, _ = await store_client.stores_in_district("11710")
         payload = json.loads(
             await asyncio.to_thread(
-                (self.settings.cache_dir / "district_11710.json").read_text, encoding="utf-8"
+                (self.settings.cache_dir / "raw-v2_district_11710.json").read_text, encoding="utf-8"
             )
         )
-        self.assertNotIn("unused_large_field", payload["items"][0])
-        self.assertEqual(client.to_store(payload["items"][0]), expected[0])
+        self.assertIn("unused_large_field", payload["pages"][0]["payload"]["body"]["items"][0])
+        self.assertEqual(
+            client.to_store(payload["pages"][0]["payload"]["body"]["items"][0]), expected[0]
+        )
         self.assertEqual(payload["meta"]["reference_date"], "2026-09-01")
 
     async def test_brand_cache_io_is_offloaded(self):
@@ -126,19 +130,20 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await franchise.load_brands(settings), ["시험브랜드"])
             self.assertEqual(await franchise.load_brands(settings), ["시험브랜드"])
 
-    async def test_previous_full_cache_is_read_without_network(self):
+    async def test_old_cache_is_ignored(self):
         path = self.settings.cache_dir / "district_11710.json"
         await asyncio.to_thread(
             path.write_text,
-            json.dumps({"items": [ITEM], "meta": {"reference_date": "2026-09-01"}}),
+            json.dumps({"items": [ITEM], "meta": {"reference_date": "old"}}),
             encoding="utf-8",
         )
+        calls = []
 
-        def no_network(request):
-            raise AssertionError("유효한 기존 캐시는 외부 조회 없이 읽어야 합니다.")
+        def network(request):
+            calls.append(request)
+            return httpx.Response(200, json={"body": {"items": [ITEM], "totalCount": 1}})
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(no_network)) as http:
-            stores, meta = await client.StoreClient(self.settings, http).stores_in_district("11710")
-        self.assertEqual(stores, [client.to_store(ITEM)])
-        self.assertTrue(meta["from_cache"])
-        self.assertEqual(meta["reference_date"], "2026-09-01")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(network)) as http:
+            _, meta = await client.StoreClient(self.settings, http).stores_in_district("11710")
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(meta["from_cache"])
