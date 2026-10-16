@@ -109,6 +109,26 @@ body {
   --text-9xl--line-height: 1;
 }
 
+/*
+ * 화면 폭을 따라 부드럽게 바뀌는 글씨 크기 — 375px에서 앞 값, 1024px에서 뒤 값이고
+ * 그 사이는 직선으로 이어진다. sm:처럼 한 지점에서 크기가 확 바뀌지 않게 할 때 쓴다.
+ * 이름은 text-fluid-<375px 크기>-<1024px 크기>.
+ */
+@theme inline {
+  --text-fluid-15-16: calc(
+    clamp(15px, 15px + 1 * (100vw - 375px) / 649, 16px) * var(--font-scale)
+  );
+  --text-fluid-15-16--line-height: 1.5;
+  --text-fluid-24-30: calc(
+    clamp(24px, 24px + 6 * (100vw - 375px) / 649, 30px) * var(--font-scale)
+  );
+  --text-fluid-24-30--line-height: 1.2;
+  --text-fluid-24-32: calc(
+    clamp(24px, 24px + 8 * (100vw - 375px) / 649, 32px) * var(--font-scale)
+  );
+  --text-fluid-24-32--line-height: 1.25;
+}
+
 /* 진행률을 알 수 없는 구간의 막대 — 분석 진행 화면의 "분석 재개" 상태에서 쓴다. */
 @theme {
   --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;

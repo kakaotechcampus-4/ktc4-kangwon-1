@@ -27,18 +27,18 @@ export default function BuildingSummaryHeader({
   return (
     <div className="flex flex-col">
       <div
-        className="flex items-start justify-between gap-6 px-10 py-8"
+        className="flex flex-col-reverse items-start gap-3 px-5 py-6 sm:flex-row sm:justify-between sm:gap-6 sm:px-10 sm:py-8"
         style={{ backgroundColor: colors.brand.dark }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           <h2
-            className="text-3xl font-bold"
+            className="text-fluid-24-30 font-bold break-keep"
             style={{ color: colors.neutral.white }}
           >
             {building.buildingName} {building.floorLabel}
           </h2>
           <p
-            className="text-base"
+            className="text-fluid-15-16 break-keep"
             style={{ color: `${colors.neutral.white}CC` }}
           >
             {building.address}
@@ -57,16 +57,16 @@ export default function BuildingSummaryHeader({
       </div>
 
       <dl
-        className="flex flex-wrap gap-x-12 gap-y-4 px-10 py-6"
+        className="grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-5 sm:flex sm:flex-wrap sm:gap-x-12 sm:px-10 sm:py-6"
         style={{ backgroundColor: `${colors.brand.primary}08` }}
       >
         {summary.map(({ label, field }) => (
-          <div key={label} className="flex flex-col gap-1">
+          <div key={label} className="flex min-w-0 flex-col gap-1">
             <dt className="text-13" style={{ color: colors.text.tertiary }}>
               {label}
             </dt>
             <dd
-              className="text-base font-bold"
+              className="text-base font-bold break-keep"
               style={{
                 color:
                   field.value === null

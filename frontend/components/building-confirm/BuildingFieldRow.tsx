@@ -23,7 +23,7 @@ export default function BuildingFieldRow<T>({
 }: BuildingFieldRowProps<T>) {
   return (
     <div
-      className="flex min-h-[88px] items-center gap-6 px-10 py-5"
+      className="flex flex-col items-start gap-3 px-5 py-5 sm:min-h-[88px] sm:flex-row sm:items-center sm:gap-6 sm:px-10"
       style={{
         borderTop: `1px solid ${colors.neutral.border}`,
         backgroundColor:
@@ -33,29 +33,32 @@ export default function BuildingFieldRow<T>({
       }}
     >
       <p
-        className="w-[220px] shrink-0 text-base"
+        className="shrink-0 text-fluid-15-16 break-keep sm:w-[140px] xl:w-[200px]"
         style={{ color: colors.text.secondary }}
       >
         {label}
       </p>
-      <div className="flex min-w-0 flex-1 items-center">
-        {editable ? (
-          editor
-        ) : (
-          <p
-            className="text-xl font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {field.value === null ? '—' : format(field.value)}
-          </p>
-        )}
+      {/* 값과 출처 배지를 한 줄에 두되, 자리가 모자라면 배지를 아래 줄로 보낸다. */}
+      <div className="flex w-full min-w-0 flex-1 flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 max-w-full">
+          {editable ? (
+            editor
+          ) : (
+            <p
+              className="text-xl font-bold"
+              style={{ color: colors.text.primary }}
+            >
+              {field.value === null ? '—' : format(field.value)}
+            </p>
+          )}
+        </div>
+        <SourceBadge
+          source={field.source}
+          registryText={
+            field.registryValue === null ? null : format(field.registryValue)
+          }
+        />
       </div>
-      <SourceBadge
-        source={field.source}
-        registryText={
-          field.registryValue === null ? null : format(field.registryValue)
-        }
-      />
     </div>
   );
 }

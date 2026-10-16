@@ -208,7 +208,7 @@ export default function BuildingConfirmPage() {
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
+      <main className="flex w-full flex-col items-start gap-6 px-4 py-6 sm:gap-8 sm:px-8 sm:py-10">
         <StepIndicator currentStep={2} />
 
         {!building ? (
@@ -224,7 +224,8 @@ export default function BuildingConfirmPage() {
               description="건축물대장에 적힌 내용이에요. 실제와 다르면 고쳐 주세요. 고친 값으로 분석하고, 리포트에 건축물대장과 다르다고 표시해 둘게요."
             />
 
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_440px] items-start gap-10">
+            {/* 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다. */}
+            <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_440px]">
               <Card
                 className="w-full gap-0"
                 style={{
@@ -244,7 +245,7 @@ export default function BuildingConfirmPage() {
                   }
                   editor={
                     <div className="flex items-center gap-2">
-                      <div className="w-48">
+                      <div className="w-full max-w-48">
                         <Input
                           inputMode="decimal"
                           aria-label="전용면적"
@@ -335,7 +336,7 @@ export default function BuildingConfirmPage() {
                           ),
                         })
                       }
-                      className="min-h-[52px] w-72 rounded-lg border px-3.5 text-base"
+                      className="min-h-[52px] w-full max-w-72 rounded-lg border px-3.5 text-base"
                       style={{
                         borderColor: colors.neutral.border,
                         backgroundColor: colors.neutral.white,
@@ -353,13 +354,13 @@ export default function BuildingConfirmPage() {
                 />
 
                 <div
-                  className="flex justify-end gap-4 px-10 py-8"
+                  className="flex flex-col-reverse gap-3 px-5 py-6 sm:flex-row sm:justify-end sm:gap-4 sm:px-10 sm:py-8"
                   style={{ borderTop: `1px solid ${colors.neutral.border}` }}
                 >
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-[60px] min-w-[176px]"
+                    className="min-h-[60px] w-full sm:w-auto sm:min-w-[176px]"
                     // Button 기본 text-sm이 클래스보다 우선 적용돼 글자 크기는 style로 준다.
                     style={{
                       fontSize: 'var(--text-base)',
@@ -374,7 +375,7 @@ export default function BuildingConfirmPage() {
                   <Button
                     type="button"
                     variant="primary"
-                    className="min-h-[60px] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-[60px] w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     style={{ fontSize: 'var(--text-base)' }}
                     disabled={isSubmitting || building.parking.value === null}
                     aria-describedby={
@@ -410,13 +411,13 @@ function PageTitle({
   return (
     <div className="flex flex-col items-start gap-3">
       <h1
-        className="text-32 leading-tight font-bold"
+        className="text-fluid-24-32 leading-tight font-bold break-keep"
         style={{ color: colors.text.primary }}
       >
         {title}
       </h1>
       <p
-        className="text-base leading-relaxed"
+        className="text-fluid-15-16 leading-relaxed"
         style={{ color: colors.text.secondary }}
       >
         {description}

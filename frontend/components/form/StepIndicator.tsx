@@ -28,7 +28,7 @@ type StepIndicatorProps = {
 
 export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
   return (
-    <div className="flex items-center py-4">
+    <div className="flex max-w-full items-center py-4">
       {steps.map((step, index) => {
         const stepNumber = index + 1;
         const isDone = stepNumber < currentStep;
@@ -36,7 +36,7 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
         const isEmphasized = isDone || isActive;
 
         return (
-          <div key={step.id} className="flex items-center">
+          <div key={step.id} className="flex min-w-0 items-center">
             <div className="flex items-center gap-2">
               <div
                 className={`${dmMono.className} flex size-[26px] items-center justify-center rounded-full text-15 ${
@@ -52,7 +52,8 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
                 {isDone ? <Check size={14} strokeWidth={2.5} /> : step.number}
               </div>
               <p
-                className={`text-base ${isEmphasized ? 'font-medium' : 'font-normal text-gray-500'}`}
+                // 좁은 화면에서는 지금 단계 이름만 보여준다.
+                className={`text-fluid-15-16 whitespace-nowrap ${isActive ? '' : 'hidden sm:block'} ${isEmphasized ? 'font-medium' : 'font-normal text-gray-500'}`}
                 style={
                   isEmphasized
                     ? {
@@ -69,7 +70,7 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
 
             {index < steps.length - 1 && (
               <div
-                className="mx-3.5 h-px w-10"
+                className="mx-2 h-px w-4 shrink-0 sm:mx-3.5 sm:w-10"
                 style={{ backgroundColor: colors.neutral.border }}
               />
             )}

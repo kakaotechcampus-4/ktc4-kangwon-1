@@ -81,7 +81,7 @@ export default function BuildingLoading({
         </div>
         <div className="flex flex-col gap-2">
           <h1
-            className="text-2xl font-bold leading-snug sm:text-32"
+            className="text-fluid-24-32 font-bold leading-snug"
             style={{ color: colors.text.primary }}
           >
             {complete

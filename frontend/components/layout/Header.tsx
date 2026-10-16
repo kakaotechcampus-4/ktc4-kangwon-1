@@ -33,7 +33,7 @@ export default function Header() {
         borderBottom: `1px solid ${colors.neutral.border}`,
       }}
     >
-      <div className="mx-auto grid h-14 w-full max-w-[1440px] grid-cols-3 items-center px-5 sm:px-8">
+      <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center justify-between px-4 sm:grid sm:grid-cols-3 sm:px-8">
         <Link href="/" className="flex items-center gap-2.5 justify-self-start">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md">
             <Image
@@ -69,7 +69,7 @@ export default function Header() {
               <Link
                 key={label}
                 href={href}
-                className="group relative flex flex-col items-center justify-center px-4 py-1.5"
+                className="group relative flex flex-col items-center justify-center px-2.5 py-1.5 sm:px-4"
               >
                 <p
                   className={`text-15 whitespace-nowrap transition-colors ${
@@ -97,7 +97,7 @@ export default function Header() {
           })}
         </nav>
 
-        <div />
+        <div className="hidden sm:block" />
       </div>
     </header>
   );

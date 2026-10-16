@@ -125,7 +125,7 @@ export default function ClarifyingPanel({
       <div className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-4">
           <h2
-            className="text-22 leading-snug font-bold"
+            className="text-22 leading-snug font-bold break-keep"
             style={{ color: colors.text.primary }}
           >
             분석을 위해 {questions.length}가지 확인이 필요해요
@@ -242,7 +242,7 @@ function QuestionCard({
 
   return (
     <div
-      className="flex flex-col gap-5 rounded-xl border p-6"
+      className="flex flex-col gap-5 rounded-xl border p-4 sm:p-6"
       style={{
         borderColor: isAnswered
           ? `${colors.brand.primary}66`
@@ -283,7 +283,7 @@ function QuestionCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5 pl-11">
+      <div className="flex flex-wrap items-center gap-2.5 sm:pl-11">
         {question.options.map((option) => {
           const isSelected = answer?.optionId === option.id;
           return (
@@ -311,7 +311,7 @@ function QuestionCard({
       </div>
 
       {detailInput && (
-        <label className="flex flex-col gap-2 pl-11">
+        <label className="flex flex-col gap-2 sm:pl-11">
           <span
             className="text-sm font-semibold"
             style={{ color: colors.text.secondary }}
@@ -338,7 +338,7 @@ function QuestionCard({
         </label>
       )}
 
-      <div className="flex flex-col gap-2.5 pl-11">
+      <div className="flex flex-col gap-2.5 sm:pl-11">
         <button
           type="button"
           aria-expanded={isReasonOpen}
@@ -392,8 +392,12 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
 
   return (
     <Card
-      className="w-full items-center gap-6 text-center"
-      style={{ padding: '48px 36px', borderRadius: '12px', borderWidth: '1px' }}
+      className="w-full items-center gap-6 text-center [--card-pad:32px_20px] sm:[--card-pad:48px_36px]"
+      style={{
+        padding: 'var(--card-pad)',
+        borderRadius: '12px',
+        borderWidth: '1px',
+      }}
     >
       <div className="flex flex-col items-center gap-3">
         <Loader2
@@ -502,8 +506,12 @@ function ResumingPanel({
 
   return (
     <Card
-      className="w-full gap-6"
-      style={{ padding: '28px', borderRadius: '12px', borderWidth: '1px' }}
+      className="w-full gap-6 [--card-pad:20px] sm:[--card-pad:28px]"
+      style={{
+        padding: 'var(--card-pad)',
+        borderRadius: '12px',
+        borderWidth: '1px',
+      }}
     >
       <div className="flex items-start gap-3.5">
         <div
@@ -526,7 +534,7 @@ function ResumingPanel({
         </div>
         <div className="flex flex-col gap-1">
           <h2
-            className="text-22 leading-snug font-bold"
+            className="text-22 leading-snug font-bold break-keep"
             style={{ color: colors.text.primary }}
           >
             {isCompleted
@@ -557,9 +565,12 @@ function ResumingPanel({
         </p>
         <dl className="flex flex-col gap-2">
           {summaryRows.map((row) => (
-            <div key={row.label} className="flex items-start gap-4 text-15">
+            <div
+              key={row.label}
+              className="flex items-start gap-3 text-15 sm:gap-4"
+            >
               <dt
-                className="w-[104px] shrink-0"
+                className="w-[84px] shrink-0 sm:w-[104px]"
                 style={{ color: colors.text.tertiary }}
               >
                 {row.label}
