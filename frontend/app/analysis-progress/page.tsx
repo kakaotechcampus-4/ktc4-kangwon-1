@@ -286,7 +286,7 @@ function LiveProgress({ requestId }: { requestId: string }) {
       stage={stage}
       questions={questions}
       initialAnswers={initialAnswers}
-      questionKey={waiting?.question_set_id}
+      questionKey={waiting?.question_session_id}
       summary={known.summary}
       error={error}
       onSubmit={handleAnswersSubmit}

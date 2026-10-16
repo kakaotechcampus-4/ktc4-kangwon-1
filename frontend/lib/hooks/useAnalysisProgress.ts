@@ -6,7 +6,7 @@ import {
   getAnalysisEvents,
   submitAnswers,
 } from '@/lib/api/analyses';
-import { applyProgressEvent } from '@/lib/api/adapters/progress';
+import { applyProgressEvent, toWaiting } from '@/lib/api/adapters/progress';
 import type {
   AnswerSubmission,
   DecisionResult,
@@ -69,7 +69,7 @@ export function useAnalysisProgress(
       const detail = await getAnalysis(requestId as string);
       if (cancelled) return;
       if (detail.status === 'waiting_for_input' && detail.questions) {
-        setWaiting(detail.questions);
+        setWaiting(toWaiting(requestId as string, detail.questions));
         setStage('awaiting_input');
       } else if (detail.status === 'completed' && detail.result) {
         setResult(detail.result);

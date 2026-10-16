@@ -374,9 +374,9 @@ function QuestionCard({
 // "무엇을 보고 있는지"를 짧은 말로 바꿔 쓴다.
 
 const ANALYSIS_FOCUS: { stepId: string; label: string }[] = [
-  { stepId: 'commercial-area', label: '상권 경쟁도' },
-  { stepId: 'floating-population', label: '유동인구 패턴' },
-  { stepId: 'business-lifecycle', label: '개폐업 추이' },
+  { stepId: 'local-data', label: '상권·유동인구·개폐업 채점' },
+  { stepId: 'decision', label: '업종별 적합도 판단' },
+  { stepId: 'evaluation', label: '평가자 4명 검토' },
 ];
 
 // 질문이 생기기 전 — 빈 로딩 화면처럼 보이지 않게 지금 도는 분석만 가볍게 보여준다.
@@ -406,8 +406,8 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         </p>
         <p className="text-15" style={{ color: colors.text.secondary }}>
           {runningCount > 0
-            ? `현재 ${runningCount}개의 분석이 진행 중이에요`
-            : '주변 자료를 모은 뒤 3가지 분석을 동시에 시작해요'}
+            ? `현재 ${focus.find((item) => item.status === 'in_progress')?.label} 중이에요`
+            : '주소를 확인한 뒤 주변 자료로 51개 업종을 채점해요'}
         </p>
       </div>
 

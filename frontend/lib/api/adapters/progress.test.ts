@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANSWERED_OPTION_ID,
+  SKIPPED_ANSWER,
+  UNKNOWN_ANSWER,
   applyProgressEvent,
   prefillAnswers,
   toAnswerSubmission,
   toClarifyingQuestions,
+  toWaiting,
 } from './progress';
 import { pollInterval } from '@/lib/hooks/useAnalysisProgress';
 import { mockAnalysisProgress } from '@/lib/mockData/analysisProgress';
@@ -33,77 +36,75 @@ function statuses(events: AnalysisEvent[]) {
 const waiting: WaitingForInput = {
   status: 'waiting_for_input',
   request_id: 'req-1',
-  question_set_id: 'qs-1',
+  question_session_id: 'qs-1',
   questions: [
     {
       field: 'floor',
-      text: '몇 층인가요?',
-      why_needed: '층에 따라 가능한 업종이 다릅니다.',
-      expected_impact: '1층 전용 업종 판단에 씁니다.',
+      question: '몇 층인가요?',
+      reason: '층에 따라 가능한 업종이 다릅니다.',
     },
     {
       field: 'space_condition',
-      text: '공간 상태는 어떤가요?',
-      why_needed: '공사 범위를 판단합니다.',
-      expected_impact: '설비 공사가 큰 업종을 거릅니다.',
+      question: '공간 상태는 어떤가요?',
+      reason: '공사 범위를 판단합니다.',
     },
   ],
 };
 
 describe('applyProgressEvent', () => {
-  it('세 분석이 시작되면 자료 수집을 끝내고 각 분석을 진행 중으로 둔다', () => {
+  it('자료 조회가 시작되면 주소 확인을 끝내고 조회를 진행 중으로 둔다', () => {
     const result = statuses([
       ev('address', 'started'),
-      ev('floating_population', 'started'),
-      ev('commercial_area', 'started'),
-      ev('business_lifecycle', 'started'),
-      ev('commercial_area', 'completed', { status: 'ok' }),
+      ev('local_data', 'started'),
     ]);
-    expect(result['data-collection']).toBe('done');
-    expect(result['commercial-area']).toBe('done');
-    expect(result['floating-population']).toBe('in_progress');
-    expect(result['business-lifecycle']).toBe('in_progress');
+    expect(result.address).toBe('done');
+    expect(result['local-data']).toBe('in_progress');
+    expect(result.decision).toBe('pending');
   });
 
-  it('질문 대기 → 답변 후 재판단 → 완료 순서를 반영한다', () => {
-    const asked = [
-      ev('decision', 'started'),
-      ev('decision', 'completed', { action: 'ask_user' }),
-      ev('questions', 'waiting', { count: 2 }),
-    ];
-    const waitingState = statuses(asked);
-    expect(waitingState.clarification).toBe('waiting');
-    expect(waitingState.decision).toBe('pending');
+  it('도구 호출이 끝나도 판단은 계속 진행 중이다', () => {
+    const result = statuses([
+      ev('local_data', 'completed'),
+      ev('decision', 'completed', { tool: 'get_scorecard', status: 'ok' }),
+    ]);
+    expect(result['local-data']).toBe('done');
+    expect(result.decision).toBe('in_progress');
+  });
 
-    const resumed = statuses([...asked, ev('decision', 'started')]);
+  it('질문 대기 뒤 판단이 다시 오면 질문 단계를 끝낸다', () => {
+    const asked = [
+      ev('decision', 'completed', { tool: 'ask_user', status: 'ok' }),
+      ev('question', 'waiting', { question_session_id: 'qs-1' }),
+    ];
+    expect(statuses(asked).clarification).toBe('waiting');
+    const resumed = statuses([
+      ...asked,
+      ev('decision', 'completed', { tool: 'submit_l', status: 'ok' }),
+    ]);
     expect(resumed.clarification).toBe('done');
     expect(resumed.decision).toBe('in_progress');
-
-    const finished = statuses([
-      ...asked,
-      ev('decision', 'started'),
-      ev('decision', 'completed', { action: 'final' }),
-    ]);
-    expect(finished.decision).toBe('done');
   });
 
-  it('질문 없이 끝나면 모든 단계를 완료로 표시한다', () => {
+  it('평가자 검토가 시작되면 판단을 끝내고, 최종 작성에서 검토를 끝낸다', () => {
+    const reviewing = statuses([ev('evaluation', 'started')]);
+    expect(reviewing.decision).toBe('done');
+    expect(reviewing.evaluation).toBe('in_progress');
+    const writing = statuses([
+      ev('evaluation', 'started'),
+      ev('evaluation', 'completed', { actor: 'founder', error_code: null }),
+      ev('final', 'started', { feedback_round: 1 }),
+    ]);
+    expect(writing.evaluation).toBe('done');
+    expect(writing.report).toBe('in_progress');
+  });
+
+  it('최종 완료면 질문이 없었어도 모든 단계를 완료로 표시한다', () => {
     const result = statuses([
-      ev('decision', 'started'),
-      ev('decision', 'completed', { action: 'final' }),
-      ev('run', 'completed', { status: 'ok' }),
+      ev('address', 'started'),
+      ev('final', 'completed', { review_completeness: 1 }),
     ]);
     expect(Object.values(result).every((status) => status === 'done')).toBe(
       true
-    );
-  });
-
-  it('보완·지도·전문가 작업은 최종 판단 진행 중으로 묶는다', () => {
-    expect(statuses([ev('supplement', 'started')]).decision).toBe(
-      'in_progress'
-    );
-    expect(statuses([ev('consult.commercial_area', 'started')]).decision).toBe(
-      'in_progress'
     );
   });
 });
@@ -122,34 +123,47 @@ describe('질문·답변 변환', () => {
     expect(floor.options[0].detailInput?.required).toBe(true);
   });
 
+  it('GET 질문 칸에 요청 ID를 붙여 대기 상태로 바꾼다', () => {
+    expect(
+      toWaiting('req-1', {
+        question_session_id: 'qs-1',
+        questions: waiting.questions,
+        status: 'waiting',
+      })
+    ).toEqual(waiting);
+  });
+
   it('층·전용면적 질문에만 앞에서 받은 값을 미리 채운다', () => {
     expect(
       prefillAnswers(waiting, { floor: ' 4층 401호 ', exclusiveArea: '85㎡' })
     ).toEqual({ floor: { optionId: ANSWERED_OPTION_ID, detail: '4층 401호' } });
   });
 
-  it('답변을 제출 형식으로 바꾸고 고르지 않은 질문은 건너뛰기로 보낸다', () => {
+  it('모든 질문에 빈칸 없는 답을 넣고 고르지 않은 질문은 건너뛰기 문장으로 보낸다', () => {
     expect(
       toAnswerSubmission(waiting, {
         floor: { optionId: 'answered', detail: '1층' },
       })
     ).toEqual({
       request_id: 'req-1',
-      question_set_id: 'qs-1',
-      answers: [
-        { field: 'floor', status: 'answered', value: '1층' },
-        { field: 'space_condition', status: 'skipped' },
-      ],
+      question_session_id: 'qs-1',
+      answers: { floor: '1층', space_condition: SKIPPED_ANSWER },
     });
     expect(
       toAnswerSubmission(waiting, {
         floor: { optionId: 'answered', detail: '  ' },
         space_condition: { optionId: 'unknown' },
       }).answers
-    ).toEqual([
-      { field: 'floor', status: 'skipped' },
-      { field: 'space_condition', status: 'unknown' },
-    ]);
+    ).toEqual({ floor: SKIPPED_ANSWER, space_condition: UNKNOWN_ANSWER });
+  });
+
+  it('답은 백엔드 상한 500자로 자른다', () => {
+    const long = '가'.repeat(600);
+    expect(
+      toAnswerSubmission(waiting, {
+        floor: { optionId: 'answered', detail: long },
+      }).answers.floor
+    ).toHaveLength(500);
   });
 });
 

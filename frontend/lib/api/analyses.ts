@@ -3,7 +3,9 @@ import type {
   AnalysisEvents,
   AnswerSubmission,
   DecisionResult,
+  RequestFacts,
   StoredAnalysis,
+  WaitingForInput,
 } from '@/lib/api/types';
 
 const API_BASE_URL =
@@ -46,7 +48,7 @@ export async function createAnalysis(
   // 맞춘다. 개발 중 백엔드 키 없이 화면만 확인하려면 호출부에서 임시로
   // { mock: true }를 넘긴다.
   options: { mock?: boolean; radiusM?: number } = {}
-): Promise<{ result: DecisionResult; requestId: string }> {
+): Promise<{ result: DecisionResult | WaitingForInput; requestId: string }> {
   const { mock = false, radiusM } = options;
   if (
     radiusM !== undefined &&
@@ -89,11 +91,9 @@ export async function createAnalysis(
     throw new AnalysisApiError(response.status, detail);
   }
 
-  const result = (await response.json()) as DecisionResult;
-  // 백엔드가 아직 X-Request-ID 응답 헤더를 내려주지 않으므로(현재
-  // backend/app/api/v1/routes.py 기준), 헤더가 있으면 그걸 쓰고 없으면
-  // 응답 본문의 request_id로 대체한다. 헤더가 추가되면 자동으로 그쪽을
-  // 우선하게 된다.
+  // allow_questions를 보내지 않으므로 보통 최종 결과지만, 계약상 질문 대기도 올 수 있다.
+  const result = (await response.json()) as DecisionResult | WaitingForInput;
+  // X-Request-ID 헤더를 우선하고, 없으면 응답 본문의 request_id로 대체한다.
   const requestId = response.headers.get('X-Request-ID') ?? result.request_id;
 
   return { result, requestId };
@@ -181,12 +181,23 @@ export async function getAnalysisEvents(
 export async function submitAnswers(
   submission: AnswerSubmission
 ): Promise<AcceptedAnalysis> {
+  const { request_id, question_session_id, answers } = submission;
   return requestJson<AcceptedAnalysis>(
-    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(submission.request_id)}/answers?wait=false`,
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(request_id)}/answers?wait=false`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submission),
+      // 백엔드 Answers는 정의되지 않은 필드를 422로 거절한다(request_id는 URL에만).
+      body: JSON.stringify({ question_session_id, answers }),
     }
+  );
+}
+
+/** 리포트 차트용 전체 fact. 결과의 facts는 보고서가 인용한 것만 담는다. */
+export async function getAnalysisFacts(
+  requestId: string
+): Promise<RequestFacts> {
+  return requestJson<RequestFacts>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/facts`
   );
 }
