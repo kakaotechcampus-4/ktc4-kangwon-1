@@ -17,7 +17,6 @@ import {
   type CommercialAreaSpecializationRank,
   type RecommendedIndustry,
 } from '@/lib/mockData/report';
-import type { IndustryAssessment } from '@/lib/api/types';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -367,20 +366,17 @@ function DistrictSpecializationBars({ data }: { data: CommercialAreaData }) {
 
 /**
  * B섹션 카드가 실제로 필요로 하는 최소 정보. 목업(RecommendedIndustry)과
- * 실제 중재 결과(IndustryAssessment)가 서로 다른 구조라, 카드 쪽은 어느
- * 소스에서 왔는지 모르게 이 형태로 통일해서 받는다.
+ * 업종명 목록이 서로 다른 구조라, 카드 쪽은 어느 소스에서 왔는지 모르게
+ * 이 형태로 통일해서 받는다. (실제 결과는 FactSections.tsx가 그린다.)
  */
 type CompetitionItem = { key: string; name: string };
 
 function toCompetitionItems(
-  fromApi: IndustryAssessment[] | undefined,
+  fromApi: string[] | undefined,
   fallback: RecommendedIndustry[]
 ): CompetitionItem[] {
   if (fromApi) {
-    return fromApi.map((item, i) => ({
-      key: `${item.category.middle}-${i}`,
-      name: item.category.middle,
-    }));
+    return fromApi.map((name, i) => ({ key: `${name}-${i}`, name }));
   }
   return fallback.map((item) => ({
     key: `${item.name}-${item.rank}`,
@@ -531,8 +527,9 @@ export default function CompetitorAnalysisSection({
   reportLayout = false,
 }: {
   data?: CommercialAreaData;
-  recommendations?: IndustryAssessment[];
-  notRecommended?: IndustryAssessment[];
+  // 업종명 목록. 없으면 목업 추천·비추천 업종을 쓴다.
+  recommendations?: string[];
+  notRecommended?: string[];
   reportLayout?: boolean;
 }) {
   const visibility = getSectionVisibility(data.status);

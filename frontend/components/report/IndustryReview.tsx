@@ -14,7 +14,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { mockReportData } from '@/lib/mockData/report';
-import type { IndustryAssessment } from '@/lib/api/types';
+import type { FinalCandidate } from '@/lib/api/types';
+import { renderSegments, type FactIndex } from '@/lib/api/segments';
 
 export function industrySymbol(name: string): LucideIcon {
   if (/반려|동물/.test(name)) return PawPrint;
@@ -31,25 +32,81 @@ export function industrySymbol(name: string): LucideIcon {
   return rules.find(([pattern]) => pattern.test(name))?.[1] ?? Store;
 }
 
+type ReviewItem = {
+  name: string;
+  // 실제 결과는 이유가 긴 문장이라 오른쪽 좁은 칸 대신 아래 줄 전체에 놓는다.
+  wide?: boolean;
+  // 100점 환산 점수. 하한·상한이 다르면 구간으로 표시한다.
+  score: number;
+  scoreHigh?: number;
+  badge?: string;
+  reasons: string[];
+  risks: string[];
+};
+
+/** 100점 환산 점수 구간. 적용 배점(A)이 0이면 점수를 매길 수 없다. */
+export function candidateScore(candidate: FinalCandidate): {
+  low: number;
+  high: number;
+} | null {
+  if (candidate.lower_ratio === null || candidate.upper_ratio === null) {
+    return null;
+  }
+  return {
+    low: Math.round(candidate.lower_ratio * 100),
+    high: Math.round(candidate.upper_ratio * 100),
+  };
+}
+
+/** 입점 전 확인할 문장 — 위험 요인, 확인 조건 문장, 서버가 붙인 확인 조건 순서. */
+export function candidateChecks(
+  candidate: FinalCandidate,
+  facts: FactIndex
+): string[] {
+  const sentences = [
+    renderSegments(candidate.risks_segments, facts),
+    renderSegments(candidate.confirmation_conditions_segments, facts),
+    ...candidate.confirmation_conditions,
+  ].map((text) => text.trim());
+  return [...new Set(sentences.filter(Boolean))];
+}
+
+function toItem(candidate: FinalCandidate, facts: FactIndex): ReviewItem {
+  const score = candidateScore(candidate);
+  const reason = renderSegments(candidate.reasons_segments, facts).trim();
+  return {
+    name: candidate.industry_name,
+    wide: true,
+    score: score?.low ?? 0,
+    scoreHigh: score && score.high !== score.low ? score.high : undefined,
+    badge: candidate.badge,
+    reasons: reason ? [reason] : [],
+    risks: candidateChecks(candidate, facts),
+  };
+}
+
 export default function IndustryReview({
-  recommendations,
-  notRecommended,
+  top5,
+  excluded,
+  facts,
 }: {
-  recommendations?: IndustryAssessment[];
-  notRecommended?: IndustryAssessment[];
+  top5?: FinalCandidate[];
+  excluded?: FinalCandidate[];
+  facts?: FactIndex;
 }) {
-  const groups = [
+  const index = facts ?? new Map();
+  const groups: {
+    title: string;
+    description: string;
+    positive: boolean;
+    items: ReviewItem[];
+  }[] = [
     {
-      title: '추천 업종',
-      description: '적합도와 추천 근거를 함께 확인하세요',
+      title: '검토 후보 업종',
+      description: '점수가 높은 순서입니다. 배지와 확인 조건을 함께 보세요',
       positive: true,
       items:
-        recommendations?.map((item) => ({
-          name: item.category.middle,
-          score: item.score,
-          reasons: item.reasons,
-          risks: item.risks,
-        })) ??
+        top5?.map((item) => toItem(item, index)) ??
         mockReportData.recommended.map((item) => ({
           name: item.name,
           score: item.score,
@@ -58,16 +115,11 @@ export default function IndustryReview({
         })),
     },
     {
-      title: '비추천 업종',
+      title: '제외한 업종',
       description: '위험 요인과 입점 조건을 먼저 확인하세요',
       positive: false,
       items:
-        notRecommended?.map((item) => ({
-          name: item.category.middle,
-          score: item.score,
-          reasons: item.reasons,
-          risks: item.risks,
-        })) ??
+        excluded?.map((item) => toItem(item, index)) ??
         mockReportData.notRecommended.map((item) => ({
           name: item.name,
           score: item.score,
@@ -98,7 +150,10 @@ export default function IndustryReview({
               const Icon = industrySymbol(item.name);
               const key = `${group.positive}-${index}`;
               return (
-                <article key={key} className="industry-item">
+                <article
+                  key={key}
+                  className={`industry-item ${item.wide ? 'industry-item-wide' : ''}`}
+                >
                   <div className="industry-row-summary">
                     <div className="industry-heading">
                       <span className="industry-rank">
@@ -107,7 +162,12 @@ export default function IndustryReview({
                       <span className="industry-icon">
                         <Icon size={25} strokeWidth={1.8} aria-hidden="true" />
                       </span>
-                      <h4>{item.name}</h4>
+                      <div className="industry-name">
+                        <h4>{item.name}</h4>
+                        {item.badge && (
+                          <span className="industry-badge">{item.badge}</span>
+                        )}
+                      </div>
                       <div className="industry-score">
                         {item.score}
                         <small>점</small>
@@ -127,6 +187,15 @@ export default function IndustryReview({
                           width: `${Math.max(0, Math.min(100, item.score))}%`,
                         }}
                       />
+                      {item.scoreHigh !== undefined && (
+                        // 확인 못 한 항목이 모두 좋게 나오면 오를 수 있는 구간
+                        <div
+                          className="industry-score-potential"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, item.scoreHigh - item.score))}%`,
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                   <ul className="industry-reasons industry-reason-labels">
