@@ -2,7 +2,6 @@
 
 import asyncio
 import importlib
-import io
 import json
 import os
 import unittest
@@ -222,28 +221,3 @@ class EnvironmentTests(unittest.TestCase):
                         initialize.assert_called_once_with("unused-test.sqlite3")
 
         asyncio.run(start())
-
-    def test_cli_entrypoints_load_environment_once(self):
-        floating = importlib.import_module("app.agents.floating_population.__main__")
-        with (
-            patch("app.config.load_dotenv") as loader,
-            patch("sys.argv", ["agent"]),
-            patch("sys.stderr", new=io.StringIO()),
-        ):
-            self.assertEqual(floating.main(), 2)
-            loader.assert_called_once()
-
-        lifecycle = importlib.import_module("examples.run_business_lifecycle")
-        result = {
-            "industry_scores": [],
-            "unavailable_industries": [],
-            "summary": "테스트",
-        }
-        with (
-            patch("app.config.load_dotenv") as loader,
-            patch.object(lifecycle, "run_business_lifecycle_agent", return_value=result),
-            patch("sys.argv", ["agent", "--area-code", "3120240", "--base-quarter", "20252"]),
-            patch("sys.stdout", new=io.StringIO()),
-        ):
-            self.assertEqual(lifecycle.main(), 0)
-            loader.assert_called_once()

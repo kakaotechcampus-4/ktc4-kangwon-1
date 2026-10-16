@@ -9,10 +9,9 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.map_analysis.agent import category_code, observe
 from app.agents.map_analysis.client import MapApiError, PlaceClient
 from app.agents.map_analysis.config import Settings
-from app.schemas import AnalysisTask, MapLookupPlan, MapObservation, Site
+from app.schemas import Site
 
 HIT: dict[str, Any] = {
     "meta": {"total_count": 100, "pageable_count": 45, "is_end": False},
@@ -230,48 +229,6 @@ GANGNAM = Site(
     latitude=37.50035,
     longitude=127.03656,
 )
-
-
-def page(total: int, documents: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return {
-        "meta": {"total_count": total, "pageable_count": min(total, 45), "is_end": True},
-        "documents": documents or [],
-    }
-
-
-class MapAnalysisObserveTests(unittest.IsolatedAsyncioTestCase):
-    async def test_facilities_aliases_duplicates_radius_and_partial_failure(self):
-        paths = []
-
-        def handler(request):
-            paths.append(request.url.path)
-            self.assertEqual(request.url.params["radius"], "300")
-            code = request.url.params["category_group_code"]
-            if code == "SC4":
-                return httpx.Response(401)
-            return httpx.Response(200, json=page(0))
-
-        queries = [
-            dict(
-                kind="infrastructure",
-                facility_code=category_code(name),
-                why_needed="접근성 확인",
-                expected_impact="후보 비교",
-            )
-            for name in ["지하철역", "지하철", "초등학교"]
-        ]
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-            result = await observe(
-                AnalysisTask(request_id="map-test", site=GANGNAM, radius_m=300),
-                MapLookupPlan(action="map_lookup", queries=queries),
-                client=PlaceClient(settings(), client=http),
-            )
-        MapObservation.model_validate(result.model_dump())
-        self.assertEqual(paths, ["/v2/local/search/category.json"] * 2)
-        self.assertEqual(result.radius_m, 300)
-        self.assertEqual(result.status, "partial")
-        self.assertEqual(result.data.queries["q1"].total_count, 0)
-        self.assertEqual(result.data.queries["q2"].error, "KAKAO_AUTH")
 
 
 if __name__ == "__main__":

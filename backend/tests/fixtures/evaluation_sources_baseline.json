@@ -35,12 +35,12 @@
         "description": "목업 개폐업 자료입니다.",
         "industries": [
           {
-            "middle": "한식 음식점업",
+            "middle": "한식 음식점",
             "open_count": 12,
             "close_count": 9
           },
           {
-            "middle": "비알코올 음료점업",
+            "middle": "카페·비알코올 음료점",
             "open_count": 18,
             "close_count": 16
           }
@@ -63,13 +63,13 @@
         "by_middle": [
           {
             "code": "I201",
-            "name": "한식 음식점업",
+            "name": "한식 음식점",
             "count": 96,
             "lq": 1.24
           },
           {
             "code": "I212",
-            "name": "비알코올 음료점업",
+            "name": "카페·비알코올 음료점",
             "count": 71,
             "lq": 2.1
           }

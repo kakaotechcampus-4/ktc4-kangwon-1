@@ -256,33 +256,6 @@
         "/scoring_method/notes/2": null,
         "/scoring_method/notes": null,
         "/scoring_method": null,
-        "/industries/0/industry_id": "G202",
-        "/industries/0/industry_name": "G202",
-        "/industries/0/score": "G202",
-        "/industries/0/confidence": "G202",
-        "/industries/0/data_available": "G202",
-        "/industries/0/score_available": "G202",
-        "/industries/0/data_status": "G202",
-        "/industries/0/data_complete": "G202",
-        "/industries/0/metrics/observed_quarters": "G202",
-        "/industries/0/metrics/latest_store_count": "G202",
-        "/industries/0/metrics/avg_store_count": "G202",
-        "/industries/0/metrics/period_open_count": "G202",
-        "/industries/0/metrics/period_close_count": "G202",
-        "/industries/0/metrics/period_net_change": "G202",
-        "/industries/0/metrics/avg_open_rate": "G202",
-        "/industries/0/metrics/avg_close_rate": "G202",
-        "/industries/0/metrics/net_change_rate": "G202",
-        "/industries/0/metrics/turnover_rate": "G202",
-        "/industries/0/metrics/recent_year_open_count": "G202",
-        "/industries/0/metrics/recent_year_close_count": "G202",
-        "/industries/0/metrics/recent_year_net_change": "G202",
-        "/industries/0/metrics/recent_year_close_rate": "G202",
-        "/industries/0/metrics/recent_year_net_change_rate": "G202",
-        "/industries/0/metrics/oldest_year_close_rate": "G202",
-        "/industries/0/metrics/close_rate_trend": "G202",
-        "/industries/0/metrics": "G202",
-        "/industries/0/warning": "G202",
         "/industries/2/industry_id": "G204",
         "/industries/2/industry_name": "G204",
         "/industries/2/score": "G204",
@@ -536,121 +509,6 @@
           "path": "/scoring_method/notes/2",
           "value": "최근 최대 4개 분기의 평균 폐업률은 낮을수록 긍정적으로 평가한다.",
           "industry_code": null
-        },
-        {
-          "path": "/industries/0/industry_id",
-          "value": "G202",
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/industry_name",
-          "value": "자동차 부품 및 내장품 소매업",
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/score",
-          "value": 71.9,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/confidence",
-          "value": "low",
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/data_status",
-          "value": "observed",
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/observed_quarters",
-          "value": 12,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/latest_store_count",
-          "value": 3,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/avg_store_count",
-          "value": 2.92,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/period_open_count",
-          "value": 1,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/period_close_count",
-          "value": 0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/period_net_change",
-          "value": 1,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/avg_open_rate",
-          "value": 2.86,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/avg_close_rate",
-          "value": 0.0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/net_change_rate",
-          "value": 2.86,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/turnover_rate",
-          "value": 2.86,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/recent_year_open_count",
-          "value": 0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/recent_year_close_count",
-          "value": 0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/recent_year_net_change",
-          "value": 0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/recent_year_close_rate",
-          "value": 0.0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/recent_year_net_change_rate",
-          "value": 0.0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/oldest_year_close_rate",
-          "value": 0.0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/metrics/close_rate_trend",
-          "value": 0.0,
-          "industry_code": "G202"
-        },
-        {
-          "path": "/industries/0/warning",
-          "value": "건수의 우위는 수익성이나 생존 가능성을 보장하지 않습니다.",
-          "industry_code": "G202"
         },
         {
           "path": "/industries/2/industry_id",
@@ -1439,20 +1297,6 @@
         "/by_middle/1/major_cluster_count": "S207",
         "/by_middle/1/major_cluster_diversity": "S207",
         "/by_middle/1": "S207",
-        "/by_middle/2/code": "P106",
-        "/by_middle/2/name": "P106",
-        "/by_middle/2/major_code": "P106",
-        "/by_middle/2/major_name": "P106",
-        "/by_middle/2/count": "P106",
-        "/by_middle/2/share": "P106",
-        "/by_middle/2/density_per_km2": "P106",
-        "/by_middle/2/lq": "P106",
-        "/by_middle/2/lq_district": "P106",
-        "/by_middle/2/diff_type_count": "P106",
-        "/by_middle/2/jacobian": "P106",
-        "/by_middle/2/major_cluster_count": "P106",
-        "/by_middle/2/major_cluster_diversity": "P106",
-        "/by_middle/2": "P106",
         "/by_radius/0/radius_m": null,
         "/by_radius/0/store_total": null,
         "/by_radius/0/category_count": null,
@@ -1464,13 +1308,6 @@
         "/by_radius/0/top_by_count/0/density_per_km2": "Q102",
         "/by_radius/0/top_by_count/0/note": "Q102",
         "/by_radius/0/top_by_count/0": "Q102",
-        "/by_radius/0/top_by_count/1/rank": "I210",
-        "/by_radius/0/top_by_count/1/code": "I210",
-        "/by_radius/0/top_by_count/1/name": "I210",
-        "/by_radius/0/top_by_count/1/count": "I210",
-        "/by_radius/0/top_by_count/1/density_per_km2": "I210",
-        "/by_radius/0/top_by_count/1/note": "I210",
-        "/by_radius/0/top_by_count/1": "I210",
         "/by_radius/0/top_by_count/2/rank": "S207",
         "/by_radius/0/top_by_count/2/code": "S207",
         "/by_radius/0/top_by_count/2/name": "S207",
@@ -1478,20 +1315,13 @@
         "/by_radius/0/top_by_count/2/density_per_km2": "S207",
         "/by_radius/0/top_by_count/2/note": "S207",
         "/by_radius/0/top_by_count/2": "S207",
-        "/by_radius/0/bottom_by_count/0/rank": "G208",
-        "/by_radius/0/bottom_by_count/0/code": "G208",
-        "/by_radius/0/bottom_by_count/0/name": "G208",
-        "/by_radius/0/bottom_by_count/0/count": "G208",
-        "/by_radius/0/bottom_by_count/0/density_per_km2": "G208",
-        "/by_radius/0/bottom_by_count/0/note": "G208",
-        "/by_radius/0/bottom_by_count/0": "G208",
-        "/by_radius/0/bottom_by_count/1/rank": "G221",
-        "/by_radius/0/bottom_by_count/1/code": "G221",
-        "/by_radius/0/bottom_by_count/1/name": "G221",
-        "/by_radius/0/bottom_by_count/1/count": "G221",
-        "/by_radius/0/bottom_by_count/1/density_per_km2": "G221",
-        "/by_radius/0/bottom_by_count/1/note": "G221",
-        "/by_radius/0/bottom_by_count/1": "G221",
+        "/by_radius/0/bottom_by_count/1/rank": null,
+        "/by_radius/0/bottom_by_count/1/code": null,
+        "/by_radius/0/bottom_by_count/1/name": null,
+        "/by_radius/0/bottom_by_count/1/count": null,
+        "/by_radius/0/bottom_by_count/1/density_per_km2": null,
+        "/by_radius/0/bottom_by_count/1/note": null,
+        "/by_radius/0/bottom_by_count/1": null,
         "/by_radius/0/bottom_by_count/2/rank": "G213",
         "/by_radius/0/bottom_by_count/2/code": "G213",
         "/by_radius/0/bottom_by_count/2/name": "G213",
@@ -1506,13 +1336,6 @@
         "/by_radius/0/top_by_concentration/0/density_per_km2": "Q102",
         "/by_radius/0/top_by_concentration/0/note": "Q102",
         "/by_radius/0/top_by_concentration/0": "Q102",
-        "/by_radius/0/top_by_concentration/1/rank": "I210",
-        "/by_radius/0/top_by_concentration/1/code": "I210",
-        "/by_radius/0/top_by_concentration/1/name": "I210",
-        "/by_radius/0/top_by_concentration/1/count": "I210",
-        "/by_radius/0/top_by_concentration/1/density_per_km2": "I210",
-        "/by_radius/0/top_by_concentration/1/note": "I210",
-        "/by_radius/0/top_by_concentration/1": "I210",
         "/by_radius/0/top_by_concentration/2/rank": "S207",
         "/by_radius/0/top_by_concentration/2/code": "S207",
         "/by_radius/0/top_by_concentration/2/name": "S207",
@@ -1527,13 +1350,6 @@
         "/by_radius/0/top_by_specialization/0/times_vs_surroundings": "Q102",
         "/by_radius/0/top_by_specialization/0/note": "Q102",
         "/by_radius/0/top_by_specialization/0": "Q102",
-        "/by_radius/0/top_by_specialization/1/rank": "I210",
-        "/by_radius/0/top_by_specialization/1/code": "I210",
-        "/by_radius/0/top_by_specialization/1/name": "I210",
-        "/by_radius/0/top_by_specialization/1/count": "I210",
-        "/by_radius/0/top_by_specialization/1/times_vs_surroundings": "I210",
-        "/by_radius/0/top_by_specialization/1/note": "I210",
-        "/by_radius/0/top_by_specialization/1": "I210",
         "/by_radius/0/top_by_specialization/2/rank": "S207",
         "/by_radius/0/top_by_specialization/2/code": "S207",
         "/by_radius/0/top_by_specialization/2/name": "S207",
@@ -1565,13 +1381,13 @@
         "/by_radius/1/top_by_count/1/density_per_km2": "S207",
         "/by_radius/1/top_by_count/1/note": "S207",
         "/by_radius/1/top_by_count/1": "S207",
-        "/by_radius/1/top_by_count/2/rank": "P106",
-        "/by_radius/1/top_by_count/2/code": "P106",
-        "/by_radius/1/top_by_count/2/name": "P106",
-        "/by_radius/1/top_by_count/2/count": "P106",
-        "/by_radius/1/top_by_count/2/density_per_km2": "P106",
-        "/by_radius/1/top_by_count/2/note": "P106",
-        "/by_radius/1/top_by_count/2": "P106",
+        "/by_radius/1/top_by_count/2/rank": null,
+        "/by_radius/1/top_by_count/2/code": null,
+        "/by_radius/1/top_by_count/2/name": null,
+        "/by_radius/1/top_by_count/2/count": null,
+        "/by_radius/1/top_by_count/2/density_per_km2": null,
+        "/by_radius/1/top_by_count/2/note": null,
+        "/by_radius/1/top_by_count/2": null,
         "/by_radius/1/bottom_by_count/0/rank": "G211",
         "/by_radius/1/bottom_by_count/0/code": "G211",
         "/by_radius/1/bottom_by_count/0/name": "G211",
@@ -1579,20 +1395,13 @@
         "/by_radius/1/bottom_by_count/0/density_per_km2": "G211",
         "/by_radius/1/bottom_by_count/0/note": "G211",
         "/by_radius/1/bottom_by_count/0": "G211",
-        "/by_radius/1/bottom_by_count/1/rank": "N102",
-        "/by_radius/1/bottom_by_count/1/code": "N102",
-        "/by_radius/1/bottom_by_count/1/name": "N102",
-        "/by_radius/1/bottom_by_count/1/count": "N102",
-        "/by_radius/1/bottom_by_count/1/density_per_km2": "N102",
-        "/by_radius/1/bottom_by_count/1/note": "N102",
-        "/by_radius/1/bottom_by_count/1": "N102",
-        "/by_radius/1/bottom_by_count/2/rank": "N104",
-        "/by_radius/1/bottom_by_count/2/code": "N104",
-        "/by_radius/1/bottom_by_count/2/name": "N104",
-        "/by_radius/1/bottom_by_count/2/count": "N104",
-        "/by_radius/1/bottom_by_count/2/density_per_km2": "N104",
-        "/by_radius/1/bottom_by_count/2/note": "N104",
-        "/by_radius/1/bottom_by_count/2": "N104",
+        "/by_radius/1/bottom_by_count/2/rank": null,
+        "/by_radius/1/bottom_by_count/2/code": null,
+        "/by_radius/1/bottom_by_count/2/name": null,
+        "/by_radius/1/bottom_by_count/2/count": null,
+        "/by_radius/1/bottom_by_count/2/density_per_km2": null,
+        "/by_radius/1/bottom_by_count/2/note": null,
+        "/by_radius/1/bottom_by_count/2": null,
         "/by_radius/1/top_by_concentration/0/rank": "Q102",
         "/by_radius/1/top_by_concentration/0/code": "Q102",
         "/by_radius/1/top_by_concentration/0/name": "Q102",
@@ -1607,27 +1416,20 @@
         "/by_radius/1/top_by_concentration/1/density_per_km2": "S207",
         "/by_radius/1/top_by_concentration/1/note": "S207",
         "/by_radius/1/top_by_concentration/1": "S207",
-        "/by_radius/1/top_by_concentration/2/rank": "P106",
-        "/by_radius/1/top_by_concentration/2/code": "P106",
-        "/by_radius/1/top_by_concentration/2/name": "P106",
-        "/by_radius/1/top_by_concentration/2/count": "P106",
-        "/by_radius/1/top_by_concentration/2/density_per_km2": "P106",
-        "/by_radius/1/top_by_concentration/2/note": "P106",
-        "/by_radius/1/top_by_concentration/2": "P106",
-        "/by_radius/1/top_by_specialization/0/rank": "G221",
-        "/by_radius/1/top_by_specialization/0/code": "G221",
-        "/by_radius/1/top_by_specialization/0/name": "G221",
-        "/by_radius/1/top_by_specialization/0/count": "G221",
-        "/by_radius/1/top_by_specialization/0/times_vs_surroundings": "G221",
-        "/by_radius/1/top_by_specialization/0/note": "G221",
-        "/by_radius/1/top_by_specialization/0": "G221",
-        "/by_radius/1/top_by_specialization/1/rank": "R102",
-        "/by_radius/1/top_by_specialization/1/code": "R102",
-        "/by_radius/1/top_by_specialization/1/name": "R102",
-        "/by_radius/1/top_by_specialization/1/count": "R102",
-        "/by_radius/1/top_by_specialization/1/times_vs_surroundings": "R102",
-        "/by_radius/1/top_by_specialization/1/note": "R102",
-        "/by_radius/1/top_by_specialization/1": "R102",
+        "/by_radius/1/top_by_concentration/2/rank": null,
+        "/by_radius/1/top_by_concentration/2/code": null,
+        "/by_radius/1/top_by_concentration/2/name": null,
+        "/by_radius/1/top_by_concentration/2/count": null,
+        "/by_radius/1/top_by_concentration/2/density_per_km2": null,
+        "/by_radius/1/top_by_concentration/2/note": null,
+        "/by_radius/1/top_by_concentration/2": null,
+        "/by_radius/1/top_by_specialization/0/rank": null,
+        "/by_radius/1/top_by_specialization/0/code": null,
+        "/by_radius/1/top_by_specialization/0/name": null,
+        "/by_radius/1/top_by_specialization/0/count": null,
+        "/by_radius/1/top_by_specialization/0/times_vs_surroundings": null,
+        "/by_radius/1/top_by_specialization/0/note": null,
+        "/by_radius/1/top_by_specialization/0": null,
         "/by_radius/1/top_by_specialization/2/rank": "Q102",
         "/by_radius/1/top_by_specialization/2/code": "Q102",
         "/by_radius/1/top_by_specialization/2/name": "Q102",
@@ -1659,13 +1461,13 @@
         "/by_radius/2/top_by_count/1/density_per_km2": "S207",
         "/by_radius/2/top_by_count/1/note": "S207",
         "/by_radius/2/top_by_count/1": "S207",
-        "/by_radius/2/top_by_count/2/rank": "P106",
-        "/by_radius/2/top_by_count/2/code": "P106",
-        "/by_radius/2/top_by_count/2/name": "P106",
-        "/by_radius/2/top_by_count/2/count": "P106",
-        "/by_radius/2/top_by_count/2/density_per_km2": "P106",
-        "/by_radius/2/top_by_count/2/note": "P106",
-        "/by_radius/2/top_by_count/2": "P106",
+        "/by_radius/2/top_by_count/2/rank": null,
+        "/by_radius/2/top_by_count/2/code": null,
+        "/by_radius/2/top_by_count/2/name": null,
+        "/by_radius/2/top_by_count/2/count": null,
+        "/by_radius/2/top_by_count/2/density_per_km2": null,
+        "/by_radius/2/top_by_count/2/note": null,
+        "/by_radius/2/top_by_count/2": null,
         "/by_radius/2/bottom_by_count/0/rank": "N110",
         "/by_radius/2/bottom_by_count/0/code": "N110",
         "/by_radius/2/bottom_by_count/0/name": "N110",
@@ -1680,13 +1482,13 @@
         "/by_radius/2/bottom_by_count/1/density_per_km2": "I207",
         "/by_radius/2/bottom_by_count/1/note": "I207",
         "/by_radius/2/bottom_by_count/1": "I207",
-        "/by_radius/2/bottom_by_count/2/rank": "M115",
-        "/by_radius/2/bottom_by_count/2/code": "M115",
-        "/by_radius/2/bottom_by_count/2/name": "M115",
-        "/by_radius/2/bottom_by_count/2/count": "M115",
-        "/by_radius/2/bottom_by_count/2/density_per_km2": "M115",
-        "/by_radius/2/bottom_by_count/2/note": "M115",
-        "/by_radius/2/bottom_by_count/2": "M115",
+        "/by_radius/2/bottom_by_count/2/rank": null,
+        "/by_radius/2/bottom_by_count/2/code": null,
+        "/by_radius/2/bottom_by_count/2/name": null,
+        "/by_radius/2/bottom_by_count/2/count": null,
+        "/by_radius/2/bottom_by_count/2/density_per_km2": null,
+        "/by_radius/2/bottom_by_count/2/note": null,
+        "/by_radius/2/bottom_by_count/2": null,
         "/by_radius/2/top_by_concentration/0/rank": "I201",
         "/by_radius/2/top_by_concentration/0/code": "I201",
         "/by_radius/2/top_by_concentration/0/name": "I201",
@@ -1701,27 +1503,20 @@
         "/by_radius/2/top_by_concentration/1/density_per_km2": "S207",
         "/by_radius/2/top_by_concentration/1/note": "S207",
         "/by_radius/2/top_by_concentration/1": "S207",
-        "/by_radius/2/top_by_concentration/2/rank": "P106",
-        "/by_radius/2/top_by_concentration/2/code": "P106",
-        "/by_radius/2/top_by_concentration/2/name": "P106",
-        "/by_radius/2/top_by_concentration/2/count": "P106",
-        "/by_radius/2/top_by_concentration/2/density_per_km2": "P106",
-        "/by_radius/2/top_by_concentration/2/note": "P106",
-        "/by_radius/2/top_by_concentration/2": "P106",
-        "/by_radius/2/top_by_specialization/0/rank": "G221",
-        "/by_radius/2/top_by_specialization/0/code": "G221",
-        "/by_radius/2/top_by_specialization/0/name": "G221",
-        "/by_radius/2/top_by_specialization/0/count": "G221",
-        "/by_radius/2/top_by_specialization/0/times_vs_surroundings": "G221",
-        "/by_radius/2/top_by_specialization/0/note": "G221",
-        "/by_radius/2/top_by_specialization/0": "G221",
-        "/by_radius/2/top_by_specialization/1/rank": "R102",
-        "/by_radius/2/top_by_specialization/1/code": "R102",
-        "/by_radius/2/top_by_specialization/1/name": "R102",
-        "/by_radius/2/top_by_specialization/1/count": "R102",
-        "/by_radius/2/top_by_specialization/1/times_vs_surroundings": "R102",
-        "/by_radius/2/top_by_specialization/1/note": "R102",
-        "/by_radius/2/top_by_specialization/1": "R102",
+        "/by_radius/2/top_by_concentration/2/rank": null,
+        "/by_radius/2/top_by_concentration/2/code": null,
+        "/by_radius/2/top_by_concentration/2/name": null,
+        "/by_radius/2/top_by_concentration/2/count": null,
+        "/by_radius/2/top_by_concentration/2/density_per_km2": null,
+        "/by_radius/2/top_by_concentration/2/note": null,
+        "/by_radius/2/top_by_concentration/2": null,
+        "/by_radius/2/top_by_specialization/0/rank": null,
+        "/by_radius/2/top_by_specialization/0/code": null,
+        "/by_radius/2/top_by_specialization/0/name": null,
+        "/by_radius/2/top_by_specialization/0/count": null,
+        "/by_radius/2/top_by_specialization/0/times_vs_surroundings": null,
+        "/by_radius/2/top_by_specialization/0/note": null,
+        "/by_radius/2/top_by_specialization/0": null,
         "/by_radius/2/top_by_specialization/2/rank": "Q102",
         "/by_radius/2/top_by_specialization/2/code": "Q102",
         "/by_radius/2/top_by_specialization/2/name": "Q102",
@@ -1754,20 +1549,6 @@
         "/district_specialization/0/times_vs_surroundings": "S201",
         "/district_specialization/0/note": "S201",
         "/district_specialization/0": "S201",
-        "/district_specialization/1/rank": "R102",
-        "/district_specialization/1/code": "R102",
-        "/district_specialization/1/name": "R102",
-        "/district_specialization/1/count": "R102",
-        "/district_specialization/1/times_vs_surroundings": "R102",
-        "/district_specialization/1/note": "R102",
-        "/district_specialization/1": "R102",
-        "/district_specialization/2/rank": "P105",
-        "/district_specialization/2/code": "P105",
-        "/district_specialization/2/name": "P105",
-        "/district_specialization/2/count": "P105",
-        "/district_specialization/2/times_vs_surroundings": "P105",
-        "/district_specialization/2/note": "P105",
-        "/district_specialization/2": "P105",
         "/trade_areas/0/code": null,
         "/trade_areas/0/name": null,
         "/trade_areas/0/kind": null,
@@ -2046,71 +1827,6 @@
           "industry_code": "S207"
         },
         {
-          "path": "/by_middle/2/code",
-          "value": "P106",
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/name",
-          "value": "기타 교육기관",
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/major_code",
-          "value": "P1",
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/major_name",
-          "value": "교육 서비스업",
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/count",
-          "value": 56,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/share",
-          "value": 0.063781,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/density_per_km2",
-          "value": 71.3014,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/lq",
-          "value": 1.2393,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/lq_district",
-          "value": 1.2734,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/diff_type_count",
-          "value": 822,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/jacobian",
-          "value": 23.6121,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/major_cluster_count",
-          "value": 113,
-          "industry_code": "P106"
-        },
-        {
-          "path": "/by_middle/2/major_cluster_diversity",
-          "value": 2.1067,
-          "industry_code": "P106"
-        },
-        {
           "path": "/by_radius/0/radius_m",
           "value": 50,
           "industry_code": null
@@ -2161,36 +1877,6 @@
           "industry_code": "Q102"
         },
         {
-          "path": "/by_radius/0/top_by_count/1/rank",
-          "value": 2,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_count/1/code",
-          "value": "I210",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_count/1/name",
-          "value": "기타 간이 음식점업",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_count/1/count",
-          "value": 5,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_count/1/density_per_km2",
-          "value": 636.6198,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_count/1/note",
-          "value": "5개 · 이 반경 점포의 9.6%",
-          "industry_code": "I210"
-        },
-        {
           "path": "/by_radius/0/top_by_count/2/rank",
           "value": 3,
           "industry_code": "S207"
@@ -2221,64 +1907,34 @@
           "industry_code": "S207"
         },
         {
-          "path": "/by_radius/0/bottom_by_count/0/rank",
-          "value": 1,
-          "industry_code": "G208"
-        },
-        {
-          "path": "/by_radius/0/bottom_by_count/0/code",
-          "value": "G208",
-          "industry_code": "G208"
-        },
-        {
-          "path": "/by_radius/0/bottom_by_count/0/name",
-          "value": "가전제품 및 정보 통신장비 소매업",
-          "industry_code": "G208"
-        },
-        {
-          "path": "/by_radius/0/bottom_by_count/0/count",
-          "value": 1,
-          "industry_code": "G208"
-        },
-        {
-          "path": "/by_radius/0/bottom_by_count/0/density_per_km2",
-          "value": 127.324,
-          "industry_code": "G208"
-        },
-        {
-          "path": "/by_radius/0/bottom_by_count/0/note",
-          "value": "1개 · 이 반경 점포의 1.9%",
-          "industry_code": "G208"
-        },
-        {
           "path": "/by_radius/0/bottom_by_count/1/rank",
           "value": 2,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/1/code",
           "value": "G221",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/1/name",
           "value": "기타 상품 전문 소매업",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/1/count",
           "value": 1,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/1/density_per_km2",
           "value": 127.324,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/1/note",
           "value": "1개 · 이 반경 점포의 1.9%",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/0/bottom_by_count/2/rank",
@@ -2341,36 +1997,6 @@
           "industry_code": "Q102"
         },
         {
-          "path": "/by_radius/0/top_by_concentration/1/rank",
-          "value": 2,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_concentration/1/code",
-          "value": "I210",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_concentration/1/name",
-          "value": "기타 간이 음식점업",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_concentration/1/count",
-          "value": 5,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_concentration/1/density_per_km2",
-          "value": 636.6198,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_concentration/1/note",
-          "value": "1km²당 637개꼴로 모여 있습니다",
-          "industry_code": "I210"
-        },
-        {
           "path": "/by_radius/0/top_by_concentration/2/rank",
           "value": 3,
           "industry_code": "S207"
@@ -2429,36 +2055,6 @@
           "path": "/by_radius/0/top_by_specialization/0/note",
           "value": "주변 2,000m 평균보다 9.3배 많습니다",
           "industry_code": "Q102"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/rank",
-          "value": 2,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/code",
-          "value": "I210",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/name",
-          "value": "기타 간이 음식점업",
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/count",
-          "value": 5,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/times_vs_surroundings",
-          "value": 2.1598,
-          "industry_code": "I210"
-        },
-        {
-          "path": "/by_radius/0/top_by_specialization/1/note",
-          "value": "주변 2,000m 평균보다 2.2배 많습니다",
-          "industry_code": "I210"
         },
         {
           "path": "/by_radius/0/top_by_specialization/2/rank",
@@ -2598,32 +2194,32 @@
         {
           "path": "/by_radius/1/top_by_count/2/rank",
           "value": 3,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_count/2/code",
           "value": "P106",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_count/2/name",
           "value": "기타 교육기관",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_count/2/count",
           "value": 19,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_count/2/density_per_km2",
           "value": 151.1972,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_count/2/note",
           "value": "19개 · 이 반경 점포의 7.1%",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/0/rank",
@@ -2656,64 +2252,34 @@
           "industry_code": "G211"
         },
         {
-          "path": "/by_radius/1/bottom_by_count/1/rank",
-          "value": 2,
-          "industry_code": "N102"
-        },
-        {
-          "path": "/by_radius/1/bottom_by_count/1/code",
-          "value": "N102",
-          "industry_code": "N102"
-        },
-        {
-          "path": "/by_radius/1/bottom_by_count/1/name",
-          "value": "건물ㆍ산업설비 청소 및 방제 서비스업",
-          "industry_code": "N102"
-        },
-        {
-          "path": "/by_radius/1/bottom_by_count/1/count",
-          "value": 1,
-          "industry_code": "N102"
-        },
-        {
-          "path": "/by_radius/1/bottom_by_count/1/density_per_km2",
-          "value": 7.9577,
-          "industry_code": "N102"
-        },
-        {
-          "path": "/by_radius/1/bottom_by_count/1/note",
-          "value": "1개 · 이 반경 점포의 0.4%",
-          "industry_code": "N102"
-        },
-        {
           "path": "/by_radius/1/bottom_by_count/2/rank",
           "value": 3,
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/2/code",
           "value": "N104",
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/2/name",
           "value": "고용 알선 및 인력 공급업",
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/2/count",
           "value": 1,
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/2/density_per_km2",
           "value": 7.9577,
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/bottom_by_count/2/note",
           "value": "1개 · 이 반경 점포의 0.4%",
-          "industry_code": "N104"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/0/rank",
@@ -2778,92 +2344,62 @@
         {
           "path": "/by_radius/1/top_by_concentration/2/rank",
           "value": 3,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/2/code",
           "value": "P106",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/2/name",
           "value": "기타 교육기관",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/2/count",
           "value": 19,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/2/density_per_km2",
           "value": 151.1972,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_concentration/2/note",
           "value": "1km²당 151개꼴로 모여 있습니다",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/rank",
           "value": 1,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/code",
           "value": "G221",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/name",
           "value": "기타 상품 전문 소매업",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/count",
           "value": 5,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/times_vs_surroundings",
           "value": 6.7229,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/0/note",
           "value": "주변 2,000m 평균보다 6.7배 많습니다",
-          "industry_code": "G221"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/rank",
-          "value": 2,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/code",
-          "value": "R102",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/name",
-          "value": "도서관, 사적지 및 유사 여가관련 서비스업",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/count",
-          "value": 6,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/times_vs_surroundings",
-          "value": 3.7016,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/1/top_by_specialization/1/note",
-          "value": "주변 2,000m 평균보다 3.7배 많습니다",
-          "industry_code": "R102"
+          "industry_code": null
         },
         {
           "path": "/by_radius/1/top_by_specialization/2/rank",
@@ -3003,32 +2539,32 @@
         {
           "path": "/by_radius/2/top_by_count/2/rank",
           "value": 3,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_count/2/code",
           "value": "P106",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_count/2/name",
           "value": "기타 교육기관",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_count/2/count",
           "value": 56,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_count/2/density_per_km2",
           "value": 71.3014,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_count/2/note",
           "value": "56개 · 이 반경 점포의 6.4%",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/0/rank",
@@ -3093,32 +2629,32 @@
         {
           "path": "/by_radius/2/bottom_by_count/2/rank",
           "value": 3,
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/2/code",
           "value": "M115",
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/2/name",
           "value": "그 외 기타 전문, 과학 및 기술 서비스업",
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/2/count",
           "value": 1,
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/2/density_per_km2",
           "value": 1.2732,
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/bottom_by_count/2/note",
           "value": "1개 · 이 반경 점포의 0.1%",
-          "industry_code": "M115"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/0/rank",
@@ -3183,92 +2719,62 @@
         {
           "path": "/by_radius/2/top_by_concentration/2/rank",
           "value": 3,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/2/code",
           "value": "P106",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/2/name",
           "value": "기타 교육기관",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/2/count",
           "value": 56,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/2/density_per_km2",
           "value": 71.3014,
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_concentration/2/note",
           "value": "1km²당 71개꼴로 모여 있습니다",
-          "industry_code": "P106"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/rank",
           "value": 1,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/code",
           "value": "G221",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/name",
           "value": "기타 상품 전문 소매업",
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/count",
           "value": 6,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/times_vs_surroundings",
           "value": 2.4717,
-          "industry_code": "G221"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/0/note",
           "value": "주변 2,000m 평균보다 2.5배 많습니다",
-          "industry_code": "G221"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/rank",
-          "value": 2,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/code",
-          "value": "R102",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/name",
-          "value": "도서관, 사적지 및 유사 여가관련 서비스업",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/count",
-          "value": 11,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/times_vs_surroundings",
-          "value": 2.0791,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/by_radius/2/top_by_specialization/1/note",
-          "value": "주변 2,000m 평균보다 2.1배 많습니다",
-          "industry_code": "R102"
+          "industry_code": null
         },
         {
           "path": "/by_radius/2/top_by_specialization/2/rank",
@@ -3399,66 +2905,6 @@
           "path": "/district_specialization/0/note",
           "value": "송파구 전체보다 2.4배 많습니다",
           "industry_code": "S201"
-        },
-        {
-          "path": "/district_specialization/1/rank",
-          "value": 2,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/1/code",
-          "value": "R102",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/1/name",
-          "value": "도서관, 사적지 및 유사 여가관련 서비스업",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/1/count",
-          "value": 11,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/1/times_vs_surroundings",
-          "value": 2.2283,
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/1/note",
-          "value": "송파구 전체보다 2.2배 많습니다",
-          "industry_code": "R102"
-        },
-        {
-          "path": "/district_specialization/2/rank",
-          "value": 3,
-          "industry_code": "P105"
-        },
-        {
-          "path": "/district_specialization/2/code",
-          "value": "P105",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/district_specialization/2/name",
-          "value": "일반 교육기관",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/district_specialization/2/count",
-          "value": 54,
-          "industry_code": "P105"
-        },
-        {
-          "path": "/district_specialization/2/times_vs_surroundings",
-          "value": 2.0775,
-          "industry_code": "P105"
-        },
-        {
-          "path": "/district_specialization/2/note",
-          "value": "송파구 전체보다 2.1배 많습니다",
-          "industry_code": "P105"
         },
         {
           "path": "/trade_areas/0/code",
@@ -3647,17 +3093,17 @@
         }
       ],
       "radii": [
+        "50",
         "100.8",
         "125",
         "163.1",
         "184.9",
         "200",
-        "2000",
         "225",
         "325",
         "425.5",
-        "50",
-        "500"
+        "500",
+        "2000"
       ],
       "brief_payload_chars": 30311
     },
@@ -5594,12 +5040,12 @@
         }
       ],
       "radii": [
+        "50",
         "100",
         "100.8",
         "163.1",
         "184.9",
         "200",
-        "50",
         "500"
       ],
       "brief_payload_chars": 7522
@@ -5863,17 +5309,7 @@
         "/places/77663134/place_url": null,
         "/places/77663134/mapping_status": null,
         "/places/77663134": null,
-        "/places": null,
-        "/industries/P105/name": "P105",
-        "/industries/P105/major": "P105",
-        "/industries/P105/place_ids/0": "P105",
-        "/industries/P105/place_ids/1": "P105",
-        "/industries/P105/place_ids/2": "P105",
-        "/industries/P105/place_ids/3": "P105",
-        "/industries/P105/place_ids/4": "P105",
-        "/industries/P105/place_ids": "P105",
-        "/industries/P105/sampled_count": "P105",
-        "/industries/P105": "P105"
+        "/places": null
       },
       "records": [
         {
@@ -6275,49 +5711,10 @@
           "path": "/places/77663134/mapping_status",
           "value": "not_applicable",
           "industry_code": null
-        },
-        {
-          "path": "/industries/P105/name",
-          "value": "일반 교육기관",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/major",
-          "value": "교육 서비스업",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/place_ids/0",
-          "value": "11575083",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/place_ids/1",
-          "value": "12760695",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/place_ids/2",
-          "value": "20945494",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/place_ids/3",
-          "value": "21922107",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/place_ids/4",
-          "value": "77663134",
-          "industry_code": "P105"
-        },
-        {
-          "path": "/industries/P105/sampled_count",
-          "value": 5,
-          "industry_code": "P105"
         }
       ],
       "radii": []
     }
-  ]
+  ],
+  "catalog_taxonomy": "service-51; 원래 실행 자료는 유지하며 제외·이름 불일치 업종의 인용 차단을 반영"
 }

@@ -78,10 +78,21 @@ class LLMBudget:
             await self._save()
             return self.used
 
-    async def finish(self, attempt: int, *, status: str, elapsed_ms: int, usage=None) -> None:
+    async def finish(
+        self, attempt: int, *, status: str, elapsed_ms: int, usage=None, model=None
+    ) -> None:
         async with self._lock:
             record = next(row for row in self.calls if row["attempt"] == attempt)
             record.update(status=status, elapsed_ms=elapsed_ms)
+            if model is not None:
+                record.update(
+                    model=model,
+                    family="anthropic"
+                    if "claude" in model.lower()
+                    else "openai"
+                    if "gpt" in model.lower()
+                    else "unknown",
+                )
             if usage is not None:
                 record.update(
                     input_tokens=usage.prompt_tokens, output_tokens=usage.completion_tokens

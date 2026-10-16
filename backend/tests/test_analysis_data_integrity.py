@@ -22,7 +22,7 @@ from app.agents.commercial_area.client import SbizApiError, StoreClient
 from app.agents.commercial_area.config import Settings as CommercialSettings
 from app.agents.commercial_area.metrics import build_radius_slices
 from app.agents.commercial_area.schemas import MiddleCode, Store
-from app.agents.floating_population.metrics import _trend
+from app.agents.floating_population.metrics import trend
 from app.agents.floating_population.models import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
 
 
@@ -137,18 +137,18 @@ class TrendTests(unittest.TestCase):
             ("20244", [_flpop("20244", 4600)]),
             ("20252", [_flpop("20252", 9100)]),
         ]
-        trend = _trend(series, {"A"})
+        result = trend(series, {"A"})
         self.assertEqual(
-            [point.period_code for point in trend.quarters],
+            [point.period_code for point in result.quarters],
             ["20241", "20244", "20251", "20252"],
         )
-        self.assertIsNotNone(trend.qoq_change)
-        self.assertIsNone(trend.yoy_change)
+        self.assertIsNotNone(result.qoq_change)
+        self.assertIsNone(result.yoy_change)
 
     def test_missing_requested_latest_quarter_is_not_replaced_by_older_data(self):
-        trend = _trend([("20251", [_flpop("20251", 9000)]), ("20252", [])], {"A"})
-        self.assertIsNone(trend.qoq_change)
-        self.assertIsNone(trend.yoy_change)
+        result = trend([("20251", [_flpop("20251", 9000)]), ("20252", [])], {"A"})
+        self.assertIsNone(result.qoq_change)
+        self.assertIsNone(result.yoy_change)
 
 
 class CommercialClientTests(unittest.IsolatedAsyncioTestCase):

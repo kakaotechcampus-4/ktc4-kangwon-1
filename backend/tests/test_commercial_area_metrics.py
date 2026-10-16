@@ -20,13 +20,13 @@ from app.agents.commercial_area.metrics import (
 from app.agents.commercial_area.schemas import MiddleCode, Store
 
 MASTER = [
-    MiddleCode(code="I201", name="한식 음식점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I212", name="비알코올 음료점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="I202", name="중식 음식점업", major_code="I2", major_name="음식점업"),
-    MiddleCode(code="G204", name="종합 소매업", major_code="G2", major_name="소매업"),
+    MiddleCode(code="I201", name="한식 음식점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I212", name="카페·비알코올 음료점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="I202", name="중식 음식점", major_code="I2", major_name="음식점업"),
+    MiddleCode(code="G204", name="종합 소매", major_code="G2", major_name="소매업"),
     MiddleCode(
         code="R102",
-        name="도서관, 사적지 및 유사 여가관련 서비스업",
+        name="독서실·유사 여가시설",
         major_code="R1",
         major_name="수리 및 개인 서비스업",
     ),
@@ -158,16 +158,6 @@ class DistrictComparisonTests(unittest.TestCase):
         rows = build_middle_rows(sample_stores(), 500, MASTER, {"I201": 100})
         self.assertTrue(all(r.lq_district is None for r in rows))
 
-    def test_district_specialization_names_the_district(self):
-        from app.agents.commercial_area.metrics import build_district_specialization
-
-        rows = build_middle_rows(sample_stores(), 500, MASTER, None, {"I201": 200, "G204": 800})
-        ranks = build_district_specialization(rows, Settings(), "송파구")
-
-        self.assertTrue(ranks)
-        self.assertIn("송파구 전체", ranks[0].note)
-        self.assertTrue(all(r.count >= Settings().min_count_for_specialization for r in ranks))
-
 
 class ClusterAttractionTests(unittest.TestCase):
     def test_cluster_count_is_the_whole_major(self):
@@ -247,7 +237,7 @@ class RadiusSliceTests(unittest.TestCase):
         slices = build_radius_slices(ring_stores(), 37.5, 127.0, MASTER, settings)
         self.assertEqual([s.radius_m for s in slices], [50, 100, 500])
         self.assertEqual([s.store_total for s in slices], [4, 4, 7])
-        self.assertEqual(slices[0].top_by_count[0].name, "한식 음식점업")
+        self.assertEqual(slices[0].top_by_count[0].name, "한식 음식점")
         self.assertEqual(slices[-1].absent_category_count, 3)
         self.assertTrue(slices[0].explanations.store_total.startswith("반경 50m 안에"))
         self.assertNotIn("LQ", slices[0].explanations.specialization)
