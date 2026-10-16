@@ -13,7 +13,7 @@ from pydantic import Field
 
 from app.db.connection import connect
 from app.db.repository import create_request
-from app.schemas import DecisionResult, Schema, Text
+from app.schemas import DecisionResult, FactView, Schema, Text
 from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
 from app.services.mock import dependencies, generators
 
@@ -180,6 +180,77 @@ def detail(request_id, path):
 async def get_analysis(request_id: str, request: Request):
     result = await asyncio.to_thread(
         detail, request_id, request.app.state.execution_settings.db_path
+    )
+    if result is None:
+        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
+    return result
+
+
+class RequestFacts(Schema):
+    request_id: Text
+    snapshot_id: Text | None
+    facts: list[FactView]
+
+
+def request_facts(request_id, path):
+    """리포트 차트용으로 요청 스냅샷의 전체 fact를 읽습니다. 보고서 인용 여부와 무관합니다."""
+    with connect(path) as db:
+        if not db.execute(
+            "SELECT 1 FROM analysis_requests WHERE request_id=?", (request_id,)
+        ).fetchone():
+            return None
+        snapshot = db.execute(
+            "SELECT snapshot_id FROM snapshots WHERE request_id=?", (request_id,)
+        ).fetchone()
+        if snapshot is None:
+            return RequestFacts(request_id=request_id, snapshot_id=None, facts=[])
+        snapshot_id = snapshot["snapshot_id"]
+        local = db.execute(
+            "SELECT scope_json FROM local_snapshots WHERE snapshot_id=?", (snapshot_id,)
+        ).fetchone()
+        rows = db.execute(
+            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
+            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? "
+            # 공간 비교는 답변마다 새로 만들어지므로 현재 판정만 돌려줍니다.
+            "AND (metric!='space_fit' OR fact_id IN (SELECT fact_id FROM space_fit_current "
+            "WHERE request_id=? AND snapshot_id=?)) ORDER BY source,metric,industry_code,fact_id",
+            (request_id, snapshot_id, request_id, snapshot_id),
+        ).fetchall()
+    # 로컬 자료 fact의 공간 범위는 스냅샷에 한 번만 저장되어 있어 읽을 때 펼칩니다.
+    spatial = json.loads(local["scope_json"]) | {"snapshot_id": snapshot_id} if local else None
+    facts = [
+        FactView(
+            fact_id=r["fact_id"],
+            source=r["source"],
+            metric=r["metric"],
+            value=json.loads(r["value_json"]),
+            unit=r["unit"],
+            period=r["period"],
+            spatial_scope=spatial
+            if r["local_lineage"] and spatial
+            else json.loads(r["spatial_scope_json"]),
+            industry_code=r["industry_code"],
+            status="not_applicable" if r["status"] == "n.a." else r["status"],
+            citable=bool(r["citable"]),
+            calc_version=r["calc_version"],
+            provenance_ref=(
+                "fact_parents:"
+                if r["metric"] == "space_fit"
+                else "local_fact_lineage:"
+                if r["local_lineage"]
+                else "fact_sources:"
+            )
+            + r["fact_id"],
+        )
+        for r in rows
+    ]
+    return RequestFacts(request_id=request_id, snapshot_id=snapshot_id, facts=facts)
+
+
+@router.get("/analyses/{request_id}/facts", response_model=RequestFacts)
+async def get_analysis_facts(request_id: str, request: Request):
+    result = await asyncio.to_thread(
+        request_facts, request_id, request.app.state.execution_settings.db_path
     )
     if result is None:
         raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
