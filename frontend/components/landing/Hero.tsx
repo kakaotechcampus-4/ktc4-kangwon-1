@@ -29,14 +29,14 @@ type InfoCard = {
 const infoCards: InfoCard[] = [
   {
     id: 'area',
-    style: { top: 84, left: 7, width: 111, height: 58 },
+    style: { top: 80, left: 0, width: 122, height: 62 },
     content: (
       <>
-        <p className={`${dmMono.className} text-[8px] text-gray-400`}>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
           전용면적
         </p>
         <p
-          className={`${outfit.className} text-[22px] font-bold`}
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
           style={{ color: colors.brand.dark }}
         >
           {mockProperty.exclusiveAreaM2}㎡
@@ -46,12 +46,14 @@ const infoCards: InfoCard[] = [
   },
   {
     id: 'frontage',
-    style: { top: 277, left: 5, width: 113, height: 56 },
+    style: { top: 274, left: 0, width: 118, height: 62 },
     content: (
       <>
-        <p className={`${dmMono.className} text-[8px] text-gray-400`}>전면폭</p>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
+          전면폭
+        </p>
         <p
-          className={`${outfit.className} text-[22px] font-bold`}
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
           style={{ color: colors.brand.primary }}
         >
           7.4m
@@ -61,19 +63,19 @@ const infoCards: InfoCard[] = [
   },
   {
     id: 'market',
-    style: { top: 79, left: 401, width: 117, height: 71 },
+    style: { top: 76, left: 398, width: 122, height: 76 },
     content: (
       <>
-        <p className={`${dmMono.className} text-[8px] text-gray-400`}>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
           상권 분석
         </p>
         <p
-          className={`${outfit.className} text-[13px] font-bold`}
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
           style={{ color: colors.brand.dark }}
         >
           반경 500m
         </p>
-        <p className={`${dmMono.className} text-[7px] text-gray-400`}>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
           234개 점포
         </p>
       </>
@@ -81,25 +83,27 @@ const infoCards: InfoCard[] = [
   },
   {
     id: 'ai-pick',
-    style: { top: 267, left: 403, width: 115, height: 76 },
+    style: { top: 262, left: 398, width: 122, height: 86 },
     dark: true,
     content: (
       <>
         <p
-          className={`${dmMono.className} text-[8px]`}
+          className={`${dmMono.className} text-[10px]`}
           style={{ color: colors.brand.primary }}
         >
           AI 추천 1위
         </p>
-        <p className={`${outfit.className} text-[15px] font-bold text-white`}>
+        <p
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap text-white`}
+        >
           네일·뷰티
         </p>
         <div className="mt-1 flex items-baseline gap-1">
-          <p className={`${dmMono.className} text-[9px] text-gray-400`}>
+          <p className={`${dmMono.className} text-[10px] text-gray-400`}>
             적합도
           </p>
           <p
-            className={`${outfit.className} text-[16px] font-bold`}
+            className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
             style={{ color: colors.brand.primary }}
           >
             92점
@@ -110,14 +114,14 @@ const infoCards: InfoCard[] = [
   },
   {
     id: 'foot-traffic',
-    style: { top: 381, left: 149, width: 104, height: 39 },
+    style: { top: 372, left: 136, width: 122, height: 54 },
     content: (
       <>
-        <p className={`${dmMono.className} text-[7px] text-gray-400`}>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
           유동인구
         </p>
         <p
-          className={`${outfit.className} text-[11px] font-bold`}
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
           style={{ color: colors.brand.dark }}
         >
           4,820명/일
@@ -127,14 +131,14 @@ const infoCards: InfoCard[] = [
   },
   {
     id: 'competitors',
-    style: { top: 383, left: 286, width: 93, height: 39 },
+    style: { top: 374, left: 282, width: 100, height: 54 },
     content: (
       <>
-        <p className={`${dmMono.className} text-[7px] text-gray-400`}>
+        <p className={`${dmMono.className} text-[10px] text-gray-400`}>
           경쟁점포
         </p>
         <p
-          className={`${outfit.className} text-[11px] font-bold`}
+          className={`${outfit.className} text-[18px] font-bold whitespace-nowrap`}
           style={{ color: colors.brand.dark }}
         >
           1개소
@@ -225,6 +229,8 @@ export default function Hero() {
               width={1040}
               height={920}
               priority
+              // 52KB 원본이라 변환 이득이 없고, 변환을 거치면 새로고침 때 그림이 늦게 뜬다.
+              unoptimized
               className="h-full w-full object-contain"
             />
             {infoCards.map(({ id, style, dark, content }) => (
