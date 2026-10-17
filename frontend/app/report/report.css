@@ -12,7 +12,8 @@
   max-width: 850px;
   letter-spacing: -0.045em;
   color: var(--rp-navy);
-  font-size: calc(clamp(32px, 3.3vw, 48px) * var(--font-scale));
+  /* 다른 단계 화면의 큰 제목(text-32)과 같은 기준 크기 */
+  font-size: calc(32px * var(--font-scale));
 }
 .report-page .report-chapter {
   border-bottom: 0;
@@ -601,6 +602,13 @@
 }
 .report-page :is(.fp-donut-legend-name, .ca-donut-legend-name) {
   white-space: normal !important;
+  /* 칸이 좁아도 업종 이름이 한 글자씩 쪼개지지 않게 최소 폭을 둔다. */
+  min-width: 4.5em !important;
+  word-break: keep-all;
+}
+/* 이름과 값이 한 줄에 다 들어가지 않으면 값을 다음 줄로 내린다. */
+.report-page :is(.fp-donut-legend-row, .ca-donut-legend-row) {
+  flex-wrap: wrap;
 }
 .report-page .oc-chip {
   min-height: 44px;
@@ -2982,4 +2990,48 @@
   .report-page .action-plan-note {
     padding: 16px 20px;
   }
+}
+
+/* 실제 결과의 업종 행 — 이름 아래에 배지, 점수 구간, 문장형 이유를 아래 줄 전체에 둔다. */
+.report-page .industry-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.report-page .industry-name h4 {
+  /* .industry-heading h4의 flex: 1을 끄고 이름 길이만큼만 차지해 배지가 바로 옆에 붙게 한다. */
+  flex: 0 1 auto;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.report-page .industry-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--rp-blue-wash);
+  color: var(--rp-navy);
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 650;
+}
+.report-page .negative .industry-badge {
+  background: var(--rp-rose);
+  color: var(--rp-caution);
+}
+.report-page .industry-score-track {
+  display: flex;
+}
+.report-page .industry-group .industry-score-track > .industry-score-potential {
+  border-radius: 0 999px 999px 0;
+  background: #b8c1c6;
+}
+.report-page .industry-item-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.report-page .industry-item-wide .industry-reason-labels:empty {
+  display: none;
 }

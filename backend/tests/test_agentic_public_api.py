@@ -169,6 +169,38 @@ class PublicApiTests(unittest.TestCase):
                     self.assertNotIn("SECRET", response.text)
                     self.assertIn("x-request-id", response.headers)
 
+    def test_facts_return_whole_snapshot_beyond_citations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "facts.sqlite3"
+            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
+            with TestClient(app) as client:
+                repository.create_request("before", "시험", db_path=path)
+                empty = client.get("/api/v1/analyses/before/facts")
+                self.assertEqual(empty.status_code, 200, empty.text)
+                self.assertEqual(empty.json()["facts"], [])
+                self.assertIsNone(empty.json()["snapshot_id"])
+                self.assertEqual(client.get("/api/v1/analyses/missing/facts").status_code, 404)
+
+                result = client.post("/api/v1/analyses?mock=true", json={"address": "시험"})
+                self.assertEqual(result.status_code, 200, result.text)
+                result = DecisionResult.model_validate(result.json())
+                response = client.get(f"/api/v1/analyses/{result.request_id}/facts")
+                self.assertEqual(response.status_code, 200, response.text)
+                body = response.json()
+                self.assertEqual(body["snapshot_id"], result.snapshot_id)
+                ids = {f["fact_id"] for f in body["facts"]}
+                self.assertEqual(len(ids), len(body["facts"]))
+                cited = {f.fact_id for f in result.facts}
+                self.assertLessEqual(cited, ids)
+                self.assertGreater(len(ids), len(cited))
+                with closing(sqlite3.connect(path)) as db:
+                    stored = db.execute(
+                        "SELECT count(*) FROM facts WHERE request_id=? AND metric!='space_fit'",
+                        (result.request_id,),
+                    ).fetchone()[0]
+                self.assertEqual(sum(f["metric"] != "space_fit" for f in body["facts"]), stored)
+                self.assertNotIn("n.a.", {f["status"] for f in body["facts"]})
+
     def test_events_preserve_status_order_and_cursor(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.sqlite3"

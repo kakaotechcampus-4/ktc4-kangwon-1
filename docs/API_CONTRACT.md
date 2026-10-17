@@ -11,6 +11,7 @@
 | POST /api/v1/analyses?wait=true | 최종 DecisionResult 또는 waiting_for_input. 기본 wait=true |
 | GET /api/v1/analyses/{id} | 진행 상태, 대기 질문 또는 최종 DecisionResult·rendered |
 | GET /api/v1/analyses/{id}/events?after=N | after 다음 순번의 이벤트. 클라이언트가 seq를 보존하여 중복 표시를 피한다 |
+| GET /api/v1/analyses/{id}/facts | 리포트 차트용 요청 스냅샷 전체 fact. request_id·snapshot_id·facts(FactView 목록). 스냅샷 전에는 snapshot_id=null·빈 목록, 미존재 ID는 404 |
 | POST /api/v1/analyses/{id}/answers | question_session_id와 answers 객체. 저장된 질문 field와 정확히 같은 항목, 값은 비어 있지 않은 문자열·최대 500자 |
 
 질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
@@ -35,6 +36,9 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 평가자는 항상 네 슬롯이다. 실패 슬롯도 유지하며 평가 미완료를 표시한다.
 프론트 담당은 rendered 문장, 검토 후보 Top 5, 코드·L 점수와 구간·coverage,
 배지, 확인 조건, 평가 상태를 새 계약에 맞춰 표시한다. 옛 결과 DB를 읽는 호환 경로는 없다.
+DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·경쟁·개폐업 차트처럼 인용과 무관하게
+지표 전체가 필요한 화면은 facts 엔드포인트를 쓴다. 상태가 unknown·not_applicable인 fact는 값이 null이다.
+공간 비교(space_fit)는 현재 판정만 포함한다.
 규제 조회 함수는 유지하고 check_regulation 도구로만 읽는다.
 
 키 없이 확인할 때 MOCK_MODE=true 또는 ?mock=true를 쓴다. 실데이터·유료 호출은 발생하지 않는다.

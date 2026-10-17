@@ -10,7 +10,7 @@ import { colors } from '@/styles/tokens';
 export default function Home() {
   return (
     <div
-      className="flex flex-1 flex-col font-sans"
+      className="flex flex-1 flex-col"
       style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
