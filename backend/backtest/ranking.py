@@ -1,9 +1,12 @@
 from typing import Any
 
-from app.industries.catalog import INDUSTRIES_WITHOUT_SEOUL
+from app.agentic.scoring import regulation
+from app.industries.catalog import INDUSTRIES, INDUSTRIES_WITHOUT_SEOUL
 
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 DOMAINS = {"D": ("D1", "D2", "D3", "D4"), "C": ("C1", "C4"), "S": ("S1", "S2", "S3", "S4")}
+G_PROBE = {"status": "ok", "zones": [{"name": "상대보호구역"}]}
+G_INDUSTRIES = frozenset(code for code in INDUSTRIES if regulation(code, G_PROBE) != "해당 없음")
 
 
 def _order(row: dict) -> tuple[bool, float, float]:
@@ -62,7 +65,7 @@ def target_summary(ranked: list[dict], target: str, counts: dict[str, int]) -> d
         "점포 수 순위": store_ranks[target],
         "서울 자료 없음": target in INDUSTRIES_WITHOUT_SEOUL,
         "현재 시점 C4": row["items"]["C4"]["status"] != "n.a.",
-        "현재 시점 G": row["regulation"] != "해당 없음",
+        "현재 시점 G": target in G_INDUSTRIES,
     }
     for domain, items in DOMAINS.items():
         rest = sum(_points(r, items) for r in others) / len(others) if others else 0.0

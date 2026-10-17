@@ -1,7 +1,7 @@
 import unittest
 
 from app.agentic import scoring
-from backtest.ranking import ITEMS, count_ranks, rank_rows, score_rows, target_summary
+from backtest.ranking import G_INDUSTRIES, ITEMS, count_ranks, rank_rows, score_rows, target_summary
 
 
 def item(status="unknown", points=None):
@@ -74,7 +74,20 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(summary["S 차이"], 7.5)
         self.assertTrue(summary["서울 자료 없음"])
         self.assertTrue(summary["현재 시점 C4"])
+        self.assertFalse(summary["현재 시점 G"])
+
+    def test_g_flag_is_false_for_non_g_target_with_unknown_regulation(self):
+        rows = [make_row("I207", 60, regulation="unknown"), make_row("B", 40)]
+        summary = target_summary(rank_rows(rows), "I207", {})
+        self.assertFalse(summary["현재 시점 G"])
+
+    def test_g_flag_is_true_for_g_target(self):
+        rows = [make_row("R104", 60, regulation="해당 없음"), make_row("B", 40)]
+        summary = target_summary(rank_rows(rows), "R104", {})
         self.assertTrue(summary["현재 시점 G"])
+
+    def test_g_industries_match_the_service(self):
+        self.assertEqual(G_INDUSTRIES, frozenset({"I101", "I102", "R104", "I211"}))
 
     def test_score_rows_write_points_or_status(self):
         ranked = rank_rows([make_row("A", 50, points={"D1": 10.0})])
