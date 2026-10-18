@@ -106,6 +106,26 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def check_resume_inputs(out: Path, baselines: Path, data_info: dict) -> str | None:
+    meta = out / META
+    runs = json.loads(meta.read_text(encoding="utf-8")).get("runs", []) if meta.exists() else []
+    kept = out / "baseline.json"
+    if kept.exists():
+        before = file_sha256(kept)
+    elif runs:
+        before = runs[0]["baselines"]["sha256"]
+    else:
+        before = None
+    if before is not None and before != file_sha256(baselines):
+        return "기준선 파일이 처음 실행 때와 다릅니다. 이어 돌릴 수 없습니다."
+    if runs:
+        first = [(v["version_id"], v["file_hash"]) for v in runs[0]["data"]["versions"]]
+        now = [(v["version_id"], v["file_hash"]) for v in data_info["versions"]]
+        if first != now:
+            return "자료 DB 버전이 처음 실행 때와 다릅니다. 이어 돌릴 수 없습니다."
+    return None
+
+
 def git_commit() -> str:
     try:
         done = subprocess.run(
@@ -287,6 +307,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.resume and requests_db.exists():
         print(f"요청 DB가 이미 있습니다: {requests_db}", file=sys.stderr)
         return 1
+    if args.resume:
+        refusal = check_resume_inputs(args.out, args.baselines, data_info)
+        if refusal:
+            print(refusal, file=sys.stderr)
+            return 1
     args.out.mkdir(parents=True, exist_ok=args.resume)
     requests_db.parent.mkdir(parents=True, exist_ok=True)
     if not (args.out / "baseline.json").exists():

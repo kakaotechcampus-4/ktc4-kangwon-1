@@ -4,11 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.address import GeocodeError
 from app.industries.catalog import INDUSTRIES
 from app.schemas import Site
-from backtest.run import STATE, SUMMARY, parse, run_rows
+from backtest.run import STATE, SUMMARY, check_resume_inputs, file_sha256, main, parse, run_rows
 
 CODES = list(INDUSTRIES)[:3]
 
@@ -163,6 +164,82 @@ class ParseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             args = parse(self.base(Path(folder) / "new"))
         self.assertFalse(args.resume)
+
+
+VERSIONS = [{"version_id": "v1", "file_hash": "aa"}, {"version_id": "v2", "file_hash": "bb"}]
+FULL_VERSIONS = [{**v, "source": "stores", "quarter": "20234", "row_count": 1} for v in VERSIONS]
+
+
+def prepare_resume(folder, *, kept_copy=True, same_baseline=True, same_data=True):
+    root = Path(folder)
+    out = root / "out"
+    out.mkdir()
+    baseline = root / "baselines.json"
+    baseline.write_text(
+        json.dumps({"quarter": "20234", "lifecycle": {}, "floating": {}, "density": {}}),
+        encoding="utf-8",
+    )
+    kept = baseline.read_text(encoding="utf-8") if same_baseline else '{"x": 1}'
+    if kept_copy:
+        (out / "baseline.json").write_text(kept, encoding="utf-8")
+    sha = file_sha256(out / "baseline.json") if kept_copy else file_sha256(baseline)
+    if not kept_copy and not same_baseline:
+        sha = "0" * 64
+    versions = FULL_VERSIONS if same_data else FULL_VERSIONS[:1]
+    (out / "run_meta.json").write_text(
+        json.dumps({"runs": [{"baselines": {"sha256": sha}, "data": {"versions": versions}}]}),
+        encoding="utf-8",
+    )
+    return out, baseline, {"versions": FULL_VERSIONS}
+
+
+class ResumeInputTests(unittest.TestCase):
+    def check(self, **kwargs):
+        with tempfile.TemporaryDirectory() as folder:
+            out, baseline, data = prepare_resume(folder, **kwargs)
+            return check_resume_inputs(out, baseline, data)
+
+    def test_same_inputs_pass(self):
+        self.assertIsNone(self.check())
+
+    def test_changed_baseline_is_refused(self):
+        self.assertIn("기준선", self.check(same_baseline=False))
+
+    def test_changed_baseline_is_refused_without_a_kept_copy(self):
+        self.assertIn("기준선", self.check(kept_copy=False, same_baseline=False))
+
+    def test_same_baseline_without_a_kept_copy_passes(self):
+        self.assertIsNone(self.check(kept_copy=False))
+
+    def test_changed_data_is_refused(self):
+        self.assertIn("자료", self.check(same_data=False))
+
+    def test_main_refuses_before_scoring(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out, baseline, data = prepare_resume(folder, same_baseline=False)
+            (out / STATE).write_text("{}", encoding="utf-8")
+            sample = Path(folder) / "a.csv"
+            sample.write_text(
+                f"업종코드,업종,그룹,순번,상호,주소\nSV001,{INDUSTRIES[CODES[0]]},1,1,가,서울\n",
+                encoding="utf-8-sig",
+            )
+            argv = [
+                "--input",
+                str(sample),
+                "--data",
+                "d",
+                "--baselines",
+                str(baseline),
+                "--out",
+                str(out),
+                "--resume",
+            ]
+            with (
+                patch("backtest.run.load_environment"),
+                patch("backtest.run.check_history_db", return_value=data),
+                patch("backtest.run.asyncio.run", side_effect=AssertionError("채점 시작")),
+            ):
+                self.assertEqual(main(argv), 1)
 
 
 if __name__ == "__main__":
