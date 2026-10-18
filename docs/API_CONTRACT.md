@@ -13,6 +13,7 @@
 | GET /api/v1/analyses/{id}/events?after=N | after 다음 순번의 이벤트. 클라이언트가 seq를 보존하여 중복 표시를 피한다 |
 | GET /api/v1/analyses/{id}/facts | 리포트 차트용 요청 스냅샷 전체 fact. request_id·snapshot_id·facts(FactView 목록). 스냅샷 전에는 snapshot_id=null·빈 목록, 미존재 ID는 404 |
 | POST /api/v1/analyses/{id}/answers | question_session_id와 answers 객체. 저장된 질문 field와 정확히 같은 항목, 값은 비어 있지 않은 문자열·최대 500자 |
+| GET /api/v1/building-registry?address= | 상가 정보 확인 화면용 건축물대장 조회. 저장하지 않음. 아래 "건축물대장 조회" 참고 |
 
 질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
 
@@ -43,6 +44,97 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 
 키 없이 확인할 때 MOCK_MODE=true 또는 ?mock=true를 쓴다. 실데이터·유료 호출은 발생하지 않는다.
 측정·녹화는 서버 실행 인자로만 켜며 공개 HTTP 입력으로 제어하지 않는다.
+
+
+## 건축물대장 조회 — `GET /api/v1/building-registry`
+
+상가 정보 확인 화면(`/building-confirm`)이 건축물대장 값을 채울 때 씁니다. 분석 요청과 별개이며 결과를 저장하지 않습니다.
+건축HUB 건축물대장정보 서비스의 표제부·층별개요·전유공용면적·오수정화시설 네 항목을 한 번에 조회합니다.
+
+**질의 문자열**
+
+| 이름 | 기본 | 설명 |
+| --- | --- | --- |
+| `address` | 필수 (1~200자) | 건물 주소. `4층` 같은 상세주소가 붙어 있어도 됩니다. 서버가 떼어 냅니다 |
+| `mock` | `false` | `true`면 외부 API를 부르지 않고 고정 응답(성희프라자)을 돌려줍니다 |
+
+**응답 200** — 아래는 `?mock=true` 응답입니다. 성희프라자 실호출 응답에서 행 일부만 옮겼습니다(층별개요 19행 중 5행, 호실 83개 중 3개).
+
+```json
+{
+  "road_address": "서울 송파구 위례광장로 199",
+  "jibun_address": "서울 송파구 장지동 880-1",
+  "titles": [{
+    "dong_name": null,
+    "building_name": "성희프라자",
+    "main_use": "제2종근린생활시설",
+    "ground_floors": 7,
+    "underground_floors": 2,
+    "total_area_m2": 12301.78,
+    "parking_spaces": 82
+  }],
+  "floors": [
+    { "dong_name": null, "floor": "지하 1층", "use": "기타제2종근린생활시설", "use_detail": "지하주차장/MDF실/방재센터", "area_m2": 1925.34 },
+    { "dong_name": null, "floor": "4층", "use": "일반음식점", "use_detail": "제2종근린생활시설", "area_m2": 275.49 },
+    { "dong_name": null, "floor": "4층", "use": "의원", "use_detail": "제1종근린생활시설", "area_m2": 498.12 },
+    { "dong_name": null, "floor": "4층", "use": "사무소", "use_detail": "업무시설", "area_m2": 220.8 },
+    { "dong_name": null, "floor": "4층", "use": "학원", "use_detail": "교육연구시설", "area_m2": 252.59 }
+  ],
+  "units": [
+    { "dong_name": null, "unit_name": "401호", "floor": "4층", "use": "학원", "use_detail": "교육연구시설(학원)", "area_m2": 100.8 },
+    { "dong_name": null, "unit_name": "404호", "floor": "4층", "use": "의원", "use_detail": "제1종근린생활시설(의원)", "area_m2": 93.6 },
+    { "dong_name": null, "unit_name": "410호", "floor": "4층", "use": "일반음식점", "use_detail": "제2종근린생활시설(일반음식점)", "area_m2": 57.04 }
+  ],
+  "sewage": [{ "method": "하수종말처리장 연결", "method_name": "하수종말처리장연결" }]
+}
+```
+
+| 항목 | 필드 | 설명 |
+| --- | --- | --- |
+| `titles` (표제부) | `building_name`, `main_use`, `ground_floors`, `underground_floors`, `total_area_m2`, `parking_spaces`, `dong_name` | 건물마다 한 행. 연면적이 큰 건물부터 보냅니다. `parking_spaces`는 옥내·옥외 기계식·자주식 주차 대수의 합 |
+| `floors` (층별개요) | `floor`, `use`, `use_detail`, `area_m2`, `dong_name` | 한 층에 용도가 여럿이면 여러 행. `use`는 세부 용도(예: 일반음식점), `use_detail`은 대장의 기타용도 원문(예: 제2종근린생활시설) |
+| `units` (호실) | `unit_name`, `floor`, `use`, `use_detail`, `area_m2`, `dong_name` | 전유 부분만 호수별로 더한 전용면적. 공용 면적은 뺍니다. 일반건축물은 호실이 없어 `[]`입니다 |
+| `sewage` (오수정화시설) | `method`, `method_name` | `method`는 화면 선택지(`하수종말처리장 연결`·`정화조`·`오수처리시설`)로 맞춘 값, 맞출 수 없으면 null. `method_name`은 대장 원문(예: 부패탱크방법, 접촉폭기방법) |
+
+- 목록이 `null`이면 그 항목 조회가 실패한 것이고, `[]`이면 대장에 등록된 행이 없는 것입니다. 네 항목이 모두 실패하면 502입니다.
+- 건축HUB 게이트웨이의 일시 오류(503·빈 응답·시간 초과)는 항목마다 두 번까지 다시 요청합니다. 보통 1초 안에 끝나고, 막히면 최대 30여 초 걸립니다.
+- 지하층은 건축HUB의 `지1층`을 화면 표기 `지하 1층`으로 바꿔 보냅니다. 지상층은 `4층`입니다.
+- 대장에 비어 있는 값(건물명 등)은 `null`입니다. 오수 형식이 비어 있는 행은 보내지 않습니다.
+- `접촉폭기방법`·`살수여상방법`처럼 처리 방식 이름만 있으면 정화조인지 오수처리시설인지 정할 수 없어 `method`가 null입니다.
+
+**화면 연결** — `frontend/lib/api/building.ts`의 `BuildingInfo`를 이렇게 채웁니다.
+
+| BuildingInfo | 응답 |
+| --- | --- |
+| `address` | `road_address` |
+| `buildingName` | `titles[0].building_name` |
+| `mainUse` | `titles[0].main_use` |
+| `totalAreaM2` | `titles[0].total_area_m2` |
+| `floors` | `ground_floors`로 `지상 7층`처럼 만들고, 지하가 있으면 `underground_floors`로 ` · 지하 2층`을 붙입니다 |
+| `floorUse` | `floors`에서 `floor`가 입력 층과 같은 행의 `use`. 여러 행이면 겹치지 않게 이어 붙입니다(예: `일반음식점 · 의원 · 사무소 · 학원`) |
+| `exclusiveAreaM2` | `units`에서 같은 층 행. 입력에 호수가 있으면 `unit_name`으로 찾고, 그 층 호실이 하나뿐이면 그 `area_m2`. 못 정하면 null로 두고 사용자가 적습니다 |
+| `parking` | `parking_spaces`가 1 이상이면 `'possible'`. 0이거나 null이면 지금처럼 사용자가 고릅니다 |
+| `facility` | `main_use`로 기존 `facilityFromMainUse` 그대로 |
+| `sewage` | `sewage`에서 `method`가 있는 첫 값. 없으면 사용자가 고릅니다 |
+
+- 조회 진행 표시(`LookupId`)는 `title`↔`titles`, `floor`↔`floors`, `exclusiveArea`↔`units`, `sewage`↔`sewage`입니다. 값이 `null`이면 `failed`, 아니면 `done`입니다.
+- `floorFromUnit`은 입력에 따라 공백 없는 `지하1층`을 돌려줄 수 있습니다. 층은 공백을 빼고 비교합니다.
+- 한 지번에 건물이 여럿이면 `titles`가 여러 행입니다(예: 인사동 대일빌딩 옆 단독주택). 층·호실은 `dong_name`이 `titles[0].dong_name`과 같은 행만 씁니다.
+- 프론트 목업의 `전용 275.49㎡`는 4층 층별개요 중 일반음식점 행의 면적입니다. 호실 하나의 전용면적이 아닙니다.
+
+**오류**
+
+| 상태 | 언제 | 본문 |
+| --- | --- | --- |
+| 400 | 주소를 찾지 못함, 여러 후보 | `{"detail": "주소를 확인해 주세요."}` |
+| 422 | `address`가 없거나 200자 초과 | FastAPI 기본 형식 |
+| 502 | 주소 조회 실패 | `{"detail": "주소 조회 서비스에 실패했습니다."}` |
+| 502 | 네 항목 모두 실패, 건축HUB 키 미설정 | `{"detail": "건축물대장 조회에 실패했습니다."}` |
+
+실제 조회에는 `.env`의 `BUILDING_REGISTRY_API_KEY`(공공데이터포털 「국토교통부_건축HUB_건축물대장정보 서비스」 활용신청 후 받은 일반 인증키,
+Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING_API_KEY`가 필요합니다.
+
+MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성희프라자 고정 응답을 돌려준다.
 
 
 ## 새 결과 형태(PR7 전환 후)
