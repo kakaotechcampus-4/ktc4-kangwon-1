@@ -10,8 +10,7 @@ FIELDS = ["업종코드", "업종", "그룹", "순번", "상호", "주소"]
 CODE, NAME = next((c, n) for c, n in INDUSTRIES.items() if "·" in n)
 
 
-def sample(rows):
-    folder = tempfile.mkdtemp()
+def sample(rows, folder):
     path = Path(folder) / "sample.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)
@@ -45,8 +44,9 @@ class CatalogTests(unittest.TestCase):
             develop_code("없는 업종")
 
     def test_read_sample_picks_rows_by_key(self):
-        path = sample([row(number="1"), row(number="2")])
-        rows = read_sample(path, {"SV001-2"})
+        with tempfile.TemporaryDirectory() as folder:
+            path = sample([row(number="1"), row(number="2")], folder)
+            rows = read_sample(path, {"SV001-2"})
         self.assertEqual([row_key(r) for r in rows], ["SV001-2"])
 
     def test_invalid_rows_reports_duplicates_unknown_names_and_empty_addresses(self):
