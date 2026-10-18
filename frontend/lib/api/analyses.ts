@@ -113,7 +113,20 @@ export type AnalysisRequestInput = {
   address: string;
   radiusM?: number;
   allowQuestions?: boolean;
+  floor?: string;
+  exclusiveAreaM2?: number;
 };
+
+const FLOOR_PATTERN = /^(지하 )?[1-9]\d{0,2}층$/;
+
+function validArea(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isFinite(value) &&
+    value >= 0.01 &&
+    value <= 100000
+  );
+}
 
 /**
  * 분석 요청 본문. 백엔드 AnalysisRequest는 정의되지 않은 필드를 422로
@@ -124,6 +137,8 @@ export function buildAnalysisRequestBody({
   address,
   radiusM,
   allowQuestions = false,
+  floor,
+  exclusiveAreaM2,
 }: AnalysisRequestInput): Record<string, unknown> {
   if (
     radiusM !== undefined &&
@@ -135,6 +150,10 @@ export function buildAnalysisRequestBody({
     address,
     ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
     ...(allowQuestions ? { allow_questions: true } : {}),
+    ...(floor !== undefined && FLOOR_PATTERN.test(floor) ? { floor } : {}),
+    ...(validArea(exclusiveAreaM2)
+      ? { exclusive_area_m2: exclusiveAreaM2 }
+      : {}),
   };
 }
 

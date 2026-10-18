@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAnalysis } from './analyses';
+import { buildAnalysisRequestBody, createAnalysis } from './analyses';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -41,6 +41,42 @@ describe('분석 요청의 반경 전달', () => {
         '분석 반경은 미터 단위의 양의 정수'
       );
       expect(fetch).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe('확인 화면 층·전용면적 전달', () => {
+  it('층과 전용면적을 함께 보낸다', () => {
+    expect(
+      buildAnalysisRequestBody({
+        address: '테스트 주소',
+        allowQuestions: true,
+        floor: '4층',
+        exclusiveAreaM2: 93.6,
+      })
+    ).toEqual({
+      address: '테스트 주소',
+      allow_questions: true,
+      floor: '4층',
+      exclusive_area_m2: 93.6,
+    });
+  });
+
+  it.each([0, 0.001, -1, NaN, Infinity, 100001])(
+    '잘못된 전용면적 %s는 빼고 보낸다',
+    (exclusiveAreaM2) => {
+      expect(
+        buildAnalysisRequestBody({ address: '테스트 주소', exclusiveAreaM2 })
+      ).toEqual({ address: '테스트 주소' });
+    }
+  );
+
+  it.each(['', '해당 층', '4층 401호', '지하1층'])(
+    '규칙 밖의 층 %s는 빼고 보낸다',
+    (floor) => {
+      expect(
+        buildAnalysisRequestBody({ address: '테스트 주소', floor })
+      ).toEqual({ address: '테스트 주소' });
     }
   );
 });
