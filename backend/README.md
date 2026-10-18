@@ -84,7 +84,7 @@ python -m uvicorn app.main:create_app --factory --reload
 
 | 메서드 · 경로 | 설명 |
 | --- | --- |
-| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. |
+| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. 선택 `floor`·`exclusive_area_m2`는 확인 화면에서 확정한 층·전용면적으로, 공간 비교에 바로 반영합니다. |
 | `GET /analyses/{request_id}` | 상태와 결과. 접수 직후에도 404가 아니라 현재 상태를 돌려줍니다. |
 | `GET /analyses/{request_id}/events?after=N` | 진행 단계. 1초 간격 폴링용입니다. |
 | `POST /analyses/{request_id}/answers` | `waiting_for_input`일 때 임대인 답변을 보내 재개합니다. |

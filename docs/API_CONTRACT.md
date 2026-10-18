@@ -7,7 +7,7 @@
 | 엔드포인트 | 입력·응답 |
 | --- | --- |
 | GET /health, /api/v1/health | 상태 확인 |
-| POST /api/v1/analyses?wait=false | address(최대 200자), radius_m(기본 500), allow_questions(기본 false), with_map. HTTP 202 request_id·status |
+| POST /api/v1/analyses?wait=false | address(최대 200자), radius_m(기본 500), allow_questions(기본 false), with_map, 선택 floor("4층"·"지하 1층")·exclusive_area_m2(0.01~100000). HTTP 202 request_id·status |
 | POST /api/v1/analyses?wait=true | 최종 DecisionResult 또는 waiting_for_input. 기본 wait=true |
 | GET /api/v1/analyses/{id} | 진행 상태, 대기 질문 또는 최종 DecisionResult·rendered |
 | GET /api/v1/analyses/{id}/events?after=N | after 다음 순번의 이벤트. 클라이언트가 seq를 보존하여 중복 표시를 피한다 |
@@ -16,6 +16,10 @@
 | GET /api/v1/building-registry?address= | 상가 정보 확인 화면용 건축물대장 조회. 저장하지 않음. 아래 "건축물대장 조회" 참고 |
 
 질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
+
+floor·exclusive_area_m2는 상가 정보 확인 화면에서 확정한 층·전용면적이다. 보내면 분석 시작 때
+source=user·unit="확인 화면 확정값" fact로 저장해 공간 비교(space_fit)에 바로 반영하고,
+decision 첫 입력의 confirmed_space(values·fact_ids)로 전달한다. 형식이 틀리면 422다.
 
 POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다. 동시 작업 슬롯은 저장 전에
 확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.

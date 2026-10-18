@@ -23,6 +23,8 @@ class AnalysisRequest(BaseModel):
     radius_m: RadiusMeters = DEFAULT_RADIUS_M
     allow_questions: StrictBool = False
     with_map: StrictBool = False
+    floor: str | None = Field(default=None, pattern=r"^(지하 )?[1-9][0-9]{0,2}층$")
+    exclusive_area_m2: float | None = Field(default=None, ge=0.01, le=100000)
 
 
 def request_headers(request_id):
