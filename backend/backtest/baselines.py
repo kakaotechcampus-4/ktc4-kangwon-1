@@ -16,6 +16,8 @@ FLOATING = (
     "PATTERN_TIME_PER_HOUR_SHARE_AVG",
     "SCALE_PERCENTILES",
 )
+LIFECYCLE = "SEOUL_INDUSTRY_LIFECYCLE_BASELINE"
+FLOATING_MODULE = "app.agents.floating_population.baseline"
 TARGETS: dict[str, dict[str, tuple[str, ...]]] = {
     "app.agentic.scoring": {
         "BASELINE_BASE_QUARTER": ("quarter",),
@@ -41,7 +43,7 @@ def _number(value: Any) -> bool:
     return value is None or (isinstance(value, int | float) and not isinstance(value, bool))
 
 
-def conform(template: Any, value: Any, where: str) -> Any:
+def conform(template: Any, value: Any, where: str, allow_missing: bool = False) -> Any:
     if isinstance(template, dict):
         if not isinstance(value, dict):
             raise BaselineMismatch(f"{where}: 사전이어야 합니다.")
@@ -50,7 +52,7 @@ def conform(template: Any, value: Any, where: str) -> Any:
             keyed = {int(key) if numeric else key: item for key, item in value.items()}
         except (TypeError, ValueError):
             raise BaselineMismatch(f"{where}: 분위 키가 정수가 아닙니다.") from None
-        if not numeric and set(template) <= set(INDUSTRIES):
+        if allow_missing and not numeric and set(template) <= set(INDUSTRIES):
             extra = set(keyed) - set(template)
             if extra:
                 raise BaselineMismatch(f"{where}: 원래 없는 업종 {sorted(extra)}")
@@ -83,9 +85,17 @@ def _plan(values: dict[str, Any]) -> list[tuple[Any, str, Any]]:
             if not hasattr(module, name):
                 raise BaselineMismatch(f"{module_name}.{name}가 서비스 코드에 없습니다.")
             where = f"{module_name}.{name}"
+            allow_missing = name == LIFECYCLE
             steps.append(
-                (module, name, conform(getattr(module, name), _section(values, path), where))
+                (
+                    module,
+                    name,
+                    conform(getattr(module, name), _section(values, path), where, allow_missing),
+                )
             )
+    quarter = str(values["quarter"])
+    label = f"서울 전체 상권 평균 ({quarter[:4]}년 {quarter[4]}분기)"
+    steps.append((importlib.import_module(FLOATING_MODULE), "BASELINE_LABEL", label))
     return steps
 
 

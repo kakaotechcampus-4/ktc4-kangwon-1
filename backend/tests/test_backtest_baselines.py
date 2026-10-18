@@ -76,6 +76,22 @@ class SwapTests(unittest.TestCase):
             self.assertNotIn(gone, scoring.SEOUL_INDUSTRY_LIFECYCLE_BASELINE)
         self.assert_restored()
 
+    def test_industry_missing_in_density_is_rejected(self):
+        values = file_values()
+        gone = next(iter(values["density"]))
+        del values["density"][gone]
+        with self.assertRaises(BaselineMismatch), swapped(values):
+            pass
+        self.assert_restored()
+
+    def test_label_follows_the_baseline_quarter_and_is_restored(self):
+        original = floating.BASELINE_LABEL
+        with swapped(file_values()):
+            self.assertIn("2023년 4분기", floating.BASELINE_LABEL)
+            self.assertNotIn("2026", floating.BASELINE_LABEL)
+            self.assertNotIn("1,648", floating.BASELINE_LABEL)
+        self.assertEqual(floating.BASELINE_LABEL, original)
+
 
 if __name__ == "__main__":
     unittest.main()
