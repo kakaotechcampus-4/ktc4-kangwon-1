@@ -113,6 +113,7 @@ export default function BuildingConfirmPage() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     fetchBuildingInfo(saved.roadAddress, {
       signal: controller.signal,
+      floorUnit: saved.floorUnit,
       failLookups: mockFailLookups(window.location.search),
       onStepChange: (id, status) =>
         setStatuses((prev) => ({ ...prev, [id]: status })),

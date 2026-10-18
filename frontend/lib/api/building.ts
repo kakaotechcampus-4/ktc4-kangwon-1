@@ -1,15 +1,17 @@
+import { API_BASE_URL } from '@/lib/api/baseUrl';
+import { MOCK_MODE } from '@/lib/api/mockMode';
 import { mockProperty } from '@/lib/mockData/property';
 /**
  * 상가 정보 확인(/building-confirm) 화면이 쓰는 건축물대장 조회.
  *
- * 백엔드에 국토교통부 건축물대장 HUB 연동이 아직 없어 지금은 mock 응답을
- * setTimeout으로 항목별 순차 완료시키며 돌려준다. 실제 API가 생기면
- * fetchBuildingInfo 안쪽만 바꾸면 되도록, 화면은 아래 타입과 onStepChange
+ * 백엔드 GET /api/v1/building-registry를 한 번 불러 항목별 진행 상태를
+ * onStepChange로 알린다. 프론트 mock 모드에서는 mock 응답을 setTimeout으로
+ * 항목별 순차 완료시키며 돌려준다. 화면은 아래 타입과 onStepChange
  * 콜백에만 의존한다.
  *
- * 조회한 값은 분석 요청 본문에 넣지 않는다(백엔드 AnalysisRequest가 정의되지
- * 않은 필드를 거절한다). 확인한 값은 resultStore의 saveConfirmedBuilding으로
- * sessionStorage에만 남긴다.
+ * 확인한 층·전용면적만 분석 요청 본문에 싣는다(analyses.ts의
+ * buildAnalysisRequestBody). 확인한 값 전체는 resultStore의
+ * saveConfirmedBuilding으로 sessionStorage에 남긴다.
  */
 
 // registry: 건축물대장 값 그대로 / user: 사용자가 고치거나 채움 / missing: 건축물대장에 없음
@@ -68,6 +70,7 @@ type FetchOptions = {
   signal?: AbortSignal;
   // 화면 확인용: 여기 넣은 항목은 일부러 실패시켜 missing 흐름을 볼 수 있다.
   failLookups?: LookupId[];
+  floorUnit?: string;
 };
 
 export function registryField<T>(value: T | null): BuildingField<T> {
@@ -123,7 +126,7 @@ function wait(ms: number, signal?: AbortSignal) {
  * 건축물대장 4개 항목을 차례로 조회한다. 한 항목이 실패해도 멈추지 않고,
  * 그 항목에서 오는 필드를 missing으로 채워 돌려준다.
  */
-export async function fetchBuildingInfo(
+async function fetchMockBuildingInfo(
   address: string,
   { onStepChange, signal, failLookups = [] }: FetchOptions = {}
 ): Promise<BuildingInfo> {
@@ -160,6 +163,191 @@ export async function fetchBuildingInfo(
     facility: registryField(facilityFromMainUse(mainUse)),
     sewage: registryField(results.sewage ? MOCK_REGISTRY.sewage.sewage : null),
   };
+}
+
+type RegistryTitle = {
+  dong_name: string | null;
+  building_name: string | null;
+  main_use: string | null;
+  ground_floors: number | null;
+  underground_floors: number | null;
+  total_area_m2: number | null;
+  parking_spaces: number | null;
+};
+
+type RegistryRow = {
+  dong_name: string | null;
+  floor: string | null;
+  use: string | null;
+  use_detail: string | null;
+  area_m2: number | null;
+};
+
+type RegistryUnit = RegistryRow & { unit_name: string | null };
+
+type RegistrySewage = {
+  method: SewageTreatment | null;
+  method_name: string | null;
+};
+
+export type BuildingRegistryResponse = {
+  road_address: string | null;
+  jibun_address: string | null;
+  titles: RegistryTitle[] | null;
+  floors: RegistryRow[] | null;
+  units: RegistryUnit[] | null;
+  sewage: RegistrySewage[] | null;
+};
+
+const REGISTRY_SECTIONS: Record<
+  LookupId,
+  'titles' | 'floors' | 'units' | 'sewage'
+> = {
+  title: 'titles',
+  floor: 'floors',
+  exclusiveArea: 'units',
+  sewage: 'sewage',
+};
+
+export const ADDRESS_ERROR_NOTE = '주소를 확인해 주세요.';
+export const LOOKUP_ERROR_NOTE =
+  '건축물대장을 불러오지 못했어요. 직접 입력해 주세요.';
+
+export function normalizeFloor(floorUnit: string): string | null {
+  const match = floorUnit.match(/(지하|[Bb])?\s*(\d+)\s*층/);
+  if (!match) {
+    return null;
+  }
+  const level = Number(match[2]);
+  if (level < 1 || level > 999) {
+    return null;
+  }
+  return match[1] ? `지하 ${level}층` : `${level}층`;
+}
+
+function unitFromFloorUnit(floorUnit: string): string | null {
+  const match = floorUnit.match(/([A-Za-z]?\d+)\s*호/);
+  return match ? `${match[1]}호` : null;
+}
+
+function compact(text: string | null): string {
+  return (text ?? '').replace(/\s+/g, '');
+}
+
+function floorsText(title: RegistryTitle | undefined): string | null {
+  if (!title || title.ground_floors === null) {
+    return null;
+  }
+  const below = title.underground_floors
+    ? ` · 지하 ${title.underground_floors}층`
+    : '';
+  return `지상 ${title.ground_floors}층${below}`;
+}
+
+export function toBuildingInfo(
+  registry: BuildingRegistryResponse,
+  roadAddress: string,
+  floorUnit: string
+): BuildingInfo {
+  const title = registry.titles?.[0];
+  const floor = normalizeFloor(floorUnit);
+  const onFloor = <T extends RegistryRow>(rows: T[] | null): T[] =>
+    (rows ?? []).filter(
+      (row) =>
+        floor !== null &&
+        compact(row.floor) === compact(floor) &&
+        (!title || row.dong_name === title.dong_name)
+    );
+  const uses = [
+    ...new Set(
+      onFloor(registry.floors)
+        .map((row) => row.use)
+        .filter((use): use is string => Boolean(use))
+    ),
+  ];
+  const units = onFloor(registry.units);
+  const unitName = unitFromFloorUnit(floorUnit);
+  const unit =
+    unitName !== null
+      ? units.find((row) => compact(row.unit_name) === compact(unitName))
+      : units.length === 1
+        ? units[0]
+        : undefined;
+  const mainUse = title?.main_use ?? null;
+  return {
+    buildingName: title?.building_name ?? '',
+    floorLabel: floor ?? '해당 층',
+    address: registry.road_address ?? roadAddress,
+    mainUse: registryField(mainUse),
+    totalAreaM2: registryField(title?.total_area_m2 ?? null),
+    floors: registryField(floorsText(title)),
+    floorUse: registryField(uses.length > 0 ? uses.join(' · ') : null),
+    exclusiveAreaM2: registryField(unit?.area_m2 ?? null),
+    parking: registryField<ParkingAvailability>(
+      (title?.parking_spaces ?? 0) >= 1 ? 'possible' : null
+    ),
+    facility: registryField(facilityFromMainUse(mainUse)),
+    sewage: registryField(
+      registry.sewage?.find((row) => row.method !== null)?.method ?? null
+    ),
+  };
+}
+
+function emptyBuildingInfo(
+  roadAddress: string,
+  floorUnit: string,
+  sourceNote: string
+): BuildingInfo {
+  return {
+    buildingName: '',
+    floorLabel: normalizeFloor(floorUnit) ?? '해당 층',
+    address: roadAddress,
+    sourceNote,
+    mainUse: registryField<string>(null),
+    totalAreaM2: registryField<number>(null),
+    floors: registryField<string>(null),
+    floorUse: registryField<string>(null),
+    exclusiveAreaM2: registryField<number>(null),
+    parking: registryField<ParkingAvailability>(null),
+    facility: registryField<NeighborhoodFacility>(null),
+    sewage: registryField<SewageTreatment>(null),
+  };
+}
+
+export async function fetchBuildingInfo(
+  address: string,
+  options: FetchOptions = {}
+): Promise<BuildingInfo> {
+  if (MOCK_MODE) {
+    return fetchMockBuildingInfo(address, options);
+  }
+  const { onStepChange, signal, floorUnit = '' } = options;
+  for (const id of LOOKUP_ORDER) {
+    onStepChange?.(id, 'loading');
+  }
+  let registry: BuildingRegistryResponse | null = null;
+  let note = LOOKUP_ERROR_NOTE;
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/building-registry?address=${encodeURIComponent(address)}`,
+      { signal }
+    );
+    if (response.ok) {
+      registry = (await response.json()) as BuildingRegistryResponse;
+    } else if (response.status === 400) {
+      note = ADDRESS_ERROR_NOTE;
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+  }
+  for (const id of LOOKUP_ORDER) {
+    onStepChange?.(id, registry?.[REGISTRY_SECTIONS[id]] ? 'done' : 'failed');
+  }
+  return registry
+    ? toBuildingInfo(registry, address, floorUnit)
+    : emptyBuildingInfo(address, floorUnit, note);
 }
 
 /**

@@ -7,9 +7,7 @@ import type {
   StoredAnalysis,
   WaitingForInput,
 } from '@/lib/api/types';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+import { API_BASE_URL } from '@/lib/api/baseUrl';
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
