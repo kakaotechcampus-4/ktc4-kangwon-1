@@ -414,11 +414,21 @@ def summarize(
     }
 
 
+AGGLOMERATION_TYPES = ("모임형", "근처형", "무관")
+
+
 def profiles() -> dict:
     with (DATA_DIR / "industry_profile.csv").open(encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f))
     if any(r["reviewed_v2"] != "true" for r in rows):
         raise ValueError("미승인 프로필")
+    for r in rows:
+        if r["agglomeration"] not in AGGLOMERATION_TYPES:
+            raise ValueError(f"집적 유형 오류: {r['industry_code']}")
+        if r["agglomeration_confidence"] not in ("high", "low"):
+            raise ValueError(f"집적 유형 확신 오류: {r['industry_code']}")
+        if not r["agglomeration_rationale"].strip():
+            raise ValueError(f"집적 유형 근거 없음: {r['industry_code']}")
     return {r["industry_code"]: r for r in rows}
 
 
