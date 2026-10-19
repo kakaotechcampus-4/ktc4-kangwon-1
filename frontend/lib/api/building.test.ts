@@ -202,6 +202,15 @@ describe('층 표기 맞추기', () => {
     ['0층', null],
     ['1F', null],
     ['', null],
+    ['지1층', '지하 1층'],
+    ['지1층 B01호', '지하 1층'],
+    ['-1층', null],
+    ['1.5층', null],
+    ['중1층', null],
+    ['M1층', null],
+    ['상가동 1층 101호', '1층'],
+    ['상가동1층', '1층'],
+    ['B동 3층', '3층'],
   ])('%s → %s', (input, expected) => {
     expect(normalizeFloor(input)).toBe(expected);
   });
