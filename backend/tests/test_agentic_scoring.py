@@ -111,6 +111,46 @@ class ScoringPolicyTests(unittest.TestCase):
         self.assertEqual(score_item("C1", {}, "G204", sample)["status"], "unknown")
 
 
+class C1AgglomerationFieldTests(unittest.TestCase):
+    def sample(self):
+        from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+        from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+
+        return {
+            "commercial_area": {
+                "radius_m": 500,
+                "by_middle": [
+                    {
+                        "code": "G204",
+                        "density_per_km2": SEOUL_INDUSTRY_DENSITY_PERCENTILES["G204"][50],
+                    }
+                ],
+            },
+            "commercial_collection_complete": True,
+            "floating_population": {
+                "benchmark": {"mean_daily_per_trade_area": DAILY_TOTAL_PERCENTILES[50]}
+            },
+        }
+
+    def test_c1_results_carry_the_type(self):
+        for kind in ("근처형", "모임형", "무관"):
+            profile = {"agglomeration": kind}
+            self.assertEqual(
+                score_item("C1", profile, "G204", self.sample())["agglomeration"], kind
+            )
+            partial = {**self.sample(), "runtime_partial_sources": ["commercial_area"]}
+            unknown = score_item("C1", profile, "G204", partial)
+            if kind != "무관":
+                self.assertEqual(unknown["status"], "unknown")
+            self.assertEqual(unknown["agglomeration"], kind)
+
+    def test_non_c1_results_have_no_type_key(self):
+        self.assertNotIn("agglomeration", result("D1", 3))
+        self.assertNotIn("agglomeration", result("D1"))
+        self.assertNotIn("agglomeration", score_item("L", {}, "G204", {}))
+        self.assertNotIn("agglomeration", score_item("C4", {}, "G204", {}))
+
+
 class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -217,14 +257,10 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
         from app.agentic.snapshot import persist_report
 
         rows = []
-        for code, reason in (
-            ("I201", "모임형: 서울 중앙값 대비 같은 업종 밀도"),
-            ("G204", "근처형: C1 α=0.5; 현재 API/2026Q2 밀도 기준선 시점 차이 있음"),
-            ("M103", "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)"),
-        ):
+        for code, kind in (("I201", "모임형"), ("G204", "근처형"), ("M103", "무관")):
             items = {key: result(key) for key in WEIGHTS}
             value = None if code == "M103" else 1.0
-            items["C1"] = result("C1", 2, reason=reason, value=value)
+            items["C1"] = result("C1", 2, reason="다른 문구", value=value, agglomeration=kind)
             rows.append(summarize(code, items, "unknown"))
         async with capture_scope("facts", self.path) as scope:
             for source, key in (
@@ -277,6 +313,16 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(ids["float"], facts["I201"][1])
         self.assertIn(ids["float"], facts["G204"][1])
         self.assertNotIn(ids["float"], facts["M103"][1])
+
+    async def test_observed_c1_without_agglomeration_type_is_rejected(self):
+        from app.agentic.snapshot import persist_report
+
+        items = {key: result(key) for key in WEIGHTS}
+        items["C1"] = result("C1", 2, reason="모임형: 서울 중앙값 대비", value=1.0)
+        rows = [summarize("I201", items, "unknown")]
+        async with capture_scope("facts", self.path) as scope:
+            with self.assertRaisesRegex(ValueError, "집적 유형"):
+                persist_report(scope, {"rows": rows, "top5": rows}, {}, [])
 
     async def test_scoring_failure_marks_service_failed(self):
         from app.services.analysis import execute_agentic_analysis

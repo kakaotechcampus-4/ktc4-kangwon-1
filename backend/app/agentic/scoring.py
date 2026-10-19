@@ -47,15 +47,24 @@ def valid(value) -> TypeGuard[int | float]:
 
 
 def result(
-    item: str, grade: int | None = None, *, status="unknown", reason="자료 부족", value=None
+    item: str,
+    grade: int | None = None,
+    *,
+    status="unknown",
+    reason="자료 부족",
+    value=None,
+    agglomeration: str | None = None,
 ):
-    return {
+    out = {
         "status": "observed" if grade is not None else status,
         "grade": grade,
         "points": WEIGHTS[item] * grade / 4 if grade is not None else None,
         "value": value,
         "reason": reason,
     }
+    if agglomeration is not None:
+        out["agglomeration"] = agglomeration
+    return out
 
 
 @cache
@@ -77,8 +86,12 @@ def score_item(
     bench = fp.get("benchmark", {})
     pop = fp.get("population", {})
 
+    kind = profile.get("agglomeration", "근처형") if item == "C1" else None
+    if item == "C1" and kind not in AGGLOMERATION_TYPES:
+        raise ValueError(f"집적 유형 오류: {code}")
+
     def unknown(reason):
-        return result(item, reason=reason)
+        return result(item, reason=reason, agglomeration=kind)
 
     def na():
         return result(item, status="n.a.", reason="사용자 승인 미적용")
@@ -103,12 +116,13 @@ def score_item(
         or (item == "D3" and profile.get("target_population") in (None, "", "—"))
         or (item == "C4" and not profile.get("required_facilities"))
     )
-    kind = profile.get("agglomeration", "근처형") if item == "C1" else None
-    if item == "C1" and kind not in AGGLOMERATION_TYPES:
-        raise ValueError(f"집적 유형 오류: {code}")
     if kind == "무관":
         return result(
-            item, 2, reason="집적과 무관한 업종이라 중간 등급 고정(관측값 아님)", value=None
+            item,
+            2,
+            reason="집적과 무관한 업종이라 중간 등급 고정(관측값 아님)",
+            value=None,
+            agglomeration=kind,
         )
     if (
         source in data.get("runtime_partial_sources", [])
@@ -241,7 +255,7 @@ def score_item(
             if density > SEOUL_INDUSTRY_DENSITY_PERCENTILES[code][95]:
                 grade = max(grade - 1, 0)
                 reason += " · 서울 상위 5% 초과로 한 단계 감점"
-            return result(item, grade, value=q, reason=reason)
+            return result(item, grade, value=q, reason=reason, agglomeration=kind)
         q = density / median
         if c1_alpha:
             daily = bench.get("mean_daily_per_trade_area")
@@ -253,6 +267,7 @@ def score_item(
             4 - bisect_right([0.5, 0.8, 1.2, 1.5], q),
             value=q,
             reason=f"근처형: C1 α={c1_alpha}; 현재 API/2026Q2 밀도 기준선 시점 차이 있음",
+            agglomeration=kind,
         )
     if item == "C4":
         facilities = profile.get("required_facilities", "")

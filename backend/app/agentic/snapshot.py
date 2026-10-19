@@ -229,9 +229,7 @@ def persist_report(scope, report, lineage, responses, version=None):
                 metric, unit, source = METRICS[item]
                 value = score["value"]
                 c1_kind_unit = (
-                    c1_unit(score["reason"])
-                    if item == "C1" and score["status"] == "observed"
-                    else None
+                    c1_unit(score) if item == "C1" and score["status"] == "observed" else None
                 )
                 if c1_kind_unit:
                     unit = c1_kind_unit

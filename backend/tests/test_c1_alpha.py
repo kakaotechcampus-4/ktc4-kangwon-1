@@ -34,7 +34,7 @@ class C1AlphaTests(unittest.TestCase):
         from scripts.rubric_dryrun import WEIGHTS, result, summarize
 
         items = {k: result(k, 3) for k in WEIGHTS}
-        items["C1"] = result("C1", 0, value=4)
+        items["C1"] = result("C1", 0, value=4, agglomeration="근처형")
         base = {"address": "대역", "rows": [summarize("I201", items, "해당 없음")]}
         sample = {"floating_population": {"benchmark": {"mean_daily_per_trade_area": 40}}}
         with (
@@ -54,13 +54,13 @@ class C1AlphaTests(unittest.TestCase):
         from scripts.rubric_dryrun import WEIGHTS, result, summarize
 
         rows = []
-        for code, reason, value in (
-            ("G204", "근처형: C1 α=0.5; 현재 API/2026Q2 밀도 기준선 시점 차이 있음", 4),
-            ("I201", "모임형: 서울 중앙값 대비 같은 업종 밀도", 2),
-            ("M103", "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)", None),
+        for code, kind, value in (
+            ("G204", "근처형", 4),
+            ("I201", "모임형", 2),
+            ("M103", "무관", None),
         ):
             items = {k: result(k, 3) for k in WEIGHTS}
-            items["C1"] = result("C1", 2, value=value, reason=reason)
+            items["C1"] = result("C1", 2, value=value, reason="다른 문구", agglomeration=kind)
             rows.append(summarize(code, items, "해당 없음"))
         base = {"address": "대역", "rows": rows}
         sample = {"floating_population": {"benchmark": {"mean_daily_per_trade_area": 40}}}

@@ -54,7 +54,7 @@ def alpha_reports(samples: list[dict], alpha: float, threshold: float = 0.65) ->
         factor = daily / DAILY_TOTAL_PERCENTILES[50] if valid(daily) and daily > 0 else None
         rows = []
         for row in base["rows"]:
-            if c1_unit(row["items"]["C1"]["reason"]) in (CLUSTER_UNIT, PROFILE_UNIT):
+            if c1_unit(row["items"]["C1"]) in (CLUSTER_UNIT, PROFILE_UNIT):
                 continue
             items = deepcopy(row["items"])
             if items["C1"]["status"] == "observed":
