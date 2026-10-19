@@ -221,6 +221,9 @@ def persist_report(scope, report, lineage, responses, version=None):
                 if item == "L":
                     facts_by_item[(row["code"], item)] = []
                     continue
+                if item == "C1" and score["status"] == "observed" and score["value"] is None:
+                    facts_by_item[(row["code"], item)] = []
+                    continue
                 if (version or {}).get("local_snapshot") and score["status"] != "observed":
                     # 결측/n.a. 상태는 scores에 보존하고 인용할 숫자 fact는 만들지 않습니다.
                     facts_by_item[(row["code"], item)] = []

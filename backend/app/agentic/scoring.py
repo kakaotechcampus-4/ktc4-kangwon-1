@@ -103,9 +103,18 @@ def score_item(
         or (item == "D3" and profile.get("target_population") in (None, "", "—"))
         or (item == "C4" and not profile.get("required_facilities"))
     )
+    kind = profile.get("agglomeration", "근처형") if item == "C1" else None
+    if kind == "무관":
+        return result(
+            item, 2, reason="집적과 무관한 업종이라 중간 등급 고정(관측값 아님)", value=None
+        )
     if (
         source in data.get("runtime_partial_sources", [])
-        or (item == "C1" and "floating_population" in data.get("runtime_partial_sources", []))
+        or (
+            item == "C1"
+            and kind != "모임형"
+            and "floating_population" in data.get("runtime_partial_sources", [])
+        )
     ) and not na_item:
         return unknown("원문 수집 부분 실패·행/페이지 누락")
 
@@ -220,6 +229,14 @@ def score_item(
         density = row.get("density_per_km2")
         if median < 0.01 or not valid(density):
             return unknown("희소 기준선·밀도 결측")
+        if kind == "모임형":
+            q = density / median
+            grade = bisect_right([0.5, 0.8, 1.2, 1.5], q)
+            reason = "모임형: 서울 중앙값 대비 같은 업종 밀도"
+            if density > SEOUL_INDUSTRY_DENSITY_PERCENTILES[code][95]:
+                grade = max(grade - 1, 0)
+                reason += " · 서울 상위 5% 초과로 한 단계 감점"
+            return result(item, grade, value=q, reason=reason)
         q = density / median
         if c1_alpha:
             daily = bench.get("mean_daily_per_trade_area")
@@ -230,7 +247,7 @@ def score_item(
             item,
             4 - bisect_right([0.5, 0.8, 1.2, 1.5], q),
             value=q,
-            reason=f"C1 α={c1_alpha}; 현재 API/2026Q2 밀도 기준선 시점 차이 있음",
+            reason=f"근처형: C1 α={c1_alpha}; 현재 API/2026Q2 밀도 기준선 시점 차이 있음",
         )
     if item == "C4":
         facilities = profile.get("required_facilities", "")

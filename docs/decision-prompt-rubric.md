@@ -6,7 +6,7 @@
 
 ### 문항·배점·입력·식
 
-총 100점: **D35 + C25 + S30 + L10**. 코드 채점 90점, decision 판단 10점. 각 문항 점수는 `배점 × 등급 / 4`다. D4는 1.25점, C4·L은 2.5점 단위다. C2·C3·G는 별도 점수 없이 설명 또는 차단 조건이다.
+총 100점: **D35 + C25 + S30 + L10**. 코드 채점 90점, decision 판단 10점. 각 문항 점수는 `배점 × 등급 / 4`다. D4는 1.25점, C4·L은 2.5점 단위다. C2는 C1에 통합됐고(업종별 방향), C3·G는 별도 점수 없이 설명 또는 차단 조건이다.
 
 표의 경로는 해당 AgentAnalysis.data 내부다. `{i}`는 코드로 찾은 행이며 상권은 code, 개폐업은 industry_id로 연결한다. 지도는 MapObservation.data, 규제는 decision payload의 education_zones다. 없는 필드·null·citable=false는 유효 근거로 만들지 않는다.
 
@@ -16,7 +16,8 @@
 | D2 | 10 | floating_population: `/benchmark/weekend_index`; 승인 day_pattern | 주말형 r=weekend_index, 평일형 r=1/weekend_index. 공통 r 등급 | 무관=n.a. 지수 결측·0·프로필 결측=unknown |
 | D3 | 10 | floating_population: `/population/age_share/{age}`, `/resident/age_share/{age}`, `/worker/age_share/{age}`, 해당 period_code; 승인 target_population·target_age_bands | r=대상 연령 비중 합/서울 같은 모집단·연령 비중 합. 공통 r 등급 | 모집단 공란=n.a. 상주·직장 연령 또는 서울 분모 결측이면 유동 연령 대체를 표시. 대체도 불가·분모 0=unknown. 모집단 합산 금지 |
 | D4 | 5 | floating_population: `/trend/yoy_change`, `/trend/quarters/{j}/period_code`, 관측 상권 코드 집합 | 전년 동기 일평균 변화율의 g 등급. 최신과 전년 같은 상권 집합, 5분기 자료 필요 | 전년 동기 없음·상권 집합 다름=unknown. 전분기 변화 대체 금지 |
-| C1 | 15 | commercial_area: `/by_middle/{i}/density_per_km2`, `/radius_m`; floating_population: `/benchmark/mean_daily_per_trade_area`; 서울 기준선 | **q=(업종 밀도/서울 같은 업종 중앙 밀도)/(유동 규모/5,920.2)^0.5**. 역방향 q 등급 | 반경 500m·완전 수집·소분류 매핑 필요. 서울 중앙 밀도<0.01, 유동 결측·0, 밀도 결측=unknown. 밀도 0은 유동·기준선 유효 시 observed |
+| C1 | 15 | commercial_area: `/by_middle/{i}/density_per_km2`, `/radius_m`; floating_population: `/benchmark/mean_daily_per_trade_area`(근처형만); 서울 기준선; 업종 유형은 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)의 `agglomeration` | **유형별 방향.** 근처형: q=(업종 밀도/서울 같은 업종 중앙 밀도)/(유동 규모/5,920.2)^0.5, 역방향 q 등급. 모임형: q=업종 밀도/서울 같은 업종 중앙 밀도, 정방향 q 등급(<0.5→0, [0.5,0.8)→1, [0.8,1.2)→2, [1.2,1.5)→3, ≥1.5→4)이며 밀도가 서울 같은 업종 상위 5%(p95)를 넘으면 한 단계 감점(최저 0). 무관: 자료를 쓰지 않고 2등급 고정(관측값 아님) | 반경 500m·완전 수집·소분류 매핑 필요. 서울 중앙 밀도<0.01, 밀도 결측=unknown. 근처형은 유동 결측·0도 unknown, 모임형은 유동을 보지 않는다. 무관은 항상 observed. 밀도 0은 기준선 유효 시 observed |
+| C2 | — | — | C1에 통합(v0.9). LQ는 설명용으로만 | 점수 없음 |
 | C4 | 10 | MapObservation.data: `/queries/{id}/request/facility_code`, `/queries/{id}/status`, `/queries/{id}/place_ids`, `/places/{id}/category_code`, `/places/{id}/distance_m`; 승인 required_facilities·max_distance_m | t=확인된 최근접 거리/허용 거리. t≤0.25→4, ≤0.50→3, ≤0.75→2, ≤1→1, >1→0. 시설 여러 개는 최저 등급 | 시설 공란=n.a. 조회 실패·거리 없음·검색 범위 부족=unknown. 검색 0건을 시설 부재로 확정하지 않음 |
 | S1 | 7.5 | business_lifecycle: `/industries/{i}/metrics/recent_year_close_rate` | r=상권 최근 폐업률/서울 같은 업종 최근 폐업률. 역방향 r 등급 | S 공통 조건·서울 분모 0=unknown |
 | S2 | 7.5 | business_lifecycle: `/industries/{i}/metrics/net_change_rate`; 서울 회전율 | r=1+(상권 순증감률−서울 순증감률)/서울 회전율. 공통 r 등급 | S 공통 조건·서울 회전율 0=unknown |
@@ -121,14 +122,14 @@ L의 근거는 fact_id로 인용한 새 근거여야 한다. 이미 코드가 �
 
 | 영역 | 문항 | 최대 배점 | 역할 |
 | --- | --- | ---: | --- |
-| 인구·수요 | D1~D4 | 40 | 시간대·요일·고객 연령·전년 동기 수요 |
-| 상권·경쟁 | C1·C4 | 30 | 경쟁 부담·필요 시설 적합성 |
+| 인구·수요 | D1~D4 | 35 | 시간대·요일·고객 연령·전년 동기 수요 |
+| 상권·경쟁 | C1·C4 | 25 | 경쟁 부담·필요 시설 적합성 |
 | 개폐업 안정성 | S1~S4 | 30 | 폐업·순증감·회전·추세 |
-| 집적·차별화 | C2·C3 | 0 | 설명·위험 항목; 점수 가산·감점 없음 |
+| 집적·차별화 | C2·C3 | 0 | C2: C1에 통합(업종별 방향) / C3: 설명·위험 항목 |
 | 규제 | G | 0 | 금지·조건부·해당 없음; 실패는 unknown |
 | 지도·공간 확인 | M1·M2·G2 | 0 | 근거 확인·추가 조건; 점수 중복 가산 없음 |
 
-채점은 **10문항·100점**이다. C2·C3의 기존 15점을 C1·C4에 각각 7.5점씩 옮겨 각 15점으로 한다. 분석 자료의 같은 점포·인구·시설을 여러 출처에서 찾았다고 중복 가산하지 않는다.
+채점은 **10문항·100점**이다. C2·C3의 기존 15점은 C1·C4로 옮겼고, 현재 배점은 C1 15점·C4 10점, D4 5점이다. 분석 자료의 같은 점포·인구·시설을 여러 출처에서 찾았다고 중복 가산하지 않는다.
 
 ## 공통 등급·상태 규칙
 
@@ -436,6 +437,7 @@ python scripts/build_density_baseline.py --industries --seoul-csv "D:/data/서�
 
 | 버전 | 변경 |
 | --- | --- |
+| v0.9 | C1 업종별 방향(모임형·근처형·무관), 모임형 과밀 p95 감점, 무관 2등급 고정, 배점 표 정정 |
 | v0.7 | 결합안 제외·D1 근거 중복 허용. α별 log(q)와 S1/S3 비율 스피어만 비교, 전체 227·음식 35행. 개선 차이 0.05 이내 규칙으로 α=0 권고, 최소 배점 60·하한 60/65/70% 재채점. 8곳·동일 표본 검증 한계 기록 |
 | v0.6 | 추천 최소 적용 배점 70→60, D1/D3 관측 조건 유지. C1 현재·유형별·수요 보정·결합 시험 결과와 유동 극단값·공간 분모·중복 보정 한계 기록. 기본 C1 미변경 |
 | v0.5 | 추천 최소 근거량 A≥70·D1 또는 D3 observed를 추가. 미달 후보는 최대 조건부와 확인 문구. 서울 CSV와 API 밀도를 비교하고 C1 유형별 중앙값·서울 백분위 대안은 시험만 수행(현재 C1 유지) |
