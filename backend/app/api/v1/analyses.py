@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -23,6 +22,7 @@ from .jobs import (
     AnalysisRequest,
     await_task,
     health,
+    is_mock,
     jobs,
     list_analysis_events,
     request_headers,
@@ -68,10 +68,6 @@ def options(request, request_id):
         "recording_path": Path(directory) / f"{request_id}-model-calls.json" if directory else None,
         "measurement": request.app.state.measurement,
     }
-
-
-def is_mock(requested):
-    return requested or os.getenv("MOCK_MODE", "").lower() in {"1", "true", "yes"}
 
 
 def space_answers(body):

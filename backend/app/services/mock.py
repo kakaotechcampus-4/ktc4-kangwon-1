@@ -4,6 +4,13 @@ import json
 
 from openai.types.chat import ChatCompletionMessage
 
+from app.building_registry import (
+    BuildingRegistry,
+    BuildingTitle,
+    FloorOverview,
+    SewageFacility,
+    Unit,
+)
 from app.schemas import Site
 
 
@@ -68,14 +75,6 @@ def building_registry():
     성희프라자 10/13 실호출 응답에서 일부 행만 옮겼습니다. 층별개요는 19행 중 지하 1층과
     4층 4행, 호실은 83개 중 4층 3개입니다. 나머지 값은 실호출 그대로입니다.
     """
-    from app.building_registry import (
-        BuildingRegistry,
-        BuildingTitle,
-        FloorOverview,
-        SewageFacility,
-        Unit,
-    )
-
     return BuildingRegistry(
         road_address="서울 송파구 위례광장로 199",
         jibun_address="서울 송파구 장지동 880-1",

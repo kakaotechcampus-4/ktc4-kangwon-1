@@ -1,6 +1,7 @@
 """공개 API의 작업 등록·대기·진행 조회입니다."""
 
 import asyncio
+import os
 from collections.abc import Coroutine
 
 from fastapi import HTTPException, Query, Request
@@ -96,3 +97,7 @@ async def list_analysis_events(
         "events": events,
         "next_after": events[-1]["seq"] if events else after,
     }
+
+
+def is_mock(requested):
+    return requested or os.getenv("MOCK_MODE", "").lower() in {"1", "true", "yes"}

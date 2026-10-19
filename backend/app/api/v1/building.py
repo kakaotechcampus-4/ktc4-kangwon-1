@@ -8,7 +8,7 @@ from app.address import GeocodeError
 from app.building_registry import BuildingRegistry, BuildingRegistryError, lookup_building
 from app.services.mock import building_registry as mock_building_registry
 
-from .analyses import is_mock
+from .jobs import is_mock
 
 router = APIRouter(prefix="/api/v1", tags=["building"])
 
