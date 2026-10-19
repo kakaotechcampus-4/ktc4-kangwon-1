@@ -453,3 +453,50 @@ describe('호수 읽기와 실제 조회의 mockFail', () => {
     expect(info.exclusiveAreaM2.value).toBe(93.6);
   });
 });
+
+describe('프론트 mock 모드', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('서버를 부르지 않고 mock 응답에서 failLookups 항목만 비운다', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('NEXT_PUBLIC_MOCK_MODE', 'true');
+    vi.resetModules();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const mocked = await import('./building');
+    const pending = mocked.fetchBuildingInfo('주소', {
+      failLookups: ['sewage'],
+    });
+    await vi.runAllTimersAsync();
+    const info = await pending;
+    expect(fetch).not.toHaveBeenCalled();
+    expect(info.mainUse.value).toBe('제2종근린생활시설');
+    expect(info.sewage.source).toBe('missing');
+  });
+});
+
+describe('다른 동의 같은 호수', () => {
+  it('표제부 동이 없으면 다른 동 행은 쓰지 않는다', () => {
+    const registry: BuildingRegistryResponse = {
+      ...REGISTRY,
+      units: [
+        {
+          dong_name: 'B동',
+          unit_name: '404호',
+          floor: '4층',
+          use: '창고',
+          use_detail: null,
+          area_m2: 999,
+        },
+        ...(REGISTRY.units ?? []),
+      ],
+    };
+    expect(
+      toBuildingInfo(registry, '', '4층 404호').exclusiveAreaM2.value
+    ).toBe(93.6);
+  });
+});

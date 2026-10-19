@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildAnalysisRequestBody, createAnalysis } from './analyses';
+import {
+  buildAnalysisRequestBody,
+  createAnalysis,
+  startAnalysis,
+} from './analyses';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -79,4 +83,35 @@ describe('확인 화면 층·전용면적 전달', () => {
       ).toEqual({ address: '테스트 주소' });
     }
   );
+});
+
+describe('확인 화면 값 경계와 분석 시작 요청', () => {
+  it.each([0.01, 100000])('전용면적 경계값 %s는 보낸다', (exclusiveAreaM2) => {
+    expect(
+      buildAnalysisRequestBody({ address: '테스트 주소', exclusiveAreaM2 })
+    ).toEqual({ address: '테스트 주소', exclusive_area_m2: exclusiveAreaM2 });
+  });
+
+  it.each(['지하 1층', '999층'])('층 경계값 %s는 보낸다', (floor) => {
+    expect(buildAnalysisRequestBody({ address: '테스트 주소', floor })).toEqual(
+      { address: '테스트 주소', floor }
+    );
+  });
+
+  it('분석 시작은 wait=false로 층과 전용면적을 본문에 싣는다', async () => {
+    const fetch = mockFetch();
+    await startAnalysis({
+      address: '테스트 주소',
+      allowQuestions: true,
+      floor: '4층',
+      exclusiveAreaM2: 93.6,
+    });
+    expect(fetch.mock.calls[0][0]).toContain('/api/v1/analyses?wait=false');
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      address: '테스트 주소',
+      allow_questions: true,
+      floor: '4층',
+      exclusive_area_m2: 93.6,
+    });
+  });
 });
