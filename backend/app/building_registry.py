@@ -326,7 +326,7 @@ def _units(rows: list[dict[str, Any]]) -> list[Unit]:
         if key in units:
             unit = units[key]
             if area is not None:
-                unit.area_m2 = (unit.area_m2 or 0) + area
+                unit.area_m2 = round((unit.area_m2 or 0) + area, 2)
             continue
         units[key] = Unit(
             dong_name=key[0],

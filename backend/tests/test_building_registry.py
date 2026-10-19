@@ -189,6 +189,17 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    async def test_unit_area_sum_is_rounded(self):
+        self.assertNotEqual(0.1 + 0.2, 0.3)
+        rows = [
+            {"hoNm": "301호", "flrNoNm": "3층", "exposPubuseGbCdNm": "전유", "area": 0.1},
+            {"hoNm": "301호", "flrNoNm": "3층", "exposPubuseGbCdNm": "전유", "area": 0.2},
+        ]
+        result, _ = await self.lookup(
+            answers(getBrExposPubuseAreaInfo=httpx.Response(200, json=hub(rows)))
+        )
+        self.assertEqual([u.area_m2 for u in result.units], [0.3])
+
     async def test_main_building_first(self):
         # 한 지번에 작은 단독주택과 상가 건물이 같이 등록된 경우입니다.
         rows = [
