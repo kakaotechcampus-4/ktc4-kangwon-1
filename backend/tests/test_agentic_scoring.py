@@ -187,6 +187,32 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
                 db.execute("SELECT L_review_state FROM score_snapshots").fetchone()[0], "unreviewed"
             )
 
+    async def test_unrelated_c1_is_cited_to_industry_profile(self):
+        from app.agentic.contracts import ScoreItem
+
+        task = AnalysisTask(
+            request_id="facts",
+            site=Site(input_address="서울", road_address="서울", latitude=37.5, longitude=127.0),
+            radius_m=500,
+        )
+        async with capture_scope("facts", self.path):
+            await persist_snapshot_scores(task)
+        with connect(self.path) as db:
+            rows = db.execute(
+                "SELECT industry_code,status,grade,points,fact_ids_json FROM scores "
+                "WHERE item='C1' AND industry_code='M103'"
+            ).fetchall()
+            self.assertEqual(len(rows), 1)
+            code, status, grade, points, fact_ids = rows[0]
+            fact_ids = json.loads(fact_ids)
+            self.assertEqual((status, grade, points), ("observed", 2, 7.5))
+            self.assertTrue(fact_ids)
+            fact = db.execute(
+                "SELECT source,metric,status FROM facts WHERE fact_id=?", (fact_ids[0],)
+            ).fetchone()
+            self.assertEqual(tuple(fact), ("industry_profile", "competition_index", "observed"))
+        ScoreItem(item="C1", status=status, grade=grade, points=points, fact_ids=fact_ids)
+
     async def test_scoring_failure_marks_service_failed(self):
         from app.services.analysis import execute_agentic_analysis
         from app.services.mock import dependencies
