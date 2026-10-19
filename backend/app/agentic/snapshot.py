@@ -18,6 +18,7 @@ from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 from app.storage.raw import RawStorageError, current_capture
 
+from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
 from .facts import CALC_VERSION, register_fact
 from .inputs import format_snapshot
 from .scoring import WEIGHTS, evaluate
@@ -227,9 +228,16 @@ def persist_report(scope, report, lineage, responses, version=None):
                     continue
                 metric, unit, source = METRICS[item]
                 value = score["value"]
-                profile_fact = item == "C1" and score["status"] == "observed" and value is None
+                c1_kind_unit = (
+                    c1_unit(score["reason"])
+                    if item == "C1" and score["status"] == "observed"
+                    else None
+                )
+                if c1_kind_unit:
+                    unit = c1_kind_unit
+                profile_fact = c1_kind_unit == PROFILE_UNIT
                 if profile_fact:
-                    source, unit = "industry_profile", "업종 집적 유형(프로필)"
+                    source = "industry_profile"
                     value = {"agglomeration": "무관", "grade": score["grade"]}
                 if item == "D1" and isinstance(value, (int, float)):
                     metric, unit = "mean_daily_per_trade_area", "명/일"
@@ -253,7 +261,7 @@ def persist_report(scope, report, lineage, responses, version=None):
                 )
                 if row["code"] in lineage.get("profiles", {}):
                     refs.append(lineage["profiles"][row["code"]])
-                if item == "C1" and score["status"] == "observed" and not profile_fact:
+                if c1_kind_unit == NEARBY_UNIT:
                     refs.extend(lineage.get("floating_population", []))
                 response_ids = response_refs.get(source, [])
                 if (

@@ -213,6 +213,71 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(tuple(fact), ("industry_profile", "competition_index", "observed"))
         ScoreItem(item="C1", status=status, grade=grade, points=points, fact_ids=fact_ids)
 
+    async def test_c1_fact_unit_and_sources_follow_the_agglomeration_type(self):
+        from app.agentic.snapshot import persist_report
+
+        rows = []
+        for code, reason in (
+            ("I201", "모임형: 서울 중앙값 대비 같은 업종 밀도"),
+            ("G204", "근처형: C1 α=0.5; 현재 API/2026Q2 밀도 기준선 시점 차이 있음"),
+            ("M103", "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)"),
+        ):
+            items = {key: result(key) for key in WEIGHTS}
+            value = None if code == "M103" else 1.0
+            items["C1"] = result("C1", 2, reason=reason, value=value)
+            rows.append(summarize(code, items, "unknown"))
+        async with capture_scope("facts", self.path) as scope:
+            for source, key in (
+                ("commercial_area", "store"),
+                ("floating_population", "float"),
+                ("industry_profile", "profile"),
+            ):
+                await scope.record(
+                    source=source,
+                    source_type="api",
+                    args={"name": key},
+                    page="1",
+                    status=200,
+                    payload={"rows": [{"name": key}]},
+                )
+            with connect(self.path) as db:
+                ids = {
+                    key: db.execute(
+                        "SELECT raw_row_id FROM raw_rows WHERE raw_json LIKE ?", (f'%"{key}"%',)
+                    ).fetchone()[0]
+                    for key in ("store", "float", "profile")
+                }
+            lineage = {
+                "commercial_area": [ids["store"]],
+                "floating_population": [ids["float"]],
+                "profiles": {"M103": ids["profile"]},
+            }
+            persist_report(scope, {"rows": rows, "top5": rows}, lineage, [])
+        with connect(self.path) as db:
+            facts = {
+                code: (
+                    unit,
+                    [
+                        r[0]
+                        for r in db.execute(
+                            "SELECT raw_row_id FROM fact_sources WHERE fact_id=?", (fact_id,)
+                        )
+                    ],
+                )
+                for fact_id, code, unit in db.execute(
+                    "SELECT fact_id,industry_code,unit FROM facts WHERE metric='competition_index'"
+                )
+            }
+        self.assertEqual(
+            facts["I201"][0], "배수(모임형: 서울 중앙 밀도 대비, 높을수록 유리·상위 5% 초과 감점)"
+        )
+        self.assertEqual(facts["G204"][0], "배수(근처형: 유동 보정 밀도, 낮을수록 유리)")
+        self.assertEqual(facts["M103"][0], "업종 집적 유형(프로필)")
+        self.assertIn(ids["store"], facts["I201"][1])
+        self.assertNotIn(ids["float"], facts["I201"][1])
+        self.assertIn(ids["float"], facts["G204"][1])
+        self.assertNotIn(ids["float"], facts["M103"][1])
+
     async def test_scoring_failure_marks_service_failed(self):
         from app.services.analysis import execute_agentic_analysis
         from app.services.mock import dependencies

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from app.agentic.c1_units import NEARBY_UNIT
 from app.canonical import canonical_hash, canonical_json
 from app.db.connection import connect
 from app.local_data.adapter import SOURCE_NAMES, LocalAdapter
@@ -42,7 +43,7 @@ def load_snapshot(scope):
         return dict(row) if row else None
 
 
-def pin_provenance(db, scope, source, metric, industry, calc_version, cell=None):
+def pin_provenance(db, scope, source, metric, industry, calc_version, cell=None, unit=None):
     row = db.execute(
         "SELECT versions_json,scope_json FROM local_snapshots WHERE snapshot_id=?",
         (scope.snapshot_id,),
@@ -51,7 +52,7 @@ def pin_provenance(db, scope, source, metric, industry, calc_version, cell=None)
         raise ValueError("고정된 로컬 자료 묶음이 없습니다.")
     versions = json.loads(row[0])
     refs = [v["version_id"] for v in versions if SOURCE_NAMES[v["source"]] == source]
-    if metric == "competition_index":
+    if metric == "competition_index" and unit == NEARBY_UNIT:
         refs += [v["version_id"] for v in versions if v["source"] == "floating"]
     # 프로필/기준값과 오프라인 시험 관측도 snapshot에 명시한 해시/조건으로 구분합니다.
     query = {"scope_ref": scope.snapshot_id, "recipe": "기존 formatter"}
