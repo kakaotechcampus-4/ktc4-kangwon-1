@@ -122,7 +122,7 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 | `sewage` | `sewage`에서 `method`가 있는 첫 값. 없으면 사용자가 고릅니다 |
 
 - 조회 진행 표시(`LookupId`)는 `title`↔`titles`, `floor`↔`floors`, `exclusiveArea`↔`units`, `sewage`↔`sewage`입니다. 값이 `null`이면 `failed`, 아니면 `done`입니다.
-- `floorFromUnit`은 입력에 따라 공백 없는 `지하1층`을 돌려줄 수 있습니다. 층은 공백을 빼고 비교합니다.
+- 입력 층은 `normalizeFloor`로 `4층`·`지하 1층` 모양으로 맞춘 뒤(`B1층`은 `지하 1층`) 공백을 빼고 비교합니다. 층을 읽을 수 없으면 층 용도·전용면적은 비워 둡니다.
 - 한 지번에 건물이 여럿이면 `titles`가 여러 행입니다(예: 인사동 대일빌딩 옆 단독주택). 층·호실은 `dong_name`이 `titles[0].dong_name`과 같은 행만 씁니다.
 - 프론트 목업의 `전용 275.49㎡`는 4층 층별개요 중 일반음식점 행의 면적입니다. 호실 하나의 전용면적이 아닙니다.
 
