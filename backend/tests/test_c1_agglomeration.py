@@ -137,6 +137,21 @@ class C1AgglomerationTests(unittest.TestCase):
             again = self.c1("무관", 10, sample)
             self.assertEqual((again["grade"], again["status"]), (2, "observed"))
 
+    def test_unknown_agglomeration_value_is_an_error(self):
+        for value in ("모임 형", "", None, "cluster"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as caught:
+                    score_item("C1", {"agglomeration": value}, "I201", self.sample(10))
+                self.assertIn("I201", str(caught.exception))
+        for profile in ({}, {"agglomeration": "근처형"}):
+            self.assertEqual(
+                score_item("C1", profile, "I201", self.sample(10))["status"], "observed"
+            )
+
+    def test_cluster_reason_keeps_baseline_gap_notice(self):
+        self.assertIn("밀도 기준선 시점 차이", self.c1("모임형", 20)["reason"])
+        self.assertIn("밀도 기준선 시점 차이", self.c1("모임형", 31)["reason"])
+
     def test_cluster_reason_mentions_saturation(self):
         self.assertIn("상위 5% 초과", self.c1("모임형", 31)["reason"])
         self.assertNotIn("상위 5% 초과", self.c1("모임형", 20)["reason"])

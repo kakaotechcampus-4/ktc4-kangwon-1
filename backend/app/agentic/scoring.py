@@ -104,6 +104,8 @@ def score_item(
         or (item == "C4" and not profile.get("required_facilities"))
     )
     kind = profile.get("agglomeration", "근처형") if item == "C1" else None
+    if item == "C1" and kind not in AGGLOMERATION_TYPES:
+        raise ValueError(f"집적 유형 오류: {code}")
     if kind == "무관":
         return result(
             item, 2, reason="집적과 무관한 업종이라 중간 등급 고정(관측값 아님)", value=None
@@ -232,7 +234,10 @@ def score_item(
         if kind == "모임형":
             q = density / median
             grade = bisect_right([0.5, 0.8, 1.2, 1.5], q)
-            reason = "모임형: 서울 중앙값 대비 같은 업종 밀도"
+            reason = (
+                "모임형: 서울 중앙값 대비 같은 업종 밀도; "
+                "현재 API/2026Q2 밀도 기준선 시점 차이 있음"
+            )
             if density > SEOUL_INDUSTRY_DENSITY_PERCENTILES[code][95]:
                 grade = max(grade - 1, 0)
                 reason += " · 서울 상위 5% 초과로 한 단계 감점"
