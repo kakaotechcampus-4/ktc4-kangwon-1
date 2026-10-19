@@ -216,6 +216,115 @@ describe('층 표기 맞추기', () => {
   });
 });
 
+const MULTI_DONG: BuildingRegistryResponse = {
+  road_address: null,
+  jibun_address: null,
+  titles: [
+    {
+      dong_name: '101동',
+      building_name: '래미안',
+      main_use: '공동주택',
+      ground_floors: 15,
+      underground_floors: 2,
+      total_area_m2: 12000,
+      parking_spaces: 200,
+    },
+    {
+      dong_name: '상가동',
+      building_name: '래미안 상가',
+      main_use: '제1종근린생활시설',
+      ground_floors: 2,
+      underground_floors: 0,
+      total_area_m2: 900,
+      parking_spaces: 10,
+    },
+  ],
+  floors: [
+    {
+      dong_name: '101동',
+      floor: '1층',
+      use: '공동주택',
+      use_detail: null,
+      area_m2: 500,
+    },
+    {
+      dong_name: '상가동',
+      floor: '1층',
+      use: '소매점',
+      use_detail: null,
+      area_m2: 300,
+    },
+  ],
+  units: [
+    {
+      dong_name: '101동',
+      unit_name: '101호',
+      floor: '1층',
+      use: '공동주택',
+      use_detail: null,
+      area_m2: 84.97,
+    },
+    {
+      dong_name: '상가동',
+      unit_name: '101호',
+      floor: '1층',
+      use: '소매점',
+      use_detail: null,
+      area_m2: 45.2,
+    },
+  ],
+  sewage: null,
+};
+
+describe('입력의 동 이름으로 표제부 고르기', () => {
+  it('입력에 맞는 동의 표제부와 그 동의 행을 쓴다', () => {
+    const info = toBuildingInfo(MULTI_DONG, '', '상가동 1층 101호');
+    expect(info.buildingName).toBe('래미안 상가');
+    expect(info.mainUse.value).toBe('제1종근린생활시설');
+    expect(info.facility.value).toBe('type1');
+    expect(info.floorUse.value).toBe('소매점');
+    expect(info.exclusiveAreaM2.value).toBe(45.2);
+    expect(info.floors.value).toBe('지상 2층');
+  });
+
+  it('동이 여럿인데 입력에 동이 없으면 층 용도와 면적을 비운다', () => {
+    const info = toBuildingInfo(MULTI_DONG, '', '1층 101호');
+    expect(info.floorUse.value).toBeNull();
+    expect(info.exclusiveAreaM2.value).toBeNull();
+    expect(info.mainUse.value).toBe('공동주택');
+  });
+
+  it('맞는 동이 없으면 층 용도와 면적을 비운다', () => {
+    const info = toBuildingInfo(MULTI_DONG, '', 'C동 1층 101호');
+    expect(info.floorUse.value).toBeNull();
+    expect(info.exclusiveAreaM2.value).toBeNull();
+  });
+
+  it('동이 하나뿐이면 입력에 동이 없어도 그 동의 행을 쓴다', () => {
+    const registry: BuildingRegistryResponse = {
+      ...REGISTRY,
+      titles: [{ ...TITLE, dong_name: 'A동' }],
+      floors: [
+        {
+          dong_name: 'A동',
+          floor: '4층',
+          use: '사무소',
+          use_detail: null,
+          area_m2: 10,
+        },
+        {
+          dong_name: 'B동',
+          floor: '4층',
+          use: '창고',
+          use_detail: null,
+          area_m2: 10,
+        },
+      ],
+    };
+    expect(toBuildingInfo(registry, '', '4층').floorUse.value).toBe('사무소');
+  });
+});
+
 describe('건축물대장 조회 호출', () => {
   it('주소를 넘기고 항목별 진행 상태를 알린다', async () => {
     const fetch = vi

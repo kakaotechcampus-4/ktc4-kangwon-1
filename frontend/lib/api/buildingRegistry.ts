@@ -94,6 +94,11 @@ function unitFromFloorUnit(floorUnit: string): string | null {
   return match ? `${match[1]}호` : null;
 }
 
+function dongFromFloorUnit(floorUnit: string): string | null {
+  const match = floorUnit.match(/(?:^|\s)([0-9A-Za-z가-힣]+동)(?=\s|\d|$)/);
+  return match ? match[1] : null;
+}
+
 function compact(text: string | null): string {
   return (text ?? '').replace(/\s+/g, '');
 }
@@ -113,14 +118,23 @@ export function toBuildingInfo(
   roadAddress: string,
   floorUnit: string
 ): BuildingInfo {
-  const title = registry.titles?.[0];
+  const titles = registry.titles ?? [];
+  const inputDong = dongFromFloorUnit(floorUnit);
+  const matched =
+    inputDong === null
+      ? undefined
+      : titles.find((row) => compact(row.dong_name) === compact(inputDong));
+  const title = matched ?? titles[0];
+  const unresolved =
+    !matched && new Set(titles.map((row) => compact(row.dong_name))).size > 1;
   const floor = normalizeFloor(floorUnit);
   const onFloor = <T extends RegistryRow>(rows: T[] | null): T[] =>
     (rows ?? []).filter(
       (row) =>
         floor !== null &&
+        !unresolved &&
         compact(row.floor) === compact(floor) &&
-        (!title || row.dong_name === title.dong_name)
+        (!title || compact(row.dong_name) === compact(title.dong_name))
     );
   const uses = [
     ...new Set(
