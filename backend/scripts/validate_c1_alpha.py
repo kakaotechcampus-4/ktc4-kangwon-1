@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.agentic.c1_units import CLUSTER_UNIT, PROFILE_UNIT, c1_unit  # noqa: E402
 from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES  # noqa: E402
 from scripts.rubric_dryrun import evaluate, result, summarize, valid  # noqa: E402
 
@@ -53,6 +54,8 @@ def alpha_reports(samples: list[dict], alpha: float, threshold: float = 0.65) ->
         factor = daily / DAILY_TOTAL_PERCENTILES[50] if valid(daily) and daily > 0 else None
         rows = []
         for row in base["rows"]:
+            if c1_unit(row["items"]["C1"]["reason"]) in (CLUSTER_UNIT, PROFILE_UNIT):
+                continue
             items = deepcopy(row["items"])
             if items["C1"]["status"] == "observed":
                 q = items["C1"]["value"]

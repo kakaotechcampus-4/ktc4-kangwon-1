@@ -49,3 +49,25 @@ class C1AlphaTests(unittest.TestCase):
                 alpha_reports([sample], 1)[0]["rows"][0]["items"]["C1"]["status"], "unknown"
             )
             self.assertEqual(alpha_reports([sample], 0)[0]["rows"][0]["items"]["C1"]["value"], 4)
+
+    def test_cluster_and_unrelated_rows_are_left_out(self):
+        from scripts.rubric_dryrun import WEIGHTS, result, summarize
+
+        rows = []
+        for code, reason, value in (
+            ("G204", "근처형: C1 α=0.5; 현재 API/2026Q2 밀도 기준선 시점 차이 있음", 4),
+            ("I201", "모임형: 서울 중앙값 대비 같은 업종 밀도", 2),
+            ("M103", "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)", None),
+        ):
+            items = {k: result(k, 3) for k in WEIGHTS}
+            items["C1"] = result("C1", 2, value=value, reason=reason)
+            rows.append(summarize(code, items, "해당 없음"))
+        base = {"address": "대역", "rows": rows}
+        sample = {"floating_population": {"benchmark": {"mean_daily_per_trade_area": 40}}}
+        with (
+            patch("scripts.validate_c1_alpha.evaluate", return_value=base),
+            patch("scripts.validate_c1_alpha.DAILY_TOTAL_PERCENTILES", {50: 10}),
+        ):
+            report = alpha_reports([sample], 0.5)[0]
+            self.assertEqual([r["code"] for r in report["rows"]], ["G204"])
+            self.assertEqual(correlations([report], False, "S1")["eligible"], 1)
