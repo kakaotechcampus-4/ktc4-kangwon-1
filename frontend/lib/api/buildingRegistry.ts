@@ -78,7 +78,7 @@ export const LOOKUP_ERROR_NOTE =
   '건축물대장을 불러오지 못했어요. 직접 입력해 주세요.';
 
 export function normalizeFloor(floorUnit: string): string | null {
-  const match = floorUnit.match(/(?:^|\s|동)(지하|지|[Bb])?\s*(\d+)\s*층/);
+  const match = floorUnit.match(/(?:^|\s|동|제)(지하|지|[Bb])?\s*(\d+)\s*층/);
   if (!match) {
     return null;
   }

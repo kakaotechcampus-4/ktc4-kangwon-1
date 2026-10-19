@@ -211,6 +211,10 @@ describe('층 표기 맞추기', () => {
     ['상가동 1층 101호', '1층'],
     ['상가동1층', '1층'],
     ['B동 3층', '3층'],
+    ['제3층', '3층'],
+    ['제3층 301호', '3층'],
+    ['신관2층', null],
+    ['3F', null],
   ])('%s → %s', (input, expected) => {
     expect(normalizeFloor(input)).toBe(expected);
   });
