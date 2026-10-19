@@ -308,6 +308,10 @@ class BuildingRegistryApiTests(unittest.TestCase):
         response = self.get(GeocodeError("NOT_FOUND", "x"))
         self.assertEqual(response.status_code, 400)
 
+    def test_geocode_service_failure_is_502(self):
+        response = self.get(GeocodeError("KAKAO_AUTH", "x"))
+        self.assertEqual(response.status_code, 502)
+
     def test_registry_failure_is_502(self):
         response = self.get(BuildingRegistryError("AUTH", "x"))
         self.assertEqual(response.status_code, 502)
