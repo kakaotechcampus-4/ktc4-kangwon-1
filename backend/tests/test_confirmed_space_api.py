@@ -58,6 +58,8 @@ class ConfirmedSpaceApiTests(unittest.TestCase):
             {"exclusive_area_m2": 0.001},
             {"exclusive_area_m2": 100001},
             {"exclusive_area_m2": "넓음"},
+            {"exclusive_area_m2": "93.6"},
+            {"exclusive_area_m2": True},
         ):
             with self.subTest(fields=fields):
                 response, seen = self.post(**fields)

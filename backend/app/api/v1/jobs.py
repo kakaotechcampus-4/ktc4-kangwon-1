@@ -24,7 +24,7 @@ class AnalysisRequest(BaseModel):
     allow_questions: StrictBool = False
     with_map: StrictBool = False
     floor: str | None = Field(default=None, pattern=r"^(지하 )?[1-9][0-9]{0,2}층$")
-    exclusive_area_m2: float | None = Field(default=None, ge=0.01, le=100000)
+    exclusive_area_m2: float | None = Field(default=None, ge=0.01, le=100000, strict=True)
 
 
 def request_headers(request_id):
