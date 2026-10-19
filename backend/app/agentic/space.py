@@ -114,12 +114,20 @@ def compare_space(profile, answers):
     return result
 
 
+def _readable(metric, value):
+    if metric == "floor":
+        return _floor(value) is not None
+    if not isinstance(value, str):
+        return False
+    return bool(re.fullmatch(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?", value.strip()))
+
+
 def ensure_space_fits(scope, *, connection=None):
     """비교 값·부모 계보가 바뀌면 새 fact를 만들고 현재 포인터만 갱신합니다."""
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
         if not db.in_transaction:
             db.execute("BEGIN IMMEDIATE")
-        profiles, answers, answer_ids = {}, {}, {}
+        profiles, answers, answer_ids, candidates = {}, {}, {}, {}
         for row in db.execute(
             "SELECT fact_id,industry_code,source,metric,value_json FROM facts "
             "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
@@ -135,8 +143,13 @@ def ensure_space_fits(scope, *, connection=None):
                 "existing_facilities",
                 "space_condition",
             }:
-                if row[3] not in answers:
-                    answers[row[3]], answer_ids[row[3]] = json.loads(row[4]), row[0]
+                candidates.setdefault(row[3], []).append((row[0], json.loads(row[4])))
+        for metric, rows in candidates.items():
+            if metric in {"floor", "exclusive_area"}:
+                chosen = next((c for c in rows if _readable(metric, c[1])), rows[0])
+            else:
+                chosen = rows[0]
+            answer_ids[metric], answers[metric] = chosen
         if set(profiles) != set(INDUSTRIES):
             raise ValueError("공간 비교에는 51업종의 공간 요건 원문 fact가 필요합니다.")
         current = {}

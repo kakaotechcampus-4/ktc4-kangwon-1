@@ -130,6 +130,55 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         await DecisionLoop.resume(self.scope, self.site, {"floor": "2층"}, generate=generate)
         self.assertEqual(self.space_fit("G202")["floor"], "불일치")
 
+    def space_fit_fact(self, code):
+        current = ensure_space_fits(self.scope)
+        with connect(self.path) as db:
+            row = db.execute(
+                "SELECT value_json FROM facts WHERE fact_id=?", (current[code],)
+            ).fetchone()
+            parents = db.execute(
+                "SELECT parent_fact_id FROM fact_parents WHERE fact_id=?", (current[code],)
+            ).fetchall()
+        return json.loads(row[0]), [parent[0] for parent in parents]
+
+    async def test_unreadable_later_floor_does_not_override_confirmed(self):
+        persist_space_requirements(self.scope)
+        first = save_confirmed_space(self.scope, {"floor": "1층"})
+        save_confirmed_space(self.scope, {"floor": "3층 정도"})
+        value, parents = self.space_fit_fact("G202")
+        self.assertEqual(value["floor"], "일치")
+        self.assertIn(first["fact_ids"]["floor"], parents)
+
+    async def test_unreadable_later_area_does_not_override_confirmed(self):
+        persist_space_requirements(self.scope)
+        save_confirmed_space(self.scope, {"exclusive_area": "85㎡"})
+        save_confirmed_space(self.scope, {"exclusive_area": "모르겠습니다."})
+        self.assertEqual(self.space_fit("G202")["area"], "일치")
+
+    async def test_unreadable_answer_in_question_flow_keeps_confirmed_floor(self):
+        from app.agentic.runtime import DecisionLoop
+
+        saved = save_confirmed_space(self.scope, {"floor": "1층"})
+
+        async def generate(*args):
+            return self.message(
+                "ask_user",
+                {"questions": [{"field": "floor", "question": "층?", "reason": "조건"}]},
+            )
+
+        loop = await DecisionLoop.create(
+            self.scope, self.site, generate=generate, confirmed_space=saved
+        )
+        waiting = await loop.run()
+        self.assertEqual(waiting.status, "waiting_for_input")
+        await DecisionLoop.resume(self.scope, self.site, {"floor": "3층 정도"}, generate=generate)
+        self.assertEqual(self.space_fit("G202")["floor"], "일치")
+
+    async def test_only_unreadable_floor_stays_unknown(self):
+        persist_space_requirements(self.scope)
+        save_confirmed_space(self.scope, {"floor": "3층 정도"})
+        self.assertEqual(self.space_fit("G202")["floor"], "미확인")
+
     async def test_service_registers_values_before_loop(self):
         from app.services.analysis import execute_agentic_analysis
 
