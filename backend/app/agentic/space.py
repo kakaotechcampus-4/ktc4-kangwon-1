@@ -11,6 +11,7 @@ from app.industries.catalog import INDUSTRIES
 from .facts import register_fact
 
 _AREA = re.compile(r"(?:약\s*)?(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
+_AREA_ANSWER = re.compile(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?")
 _AREA_RANGE = re.compile(r"(\d+(?:\.\d+)?)\s*[~-]\s*(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
 _FACILITY = re.compile(
     r"(?P<names>(?:주방|배기|후드|급배수)(?:\s*(?:·|/|및|와)\s*(?:주방|배기|후드|급배수))*)"
@@ -34,7 +35,7 @@ def _area_fit(requirement, answer):
         return "해당 없음"
     if not isinstance(requirement, str) or not isinstance(answer, str):
         return "미확인"
-    observed = re.fullmatch(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?", answer.strip())
+    observed = _AREA_ANSWER.fullmatch(answer.strip())
     bounds = _AREA_RANGE.fullmatch(requirement.strip())
     if not observed or not bounds:
         return "미확인"
@@ -119,7 +120,7 @@ def _readable(metric, value):
         return _floor(value) is not None
     if not isinstance(value, str):
         return False
-    return bool(re.fullmatch(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?", value.strip()))
+    return bool(_AREA_ANSWER.fullmatch(value.strip()))
 
 
 def ensure_space_fits(scope, *, connection=None):
