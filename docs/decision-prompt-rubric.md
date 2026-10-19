@@ -2,6 +2,8 @@
 
 ## 확정 규칙
 
+Founder(임차인·창업자) 검토 기준은 [전용 평가표](founder-evaluator-rubric.md)를 따른다. 별도 점수·순위를 만들지 않으며 다른 세 평가자와 본 채점표의 배점·판정은 변경하지 않는다.
+
 이 절이 v0.8의 유일한 현재 규칙이다. 뒤의 v0.2~v0.7 기록에 다른 배점·식·권고가 있어도 이 절을 우선한다. 대상은 service-51의 [생성 카탈로그](../backend/app/industries/catalog.py) 51업종과 승인된 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)다. 현재 단일 decision 경로의 코드 채점·보고서 검증에 적용하며 실행 구조는 [백엔드 README](../backend/README.md)를 따른다. 성공 확률·매출·수익을 예측하는 점수가 아니다.
 
 ### 문항·배점·입력·식
