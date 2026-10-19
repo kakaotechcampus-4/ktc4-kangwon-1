@@ -401,3 +401,55 @@ describe('건축물대장 조회 호출', () => {
     });
   });
 });
+
+describe('호수 읽기와 실제 조회의 mockFail', () => {
+  const HYPHEN: BuildingRegistryResponse = {
+    ...REGISTRY,
+    units: [
+      {
+        dong_name: null,
+        unit_name: '401호',
+        floor: '4층',
+        use: '학원',
+        use_detail: null,
+        area_m2: 100.8,
+      },
+      {
+        dong_name: null,
+        unit_name: '401-1호',
+        floor: '4층',
+        use: '의원',
+        use_detail: null,
+        area_m2: 33.3,
+      },
+    ],
+  };
+
+  it('붙임표가 있는 호수를 그대로 찾는다', () => {
+    expect(
+      toBuildingInfo(HYPHEN, '', '4층 401-1호').exclusiveAreaM2.value
+    ).toBe(33.3);
+  });
+
+  it('층 바로 뒤에 붙은 호수도 읽는다', () => {
+    expect(toBuildingInfo(HYPHEN, '', '4층401호').exclusiveAreaM2.value).toBe(
+      100.8
+    );
+  });
+
+  it('실제 조회에서도 failLookups에 넣은 항목은 실패로 둔다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(REGISTRY)));
+    const steps = new Map<LookupId, LookupStatus>();
+    const info = await fetchBuildingInfo('서울 송파구 위례광장로 199', {
+      floorUnit: '4층 404호',
+      failLookups: ['floor'],
+      onStepChange: (id, status) => steps.set(id, status),
+    });
+    expect(steps.get('floor')).toBe('failed');
+    expect(steps.get('title')).toBe('done');
+    expect(steps.get('exclusiveArea')).toBe('done');
+    expect(steps.get('sewage')).toBe('done');
+    expect(info.floorUse.source).toBe('missing');
+    expect(info.exclusiveAreaM2.value).toBe(93.6);
+  });
+});

@@ -169,7 +169,7 @@ export async function fetchBuildingInfo(
   if (MOCK_MODE) {
     return fetchMockBuildingInfo(address, options);
   }
-  const { onStepChange, signal, floorUnit = '' } = options;
+  const { onStepChange, signal, floorUnit = '', failLookups = [] } = options;
   for (const id of LOOKUP_ORDER) {
     onStepChange?.(id, 'loading');
   }
@@ -188,6 +188,12 @@ export async function fetchBuildingInfo(
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw error;
+    }
+  }
+  if (registry) {
+    registry = { ...registry };
+    for (const id of failLookups) {
+      registry[REGISTRY_SECTIONS[id]] = null;
     }
   }
   for (const id of LOOKUP_ORDER) {

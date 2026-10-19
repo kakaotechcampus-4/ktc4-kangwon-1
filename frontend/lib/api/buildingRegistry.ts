@@ -90,7 +90,7 @@ export function normalizeFloor(floorUnit: string): string | null {
 }
 
 function unitFromFloorUnit(floorUnit: string): string | null {
-  const match = floorUnit.match(/([A-Za-z]?\d+)\s*호/);
+  const match = floorUnit.match(/(?:^|[\s동층])([A-Za-z]?\d+(?:-\d+)?)\s*호/);
   return match ? `${match[1]}호` : null;
 }
 
