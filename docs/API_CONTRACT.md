@@ -19,7 +19,7 @@
 
 floor·exclusive_area_m2는 상가 정보 확인 화면에서 확정한 층·전용면적이다. 보내면 분석 시작 때
 source=user·unit="확인 화면 확정값" fact로 저장해 공간 비교(space_fit)에 바로 반영하고,
-decision 첫 입력의 confirmed_space(values·fact_ids)로 전달한다. 형식이 틀리면 422다.
+decision 첫 입력의 confirmed_space(values·fact_ids)로 전달한다. 형식이 틀리면 422다. exclusive_area_m2는 JSON 숫자만 받는다(문자열·불리언은 422). 이 두 필드는 extra="forbid" 요청 모델에 새로 생겼으므로 백엔드를 화면보다 먼저 배포한다(옛 백엔드는 floor를 받으면 422).
 
 POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다. 동시 작업 슬롯은 저장 전에
 확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.
@@ -122,8 +122,8 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 | `sewage` | `sewage`에서 `method`가 있는 첫 값. 없으면 사용자가 고릅니다 |
 
 - 조회 진행 표시(`LookupId`)는 `title`↔`titles`, `floor`↔`floors`, `exclusiveArea`↔`units`, `sewage`↔`sewage`입니다. 값이 `null`이면 `failed`, 아니면 `done`입니다.
-- 입력 층은 `normalizeFloor`로 `4층`·`지하 1층` 모양으로 맞춘 뒤(`B1층`은 `지하 1층`) 공백을 빼고 비교합니다. 층을 읽을 수 없으면 층 용도·전용면적은 비워 둡니다.
-- 한 지번에 건물이 여럿이면 `titles`가 여러 행입니다(예: 인사동 대일빌딩 옆 단독주택). 층·호실은 `dong_name`이 `titles[0].dong_name`과 같은 행만 씁니다.
+- 입력 층은 `normalizeFloor`로 `4층`·`지하 1층` 모양으로 맞춘 뒤(`지1층`·`B1층`은 `지하 1층`, `-1층`·`1.5층`·`중1층`은 읽지 않음) 공백을 빼고 비교합니다. 층을 읽을 수 없으면 층 용도·전용면적은 비워 둡니다.
+- 한 지번에 건물이 여럿이면 `titles`가 여러 행입니다(예: 인사동 대일빌딩 옆 단독주택). 입력에 동 이름("상가동"·"B동")이 있으면 같은 `dong_name`의 표제부를 고르고 층·호실도 그 동 행만 씁니다. 동이 여럿인데 맞는 동을 못 찾으면 층 용도·전용면적은 비웁니다.
 - 프론트 목업의 `전용 275.49㎡`는 4층 층별개요 중 일반음식점 행의 면적입니다. 호실 하나의 전용면적이 아닙니다.
 
 **오류**
@@ -138,7 +138,7 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 실제 조회에는 `.env`의 `BUILDING_REGISTRY_API_KEY`(공공데이터포털 「국토교통부_건축HUB_건축물대장정보 서비스」 활용신청 후 받은 일반 인증키,
 Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING_API_KEY`가 필요합니다.
 
-MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성희프라자 고정 응답을 돌려준다.
+MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성희프라자 고정 응답을 돌려줍니다.
 
 
 ## 새 결과 형태(PR7 전환 후)
