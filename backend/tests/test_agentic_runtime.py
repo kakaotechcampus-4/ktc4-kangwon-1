@@ -586,14 +586,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         async def generate(messages, definitions, *args):
             if "submit_l" in [d["function"]["name"] for d in definitions]:
                 return self.message("submit_l", {"finish": True})
-            if "reviews" not in messages[-1].get("content", ""):
-                return self.message("submit_draft", {"phase": "draft", "report": {}})
-            from tests.test_agentic_reviews import resolve_all
-
-            return self.message(
-                "submit_draft",
-                {"phase": "final", "report": {}, "review_resolutions": resolve_all(messages)},
-            )
+            phase = "final" if "reviews" in messages[-1].get("content", "") else "draft"
+            return self.message("submit_draft", {"phase": phase, "report": {}})
 
         async def evaluator(messages, *args):
             draft_id = json.loads(messages[1]["content"])["draft_id"]

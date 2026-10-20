@@ -3,22 +3,15 @@
 정상 초안에 오류를 하나씩 심어 잡는지, 정상 초안에 헛지적하지 않는지를 봅니다.
 """
 
-import json
 import unittest
 import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.agentic import customer_rubric
-from app.agentic.contracts import (
-    FactReferenceSegment,
-    FitCheck,
-    SubmitDraftInput,
-    SubmitLInput,
-)
-from app.agentic.evaluators import PERSONAS
+from app.agentic.contracts import FactReferenceSegment
+from app.agentic.customer_rubric import FitCheck
 from app.industries.catalog import INDUSTRIES
-from tests import test_agentic_runtime as fixtures
 
 CODES = list(INDUSTRIES)[:5]
 
@@ -208,180 +201,6 @@ class FinishTests(unittest.TestCase):
         self.assertGreaterEqual(rubric.ratio, customer_rubric.AGREE)
         self.assertEqual(checks([(1, CODES[0], rubric.candidates[0].checks)])["K3"].points, 0)
         self.assertEqual(verdict, "conditional")
-
-
-class ReviewIntegrationTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = fixtures.RuntimeTests.asyncSetUp
-    asyncTearDown = fixtures.RuntimeTests.asyncTearDown
-    message = fixtures.RuntimeTests.message
-
-    async def observed_fact(self):
-        from app.agentic.facts import register_fact
-        from app.db.connection import connect
-
-        response = await self.scope.record(
-            source="floating_population",
-            source_type="api",
-            args={},
-            page="test",
-            status=200,
-            payload={"rows": [{"age": "20", "share": 0.3}]},
-        )
-        with connect(self.path) as db:
-            ref = db.execute(
-                "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
-            ).fetchone()[0]
-        return register_fact(
-            self.scope,
-            industry_code=None,
-            source="floating_population",
-            metric="age_share",
-            value={"20": 0.3},
-            unit="비율",
-            status="observed",
-            row_ids=[ref],
-        )
-
-    async def test_customer_review_merges_model_points_and_limits_slots(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
-
-        fact = await self.observed_fact()
-        packets, replies = [], []
-
-        async def evaluator(messages, definitions, settings, receipt):
-            payload = json.loads(messages[1]["content"])
-            packets.append((payload, definitions))
-            tools = [m for m in messages if m["role"] == "tool"]
-            if tools:
-                replies.append(json.loads(tools[-1]["content"]))
-            alias = fact
-            issues = (
-                []
-                if replies
-                else [
-                    {
-                        "issue_id": "motive",
-                        "target": "claim",
-                        "kind": "missing_evidence",
-                        "comment": "추천과 근거가 어긋남",
-                        "fact_ids": [alias],
-                        "suggested_check": "근거 확인",
-                    }
-                ]
-            )
-            return self.message(
-                "submit_review",
-                {
-                    "draft_id": payload["draft_id"],
-                    "verdict": "agree",
-                    "issues": issues,
-                    "fit_checks": [
-                        {
-                            "industry_code": payload["candidates"][0]["industry_code"],
-                            "points": 30,
-                            "fact_ids": [alias],
-                            "reason": "통행 연령과 대상이 맞음",
-                        }
-                    ],
-                },
-            )
-
-        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
-        await loop.submit_l(SubmitLInput(finish=True))
-        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        result = await review(loop, "customer", loop.evaluator_executors()["customer"], loop.done)
-
-        payload, definitions = packets[0]
-        self.assertNotIn("persona", payload)
-        self.assertEqual(payload["remaining_issue_slots"], 0)
-        submit = next(d for d in definitions if d["function"]["name"] == "submit_review")
-        self.assertIn("fit_checks", submit["function"]["parameters"]["properties"])
-        # 코드 지적이 네 칸을 채워 모델 지적은 거절되고 다시 제출됩니다.
-        self.assertEqual(replies[0]["error"]["code"], "INVALID_REFERENCE")
-        self.assertEqual(result.status, "completed")
-        self.assertEqual(result.verdict, "oppose")
-        self.assertEqual(len(result.issues), 4)
-        self.assertTrue(all(i.issue_id.startswith("customer:demand-") for i in result.issues))
-        rubric = result.customer_rubric
-        k6 = rubric.candidates[0].checks[-1]
-        self.assertEqual((k6.points, k6.fact_ids), (30, [fact]))
-        self.assertEqual(rubric.model_status, "completed")
-
-    async def test_rejected_submissions_keep_fit_points(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
-
-        fact = await self.observed_fact()
-        replies = []
-
-        async def evaluator(messages, definitions, settings, receipt):
-            payload = json.loads(messages[1]["content"])
-            tools = [m for m in messages if m["role"] == "tool"]
-            if tools:
-                replies.append(json.loads(tools[-1]["content"]))
-            alias = fact
-            # 남은 칸이 없는데 숫자 섞인 지적을 계속 내서 제출이 끝까지 거절됩니다.
-            return self.message(
-                "submit_review",
-                {
-                    "draft_id": payload["draft_id"],
-                    "verdict": "agree",
-                    "issues": [
-                        {
-                            "issue_id": "age",
-                            "target": "claim",
-                            "kind": "missing_evidence",
-                            "comment": "20대 통행만으로는 부족함",
-                            "fact_ids": [alias],
-                            "suggested_check": "근거 확인",
-                        }
-                    ],
-                    "fit_checks": [
-                        {
-                            "industry_code": payload["candidates"][0]["industry_code"],
-                            "points": 20,
-                            "fact_ids": [alias],
-                            "reason": "근거가 일반론임",
-                        }
-                    ],
-                },
-            )
-
-        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
-        await loop.submit_l(SubmitLInput(finish=True))
-        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        result = await review(loop, "customer", loop.evaluator_executors()["customer"], loop.done)
-
-        self.assertIn("남은 칸은", replies[0]["error"]["message"])
-        rubric = result.customer_rubric
-        self.assertEqual(rubric.model_status, "failed")
-        k6 = rubric.candidates[0].checks[-1]
-        self.assertEqual((k6.points, k6.fact_ids), (20, [fact]))
-
-    async def test_other_evaluators_do_not_see_fit_field(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
-
-        seen = []
-
-        async def evaluator(messages, definitions, settings, receipt):
-            seen.append(definitions)
-            payload = json.loads(messages[1]["content"])
-            return self.message(
-                "submit_review",
-                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
-            )
-
-        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
-        await loop.submit_l(SubmitLInput(finish=True))
-        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        result = await review(loop, "founder", loop.evaluator_executors()["founder"], loop.done)
-        self.assertEqual(result.status, "completed")
-        self.assertIsNone(result.customer_rubric)
-        submit = next(d for d in seen[0] if d["function"]["name"] == "submit_review")
-        self.assertNotIn("fit_checks", submit["function"]["parameters"]["properties"])
-        self.assertTrue(PERSONAS["customer"])
 
 
 if __name__ == "__main__":

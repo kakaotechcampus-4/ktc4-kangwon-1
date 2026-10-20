@@ -299,11 +299,6 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
-            patch(
-                "app.agentic.customer_rubric.code_checks",
-                return_value=([], [], set()),
-            ),
-            patch("app.agentic.customer_rubric.packet", return_value={"draft_id": "draft"}),
         ):
             reviews = await asyncio.gather(
                 *(
