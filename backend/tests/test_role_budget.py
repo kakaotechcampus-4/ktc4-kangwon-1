@@ -143,6 +143,14 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
             denied = await self.executor().execute("query_raw", {"sql": "SELECT 1"})
         self.assertEqual(denied.error.code, "INVALID_ARGUMENT")
 
+    async def test_get_facts_rule_message_names_the_broken_rule(self):
+        executor = self.executor()
+        with patch("app.agentic.tools._audit"):
+            reply = await executor.execute("get_facts", {"source": "commercial_area"})
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        self.assertIn("업종·출처·지표를 모두 지정해야 합니다.", reply.error.message)
+        self.assertLessEqual(len(reply.error.message), 400)
+
     async def test_only_three_examiner_tools_and_three_reads_in_measurement(self):
         expected = {"get_scorecard", "get_facts", "submit_review"}
         for measurement in (False, True):
