@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from app.agentic import customer_rubric
 from app.agentic.aliases import encode
 from app.agentic.contracts import SubmitDraftInput, SubmitLInput
 from app.agentic.evaluators import PERSONAS
@@ -90,10 +91,17 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                 {"model": "replay", "usage": {"prompt_tokens": 1, "completion_tokens": 1}},
                 0,
             )
+        _, issues, _ = customer_rubric.code_checks(self.loop.scope, self.loop.done)
+        resolutions = [
+            {"issue_id": i.issue_id, "disposition": "accepted", "reason": "반영"} for i in issues
+        ]
         await recording.record(
             "decision",
             [],
-            call("submit_draft", {"phase": "final", "report": proposal, "review_resolutions": []}),
+            call(
+                "submit_draft",
+                {"phase": "final", "report": proposal, "review_resolutions": resolutions},
+            ),
             {"model": "replay", "usage": {"prompt_tokens": 1, "completion_tokens": 1}},
             0,
         )

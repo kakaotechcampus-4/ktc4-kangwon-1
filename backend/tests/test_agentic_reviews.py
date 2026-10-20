@@ -11,6 +11,16 @@ from app.db.connection import connect
 from tests import test_agentic_runtime as fixtures
 
 
+def resolve_all(messages):
+    """최종 단계 메시지의 모든 평가 지적을 반영 처리하는 가짜 decision 응답입니다."""
+    reviews = json.loads(messages[-1]["content"]).get("reviews", [])
+    return [
+        {"issue_id": issue["issue_id"], "disposition": "accepted", "reason": "반영"}
+        for review in reviews
+        for issue in review["issues"]
+    ]
+
+
 class ReviewTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = fixtures.RuntimeTests.asyncSetUp
     asyncTearDown = fixtures.RuntimeTests.asyncTearDown
@@ -111,7 +121,8 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         async def decision(messages, definitions, settings, receipt):
             finals.append(messages)
             return self.message(
-                "submit_draft", {"phase": "final", "report": {}, "review_resolutions": []}
+                "submit_draft",
+                {"phase": "final", "report": {}, "review_resolutions": resolve_all(messages)},
             )
 
         loop = await DecisionLoop.create(
@@ -122,7 +133,10 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         outcome = await loop.review_and_finalize()
         self.assertEqual(outcome.status, "completed")
         self.assertEqual(len(outcome.result.evaluator_reviews), 4)
-        self.assertEqual(outcome.result.review_completeness, 0.75)
+        # 손님 모델 실패는 코드 채점(K1~K4)으로 완료하고 모델 상태만 실패로 남깁니다.
+        self.assertEqual(outcome.result.review_completeness, 1)
+        customer = next(r for r in outcome.result.evaluator_reviews if r.actor == "customer")
+        self.assertEqual(customer.customer_rubric.model_status, "failed")
         self.assertEqual(len(finals), 1)
         self.assertEqual(loop.state["feedback_rounds"], 1)
         self.assertEqual(len(entered), 4)
