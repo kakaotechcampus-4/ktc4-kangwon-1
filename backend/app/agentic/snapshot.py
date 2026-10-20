@@ -18,6 +18,7 @@ from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 from app.storage.raw import RawStorageError, current_capture
 
+from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
 from .facts import CALC_VERSION, register_fact
 from .inputs import format_snapshot
 from .scoring import WEIGHTS, evaluate
@@ -227,6 +228,15 @@ def persist_report(scope, report, lineage, responses, version=None):
                     continue
                 metric, unit, source = METRICS[item]
                 value = score["value"]
+                c1_kind_unit = (
+                    c1_unit(score) if item == "C1" and score["status"] == "observed" else None
+                )
+                if c1_kind_unit:
+                    unit = c1_kind_unit
+                profile_fact = c1_kind_unit == PROFILE_UNIT
+                if profile_fact:
+                    source = "industry_profile"
+                    value = {"agglomeration": "무관", "grade": score["grade"]}
                 if item == "D1" and isinstance(value, (int, float)):
                     metric, unit = "mean_daily_per_trade_area", "명/일"
                 if item == "D3" and isinstance(value, dict):
@@ -234,21 +244,27 @@ def persist_report(scope, report, lineage, responses, version=None):
                         value.get("population"), source
                     )
                 refs = (
-                    list(
-                        lineage.get("industry_rows", {})
-                        .get(source, {})
-                        .get(row["code"], lineage.get(source, []))
+                    []
+                    if profile_fact
+                    else (
+                        list(
+                            lineage.get("industry_rows", {})
+                            .get(source, {})
+                            .get(row["code"], lineage.get(source, []))
+                        )
+                        if score["status"] == "observed"
+                        else []
                     )
-                    if score["status"] == "observed"
-                    else []
-                ) + list(lineage.get("baseline", []))
+                    + list(lineage.get("baseline", []))
+                )
                 if row["code"] in lineage.get("profiles", {}):
                     refs.append(lineage["profiles"][row["code"]])
-                if item == "C1" and score["status"] == "observed":
+                if c1_kind_unit == NEARBY_UNIT:
                     refs.extend(lineage.get("floating_population", []))
                 response_ids = response_refs.get(source, [])
                 if (
                     score["status"] == "observed"
+                    and not (profile_fact and refs)
                     and not lineage.get(source)
                     and not response_ids
                     and not (version or {}).get("local_snapshot")

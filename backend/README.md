@@ -163,4 +163,6 @@ python scripts/verify_rubric_reproduction.py
 
 자동 시험은 임시 DB와 API·모델 대역만 씁니다. 실제 API·모델 품질은 별도로 승인한 실행에서만 확인하고, 모델 호출은 `create_app(recording_dir=...)` 서버 설정으로 녹화해 같은 실행을 네트워크 없이 재생(`scripts/replay_agentic.py`)할 수 있습니다.
 
+C1 업종별 방향 변경(2026-10-19)으로 C1 등급이 의도적으로 바뀌어 `scripts/verify_rubric_reproduction.py`의 저장 기준(`dryrun-results.json`의 408/408 일치, 배지 9/1/377/21)은 더 이상 맞지 않습니다. `backend/cache/rubric_samples`를 가진 사람이 `dryrun-results.json`과 배지 합계를 다시 만들기 전에는 이 검증이 실패하는 것이 정상입니다.
+
 이전 설계 기록은 [docs/archive](../docs/archive/README.md)에 있고 당시 구현의 기록입니다.
