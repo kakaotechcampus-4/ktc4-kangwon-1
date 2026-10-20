@@ -17,6 +17,7 @@ from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 from app.text import has_digit
 
+from . import landlord
 from .aliases import encode
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
@@ -35,10 +36,7 @@ PERSONAS = {
         "손님 편입니다. 방문 동기·동선·확인된 고객층과 업종의 적합성을 검토하세요. "
         "결측 자료나 운영 가설을 확인된 수요로 단정하지 마세요."
     ),
-    "landlord_advocate": (
-        "임대인 편입니다. 공실 해소·임대 지속성·확인된 공간 조건과 과도한 확신을 검토하세요. "
-        "예약·기업 거래 중심 업종에 층·보행 통행 조건을 일괄 적용하지 마세요."
-    ),
+    "landlord_advocate": landlord.PERSONA,
 }
 COMMON = """검토 패킷을 읽고 읽기 도구는 최대 세 번 사용한 뒤 submit_review를 제출하세요.
 get_facts는 업종·source·metrics 또는 받은 fact_ids로 좁혀 조회하고 같은 요청을 반복하지 마세요.
@@ -209,7 +207,13 @@ async def review(loop, actor, executor, draft):
             {"role": "system", "content": PERSONAS[actor] + "\n" + COMMON},
             {
                 "role": "user",
-                "content": canonical_json(await run_in_thread(review_packet, loop.scope, draft)),
+                "content": canonical_json(
+                    await run_in_thread(
+                        landlord.review_packet if actor == "landlord_advocate" else review_packet,
+                        loop.scope,
+                        draft,
+                    )
+                ),
             },
         ]
         reads = 0
