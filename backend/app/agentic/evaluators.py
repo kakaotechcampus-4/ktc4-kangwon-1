@@ -17,16 +17,14 @@ from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 from app.text import has_digit
 
+from . import examiner
 from .aliases import encode
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
 from .sql_tool import error
 
 PERSONAS = {
-    "examiner": (
-        "심사관입니다. 근거의 원천·기간·반경, L 중복 채점과 전체 업종의 unknown 이유를 "
-        "검증하세요. 검토 전 공간 초안이 확정 사실이나 점수 근거가 되었는지 확인하세요."
-    ),
+    "examiner": examiner.PERSONA,
     "founder": (
         "창업자 편입니다. 공간 초안과 임대인의 확인된 조건을 대조해 설비·운영 제약을 "
         "검토하세요. 소매업의 주방·조리 배기 부재만으로 불리하게 판단하지 마세요."
@@ -163,6 +161,9 @@ def review_packet(scope, draft):
 async def review(loop, actor, executor, draft):
     submitted = None
     accepted = {}
+    reads = 0
+    submit_failures = 0
+    model_calls = 0
 
     async def submit(input):
         nonlocal submitted
@@ -209,11 +210,15 @@ async def review(loop, actor, executor, draft):
             {"role": "system", "content": PERSONAS[actor] + "\n" + COMMON},
             {
                 "role": "user",
-                "content": canonical_json(await run_in_thread(review_packet, loop.scope, draft)),
+                "content": canonical_json(
+                    await run_in_thread(
+                        examiner.review_packet if actor == "examiner" else review_packet,
+                        loop.scope,
+                        draft,
+                    )
+                ),
             },
         ]
-        reads = 0
-        submit_failures = 0
         while submitted is None:
             submit_only = reads >= 3 or submit_failures > 0
             if submit_only:
@@ -221,6 +226,7 @@ async def review(loop, actor, executor, draft):
             definitions = executor.definitions()
             if submit_only:
                 definitions = [d for d in definitions if d["function"]["name"] == "submit_review"]
+            model_calls += 1
             async with asyncio.timeout(
                 max(0.01, loop.budget.seconds_limit - loop.budget.active_seconds)
             ):
@@ -290,6 +296,13 @@ async def review(loop, actor, executor, draft):
     await loop.event(
         "evaluation",
         "completed" if submitted else "failed",
-        {"actor": actor, "error_code": result.error_code},
+        {
+            "actor": actor,
+            "error_code": result.error_code,
+            "issues_count": len(result.issues),
+            "reads": reads,
+            "rejections": submit_failures,
+            "model_calls": model_calls,
+        },
     )
     return result

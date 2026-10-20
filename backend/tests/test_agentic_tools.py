@@ -143,7 +143,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         tool = ToolExecutor(
             self.scope,
             Site(input_address="시험", road_address="시험", latitude=37.5, longitude=127.0),
-            actor="examiner",
+            actor="founder",
         )
         self.assertEqual((await tool.execute("ask_user", {})).error.code, "INVALID_ARGUMENT")
         for i in range(2):
