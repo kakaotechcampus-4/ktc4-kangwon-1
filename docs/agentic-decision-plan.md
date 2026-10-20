@@ -197,7 +197,7 @@ fact_id는 f_UUID·불변 규칙을 유지한다. CSV의 행 번호만 키로 �
 ## 3. 도구 계약
 
 현재 역할 권한·예산은 4·6절과 전체 L 구현 계획이 우선한다. 평가자는
-get_scorecard·get_facts·query_raw 합계 세 번과 submit_review 한 번만 쓴다.
+get_scorecard·get_facts·query_raw 합계 세 번과 submit_review 한 번만 쓴다. examiner는 query_raw를 받지 않는다.
 지도·규제는 decision만 조회하고 보조 모델에는 도구를 주지 않는다.
 get_facts의 공간 비교 묶음만 source=industry_profile·metrics=[space_fit]·limit≤51을 허용한다.
 
@@ -223,7 +223,7 @@ v0.4에서도 도구 아홉 개의 이름·한도와 ToolReply 계약은 유지�
 | --- | --- | --- | --- | --- | --- |
 | get_scorecard | 계산 점수 우선. {industry_codes?:[Code]≤51, mode:summary/detail, limit:int≤32(summary)/5(detail), cursor?:string} | summary는 코드·B/H/A·coverage·배지·누락 상태, detail은 Scorecard·fact_ids. 전체 51업종은 페이지 조회 | common + VERSION_MISMATCH | decision 6회, 평가자 각 2회. 응답≤2,000토큰 | decision·평가자 |
 | get_facts | {fact_ids:[FactId]≤32} **또는** {industry_code?:Code, source:Source, metrics:[Metric]≤8, limit≤32,cursor?}. 둘 중 하나 | {facts:[FactView],provenance_refs}. raw 행 참조·단위·기간 제공 | common + UNKNOWN_FACT/UNCITABLE | decision 8회, 평가자 각 3회, 보조 각 1회(받은 ID만) | decision·평가자·보조 |
-| query_raw | {sql:string≤4,000자, params:object/array, max_rows:int≤50}. 승인된 뷰 단일 SELECT만(1차) | {columns,rows[{raw_row_refs,values,fact_ids}],uncitable_columns}; 직접 필드는 원문 재대조 후 자동 fact 등록 | common + SQL_DENIED/SQL_TIMEOUT/LINEAGE_UNAVAILABLE | decision 4회, 평가자 각 2회, SQL≤2초·50행·응답≤2,000토큰 | decision·평가자 |
+| query_raw | {sql:string≤4,000자, params:object/array, max_rows:int≤50}. 승인된 뷰 단일 SELECT만(1차) | {columns,rows[{raw_row_refs,values,fact_ids}],uncitable_columns}; 직접 필드는 원문 재대조 후 자동 fact 등록 | common + SQL_DENIED/SQL_TIMEOUT/LINEAGE_UNAVAILABLE | decision 4회, examiner 외 평가자 각 3회, SQL≤2초·50행·응답≤2,000토큰 | decision·examiner 외 평가자 |
 | map_search | {industry_code:Code **또는** facility_code:KakaoEnum, radius_m:int 50~500, limit≤20}. 좌표는 현재 Site 고정 | {observation_id,places[{place_id,name,kakao_category,distance_fact_id,match_status:category_match/name_match/unknown,match_rule_id,fact_ids}],coverage,has_more}. 이름·카테고리·거리도 fact_id로 등록 | common + MAP_UNAVAILABLE | 요청 전체 서로 다른 검색 6개·지도 HTTP 20회·각 검색 15초 | decision·평가자 |
 | check_regulation | {}. 현재 좌표·저장된 구역 snapshot 사용 | {status,queried_at,contains_verified,zones,fact_ids,industry_restrictions,limitations}. 건축물대장은 현재 unavailable | common + REGULATION_UNAVAILABLE | 실제 구역 조회 요청당 1회, actor 호출 각 1회·캐시 공유 | decision·평가자 |
 | ask_advisor | {question:string≤800자,fact_ids:[FactId]≤12,industry_codes?:[Code]≤3} | {consult_id,status,interpretations[{claim,fact_ids,conditions,confidence}],missing_facts,limitations}. 점수 없음 | common + ADVISOR_UNAVAILABLE | 요청당 최대 2회·각 45초·출력≤1,000토큰 | decision만 |
@@ -332,8 +332,8 @@ ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했
 
 | 역할 | 중점 | 도구 |
 | --- | --- | --- |
-| examiner | 사실·기간·범위·L 중복·계보 | get_scorecard / get_facts / query_raw / submit_review |
-| founder | 공간·설비·운영 제약, 초안 요건의 과신 | 동일 |
+| examiner | 보고서 문장과 근거의 대조(근거 슬롯·출처·기간 범위·중복), [전용 평가표](examiner-evaluator-rubric.md) | get_scorecard / get_facts / submit_review |
+| founder | 공간·설비·운영 제약, 초안 요건의 과신 | get_scorecard / get_facts / query_raw / submit_review |
 | customer | 손님·동선·수요·확인 조건 | 동일 |
 | landlord_advocate | 임대 지속성·답변 조건·불확실성 | 동일 |
 
