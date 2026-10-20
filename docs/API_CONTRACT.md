@@ -1,442 +1,1003 @@
-# API 계약 — 프론트엔드 ↔ 백엔드
+# API 계약 — 단일 decision 도구 루프
 
-**살아 있는 문서는 Swagger입니다.** 백엔드를 띄우고 <http://127.0.0.1:8000/docs>를 보세요.
-이 문서는 그 위에서 합의한 약속과 화면이 알아야 할 사정을 적습니다.
+공개 API는 로컬 자료 조회·코드 채점 → decision → 평가자 네 명 → 최종 보고서 순서로 실행한다.
+프론트는 아래 새 DecisionResult를 기준으로 화면을 연결한다. 옛 추천 목록·agent/path 근거·
+브리핑·재시도 엔드포인트는 제공하지 않는다. 숫자는 fact 슬롯을 서버가 렌더링한다.
 
-## 평가자 의견 조회와 화면 연결
-
-`POST /api/v1/analyses`와 답변 제출의 응답 계약은 그대로입니다. 평가 의견은 완료 후
-`GET /api/v1/analyses/{request_id}`로 읽습니다. 요청에 저장된 평가자 사용 여부가 참일 때만
-다음 `evaluation` 키가 추가됩니다. 현재 서버 설정이 아니라 요청의 저장값을 따릅니다.
-
-```json
-{
-  "evaluation": {
-    "skipped": null,
-    "draft": {"summary": "초안 요약", "recommendations": [], "not_recommended": []},
-    "evaluations": [{
-      "evaluator": "landlord_advocate", "source": "model", "verdict": "conditional",
-      "comments": [{"index": 0, "industry_code": "I201", "comment": "설비 확인 필요",
-                    "evidence": [], "request": "ask_user"}]
-    }],
-    "log": [{"evaluator": "landlord_advocate", "index": 0, "decision": "partial",
-             "applied": "설비 확인을 추가", "dropped": "설비가 부족하다는 단정은 제외",
-             "reason": "공간 조건은 임대인 확인이 필요합니다."}]
-  }
-}
-```
-
-예시는 한 명만 표시했으며, 평가가 완료되면 `evaluations`에 아래 순서대로 네 명이 들어옵니다.
-`notes`·평가의 `request_id`는 공개하지 않습니다. 평가 전에는 `draft=null`, `evaluations=[]`, `log=[]`입니다.
-평가를 생략하면 `skipped`는 `no_data` 또는 `budget`이며 나머지는 같은 빈 값입니다.
-모두 실패하거나 성공한 평가자 전원이 지적 없이 동의하면 초안이 최종 결과가 되고 `log=[]`입니다.
-
-| 식별자 | 표시 이름 | 판정 |
-| --- | --- | --- |
-| `examiner` | 심사자 | `agree` 동의 / `conditional` 조건부 / `oppose` 반대 |
-| `founder` | 예비 창업자 | 같음 |
-| `customer` | 동네 손님 | 같음 |
-| `landlord_advocate` | 임대인 대변인 | 같음 |
-
-결과 화면의 **평가자 의견** 영역 머리말은 다음 문구를 씁니다.
-“평가자는 초안에 의견을 냅니다. 판정관이 원자료로 확인해 반영 여부를 정합니다.”
-판정 배지, 모든 지적 원문, 근거 칸, 요청한 확인 행동을 요약하거나 거르지 않고 보여 줍니다.
-`request`는 `none`(추가 행동 없음), `map_lookup`(지도 확인), `supplement`(자료 보완),
-`ask_specialists`(전문가 확인), `ask_user`(임대인 질문)입니다. 브리핑에서는 지도·보완도 전문가에게 요청합니다.
-지적과 반영 기록은 `(evaluator, index)`로 연결하며 다음 배지와 함께 `applied`·`dropped`·`reason`을 표시합니다.
-`accepted` 반영 / `partial` 일부 반영 / `rejected` 반영 안 함 / `unreviewed` 검토 안 됨.
-`source="failed"`는 판정이 `null`, 지적이 빈 배열이며 “이번에 의견을 내지 못했습니다”로 표시합니다.
-
-### 평가 진행 이벤트
-
-| stage | event | detail | 화면 문구 |
-| --- | --- | --- | --- |
-| `decision` | `started`·`completed` | 평가자 켜짐일 때만 기존 값에 `phase=draft` 또는 `final` 추가 | 판정관이 초안을 쓰고 있어요 / 평가를 보고 최종 보고서를 쓰고 있어요 |
-| `evaluate.{evaluator}` | `started` | 빈 객체 | 평가자 4명이 초안을 보고 있어요 |
-| `evaluate.{evaluator}` | `completed` | `source`, `verdict`, `comments`(개수) | 해당 평가자의 의견을 받았어요 |
-| `evaluate` | `completed` | `skipped=no_data` 또는 `budget` | 평가를 건너뛰었어요 |
-| `evaluate` | `completed` | `final_call`, `reason=comments`·`all_failed`·`no_comments` | 평가를 마쳤어요 |
-
-이벤트에는 지적 원문을 싣지 않습니다. 평가자를 끈 요청에는 평가 이벤트나 `phase`가 추가되지 않습니다.
-평가자 사용 시 질문은 최종 단계에서만 발행합니다. 답변 재개·평가 후 실패 재시도에서는 평가자를 다시 호출하지 않습니다.
-평가 전 실패 재시도는 저장된 분석·브리핑으로 초안 → 평가 → 최종판단을 실행하며 평가자는 이때 처음 수행합니다.
-평가자 사용 요청의 호출·전체 시간 한도는 시작 시의 저장값을 유지합니다.
-`mock=true`도 같은 흐름을 쓰며 임대인 대변인의 설비 확인 지적 한 개와 일부 반영 기록을 생성합니다.
-
-## 서버 주소
-
-| 환경 | 주소 |
+| 엔드포인트 | 입력·응답 |
 | --- | --- |
-| 로컬 백엔드 | `http://127.0.0.1:8000` |
-| 로컬 프론트 | `http://localhost:3000` |
+| GET /health, /api/v1/health | 상태 확인 |
+| POST /api/v1/analyses?wait=false | address(최대 200자), radius_m(기본 500), allow_questions(기본 false), with_map. HTTP 202 request_id·status |
+| POST /api/v1/analyses?wait=true | 최종 DecisionResult 또는 waiting_for_input. 기본 wait=true |
+| GET /api/v1/analyses/{id} | 진행 상태, 대기 질문 또는 최종 DecisionResult·rendered |
+| GET /api/v1/analyses/{id}/events?after=N | after 다음 순번의 이벤트. 클라이언트가 seq를 보존하여 중복 표시를 피한다 |
+| GET /api/v1/analyses/{id}/facts | 리포트 차트용 요청 스냅샷 전체 fact. request_id·snapshot_id·facts(FactView 목록). 스냅샷 전에는 snapshot_id=null·빈 목록, 미존재 ID는 404 |
+| POST /api/v1/analyses/{id}/answers | question_session_id와 answers 객체. 저장된 질문 field와 정확히 같은 항목, 값은 비어 있지 않은 문자열·최대 500자 |
 
-CORS는 `CORS_ALLOW_ORIGINS` 환경변수로 정합니다. 기본값이 `http://localhost:3000`이라
-로컬 개발은 설정 없이 됩니다. 배포 주소가 생기면 쉼표로 이어 붙입니다.
+질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
 
-## 엔드포인트
+POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다. 동시 작업 슬롯은 저장 전에
+확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.
+접수된 ID의 GET은 pending/running/waiting_for_input/completed/failed 상태를200으로 반환한다.
+자료가 아직 없으면 site/result/error/rendered/questions는 null이다. 미존재 ID만404다.
+답변 뒤 같은 요청 ID로 재개하며 자료 버전·모델 예산·이전 대화를 유지한다.
+wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를 오류 추적에 쓴다.
 
-### `GET /health`, `GET /api/v1/health`
+| 오류 | 의미 |
+| --- | --- |
+| 400 | 주소 변환 오류 |
+| 404 | 요청 없음 |
+| 409 | 답변 세션 불일치·이미 처리·동시 작업 충돌 |
+| 422 | 입력 스키마·답변 항목 검증 오류 |
+| 502 | 외부 서비스·실행 실패 |
+| 500 | 내부 오류 |
+| 429 | 동시 작업 수용 상한 또는 종료 중 |
 
-```json
-{ "status": "ok" }
-```
+평가자는 항상 네 슬롯이다. 실패 슬롯도 유지하며 평가 미완료를 표시한다.
+프론트 담당은 rendered 문장, 검토 후보 Top 5, 코드·L 점수와 구간·coverage,
+배지, 확인 조건, 평가 상태를 새 계약에 맞춰 표시한다. 옛 결과 DB를 읽는 호환 경로는 없다.
+DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·경쟁·개폐업 차트처럼 인용과 무관하게
+지표 전체가 필요한 화면은 facts 엔드포인트를 쓴다. 상태가 unknown·not_applicable인 fact는 값이 null이다.
+공간 비교(space_fit)는 현재 판정만 포함한다.
+규제 조회 함수는 유지하고 check_regulation 도구로만 읽는다.
 
-### `POST /api/v1/analyses`
+키 없이 확인할 때 MOCK_MODE=true 또는 ?mock=true를 쓴다. 실데이터·유료 호출은 발생하지 않는다.
+측정·녹화는 서버 실행 인자로만 켜며 공개 HTTP 입력으로 제어하지 않는다.
 
-주소 하나로 분석 전체를 돌립니다.
 
-**요청**
+## 새 결과 형태(PR7 전환 후)
 
-```json
-{ "address": "서울특별시 노원구 한글비석로 242 삼부프라자 1층" }
-```
+현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
 
-| 필드 | 형 | 설명 |
-| --- | --- | --- |
-| `address` | string (1~200자) | 상세주소가 붙어 있어도 됩니다. 서버가 떼어 냅니다 |
-| `radius_m` | 양의 정수, 기본 500 | 공통 요청 반경. 실제 분석 범위는 각 결과의 scope로 확인 |
-| `allow_questions` | boolean, 기본 false | 임대인에게 선택적으로 질문할 수 있도록 허용 |
-| `with_map` | boolean, 기본 false | 필요할 때 카카오맵 조회 허용. 항상 실행하지는 않음 |
-
-기존 주소만 보내는 요청은 유지됩니다. 반경에 문자열·소수·boolean·0을 보내면 422입니다.
-실제 실행에는 등록된 분석 보완 도구를 전달합니다. 보완 요청 여부는 최종판단이 결정합니다.
-
-**질의 문자열**
-
-| 이름 | 기본 | 설명 |
-| --- | --- | --- |
-| `mock` | `false` | `true`면 외부 API·모델을 부르지 않고 고정 응답을 돌려줍니다 |
-
-**응답 200** — `DecisionResult`
-
-질문을 허용한 요청은 DecisionResult 대신 다음 WaitingForInput을 반환할 수 있습니다.
-HTTP 요청은 이때 종료되며 서버는 답변이 올 때까지 연결을 붙잡지 않습니다.
-
-```json
-{
-  "status": "waiting_for_input",
-  "request_id": "요청 ID",
-  "question_set_id": "질문 묶음 ID",
-  "questions": [{
-    "field": "floor",
-    "text": "공실은 몇 층인가요?",
-    "why_needed": "접근 조건을 확인해야 합니다.",
-    "expected_impact": "보행 접근성이 중요한 후보의 판단에 반영합니다."
-  }]
-}
-```
-
-이 객체가 별도 리포트 단계를 거치지 않는 최종 판단 결과입니다. 응답 헤더 `X-Request-ID`로
-같은 실행의 저장 상태를 조회할 수 있으며, 브라우저에서도 읽을 수 있도록 CORS에 노출합니다.
+전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
 
 ```json
 {
-  "schema_version": "1.0",
-  "agent_id": "decision",
-  "request_id": "37cbeec60f8f409bb32164661eaa49eb",
-  "address": "서울특별시 노원구 한글비석로 242 삼부프라자 1층",
-  "status": "ok",
-  "summary": "점심 직장인 수요가 뚜렷하고 커피·음료는 이미 포화에 가깝습니다.",
-  "recommendations": [
+  "schema_version": "2.0",
+  "rubric_version": "v0.8",
+  "tool_contract_version": "3",
+  "request_id": "request-demo",
+  "run_id": "run-demo",
+  "report_id": "report-demo",
+  "snapshot_id": "snapshot-demo",
+  "score_snapshot_id": "scores-demo",
+  "summary_segments": [
     {
-      "category": { "code": "I201", "major": "음식점업", "middle": "한식 음식점업" },
-      "score": 72,
-      "reasons": ["직장인 비중이 41%로 점심 수요를 기대할 수 있습니다."],
-      "evidence": [
-        { "agent_id": "floating_population", "path": "/office_worker_share" },
-        { "agent_id": "commercial_area", "path": "/by_middle/0" }
-      ],
-      "risks": ["점포 수가 이미 96개로 경쟁이 적지 않습니다."]
+      "type": "text",
+      "text": "검토 후보와 확인 조건을 함께 제시합니다."
     }
   ],
-  "not_recommended": [ "… 같은 형태" ],
-  "limitations": ["목업 자료로 만든 결과입니다."],
-  "source_analyses": [ "… 세 에이전트의 원본 분석" ]
+  "top5": [
+    {
+      "industry_code": "I201",
+      "industry_name": "한식 음식점업",
+      "code_points": 50.0,
+      "L_points": null,
+      "L_status": "unknown",
+      "A": 65.0,
+      "B": 50.0,
+      "H": 60.0,
+      "lower_ratio": 0.7692307692307693,
+      "upper_ratio": 0.9230769230769231,
+      "coverage": 0.8461538461538461,
+      "demand_coverage": 1.0,
+      "competition_coverage": 1.0,
+      "G": "해당 없음",
+      "badge": "추천",
+      "confirmation_conditions": [
+        "판단 미확인",
+        "건축물 용도 확인 필요"
+      ],
+      "reasons_segments": [
+        {
+          "type": "text",
+          "text": "주변 동종 점포 밀도는 "
+        },
+        {
+          "type": "fact",
+          "fact_id": "f_12345678-1234-4234-8234-123456789abc",
+          "format": "rate"
+        },
+        {
+          "type": "text",
+          "text": "입니다."
+        }
+      ],
+      "risks_segments": [],
+      "confirmation_conditions_segments": [
+        {
+          "type": "text",
+          "text": "건축물 용도는 별도 확인합니다."
+        }
+      ],
+      "fact_ids": [
+        "f_12345678-1234-4234-8234-123456789abc"
+      ],
+      "review_state": "unreviewed"
+    }
+  ],
+  "excluded_candidates": [],
+  "facts": [
+    {
+      "fact_id": "f_12345678-1234-4234-8234-123456789abc",
+      "source": "commercial_area",
+      "metric": "density_per_km2",
+      "value": 10.0,
+      "unit": "개/km²",
+      "period": "2026Q2",
+      "spatial_scope": {
+        "radius_m": 500
+      },
+      "industry_code": "I201",
+      "status": "observed",
+      "citable": true,
+      "calc_version": "demo-1",
+      "provenance_ref": "raw-demo"
+    }
+  ],
+  "L_records": [
+    {
+      "industry_code": "G202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 1,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 2,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 3,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G205",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 4,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G208",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 5,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G209",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 6,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G210",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 7,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G211",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 8,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G213",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 9,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G215",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 10,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G215B",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 11,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G216",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 12,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G217",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 13,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G218",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 14,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G219",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 15,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G220",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 16,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "G222",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 17,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I101",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 18,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 19,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I201",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 20,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 21,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 22,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 23,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I207",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 24,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I210",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 25,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I211",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 26,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "I212",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 27,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "L102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 28,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M103",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 29,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M104",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 30,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M107",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 31,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M111",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 32,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M113",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 33,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "M114",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 34,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 35,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N105",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 36,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N109",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 37,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "N110",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 38,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "P105",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 39,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "Q102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 40,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R102",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 41,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R103",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 42,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "R104",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 43,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S201",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 44,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S202",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 45,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S203",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 46,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S204",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 47,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S205",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 48,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S207",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 49,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S208",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 50,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    },
+    {
+      "industry_code": "S209",
+      "selection": {
+        "basis": "all_industries",
+        "code_score_snapshot_id": "scores-demo",
+        "code_lower_rank": 51,
+        "reason": "전체 업종 동일 검토"
+      },
+      "review_state": "unreviewed",
+      "status": "unknown",
+      "grade": null,
+      "limitations": [
+        "판단 미제출"
+      ]
+    }
+  ],
+  "evaluator_reviews": [
+    {
+      "actor": "examiner",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "founder",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "customer",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    },
+    {
+      "actor": "landlord_advocate",
+      "status": "failed",
+      "review_id": null,
+      "verdict": null,
+      "issues": [],
+      "error_code": "TIMEOUT"
+    }
+  ],
+  "review_completeness": 0.0,
+  "review_resolutions": [],
+  "confirmation_conditions_segments": [
+    {
+      "type": "text",
+      "text": "실제 영업 전 건축물 용도를 확인해야 합니다."
+    }
+  ],
+  "limitations_segments": [
+    {
+      "type": "text",
+      "text": "평가 미완료: 이 예시는 평가자 전체 실패와 판단 미확인을 보여 주는 목업입니다."
+    }
+  ]
 }
 ```
-
-### `GET /api/v1/analyses/{request_id}`
-
-새 최종판단의 `category`는 공통 업종 `code`와 기존 `major`·`middle`을 함께 제공합니다.
-모델 입력은 코드만 사용할 수 있고 서버가 공식명을 채웁니다. 이름을 함께 보내면 코드와 일치해야 합니다.
-코드 없는 과거 저장 결과도 조회할 수 있습니다. 요청 당시 업종표 버전이 현재와 다르거나
-기록되지 않은 요청은 질문 재개·최종판단 재시도 대신 새 분석이 필요합니다.
-
-POST의 `X-Request-ID`로 저장된 실행을 조회합니다. `status`는
-`pending` / `running` / `waiting_for_input` / `completed` / `failed`이며 `site`, `result`, `error`는 JSON 객체 또는 null입니다.
-과거 저장 결과의 업종명은 현재 75업종 규칙으로 다시 검증하거나 변환하지 않습니다.
-
-추가 조회 필드:
 
 | 필드 | 의미 |
 | --- | --- |
-| `questions` | 저장된 WaitingForInput 또는 null. 완료 뒤에도 질문 이력으로 남음 |
-| `analyses` | `{attempt, analysis}` 목록. analysis는 AgentAnalysis 원본 |
-| `supplements` | 분석 보완 이벤트 목록 |
-| `map_status` | 지도 조회의 running / completed 또는 null |
-| `map_observation` | 저장된 지도 관측 또는 null. 진행 중에는 null |
+| schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 3. 모델 이름에 V2를 붙이지 않음 |
+| request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
+| top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지 제외·B 내림차순→coverage→코드 정렬, 부족하면 미충원 |
+| code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
+| A / B / H | 적용 배점(n.a. 제외·unknown 포함)·하한·상한 |
+| lower_ratio / upper_ratio / coverage | B/A·H/A·observed 배점/A. A=0이면 null. D/C 묶음 coverage는 별도 제공 |
+| G / badge | 규제 금지/조건부/해당 없음/unknown, 추천/조건부/보류/비추천. 규제 금지는 점수로 상쇄 불가 |
+| *_segments / facts | text 또는 fact_id 슬롯. 숫자는 facts 레지스트리 값·단위로 렌더링. `{i}`·agent/path 인용 없음 |
+| L_records / review_state | 전체 51업종의 새 근거·질문·도구·자문 기록. 최대51·최종은 정확히51개, unknown에는 개별 이유. basis=all_industries |
+| evaluator_reviews / review_completeness | 항상 4명 실행. completed 수/4, 실패는 동의로 간주하지 않음 |
+| review_resolutions | 지적별 수용·일부·기각과 근거/이유 |
+| confirmation_conditions_segments / limitations_segments | 영업 전 확인 조건·시점/공간/예산/평가 한계. 건축물 용도는 확인 조건 |
 
-질문 입력창은 **요청 status가 waiting_for_input일 때만** 표시합니다.
-요청 상태 completed와 최종 결과의 ok / partial / no_data는 서로 다른 상태입니다.
+### 진행 이벤트 stage 변경
 
-### `POST /api/v1/analyses/{request_id}/answers`
-
-```json
-{
-  "request_id": "요청 ID",
-  "question_set_id": "질문 묶음 ID",
-  "answers": [{"field": "floor", "status": "answered", "value": "1층"}]
-}
-```
-
-- 답변 상태는 answered / unknown / skipped. answered만 value가 필요합니다.
-- `answers: []`는 전부 건너뛰기입니다. 미제출 항목도 skipped로 처리됩니다.
-- 경로와 본문의 요청 ID가 다르면 422, 요청이 없으면 404입니다.
-- 질문 ID·항목 불일치, 이미 제출한 답변 변경, 처리 중·실패한 재개는 409입니다.
-- 같은 답변을 완료 후 재전송하면 저장된 최종 결과를 반환합니다.
-- 응답 200은 DecisionResult. 기존 자료로 최종판단만 재개하며 재조회하지 않습니다.
-- 대역 실행에서 시작했다면 답변에도 `?mock=true`를 유지하세요. 요청 간 실행 모드를 바꾸지 마세요.
-
-지도 관측은 최종 결과의 `map_observation`에도 포함됩니다. map_analysis 근거 경로는
-이 객체의 data 안에서 해석하며, 기본 세 분석 source_analyses와 구분합니다.
-`data.queries.*.matches`는 장소 ID별로 질문 업종의 동종 여부(`same`·`different`·`unclear`)를 나타냅니다. 시설 검색·옛 기록은 빈 객체입니다.
-지도 검색은 최대 8개이며, `industries.*.sampled_count`는 해당 업종의 동종 표본 수입니다. 한 장소가 여러 질문 업종의 동종 표본일 수 있습니다.
-
-POST는 기본(`wait=true`)으로 실행 완료 또는 질문 대기까지 기다립니다.
-진행 화면이 필요하면 아래 [비동기 실행과 진행 이벤트](#비동기-실행과-진행-이벤트)를 씁니다.
-
-## 비동기 실행과 진행 이벤트
-
-진행 중 화면(주소 확인 → 세 분석 → 전문가 → 판정 …)을 보여 줄 때 쓰는 흐름입니다. 폴링 방식이며 새 연결 방식(SSE·웹소켓)은 없습니다.
-
-```text
-POST /api/v1/analyses?wait=false        → 202 {request_id, status:"running"}
-GET  /api/v1/analyses/{id}/events?after=0 → 처음 1초 간격, 10초 뒤 2초, 1분 뒤 3초; next_after를 다음 after로
-     finished=true가 되면 멈춤
-GET  /api/v1/analyses/{id}              → 결과(completed) · 질문(waiting_for_input) · 오류(failed)
-POST /api/v1/analyses/{id}/answers?wait=false → 202, 다시 events 폴링
-```
-
-`?mock=true`와 함께 쓰면 외부 호출 없이 같은 이벤트가 나옵니다. 중간 페이지는 이것으로 먼저 만듭니다.
-
-권장 폴링 간격은 처음 1초, 10초 뒤부터 2초, 1분 뒤부터 3초입니다. 사용자 증가 시 SSE로 전환하며, 이벤트는 이미 DB에 순번으로 쌓입니다.
-
-### `GET /api/v1/analyses/{request_id}/events?after=N`
-
-```json
-{
-  "request_id": "5f0c...",
-  "status": "running",
-  "finished": false,
-  "events": [
-    { "seq": 1, "at": "2026-09-30T02:10:01+00:00", "stage": "address", "event": "started", "detail": {} },
-    { "seq": 2, "at": "2026-09-30T02:10:01+00:00", "stage": "address", "event": "completed",
-      "detail": { "road_address": "서울 송파구 오금로 404" } }
-  ],
-  "next_after": 2
-}
-```
-
-- `status`: `pending`(202 직후 아직 저장 전) · `running` · `waiting_for_input` · `completed` · `failed`.
-- `finished`가 true면 폴링을 멈춥니다. 답변 재개 직후처럼 DB 상태가 바뀌기 전이어도 작업이 살아 있으면 `running`, `finished=false`입니다.
-- `seq`는 요청마다 1부터 빈틈없이 늘어납니다. 받은 마지막 `seq`를 `after`로 넘기면 새 이벤트만 옵니다.
-
-| stage | event | detail | 화면 문구 예 |
-| --- | --- | --- | --- |
-| `address` | started · completed | `road_address` | 주소를 확인하고 있어요 |
-| `education_zone` | started · completed | `status`(ok·error), `zones` 수 | 학교 주변인지 확인하고 있어요 |
-| `floating_population` · `business_lifecycle` · `commercial_area` | started · completed | `status`(ok·partial·no_data·error) | 유동인구 / 개폐업 / 주변 상권을 계산하고 있어요 |
-| `brief.{전문가}` | started · completed | `source`(model·fallback), `findings` 수 | 인구 전문가가 자료를 요약하고 있어요 (multi_agent만) |
-| `decision` | started · completed | `action`: final · ask_specialists · supplement · map_lookup · ask_user | 판정관이 종합하고 있어요 |
-| `consult.{전문가}` | started · completed | `round`, `question`(300자 이내), `status`, `tools`(사용한 도구 이름) | 판정관이 상권 전문가에게 되묻고 있어요 (multi_agent만) |
-| `supplement` | started · completed | `agents` | 부족한 자료를 다시 조회하고 있어요 |
-| `map` | started · completed | `queries` 수, `status` | 주변 가게를 지도에서 찾고 있어요 |
-| `questions` | waiting | `count` | 임대인 질문 화면으로 이동 |
-| `run` | completed · failed | `status` 또는 `code` | 완료 / 실패 |
-
-- 전문가 이름: `floating_population`, `business_lifecycle`, `commercial_area`, `map_analysis`.
-- 세 분석은 동시에 돌기 때문에 started 셋이 먼저 오고 completed는 끝난 순서대로 옵니다.
-- `decision`은 여러 번 올 수 있습니다(되묻기·보완 뒤 재판단). 마지막 `action`이 `final`이면 곧 `run completed`가 옵니다.
-- detail에는 코드가 만든 요약만 있습니다. 모델 원문·근거 경로·키는 없습니다. 결과 화면 자료는 GET으로 받습니다.
-- 이벤트는 진행 표시용입니다. 이벤트 저장에 실패해도 분석은 계속되므로, 최종 상태는 항상 GET 결과를 기준으로 합니다.
-
-```ts
-async function follow(id: string, onEvent: (e: AnalysisEvent) => void) {
-  let after = 0;
-  const started = Date.now();
-  for (;;) {
-    const page = await fetch(`${API}/api/v1/analyses/${id}/events?after=${after}`).then(r => r.json());
-    page.events.forEach(onEvent);
-    after = page.next_after;
-    if (page.finished) return page.status; // completed | failed | waiting_for_input
-    const elapsed = Date.now() - started;
-    const interval = elapsed >= 60000 ? 3000 : elapsed >= 10000 ? 2000 : 1000;
-    await new Promise(r => setTimeout(r, interval));
-  }
-}
-```
-
-**제한과 오류**
-
-- 서버 한 대에서 백그라운드 분석은 동시에 `ANALYSIS_MAX_CONCURRENCY`개(기본 2)까지입니다. 넘으면 **429** + `Retry-After: 30`.
-- 서버가 다시 시작되면 끊긴 실행 중 요청은 `failed`, `error.code = "INTERRUPTED"`가 됩니다. 같은 주소로 다시 요청합니다.
-- 작업표는 서버 프로세스 메모리에 있습니다. 서버를 여러 대 띄우는 배포에서는 외부 큐가 필요합니다.
-
-## 화면이 알아야 할 것
-
-**1. `status`는 세 가지입니다.**
-
-| status | 화면 처리 |
-| --- | --- |
-| `ok` | 그대로 보여 줍니다 |
-| `partial` | 결과를 보여 주되 `limitations`를 함께 노출합니다 |
-| `no_data` | 추천 목록이 빕니다. `limitations`로 이유를 보여 줍니다 |
-
-**2. `score`는 성공 확률이 아닙니다.**
-0~100의 **적합성 판단 점수**입니다. "성공률 72%"처럼 보이지 않게 표기합니다.
-숫자만 크게 띄우지 말고 옆에 근거(`reasons`)를 같이 놓습니다.
-
-**3. `recommendations`와 `not_recommended`는 각각 최대 5개**입니다.
-정렬은 서버가 합니다(추천은 점수 내림차순, 비추천은 오름차순).
-1차 MVP 리포트는 앞의 3개(Top 3 / Worst 3)만 씁니다.
-
-**3-1. `limitations`에 교육환경보호구역 사실이 들어올 수 있습니다.**
-주소 확정 직후 V-World로 좌표가 고시된 보호구역에 드는지 한 번 조회합니다(거리 계산이 아닙니다).
-구역에 들면 구역명과 제한 업종 안내가 **코드가 넣은 문장으로** `limitations`에 들어가고 결과는 `partial`이 됩니다.
-조회에 실패하면 "확인하지 못했습니다"가 들어옵니다 — **보호구역이 아니라는 뜻이 아닙니다.**
-업종을 거르지는 않습니다. 추천 목록은 그대로입니다.
-
-**4. `evidence.path`는 JSON Pointer입니다.**
-`source_analyses`에서 같은 `agent_id`를 찾아 그 `data`를 그 경로로 따라가면 실제 숫자가 나옵니다.
-"근거 보기"를 만들 때 씁니다.
-
-**5. `source_analyses`는 큽니다.**
-상권 에이전트 하나가 약 100KB입니다. 목록 화면에서는 받지 말고 상세에서만 씁니다.
-
-**6. 응답이 느립니다.**
-실제 호출은 공공데이터 API를 100회 넘게 부르고 모델도 부릅니다. 수십 초가 걸릴 수 있습니다.
-진행 화면은 `wait=false`와 events 폴링을 씁니다. 기다리는 방식을 쓴다면 `fetch` 타임아웃을 넉넉히 잡습니다.
-
-## 오류
-
-| 상태 | 언제 | 본문 |
+| 단계 | stage·event | detail |
 | --- | --- | --- |
-| 400 | 주소를 찾지 못함, 여러 후보, 입력 오류 | `{"detail": "주소를 확인해 주세요."}` |
-| 422 | 본문 형식이 틀림 (빈 주소 등) | FastAPI 기본 형식 |
-| 404 | GET 요청 ID가 없음 | `{"detail": "분석 요청을 찾을 수 없습니다."}` |
-| 409 | 질문 상태·답변 충돌 | 고정된 안전 메시지 |
-| 429 | `wait=false` 동시 실행 상한 초과 | `{"detail": "동시에 실행할 수 있는 분석 수를 넘었습니다. …"}` |
-| 502 | 주소·외부 API·모델 실패 | 고정된 안전 메시지 |
-| 500 | 결과 계약·저장 또는 저장 결과 조회 실패 | 고정된 안전 메시지 |
+| 주소·로컬 자료 | address / local_data started·completed | 고정 자료 버전·자료 기간 |
+| 계산·채점 | local_data completed | 조회·코드 점수 저장 완료 |
+| 판정 | decision completed | tool·status |
+| 필수 평가 | evaluation started·completed | 네 평가자 상태·완료 수 |
+| 질문·종료 | question waiting / final started·completed·failed | 질문 세션·feedback_round·평가 완료 여부 |
 
-POST가 요청 ID를 만든 뒤 처리한 오류 응답에도 `X-Request-ID`가 있습니다. 본문 검증 422와
-공백 주소 400처럼 저장 시작 전 실패에는 조회할 행이 없습니다. 키·외부 URL·원문 예외는 반환하지 않습니다.
+seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 경로의 결과와 이벤트로 연결합니다. 키·SQL·원문·fact 값은 이벤트에 넣지 않습니다.
 
-## 키 없이 화면 붙이기
+### 도구 function 정의의 내보내기
 
-백엔드 키가 아직 없어도 화면 작업은 막히지 않습니다.
+도구 계약3은 열 개 function이다. 행별 L 근거를 제출하여 종료한 뒤
+보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
 
-```bash
-cd backend
-MOCK_MODE=1 .venv/Scripts/python -m uvicorn app.main:create_app --factory --reload
-```
+도구 계약3: submit_l은 업종·factors(fact_id 별칭/direction/severe)·neutral/fact_ids·note만 받는다.
+등급·상태는 서버가 계산하며 묶음 상한 없이 행별로 채택·거절한다. 중복 업종은 무시한다.
+응답에는 accepted/ignored/rejected(이유·수정법)/unsubmitted가 있다. 기존 최종 L_records 형태는 유지한다.
+모델 경계의 fact 별칭은 요청별8자이며 DB·GET의 fact_id는 기존 불변ID다.
+없는 별칭은 해당 L 행 또는 보고서 인용 문장만 제외하고 알림을 반환한다.
+평가자 입력은 Top5·후보 L요인·등급 분포·한계·핵심 fact의 약6k토큰 검토 패킷이다.
+지적 근거는 최대5개이며 제출 오류는 추가 두 번 수정할 수 있다.
+G·C4는 채점 전 코드가 관측한다. 외부 실패는 해당 항목만 unknown으로 남긴다.
+현재 구현 순서·공통 공간 fact·측정 예산은 [단순 L 계획](simple-l-input-plan.md)을 따른다.
+아래 내보내기 규칙은 계약3에서도 유지한다.
 
-또는 요청마다 `?mock=true`를 붙입니다. **목업도 진짜 오케스트레이터와 최종판단 에이전트를 그대로 지나가므로
-응답 형태가 실제와 같습니다.** 좌표는 고정이고 `address`만 요청한 값이 돌아옵니다.
+`tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
-대역에서 with_map을 켜면 외부 호출 없는 0건 지도 관측을 만들고,
-allow_questions를 켜면 층수 질문을 고정 반환합니다. 이는 흐름 검증용이며 추천 품질 시험이 아닙니다.
+get_facts/map_search의 배타 조건·상세 limit·L/평가 정합성은 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. 이번 PR에서는 API·LLM 호출을 하지 않습니다. SQL 내용/권한/시간·fact 소유/숫자 슬롯·점수 재계산·정렬의 실제 검증은 PR4~PR6 범위입니다.
 
-현재 API에는 사용자 인증·요청 소유권 검사가 없습니다. 이 변경을 공개 서비스 배포 준비 완료로
-보면 안 됩니다. 외부 공개 전 인증·권한·호출량 제한과 목업 옵션 정책을 별도 적용해야 합니다.
-
-```ts
-const res = await fetch('http://127.0.0.1:8000/api/v1/analyses?mock=true', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ address }),
-});
-const result: DecisionResult = await res.json();
-```
-
-## 실패한 최종판단 재시도
-
-`GET /api/v1/analyses/{request_id}`의 `completed_at`을 확인한 뒤 호출합니다.
-
-```http
-POST /api/v1/analyses/{request_id}/retry-decision
-Content-Type: application/json
-
-{"failed_at": "조회에서 받은 completed_at"}
-```
-
-- 저장된 분석·채택된 보완·지도 관측·제출 답변으로 재시도합니다. 평가자 꺼짐이나 평가 후 실패는 **최종판단만** 실행합니다. 평가 전 실패는 **초안 → 평가 → 최종판단**을 실행합니다.
-- 분석 API·브리핑·전문가 되묻기는 다시 호출하지 않으며 새 임대인 질문도 발행하지 않습니다. 실제 모드에서는 실행한 판정관·평가자 LLM 비용이 발생합니다.
-- 상태나 실패 시각이 바뀌었거나 저장 입력이 불완전하면 `409`입니다. 중복 실행하지 않습니다.
-- 근거 검증은 동일합니다. 자동 교정은 한 번이며, 다시 실패하면 사용자 재시도가 필요합니다.
-- 조회의 `decision_failures`에 실패 시각·오류·잘못된 경로·실제 경로 후보를 보존합니다.
-  후보는 문자열 유사도로 제시할 뿐 업종·의미 일치를 보증하지 않습니다.
-- 과거 실패는 모델 경로가 저장되지 않아 진단 목록이 비어 있을 수 있습니다.
-- 대역 실행은 재시도에도 `?mock=true`를 유지하세요. 기존 API와 동일하게 인증 적용 전에는 외부 공개하지 않습니다.
-
-## 타입을 옮길 때
-
-`frontend/types/`에 손으로 옮겨 적지 말고, 가능하면 `openapi.json`에서 생성합니다.
-
-```bash
-curl http://127.0.0.1:8000/openapi.json -o openapi.json
-```
-
-손으로 옮긴다면 **`backend/app/schemas.py`가 원본**입니다. 그쪽이 바뀌면 같이 고칩니다.
-## 멀티에이전트 모드 추가 계약
-
-서버 설정 `ANALYSIS_MODE=multi_agent`에서만 사용합니다. 기본값은 `single_decision`입니다.
-`AnalysisTask`, `AgentAnalysis`, `DecisionResult` 필드는 변경하지 않았습니다.
-POST 주소 분석·답변·최종판단 재시도 경로와 기존 응답 형태도 유지합니다.
-
-### 내부 메시지
-
-| 모델 | 주요 필드 | 제약 |
-| --- | --- | --- |
-| `AgentBrief` | 요청·전문가 ID, `source`, `headline`, `findings`, `limitations`, `tool_calls` | 초기 3개 전문가, 근거 최대 8개 |
-| `Finding` | `claim`, `signal`, `industry_code`, `evidence[].path` | 공통 75개 코드, 자기 원자료 경로만 인용 |
-| `ConsultPlan` | `action=ask_specialists`, `queries` | 라운드당 서로 다른 전문가 최대 3명 |
-| `SpecialistQuery` | 전문가, 질문, 업종 코드, 필요 이유·판단 영향 | 임의 주소·반경 변경 불가 |
-| `SpecialistAnswer` | 요청·라운드·질문, 상태, 근거, 도구 이력, 선택형 분석·지도 관측 | 평가자 꺼짐 최대 2라운드, 켜짐 초안 2 + 평가 후 4라운드, 근거 최대 5개 |
-| `QuestionSnapshotV2` | 기존 task·질문·분석 차수 + 브리핑 ID·라운드·지도 차수·소비 예산·활성 시간 | 기존 v1 대기 자료도 재개 가능 |
-
-전문가 문장은 최종 근거가 아닙니다. 원자료 경로·소유 업종·직접 수치를 재검증합니다.
-문장의 의미·사업 적합성까지 자동 보증하지 않습니다. 폐업률 단위·기간·공간 범위는 원자료를 유지합니다.
-
-### 저장과 조회
-
-`GET /api/v1/analyses/{request_id}`에는 `analysis_mode`가 추가됩니다.
-멀티 모드에만 선택형 `deliberation`이 포함됩니다.
-
-| 필드 | 내용 |
-| --- | --- |
-| `briefs` | 최초 전문가 브리핑과 fallback 여부 |
-| `answers` | 라운드별 질문·답변·도구 실행 상태. 원본 분석·지도 중복 본문은 제외 |
-| `consult_round` | 소비한 되묻기 라운드 |
-| `map_attempt` | 최신 채택 지도 차수 |
-| `budget.used`, `budget.calls` | 실제 모델 요청 시도 누계, 역할·성공 여부·입출력 토큰·입력 문자 수·시간 |
-| `elapsed_seconds` | 사람 답변 대기를 제외한 활성 실행 누계 |
-
-모델이 usage를 주지 않으면 토큰은 `null`입니다. 대역은 실제 전송이 없어 호출 누계가 0입니다.
-최종 `source_analyses`와 지도 관측은 채택된 원자료입니다. 새 관측을 거절해도 이력은 남습니다.
-질문 후 환경변수가 달라져도 저장한 모드·도구 등록 범위·예산으로 이어갑니다.
-최종판단 재시도는 저장 자료만 쓰며 전문가·데이터 API는 재호출하지 않습니다.
-
-### DB 추가·변경
-
-| 테이블 | 키·추가 컬럼 | 의미 |
-| --- | --- | --- |
-| `analysis_requests` | `analysis_mode`, `execution_json` | 실행 모드, 소비 예산·활성 시간·등록 도구 범위 |
-| `agent_briefs` | PK `(request_id, agent_id)`, `brief_json`, `created_at` | 최초 브리핑, 덮어쓰기 금지 |
-| `specialist_consults` | PK `(request_id, round, agent_id)`, `status`, `answer_json`, `created_at` | 라운드별 전문가 답변 |
-| `map_observations` | PK `(request_id, attempt)`, `adopted` | 반복 관측과 채택 이력. 최종 결과는 최신 채택 관측 |
-| `supplement_events` | `analysis_attempt` | 이벤트의 분석 이력 차수. 결과 없는 시도는 NULL |
-
-기존 DB는 명시적 초기화 때 마이그레이션합니다. 기존 요청은 단일판정 모드,
-기존 지도 행은 1차로 보존합니다. 보완은 원본 이력과 대조 가능한 차수만 복원합니다.
-호출 예산 초과는 `LLM_BUDGET_EXHAUSTED`로 실패하며 유효하지 않은 판정을 성공으로 만들지 않습니다.
+ReportProposal에는 review_resolutions를 두지 않습니다. 제출 입력 SubmitDraftInput에만 두며 서버가 채택한 반영 기록은 최종 DecisionResult.review_resolutions로 제공합니다.

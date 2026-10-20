@@ -30,12 +30,13 @@ PR마다 CI가 같은 명령을 돌립니다. **로컬에서 먼저 돌리고 �
 ### 계층
 
 ```
-app/*.py     팀 공통 (schemas.py · address.py · config.py · geo.py). 세 에이전트가 함께 쓴다
+app/*.py     팀 공통 (schemas.py · address.py · config.py · geo.py)
 schemas.py   팀 공통 계약 (여기를 바꾸면 남의 코드가 깨진다)
-agent.py     한 에이전트의 흐름. 외부 호출·계산·조립을 순서대로 부른다
+agentic/     단일 decision·자문·질문·평가·채점·fact·보고서
+local_data/  자료 버전·어댑터·계보, 일반 요청은 고정된 자료를 읽는다
 client.py    외부 API 호출만. 계산하지 않는다
 metrics.py   순수 계산만. 네트워크·파일을 모른다
-llm.py       모델 호출과 응답 파싱만
+llm/         모델 호출·응답 파싱·예산
 schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
 ```
 
@@ -59,13 +60,14 @@ schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
 | 위치 | 정책 |
 | --- | --- |
 | `client.py` | 외부 실패를 `SbizApiError`로 바꿔 올린다. 재시도는 여기서 한다 |
-| `agent.py` | 외부 API 등 운영 실패는 `status`와 `warnings`로 수집한다. 공통 계약 검증 오류는 전파한다 |
-| `agents/orchestration/workflow.py` | 운영 실패는 다른 에이전트를 살려 수집하고, 계약 오류는 판단을 중단해 failed로 저장한다 |
-| `decision/llm.py` | 모델 실패는 **대체하지 않고 올린다**. 틀린 판단보다 실패가 낫다 |
+| `local_data/` | 자료 불완전·버전 없음은 `DataValidationError`. 검증 실패 시 활성 자료를 바꾸지 않는다 |
+| `agentic/` | 도구 오류는 구조화된 결과, 계약·저장 오류는 요청 경계로 전파한다. 병렬 평가 실패를 수집한다 |
+| `llm/` | 모델 실패를 임의의 판단으로 대체하지 않고 올린다 |
 | `services/analysis.py` | 저장 오류를 에이전트 실패로 숨기지 않고 전파한다 |
-| `api/v1/routes.py` | 400은 주소 입력, 422는 본문 검증, 502는 외부 실패, 500은 계약·저장 실패 |
+| `api/v1/analyses.py` | 입력·외부 실패·계약·저장 실패를 API 계약의 HTTP 오류로 변환한다 |
 
-`status` 네 가지의 뜻은 이렇게 고정합니다.
+수집·계산 자료의 `AgentAnalysis.status` 네 가지 뜻은 다음과 같습니다.
+공개 요청·질문·최종 보고서의 상태는 [API 계약](API_CONTRACT.md)을 따릅니다.
 
 | status | 뜻 | `data` |
 | --- | --- | --- |

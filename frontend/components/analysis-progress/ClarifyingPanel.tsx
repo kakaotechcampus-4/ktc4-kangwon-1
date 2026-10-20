@@ -10,6 +10,8 @@ import { colors } from '@/styles/tokens';
 import type {
   AnalysisStage,
   ClarifyingQuestion,
+  ClarifyingAnswer,
+  ClarifyingAnswers,
   ProgressStep,
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
@@ -19,12 +21,27 @@ const dmMono = DM_Mono({
   weight: ['400', '500'],
 });
 
+function isAnswerComplete(
+  question: ClarifyingQuestion,
+  answer?: ClarifyingAnswer
+): boolean {
+  const option = question.options.find((item) => item.id === answer?.optionId);
+  return Boolean(
+    option && (!option.detailInput?.required || answer?.detail?.trim())
+  );
+}
+
 type ClarifyingPanelProps = {
   stage: AnalysisStage;
   steps: ProgressStep[];
   questions: ClarifyingQuestion[];
-  onSubmit: (answers: Record<string, string>, note: string) => void;
+  onSubmit: (answers: ClarifyingAnswers, note: string) => void;
   onViewReport: () => void;
+  // 앞 단계에서 이미 받은 값으로 미리 채운 답(예: 층·전용면적). 질문이 바뀌면
+  // 부모가 key를 바꿔 이 값으로 다시 시작하게 한다.
+  initialAnswers?: ClarifyingAnswers;
+  // "추가로 알려주실 내용" 칸. 실제 백엔드는 이 값을 받을 필드가 없어 숨긴다.
+  showNote?: boolean;
 };
 
 /**
@@ -38,9 +55,12 @@ export default function ClarifyingPanel({
   questions,
   onSubmit,
   onViewReport,
+  initialAnswers,
+  showNote = true,
 }: ClarifyingPanelProps) {
-  // 답변/입력값은 로컬 state로만 관리한다 — 실제 제출 API는 아직 없다.
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<ClarifyingAnswers>(
+    initialAnswers ?? {}
+  );
   const [note, setNote] = useState('');
 
   if (stage === 'analyzing') {
@@ -59,16 +79,43 @@ export default function ClarifyingPanel({
     );
   }
 
-  const answeredCount = questions.filter(
-    (question) => answers[question.questionId]
+  const missingDetailQuestion = questions.find((question) => {
+    const answer = answers[question.questionId];
+    const option = question.options.find(
+      (item) => item.id === answer?.optionId
+    );
+    return option?.detailInput?.required && !answer?.detail?.trim();
+  });
+  const answeredCount = questions.filter((question) =>
+    isAnswerComplete(question, answers[question.questionId])
   ).length;
   const remaining = questions.length - answeredCount;
   const canSubmit = remaining === 0;
 
   function handleSubmit() {
+    if (!canSubmit) {
+      return;
+    }
+    const submittedAnswers: ClarifyingAnswers = {};
+    for (const question of questions) {
+      const answer = answers[question.questionId];
+      const option = question.options.find(
+        (item) => item.id === answer?.optionId
+      );
+      if (answer && option) {
+        const detail = option.detailInput ? answer.detail?.trim() : undefined;
+        submittedAnswers[question.questionId] = {
+          optionId: option.id,
+          ...(detail ? { detail } : {}),
+        };
+      }
+    }
     // mock 처리 — 실제 API 연동 없이 콘솔에만 기록한다.
-    console.log('[ClarifyingPanel] 답변 제출(mock):', { answers, note });
-    onSubmit(answers, note);
+    console.log('[ClarifyingPanel] 답변 제출(mock):', {
+      answers: submittedAnswers,
+      note,
+    });
+    onSubmit(submittedAnswers, note);
   }
 
   // 외곽 카드 없이 제목·진행률 → 질문 카드들 → 추가 입력 순으로 바로 놓는다.
@@ -78,13 +125,13 @@ export default function ClarifyingPanel({
       <div className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-4">
           <h2
-            className="text-[22px] leading-snug font-bold"
+            className="text-22 leading-snug font-bold"
             style={{ color: colors.text.primary }}
           >
             분석을 위해 {questions.length}가지 확인이 필요해요
           </h2>
           <p
-            className="shrink-0 text-[15px] font-semibold"
+            className="shrink-0 text-15 font-semibold"
             style={{ color: colors.brand.dark }}
           >
             <span className={dmMono.className}>
@@ -102,37 +149,48 @@ export default function ClarifyingPanel({
             key={question.questionId}
             number={index + 1}
             question={question}
-            selected={answers[question.questionId]}
+            answer={answers[question.questionId]}
+            onDetailChange={(detail) =>
+              setAnswers((prev) => ({
+                ...prev,
+                [question.questionId]: { ...prev[question.questionId], detail },
+              }))
+            }
             onSelect={(option) =>
               setAnswers((prev) => ({
                 ...prev,
-                [question.questionId]: option,
+                [question.questionId]:
+                  prev[question.questionId]?.optionId === option
+                    ? prev[question.questionId]
+                    : { optionId: option },
               }))
             }
           />
         ))}
       </div>
 
-      <label className="flex flex-col gap-2">
-        <span
-          className="text-sm font-semibold"
-          style={{ color: colors.text.secondary }}
-        >
-          추가로 알려주실 내용 <span className="font-normal">(선택)</span>
-        </span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={2}
-          placeholder="예: 2층까지 함께 임대 가능해요"
-          className="w-full resize-none rounded-lg border px-4 py-3 text-[15px] leading-relaxed placeholder:text-gray-400"
-          style={{
-            borderColor: colors.neutral.border,
-            backgroundColor: colors.neutral.white,
-            color: colors.text.primary,
-          }}
-        />
-      </label>
+      {showNote && (
+        <label className="flex flex-col gap-2">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            추가로 알려주실 내용 <span className="font-normal">(선택)</span>
+          </span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={2}
+            placeholder="예: 2층까지 함께 임대 가능해요"
+            className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
+            style={{
+              borderColor: colors.neutral.border,
+              backgroundColor: colors.neutral.white,
+              color: colors.text.primary,
+            }}
+          />
+        </label>
+      )}
 
       <div className="flex flex-col gap-2">
         <Button
@@ -140,19 +198,21 @@ export default function ClarifyingPanel({
           variant="primary"
           className="min-h-[52px] w-full justify-center disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:opacity-40"
           // Button 기본 text-sm이 클래스보다 우선 적용돼 글자 크기는 style로 준다.
-          style={{ fontSize: '16px' }}
+          style={{ fontSize: 'var(--text-base)' }}
           disabled={!canSubmit}
           onClick={handleSubmit}
         >
           답변하고 분석 이어가기 →
         </Button>
         <p
-          className="text-center text-[13px] leading-relaxed"
+          className="text-center text-13 leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
           {canSubmit
             ? '제출하면 답변을 반영해 최종 판단을 시작해요.'
-            : `남은 질문 ${remaining}개에 답하면 분석을 이어갈 수 있어요. 잘 모르시면 '모르겠어요'를 골라도 괜찮아요.`}
+            : missingDetailQuestion
+              ? `${missingDetailQuestion.shortLabel}의 추가 내용을 입력해 주세요.`
+              : `남은 질문 ${remaining}개에 답하면 분석을 이어갈 수 있어요.`}
         </p>
       </div>
     </section>
@@ -162,16 +222,22 @@ export default function ClarifyingPanel({
 function QuestionCard({
   number,
   question,
-  selected,
+  answer,
+  onDetailChange,
   onSelect,
 }: {
   number: number;
   question: ClarifyingQuestion;
-  selected?: string;
+  answer?: ClarifyingAnswer;
+  onDetailChange: (value: string) => void;
   onSelect: (option: string) => void;
 }) {
   const [isReasonOpen, setIsReasonOpen] = useState(false);
-  const isAnswered = Boolean(selected);
+  const selectedOption = question.options.find(
+    (option) => option.id === answer?.optionId
+  );
+  const detailInput = selectedOption?.detailInput;
+  const isAnswered = isAnswerComplete(question, answer);
   const reasonId = `reason-${question.questionId}`;
 
   return (
@@ -186,7 +252,7 @@ function QuestionCard({
     >
       <div className="flex items-start gap-3">
         <div
-          className={`${dmMono.className} flex size-8 shrink-0 items-center justify-center rounded-full text-[13px] font-medium`}
+          className={`${dmMono.className} flex size-8 shrink-0 items-center justify-center rounded-full text-13 font-medium`}
           style={
             isAnswered
               ? {
@@ -219,14 +285,14 @@ function QuestionCard({
 
       <div className="flex flex-wrap items-center gap-2.5 pl-11">
         {question.options.map((option) => {
-          const isSelected = selected === option;
+          const isSelected = answer?.optionId === option.id;
           return (
             <button
-              key={option}
+              key={option.id}
               type="button"
               aria-pressed={isSelected}
-              onClick={() => onSelect(option)}
-              className="min-h-[44px] rounded-lg border px-5 py-2.5 text-[15px]"
+              onClick={() => onSelect(option.id)}
+              className="min-h-[44px] rounded-lg border px-5 py-2.5 text-15"
               style={{
                 borderColor: isSelected
                   ? colors.brand.dark
@@ -238,11 +304,39 @@ function QuestionCard({
                 fontWeight: isSelected ? 600 : 500,
               }}
             >
-              {option}
+              {option.label}
             </button>
           );
         })}
       </div>
+
+      {detailInput && (
+        <label className="flex flex-col gap-2 pl-11">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            {detailInput.label}{' '}
+            <span className="font-normal">
+              ({detailInput.required ? '필수' : '선택'})
+            </span>
+          </span>
+          <textarea
+            required={detailInput.required}
+            value={answer?.detail ?? ''}
+            onChange={(event) => onDetailChange(event.target.value)}
+            rows={3}
+            placeholder={detailInput.placeholder}
+            className="w-full resize-y rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400 focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              borderColor: colors.neutral.border,
+              backgroundColor: colors.neutral.white,
+              color: colors.text.primary,
+              outlineColor: colors.brand.primary,
+            }}
+          />
+        </label>
+      )}
 
       <div className="flex flex-col gap-2.5 pl-11">
         <button
@@ -278,10 +372,11 @@ function QuestionCard({
 
 // 분석 중 화면에서 보여줄 분석 항목 — 좌측 단계 라벨과 겹치지 않게
 // "무엇을 보고 있는지"를 짧은 말로 바꿔 쓴다.
+
 const ANALYSIS_FOCUS: { stepId: string; label: string }[] = [
-  { stepId: 'commercial-area', label: '상권 경쟁도' },
-  { stepId: 'floating-population', label: '유동인구 패턴' },
-  { stepId: 'business-lifecycle', label: '개폐업 추이' },
+  { stepId: 'local-data', label: '상권·유동인구·개폐업 채점' },
+  { stepId: 'decision', label: '업종별 적합도 판단' },
+  { stepId: 'evaluation', label: '평가자 4명 검토' },
 ];
 
 // 질문이 생기기 전 — 빈 로딩 화면처럼 보이지 않게 지금 도는 분석만 가볍게 보여준다.
@@ -309,10 +404,10 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
           자료를 모아 분석하고 있어요
         </p>
-        <p className="text-[15px]" style={{ color: colors.text.secondary }}>
+        <p className="text-15" style={{ color: colors.text.secondary }}>
           {runningCount > 0
-            ? `현재 ${runningCount}개의 분석이 진행 중이에요`
-            : '주변 자료를 모은 뒤 3가지 분석을 동시에 시작해요'}
+            ? `현재 ${focus.find((item) => item.status === 'in_progress')?.label} 중이에요`
+            : '주소를 확인한 뒤 주변 자료로 51개 업종을 채점해요'}
         </p>
       </div>
 
@@ -326,7 +421,7 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         ))}
       </ul>
 
-      <p className="text-[13px]" style={{ color: colors.text.tertiary }}>
+      <p className="text-13" style={{ color: colors.text.tertiary }}>
         판단에 필요한 정보가 부족하면 이 자리에서 여쭤볼게요.
       </p>
     </Card>
@@ -385,16 +480,23 @@ function ResumingPanel({
   onViewReport,
 }: {
   questions: ClarifyingQuestion[];
-  answers: Record<string, string>;
+  answers: ClarifyingAnswers;
   note: string;
   isCompleted: boolean;
   onViewReport: () => void;
 }) {
   const summaryRows = [
-    ...questions.map((question) => ({
-      label: question.shortLabel,
-      value: answers[question.questionId],
-    })),
+    ...questions.map((question) => {
+      const answer = answers[question.questionId];
+      const option = question.options.find(
+        (item) => item.id === answer?.optionId
+      );
+      const detail = option?.detailInput ? answer?.detail?.trim() : undefined;
+      return {
+        label: question.shortLabel,
+        value: detail ? `${option?.label}: ${detail}` : option?.label,
+      };
+    }),
     ...(note ? [{ label: '추가 조건', value: note }] : []),
   ];
 
@@ -424,7 +526,7 @@ function ResumingPanel({
         </div>
         <div className="flex flex-col gap-1">
           <h2
-            className="text-[22px] leading-snug font-bold"
+            className="text-22 leading-snug font-bold"
             style={{ color: colors.text.primary }}
           >
             {isCompleted
@@ -432,7 +534,7 @@ function ResumingPanel({
               : '답변을 반영해 분석을 이어가고 있어요'}
           </h2>
           <p
-            className="text-[15px] leading-relaxed"
+            className="text-15 leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
             {isCompleted
@@ -455,7 +557,7 @@ function ResumingPanel({
         </p>
         <dl className="flex flex-col gap-2">
           {summaryRows.map((row) => (
-            <div key={row.label} className="flex items-start gap-4 text-[15px]">
+            <div key={row.label} className="flex items-start gap-4 text-15">
               <dt
                 className="w-[104px] shrink-0"
                 style={{ color: colors.text.tertiary }}
@@ -479,7 +581,7 @@ function ResumingPanel({
           variant="primary"
           // 이 화면의 마지막이자 가장 중요한 액션 — 다른 버튼보다 한 단계 크게.
           className="min-h-[56px] w-full justify-center"
-          style={{ fontSize: '16px' }}
+          style={{ fontSize: 'var(--text-base)' }}
           onClick={onViewReport}
         >
           리포트 보기 →
@@ -487,7 +589,7 @@ function ResumingPanel({
       ) : (
         <div className="flex flex-col gap-2.5">
           <p
-            className="text-[15px] font-semibold"
+            className="text-15 font-semibold"
             style={{ color: colors.brand.dark }}
           >
             최종 업종 적합도를 계산하고 있어요...

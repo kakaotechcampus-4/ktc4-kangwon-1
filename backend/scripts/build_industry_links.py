@@ -153,6 +153,12 @@ def main() -> int:
     args = parser.parse_args()
 
     master = {row["middle_code"]: row for row in read_csv(MASTER_PATH)}
+    if any("source_middle_codes" in row for row in master.values()):
+        print(
+            "service-51 연결표는 검토된 CSV를 직접 수정하세요. "
+            "이전 자동 매칭으로 덮어쓰지 않습니다."
+        )
+        return 1
     print(f"마스터 {len(master)}종")
 
     seoul_rows = build_seoul_links(master)

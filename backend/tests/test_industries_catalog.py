@@ -60,20 +60,9 @@ class SeoulLinkTests(unittest.TestCase):
     def test_unlinked_industries_are_the_ones_seoul_cannot_supply(self):
         # 개폐업이 "서울시 자료로는 못 만든다"고 한 업종의 대상들. 우리 자료가 메우는 자리다.
         # G212(생활용품)만 예외 — 서울시 악기·조명용품이 붙어 있어 단독이 아니다.
-        for code in (
-            "I206",
-            "Q101",
-            "Q104",
-            "S208",
-            "S210",
-            "S211",
-            "M105",
-            "M106",
-            "M107",
-            "M109",
-        ):
+        for code in ("I207", "M107", "M114", "N109", "S201", "S208"):
             self.assertIn(code, INDUSTRIES_WITHOUT_SEOUL)
-        self.assertNotIn("G212", INDUSTRIES_WITHOUT_SEOUL)
+        self.assertNotIn("G210", INDUSTRIES_WITHOUT_SEOUL)
 
 
 class Legacy70Tests(unittest.TestCase):
@@ -82,7 +71,6 @@ class Legacy70Tests(unittest.TestCase):
 
     def test_every_link_points_at_a_known_industry(self):
         for codes in LEGACY70_TO_INDUSTRY.values():
-            self.assertTrue(codes)
             for code in codes:
                 self.assertIn(code, INDUSTRIES)
 

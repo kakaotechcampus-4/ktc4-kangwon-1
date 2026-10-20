@@ -19,7 +19,7 @@ export default function Badge({
 }: BadgeProps) {
   return (
     <span
-      className={`${dmMono.className} inline-flex shrink-0 items-center rounded-md px-2.5 py-1 text-[10px] tracking-[1.2px] whitespace-nowrap uppercase ${className}`}
+      className={`${dmMono.className} inline-flex shrink-0 items-center rounded-md px-2.5 py-1 text-10 tracking-[1.2px] whitespace-nowrap uppercase ${className}`}
       style={{
         backgroundColor: `${colors.brand.primary}1A`,
         color: colors.brand.primary,

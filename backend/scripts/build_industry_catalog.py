@@ -32,13 +32,30 @@ from app.industries import (  # noqa: E402
 
 CATALOG_PATH = PACKAGE_DIR / "catalog.py"
 
-EXPECTED_COUNT = 75
+EXPECTED_COUNT = 51
+SMALL_PATH = PACKAGE_DIR / "data" / "small_to_industry.csv"
 SOURCE_PERIOD = "2026년 1분기"
 EXCLUDED_SEOUL = {"CS300043": "전자상거래업"}
 MATCH_METHODS = {"정확", "모델", "부분", "수동"}
 LEGACY_RANGE = range(1, 71)
 
-MASTER_COLUMNS = {"middle_code", "middle_name", "major_code", "major_name", "has_seoul", "note"}
+MASTER_COLUMNS = {
+    "middle_code",
+    "middle_name",
+    "major_code",
+    "major_name",
+    "has_seoul",
+    "note",
+    "source_middle_codes",
+}
+SMALL_COLUMNS = {
+    "small_code",
+    "small_name",
+    "source_middle_code",
+    "industry_code",
+    "evidence",
+    "note",
+}
 SEOUL_COLUMNS = {
     "seoul_code",
     "seoul_name",
@@ -92,13 +109,14 @@ def read_strict(path: Path, columns: set[str]) -> list[dict[str, str]]:
     return rows
 
 
-def check_master(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+def check_master(rows: list[dict[str, str]], split_middles: set[str]) -> dict[str, dict[str, str]]:
     if len(rows) != EXPECTED_COUNT:
         raise Failure(f"마스터가 {len(rows)}행입니다. {EXPECTED_COUNT}행이어야 합니다.")
 
     master: dict[str, dict[str, str]] = {}
     normalized: dict[str, str] = {}
     majors: dict[str, str] = {}
+    source_owners: dict[str, str] = {}
     for row in rows:
         code = row["middle_code"]
         if not code or not row["middle_name"]:
@@ -121,7 +139,50 @@ def check_master(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
             )
         if row["has_seoul"] not in {"Y", "N"}:
             raise Failure(f"{code}: has_seoul 이 Y/N 이 아닙니다 — {row['has_seoul']!r}")
+        sources = row["source_middle_codes"].split(";")
+        if not sources or any(not re.fullmatch(r"[A-Z]\d{3}", s) for s in sources):
+            raise Failure(f"{code}: 원래 중분류 코드가 올바르지 않습니다.")
+        if code != sources[0] and not (
+            len(sources) == 1
+            and sources[0] in split_middles
+            and re.fullmatch(re.escape(sources[0]) + r"[A-Z]", code)
+        ):
+            raise Failure(f"{code}: 대표 중분류 또는 CSV에 정의된 분할 서비스 코드를 써야 합니다.")
+        for source in sources:
+            if source not in split_middles and source_owners.setdefault(source, code) != code:
+                raise Failure(f"{source}: 미분할 중분류가 여러 서비스 업종에 연결됐습니다.")
     return master
+
+
+def check_small(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -> None:
+    seen = set()
+    targets: dict[str, set[str]] = {}
+    split_middles = {r["source_middle_code"] for r in rows}
+    evidence_path = (
+        PACKAGE_DIR.parents[1] / "examples" / "schema_compare" / "upjong_small_official.csv"
+    )
+    with evidence_path.open(encoding="utf-8-sig", newline="") as handle:
+        official = {
+            (r["indsMclsCd"], r["indsSclsCd"], r["indsSclsNm"]) for r in csv.DictReader(handle)
+        }
+    for row in rows:
+        source, code, target = row["source_middle_code"], row["small_code"], row["industry_code"]
+        if not source or code in seen:
+            raise Failure("분할 소분류의 중분류 또는 중복 코드를 확인하세요.")
+        seen.add(code)
+        if (source, code, row["small_name"]) not in official or not row["evidence"]:
+            raise Failure(f"{code}: 소분류 코드·이름의 공식 근거가 없습니다.")
+        if target:
+            if target not in master or source not in master[target]["source_middle_codes"].split(
+                ";"
+            ):
+                raise Failure(f"{code}: 서비스 업종과 원래 중분류 연결이 다릅니다.")
+            targets.setdefault(source, set()).add(target)
+        elif not row["note"]:
+            raise Failure(f"{code}: 제외 사유가 없습니다.")
+    expected = {c for m, c, _ in official if m in split_middles}
+    if seen != expected or any(len(targets.get(m, set())) < 2 for m in split_middles):
+        raise Failure("분할 중분류의 모든 소분류와 두 서비스 업종 연결이 필요합니다.")
 
 
 def check_seoul(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -> None:
@@ -135,7 +196,11 @@ def check_seoul(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -
         if code in seen:
             raise Failure(f"서울시 코드가 중복입니다 — {code}")
         seen.add(code)
-        if row["middle_code"] not in master:
+        if not row["middle_code"]:
+            if not row["note"]:
+                raise Failure(f"{code}: 제외 사유가 없습니다.")
+            continue
+        if row["middle_code"] and row["middle_code"] not in master:
             raise Failure(f"{code}: 중분류 {row['middle_code']!r} 가 마스터에 없습니다.")
         if row["match_method"] not in MATCH_METHODS:
             raise Failure(f"{code}: 판정방식이 허용값이 아닙니다 — {row['match_method']!r}")
@@ -158,13 +223,17 @@ def check_legacy(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) 
             raise Failure(f"legacy_id 가 정수가 아닙니다 — {row['legacy_id']!r}") from exc
         if legacy_id not in LEGACY_RANGE:
             raise Failure(f"legacy_id 가 1~70 밖입니다 — {legacy_id}")
-        if row["middle_code"] not in master:
+        if row["middle_code"] and row["middle_code"] not in master:
             raise Failure(
                 f"legacy {legacy_id}: 중분류 {row['middle_code']!r} 가 마스터에 없습니다."
             )
         if row["route"] not in {"seoul", "direct"}:
             raise Failure(f"legacy {legacy_id}: route 가 허용값이 아닙니다 — {row['route']!r}")
-        by_id.setdefault(legacy_id, set()).add(row["middle_code"])
+        by_id.setdefault(legacy_id, set())
+        if row["middle_code"]:
+            by_id[legacy_id].add(row["middle_code"])
+        elif not row["note"]:
+            raise Failure(f"legacy {legacy_id}: 제외 사유가 없습니다.")
 
     missing = sorted(set(LEGACY_RANGE) - set(by_id))
     if missing:
@@ -191,6 +260,7 @@ def render(
     master: dict[str, dict[str, str]],
     seoul: list[dict[str, str]],
     legacy: list[dict[str, str]],
+    small: list[dict[str, str]],
 ) -> str:
     def dict_block(name: str, annotation: str, items: list[tuple[str, str]], comment: str) -> str:
         lines = [f"# {comment}", f"{name}: {annotation} = {{"]
@@ -205,18 +275,26 @@ def render(
     seoul_to = [
         (repr(r["seoul_code"]), repr(r["middle_code"]))
         for r in sorted(seoul, key=lambda r: r["seoul_code"])
+        if r["middle_code"]
     ]
 
     industry_to_seoul: dict[str, list[str]] = {}
     for row in sorted(seoul, key=lambda r: r["seoul_code"]):
+        if not row["middle_code"]:
+            continue
         industry_to_seoul.setdefault(row["middle_code"], []).append(row["seoul_code"])
     to_seoul = [(repr(c), repr(tuple(v))) for c, v in sorted(industry_to_seoul.items())]
     terms: dict[str, list[str]] = {code: [] for code in master}
     for row in seoul:
+        if not row["middle_code"]:
+            continue
         includes = terms[row["middle_code"]]
         for term in [row["seoul_name"], *row["evidence_small"].split(" / ")]:
             if term and term not in includes:
                 includes.append(term)
+    for row in small:
+        if row["industry_code"] and row["small_name"] not in terms[row["industry_code"]]:
+            terms[row["industry_code"]].append(row["small_name"])
 
     without = [
         (repr(c), repr(r["middle_name"]))
@@ -226,7 +304,9 @@ def render(
 
     legacy_to: dict[int, list[str]] = {}
     for row in sorted(legacy, key=lambda r: (int(r["legacy_id"]), r["middle_code"])):
-        legacy_to.setdefault(int(row["legacy_id"]), []).append(row["middle_code"])
+        legacy_to.setdefault(int(row["legacy_id"]), [])
+        if row["middle_code"]:
+            legacy_to[int(row["legacy_id"])].append(row["middle_code"])
     legacy_block = [(str(k), repr(tuple(v))) for k, v in sorted(legacy_to.items())]
 
     industry_to_legacy: dict[str, list[int]] = {}
@@ -235,8 +315,28 @@ def render(
             industry_to_legacy.setdefault(code, []).append(legacy_id)
     to_legacy = [(repr(c), repr(tuple(v))) for c, v in sorted(industry_to_legacy.items())]
 
-    excluded = [(repr(k), repr(v)) for k, v in sorted(EXCLUDED_SEOUL.items())]
+    excluded_codes = {
+        **EXCLUDED_SEOUL,
+        **{r["seoul_code"]: r["seoul_name"] for r in seoul if not r["middle_code"]},
+    }
+    excluded = [(repr(k), repr(v)) for k, v in sorted(excluded_codes.items())]
+    split_middles = {r["source_middle_code"] for r in small}
+    excluded_smalls = {r["small_code"] for r in small if not r["industry_code"]}
+    direct_middles = {
+        source: code
+        for code, row in sorted(master.items())
+        for source in row["source_middle_codes"].split(";")
+        if source not in split_middles
+    }
+    if split_middles.intersection(direct_middles):
+        raise Failure("분할 중분류는 중분류 직접 연결에 포함할 수 없습니다.")
+    middle_to = [(repr(source), repr(code)) for source, code in direct_middles.items()]
+    sources = [
+        (repr(code), repr(tuple(row["source_middle_codes"].split(";"))))
+        for code, row in sorted(master.items())
+    ]
 
+    unreviewed = sum(bool(r["middle_code"]) and r["match_method"] == "모델" for r in seoul)
     head = f'''"""팀 공통 업종 어휘 — 자동 생성 파일입니다. 고치지 마세요.
 
 원본은 `app/industries/data/*.csv` 이고, 이 파일은
@@ -251,13 +351,38 @@ from __future__ import annotations
 
 from typing import Final
 
-CATALOG_VERSION: Final = "{fingerprint(list(master.values()), seoul, legacy)}"
+CATALOG_VERSION: Final = "{fingerprint(list(master.values()), seoul, legacy, small)}"
 SOURCE_PERIOD: Final = "{SOURCE_PERIOD}"
 EXPECTED_INDUSTRY_COUNT: Final = {EXPECTED_COUNT}
+UNREVIEWED_MAPPING_COUNT: Final = {unreviewed}
+SPLIT_MIDDLES: Final[frozenset[str]] = frozenset({tuple(sorted(split_middles))!r})
+EXCLUDED_SMALLS: Final[frozenset[str]] = frozenset({tuple(sorted(excluded_smalls))!r})
 
 '''
 
     blocks = [
+        dict_block(
+            "MIDDLE_TO_INDUSTRY",
+            "Final[dict[str, str]]",
+            middle_to,
+            "미분할 원래 중분류 → 서비스 업종",
+        ),
+        dict_block(
+            "INDUSTRY_SOURCE_MIDDLES",
+            "Final[dict[str, tuple[str, ...]]]",
+            sources,
+            "서비스 업종 → 원래 중분류",
+        ),
+        dict_block(
+            "SMALL_TO_INDUSTRY",
+            "Final[dict[str, str]]",
+            [
+                (repr(r["small_code"]), repr(r["industry_code"]))
+                for r in small
+                if r["industry_code"]
+            ],
+            "확인된 분할 소분류 → 서비스 업종. 제외 소분류는 포함하지 않습니다.",
+        ),
         dict_block(
             "INDUSTRY_TERMS",
             "Final[dict[str, tuple[str, ...]]]",
@@ -343,11 +468,13 @@ def main() -> int:
         master_rows = read_strict(MASTER_PATH, MASTER_COLUMNS)
         seoul_rows = read_strict(SEOUL_LINK_PATH, SEOUL_COLUMNS)
         legacy_rows = read_strict(LEGACY70_LINK_PATH, LEGACY_COLUMNS)
+        small_rows = read_strict(SMALL_PATH, SMALL_COLUMNS)
 
-        master = check_master(master_rows)
+        master = check_master(master_rows, {r["source_middle_code"] for r in small_rows})
         check_seoul(seoul_rows, master)
         check_legacy(legacy_rows, master)
-        rendered = ruff_format(render(master, seoul_rows, legacy_rows))
+        check_small(small_rows, master)
+        rendered = ruff_format(render(master, seoul_rows, legacy_rows, small_rows))
     except Failure as exc:
         print(f"검증 실패: {exc}")
         return 1
@@ -355,10 +482,15 @@ def main() -> int:
     linked = sum(1 for r in master.values() if r["has_seoul"] == "Y")
     by_method: dict[str, int] = {}
     for row in seoul_rows:
+        if not row["middle_code"]:
+            continue
         by_method[row["match_method"]] = by_method.get(row["match_method"], 0) + 1
 
     print(f"업종 {len(master)}종 — 서울시 연결 {linked} · 단독 {len(master) - linked}")
-    print(f"서울시 연결 {len(seoul_rows)}행 · 판정방식 {by_method}")
+    print(
+        f"서울시 연결 {sum(bool(r['middle_code']) for r in seoul_rows)}행 · "
+        f"제외 {sum(not r['middle_code'] for r in seoul_rows)}행 · 판정방식 {by_method}"
+    )
     print(f"  '모델' {by_method.get('모델', 0)}건은 사람 검수가 필요합니다")
     print(f"개폐업 연결 {len(legacy_rows)}행 / {len({r['legacy_id'] for r in legacy_rows})}업종")
 
