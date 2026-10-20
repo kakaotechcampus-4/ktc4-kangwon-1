@@ -340,9 +340,9 @@ ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했
 각 역할은 읽기 최대 세 번과 제출 한 번이며 지도·규제·자문·질문 도구는 받지 않는다.
 필요한 지도·규제의 기존 fact를 읽고 재조회가 필요하면 suggested_check로 남긴다.
 초안·전체 L의 요인/근거·확인 조건을 짧게 전달하고 반복 스냅샷 메타데이터는 뺀다.
-역할별 입력40k·출력5.5k·4호출을 다른 역할이 쓰지 못한다. 실패해도 정확히 네 슬롯을 유지한다.
+역할별 입력40k·출력5.5k·4호출을 다른 역할이 쓰지 못한다. 읽기 세 번을 마쳤거나 제출이 한 번 거절되면 submit_review만 받으며, 이 제출 전용 호출은 역할 몫 대신 요청 전체 한도까지 쓴다. 실패해도 정확히 네 슬롯을 유지한다.
 
-ReviewIssue는 issue_id·industry_code·target·kind·comment·fact_ids≤3·suggested_check이다.
+ReviewIssue는 issue_id·industry_code·target·kind·comment·fact_ids≤5·suggested_check이다.
 decision은 지적마다 accepted/partial/rejected와 이유·근거를 한 번 제출한다.
 고정된 코드 점수를 모델이 고치지 못하며 L의 최초 채택 기록도 중복 제출로 덮지 않는다.
 최종 report validator가 인용·규제·배지·순위를 다시 검사한다. 평가 실패를 동의로 간주하지 않는다.
@@ -405,7 +405,7 @@ GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 se
 | 계산/채점 | metrics/scorecard started·completed {rubric_version,industry_count} | 코드 채점 단계 표시 |
 | 판정 도구 | decision started/completed {phase:draft/final}; decision.tool completed {tool,status} | 원문·SQL·키·fact 값은 이벤트에서 제외 |
 | 자문 | advisor started/completed {status} | consult.*·briefing stages 삭제 |
-| 평가 | evaluate.examiner/founder/customer/landlord_advocate started/completed {status,issues_count} | 항상 4명 상태·평가 미완료 표시 |
+| 평가 | evaluation started {}; 도구마다 evaluation completed {actor,tool,status}; 평가자마다 evaluation completed/failed {actor,error_code,issues_count,reads,rejections,model_calls} | 항상 4명 상태·평가 미완료 표시 |
 | 질문/종료 | questions waiting, run completed/failed/draft_available | 새 QuestionSnapshot으로 대기/재개. 유효 초안과 final 구분 |
 
 기존 PR1 결과·질문 계약을 재사용하고 LD5에서 API_CONTRACT의 자료 기간·stage와 런타임·GET·이벤트를 연결한다. 프론트 담당은 LD6의 전환 완료 조건에 포함해 검증한다. retry는 같은 snapshot·저장 예산을 이어받는다. DB 버전 불일치는 시작 오류와 명시적 초기화 안내로 처리한다.
