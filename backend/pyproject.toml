@@ -51,5 +51,5 @@ known-first-party = ["app"]
 
 [tool.mypy]
 python_version = "3.12"
-files = ["app", "backtest"]
+files = ["app"]
 ignore_missing_imports = true
