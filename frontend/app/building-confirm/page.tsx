@@ -30,6 +30,7 @@ import {
   SEWAGE_OPTIONS,
   editField,
   fetchBuildingInfo,
+  normalizeFloor,
   type BuildingInfo,
   type LookupId,
   type LookupStatus,
@@ -113,6 +114,7 @@ export default function BuildingConfirmPage() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     fetchBuildingInfo(saved.roadAddress, {
       signal: controller.signal,
+      floorUnit: saved.floorUnit,
       failLookups: mockFailLookups(window.location.search),
       onStepChange: (id, status) =>
         setStatuses((prev) => ({ ...prev, [id]: status })),
@@ -159,7 +161,7 @@ export default function BuildingConfirmPage() {
     if (!input || !building || building.parking.value === null) {
       return;
     }
-    // 확인한 건축물 정보는 화면 표시용으로만 남기고 분석 요청에는 싣지 않는다.
+    // 확인한 건축물 정보는 화면 표시용으로 남기고, 층·전용면적만 분석 요청에 싣는다.
     saveConfirmedBuilding(building);
 
     if (MOCK_MODE) {
@@ -182,6 +184,8 @@ export default function BuildingConfirmPage() {
         address: fullAddress,
         radiusM: parseRadius(input.radius),
         allowQuestions: true,
+        floor: normalizeFloor(input.floorUnit) ?? undefined,
+        exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,
       });
       // 이전 분석 결과가 리포트에 섞이지 않게 지우고 새 요청 ID만 남긴다.
       clearAnalysisResult();

@@ -1,6 +1,7 @@
 """공개 API의 작업 등록·대기·진행 조회입니다."""
 
 import asyncio
+import os
 from collections.abc import Coroutine
 
 from fastapi import HTTPException, Query, Request
@@ -23,6 +24,8 @@ class AnalysisRequest(BaseModel):
     radius_m: RadiusMeters = DEFAULT_RADIUS_M
     allow_questions: StrictBool = False
     with_map: StrictBool = False
+    floor: str | None = Field(default=None, pattern=r"^(지하 )?[1-9][0-9]{0,2}층$")
+    exclusive_area_m2: float | None = Field(default=None, ge=0.01, le=100000, strict=True)
 
 
 def request_headers(request_id):
@@ -94,3 +97,7 @@ async def list_analysis_events(
         "events": events,
         "next_after": events[-1]["seq"] if events else after,
     }
+
+
+def is_mock(requested):
+    return requested or os.getenv("MOCK_MODE", "").lower() in {"1", "true", "yes"}

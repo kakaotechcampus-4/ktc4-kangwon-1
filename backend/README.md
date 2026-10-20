@@ -84,10 +84,11 @@ python -m uvicorn app.main:create_app --factory --reload
 
 | 메서드 · 경로 | 설명 |
 | --- | --- |
-| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. |
+| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. 선택 `floor`·`exclusive_area_m2`는 확인 화면에서 확정한 층·전용면적으로, 공간 비교에 바로 반영합니다. |
 | `GET /analyses/{request_id}` | 상태와 결과. 접수 직후에도 404가 아니라 현재 상태를 돌려줍니다. |
 | `GET /analyses/{request_id}/events?after=N` | 진행 단계. 1초 간격 폴링용입니다. |
 | `POST /analyses/{request_id}/answers` | `waiting_for_input`일 때 임대인 답변을 보내 재개합니다. |
+| `GET /building-registry?address=` | 건축물대장 표제부·층별개요·호실·오수정화시설 조회. 상가 정보 확인 화면용이며 저장하지 않습니다. `mock=true`는 고정 응답입니다. |
 | `GET /health` | 상태 확인 |
 
 요청 상태는 `pending` → `running` → (`waiting_for_input` ↔ `running`) → `completed` 또는 `failed`입니다.
@@ -103,6 +104,7 @@ python -m uvicorn app.main:create_app --factory --reload
 | `DECISION_LLM_*` · `EVALUATOR_LLM_*` · `ADVISOR_LLM_*` | 역할별 모델·키·주소·토큰·시간·reasoning. 비우면 공통 값을 씁니다. |
 | `GEOCODING_API_KEY` | 주소 변환과 지도 검색(카카오) |
 | `VWORLD_API_KEY` · `VWORLD_REFERER` | 규제·서울 경계 조회(V-World) |
+| `BUILDING_REGISTRY_API_KEY` | 상가 정보 확인 화면의 건축물대장 조회(공공데이터포털 건축HUB). Encoding·Decoding 두 개가 보이면 Decoding 키 |
 | `LOCAL_DATA_DB_PATH` | 자료 DB 경로 |
 | `SQLITE_PATH` | 요청 DB 경로 |
 | `FLOATING_POPULATION_API_KEY` · `BUSINESS_LIFECYCLE_API_KEY` · `SEOUL_OPEN_API_KEY` · `COMMERCIAL_AREA_API_KEY` · `FRANCHISE_API_KEY` | **자료 갱신과 연구 스크립트용** 키. 일반 요청에는 쓰지 않습니다. |

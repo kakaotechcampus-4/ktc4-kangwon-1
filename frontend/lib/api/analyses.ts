@@ -7,9 +7,7 @@ import type {
   StoredAnalysis,
   WaitingForInput,
 } from '@/lib/api/types';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+import { API_BASE_URL } from '@/lib/api/baseUrl';
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
@@ -115,7 +113,20 @@ export type AnalysisRequestInput = {
   address: string;
   radiusM?: number;
   allowQuestions?: boolean;
+  floor?: string;
+  exclusiveAreaM2?: number;
 };
+
+const FLOOR_PATTERN = /^(지하 )?[1-9]\d{0,2}층$/;
+
+function validArea(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isFinite(value) &&
+    value >= 0.01 &&
+    value <= 100000
+  );
+}
 
 /**
  * 분석 요청 본문. 백엔드 AnalysisRequest는 정의되지 않은 필드를 422로
@@ -126,6 +137,8 @@ export function buildAnalysisRequestBody({
   address,
   radiusM,
   allowQuestions = false,
+  floor,
+  exclusiveAreaM2,
 }: AnalysisRequestInput): Record<string, unknown> {
   if (
     radiusM !== undefined &&
@@ -137,6 +150,10 @@ export function buildAnalysisRequestBody({
     address,
     ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
     ...(allowQuestions ? { allow_questions: true } : {}),
+    ...(floor !== undefined && FLOOR_PATTERN.test(floor) ? { floor } : {}),
+    ...(validArea(exclusiveAreaM2)
+      ? { exclusive_area_m2: exclusiveAreaM2 }
+      : {}),
   };
 }
 

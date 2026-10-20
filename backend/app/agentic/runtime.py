@@ -124,6 +124,7 @@ class DecisionLoop:
         measurement=False,
         recorder=None,
         allow_questions=True,
+        confirmed_space=None,
     ):
         self.scope, self.site, self.base_id, self.base_rows = scope, site, base_id, base_rows
         self.generate, self.advisor_generate = generate, advisor_generate
@@ -134,7 +135,7 @@ class DecisionLoop:
             "asked": False,
             "limitations": [],
             "tool_sequence": [],
-            "known_fact_ids": [],
+            "known_fact_ids": list(confirmed_space["fact_ids"].values()) if confirmed_space else [],
         }
         self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
         self.state.setdefault("allow_questions", allow_questions)
@@ -197,6 +198,7 @@ class DecisionLoop:
                             },
                             "L_industry_codes": list(INDUSTRIES),
                             "industry_names": INDUSTRIES,
+                            **({"confirmed_space": confirmed_space} if confirmed_space else {}),
                         }
                     ),
                 },

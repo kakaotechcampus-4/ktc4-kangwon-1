@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -23,6 +22,7 @@ from .jobs import (
     AnalysisRequest,
     await_task,
     health,
+    is_mock,
     jobs,
     list_analysis_events,
     request_headers,
@@ -70,8 +70,13 @@ def options(request, request_id):
     }
 
 
-def is_mock(requested):
-    return requested or os.getenv("MOCK_MODE", "").lower() in {"1", "true", "yes"}
+def space_answers(body):
+    values = {}
+    if body.floor is not None:
+        values["floor"] = body.floor
+    if body.exclusive_area_m2 is not None:
+        values["exclusive_area"] = f"{body.exclusive_area_m2:.2f}".rstrip("0").rstrip(".") + "㎡"
+    return values or None
 
 
 def public_result(request_id, outcome):
@@ -110,6 +115,7 @@ async def create_analysis(
             request_id=request_id,
             radius_m=body.radius_m,
             allow_questions=body.allow_questions,
+            confirmed_space=space_answers(body),
             request_prepared=True,
             **options(request, request_id),
             **(dependencies(ask=body.allow_questions) if is_mock(mock) else {}),

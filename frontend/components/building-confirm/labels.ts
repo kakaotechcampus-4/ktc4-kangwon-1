@@ -1,7 +1,8 @@
-import type {
-  LookupId,
-  NeighborhoodFacility,
-  ParkingAvailability,
+import {
+  normalizeFloor,
+  type LookupId,
+  type NeighborhoodFacility,
+  type ParkingAvailability,
 } from '@/lib/api/building';
 
 // 상가 정보 확인 화면의 표시 문구 — 컴포넌트 여러 곳에서 같이 쓴다.
@@ -44,6 +45,5 @@ export function formatArea(value: number): string {
 
 // 입력값의 층/호수에서 "4층", "지하 1층" 부분만 뽑는다. 없으면 "해당 층".
 export function floorFromUnit(floorUnit: string): string {
-  const match = floorUnit.match(/(지하\s*)?\d+\s*층/);
-  return match ? match[0].replace(/\s+/g, ' ') : '해당 층';
+  return normalizeFloor(floorUnit) ?? '해당 층';
 }
