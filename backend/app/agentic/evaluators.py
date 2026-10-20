@@ -163,6 +163,9 @@ def review_packet(scope, draft):
 async def review(loop, actor, executor, draft):
     submitted = None
     accepted = {}
+    reads = 0
+    submit_failures = 0
+    model_calls = 0
 
     async def submit(input):
         nonlocal submitted
@@ -212,8 +215,6 @@ async def review(loop, actor, executor, draft):
                 "content": canonical_json(await run_in_thread(review_packet, loop.scope, draft)),
             },
         ]
-        reads = 0
-        submit_failures = 0
         while submitted is None:
             submit_only = reads >= 3 or submit_failures > 0
             if submit_only:
@@ -221,6 +222,7 @@ async def review(loop, actor, executor, draft):
             definitions = executor.definitions()
             if submit_only:
                 definitions = [d for d in definitions if d["function"]["name"] == "submit_review"]
+            model_calls += 1
             async with asyncio.timeout(
                 max(0.01, loop.budget.seconds_limit - loop.budget.active_seconds)
             ):
@@ -290,6 +292,13 @@ async def review(loop, actor, executor, draft):
     await loop.event(
         "evaluation",
         "completed" if submitted else "failed",
-        {"actor": actor, "error_code": result.error_code},
+        {
+            "actor": actor,
+            "error_code": result.error_code,
+            "issues_count": len(result.issues),
+            "reads": reads,
+            "rejections": submit_failures,
+            "model_calls": model_calls,
+        },
     )
     return result

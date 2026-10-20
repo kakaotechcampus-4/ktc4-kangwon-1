@@ -350,6 +350,95 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definitions_seen[3:], [{"submit_review"}] * 3)
         self.assertEqual(executor.shared.calls[("examiner", "total")], 3)
         self.assertFalse(budget.submitting)
+        self.assertEqual(
+            loop.event.await_args_list[-1].args,
+            (
+                "evaluation",
+                "completed",
+                {
+                    "actor": "examiner",
+                    "error_code": None,
+                    "issues_count": 0,
+                    "reads": 3,
+                    "rejections": 2,
+                    "model_calls": 6,
+                },
+            ),
+        )
+
+    async def test_final_event_counts_accepted_issues(self):
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        executor = ToolExecutor(scope, None, actor="examiner")
+        fact_id = "f_00000000-0000-4000-8000-000000000001"
+        issue = {
+            "issue_id": "evidence",
+            "target": "claim",
+            "kind": "missing_evidence",
+            "comment": "문장의 근거가 없습니다.",
+            "fact_ids": [fact_id],
+            "suggested_check": "근거를 붙이세요.",
+        }
+        message = call(
+            "submit_review", {"draft_id": "draft", "verdict": "conditional", "issues": [issue]}
+        )
+        loop = SimpleNamespace(
+            scope=scope,
+            budget=RuntimeBudget(),
+            _model=AsyncMock(return_value=(message, {})),
+            event=AsyncMock(),
+        )
+        with (
+            patch(
+                "app.agentic.evaluators.fact_rows",
+                return_value={fact_id: {"citable": True, "status": "observed"}},
+            ),
+            patch("app.agentic.evaluators.save_review"),
+            patch("app.agentic.tools._audit"),
+            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+        ):
+            result = await evaluators.review(loop, "examiner", executor, self.draft())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(
+            loop.event.await_args_list[-1].args[2],
+            {
+                "actor": "examiner",
+                "error_code": None,
+                "issues_count": 1,
+                "reads": 0,
+                "rejections": 0,
+                "model_calls": 1,
+            },
+        )
+
+    async def test_final_event_counts_zero_when_packet_fails(self):
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        loop = SimpleNamespace(
+            scope=scope, budget=RuntimeBudget(), _model=AsyncMock(), event=AsyncMock()
+        )
+        with (
+            patch("app.agentic.evaluators.review_packet", side_effect=ValueError("over")),
+            patch("app.agentic.evaluators.save_review"),
+        ):
+            result = await evaluators.review(
+                loop, "examiner", ToolExecutor(scope, None, actor="examiner"), self.draft()
+            )
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        loop._model.assert_not_awaited()
+        self.assertEqual(
+            loop.event.await_args_list[-1].args,
+            (
+                "evaluation",
+                "failed",
+                {
+                    "actor": "examiner",
+                    "error_code": "SOURCE_UNAVAILABLE",
+                    "issues_count": 0,
+                    "reads": 0,
+                    "rejections": 0,
+                    "model_calls": 0,
+                },
+            ),
+        )
 
     async def test_packet_all_industry_counts_without_all_industry_records(self):
         draft = self.draft()
@@ -386,6 +475,17 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error_code, "DRAFT_MISMATCH")
         self.assertEqual(loop._model.await_count, 3)
         self.assertEqual(executor.shared.calls[("examiner", "submit_review")], 0)
+        self.assertEqual(
+            loop.event.await_args_list[-1].args[2],
+            {
+                "actor": "examiner",
+                "error_code": "DRAFT_MISMATCH",
+                "issues_count": 0,
+                "reads": 0,
+                "rejections": 3,
+                "model_calls": 3,
+            },
+        )
 
 
 class SpaceFitCacheTests(unittest.IsolatedAsyncioTestCase):
