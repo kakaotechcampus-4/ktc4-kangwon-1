@@ -148,6 +148,8 @@ class ToolExecutor:
             if self.actor == "advisor"
             else set(TOOL_INPUTS) - {"submit_review"}
         )
+        if self.actor == "examiner":
+            permitted = permitted - {"query_raw"}
         return [d for d in tool_definitions() if d["function"]["name"] in permitted]
 
     def _reserve(self, name, args, *, duplicate=False):

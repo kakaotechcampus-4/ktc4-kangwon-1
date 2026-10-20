@@ -17,16 +17,14 @@ from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 from app.text import has_digit
 
+from . import examiner
 from .aliases import encode
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
 from .sql_tool import error
 
 PERSONAS = {
-    "examiner": (
-        "심사관입니다. 근거의 원천·기간·반경, L 중복 채점과 전체 업종의 unknown 이유를 "
-        "검증하세요. 검토 전 공간 초안이 확정 사실이나 점수 근거가 되었는지 확인하세요."
-    ),
+    "examiner": examiner.PERSONA,
     "founder": (
         "창업자 편입니다. 공간 초안과 임대인의 확인된 조건을 대조해 설비·운영 제약을 "
         "검토하세요. 소매업의 주방·조리 배기 부재만으로 불리하게 판단하지 마세요."
@@ -212,7 +210,13 @@ async def review(loop, actor, executor, draft):
             {"role": "system", "content": PERSONAS[actor] + "\n" + COMMON},
             {
                 "role": "user",
-                "content": canonical_json(await run_in_thread(review_packet, loop.scope, draft)),
+                "content": canonical_json(
+                    await run_in_thread(
+                        examiner.review_packet if actor == "examiner" else review_packet,
+                        loop.scope,
+                        draft,
+                    )
+                ),
             },
         ]
         while submitted is None:

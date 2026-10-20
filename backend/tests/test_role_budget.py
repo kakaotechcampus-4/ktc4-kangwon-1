@@ -133,8 +133,18 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
         executor.shared.measurement = measurement
         return executor
 
-    async def test_only_four_evaluator_tools_and_three_reads_in_measurement(self):
-        expected = {"get_scorecard", "get_facts", "query_raw", "submit_review"}
+    async def test_examiner_reads_without_raw_rows_and_others_keep_four_tools(self):
+        founder = self.executor("founder")
+        self.assertEqual(
+            {definition["function"]["name"] for definition in founder.definitions()},
+            {"get_scorecard", "get_facts", "query_raw", "submit_review"},
+        )
+        with patch("app.agentic.tools._audit"):
+            denied = await self.executor().execute("query_raw", {"sql": "SELECT 1"})
+        self.assertEqual(denied.error.code, "INVALID_ARGUMENT")
+
+    async def test_only_three_examiner_tools_and_three_reads_in_measurement(self):
+        expected = {"get_scorecard", "get_facts", "submit_review"}
         for measurement in (False, True):
             executor = self.executor(
                 measurement=measurement,
@@ -299,6 +309,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             reviews = await asyncio.gather(
                 *(
@@ -343,6 +357,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             result = await evaluators.review(loop, "examiner", executor, self.draft())
         self.assertEqual(result.status, "completed")
@@ -395,6 +413,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             result = await evaluators.review(loop, "examiner", executor, self.draft())
         self.assertEqual(result.status, "completed")
@@ -416,7 +438,7 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             scope=scope, budget=RuntimeBudget(), _model=AsyncMock(), event=AsyncMock()
         )
         with (
-            patch("app.agentic.evaluators.review_packet", side_effect=ValueError("over")),
+            patch("app.agentic.examiner.review_packet", side_effect=ValueError("over")),
             patch("app.agentic.evaluators.save_review"),
         ):
             result = await evaluators.review(
@@ -469,6 +491,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             result = await evaluators.review(loop, "examiner", executor, self.draft())
         self.assertEqual(result.status, "failed")
