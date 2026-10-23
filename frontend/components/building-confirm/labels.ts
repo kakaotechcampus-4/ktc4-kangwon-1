@@ -42,8 +42,14 @@ export function formatArea(value: number): string {
   return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡`;
 }
 
-// 입력값의 층/호수에서 "4층", "지하 1층" 부분만 뽑는다. 없으면 "해당 층".
+// 백엔드 공간 비교와 같은 표기를 지원하며, 지하 접두어를 버리고 지상층으로 읽지 않는다.
 export function floorFromUnit(floorUnit: string): string {
-  const match = floorUnit.match(/(지하\s*)?\d+\s*층/);
-  return match ? match[0].replace(/\s+/g, ' ') : '해당 층';
+  const match = floorUnit.match(
+    /^\s*(지하|지상|지|B)?\s*0*([1-9][0-9]*)(?:\s*(층|F)(?:\s*[0-9]+\s*호)?|\s+[0-9]+\s*호)?\s*$/i
+  );
+  if (!match || !(match[1] || match[3])) {
+    return '해당 층';
+  }
+  const basement = ['지하', '지', 'b'].includes((match[1] ?? '').toLowerCase());
+  return `${basement ? '지하 ' : ''}${match[2]}층`;
 }
