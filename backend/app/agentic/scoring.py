@@ -374,7 +374,7 @@ def regulation(code: str, scan: dict) -> str:
     relative = any("상대" in n for n in names)
     if not absolute and not relative:
         return "unknown"
-    if absolute and code in {"I101", "I102"}:
+    if absolute:
         return "금지"
     return "조건부"
 
