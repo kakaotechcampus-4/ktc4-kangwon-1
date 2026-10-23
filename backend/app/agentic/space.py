@@ -14,6 +14,7 @@ FACILITY_LEVELS = frozenset({"required", "preferred", "conditional", "false"})
 FLOOR_LEVELS = frozenset({"ground_required", "ground_preferred", "basement_preferred", "false"})
 GROUND_LEVELS = frozenset({"ground_required", "ground_preferred"})
 NEEDED_LEVELS = frozenset({True, "true", "required", "preferred"})
+CONFIRMED_STATES = {"present": True, "unavailable": False, "installable": None}
 
 _AREA = re.compile(r"(?:약\s*)?(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
 _AREA_ANSWER = re.compile(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?")
@@ -118,6 +119,11 @@ def compare_space(profile, answers):
     elif expected_floor is not None and actual_floor is not None:
         result["floor"] = "일치" if expected_floor == actual_floor else "불일치"
     facilities = _facilities(answers)
+    confirmed = answers.get("confirmed_facilities")
+    if isinstance(confirmed, dict):
+        for field, state in confirmed.items():
+            if field in facilities:
+                facilities[field] = CONFIRMED_STATES.get(state)
     for field in ("kitchen", "ventilation", "water_supply"):
         requirement = profile.get(field + "_needed")
         result[field] = "미확인"
@@ -159,7 +165,13 @@ def ensure_space_fits(scope, *, connection=None):
                 "existing_facilities",
                 "space_condition",
             }:
-                candidates.setdefault(row[3], []).append((row[0], json.loads(row[4])))
+                value = json.loads(row[4])
+                key = (
+                    "confirmed_facilities"
+                    if row[3] == "existing_facilities" and isinstance(value, dict)
+                    else row[3]
+                )
+                candidates.setdefault(key, []).append((row[0], value))
         for metric, rows in candidates.items():
             if metric in {"floor", "exclusive_area"}:
                 chosen = next((c for c in rows if _readable(metric, c[1])), rows[0])
