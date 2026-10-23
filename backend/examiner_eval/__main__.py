@@ -2,6 +2,6 @@
 
 import sys
 
-from examiner_eval.runner import main
+from examiner_eval.cli import main
 
 sys.exit(main())

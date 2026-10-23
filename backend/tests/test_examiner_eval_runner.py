@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import copy
 import dataclasses
+import hashlib
 import io
 import json
 import os
@@ -12,6 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
+
+from openai.types.chat import ChatCompletionMessage
 
 from app.agentic import evaluators, examiner
 from app.agentic.contracts import SubmitDraftInput, SubmitLInput
@@ -23,7 +26,7 @@ from app.db.repository import create_request
 from app.industries.catalog import INDUSTRIES
 from app.schemas import Site
 from app.storage.raw import capture_scope
-from examiner_eval import runner, store
+from examiner_eval import cli, runner, store
 from examiner_eval.cases import dump_cases, load_cases
 from examiner_eval.generator import build_cases
 from examiner_eval.variants import VARIANTS
@@ -31,6 +34,11 @@ from examiner_eval.variants import VARIANTS
 SAVE_REVIEW = evaluators.save_review
 REVIEW_PACKET = examiner.review_packet
 SITE = Site(input_address="시험", road_address="시험", latitude=37.5, longitude=127.0)
+REAL_ENV = {
+    "EVALUATOR_LLM_MODEL": "eval-model",
+    "EVALUATOR_LLM_API_KEY": "placeholder-key",
+    "EVALUATOR_LLM_BASE_URL": "http://localhost",
+}
 
 
 async def make_store(folder):
@@ -70,6 +78,53 @@ def line_count(path):
     return len(Path(path).read_text(encoding="utf-8").splitlines())
 
 
+def file_state(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest(), Path(path).stat().st_mtime_ns
+
+
+def stubborn_message(number):
+    if number == 1:
+        name, args = "submit_review", {"draft_id": "wrong", "verdict": "agree", "issues": []}
+    else:
+        name, args = "get_scorecard", {}
+    return ChatCompletionMessage(
+        role="assistant",
+        tool_calls=[
+            {
+                "id": f"c{number}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args)},
+            }
+        ],
+    )
+
+
+def stubborn_request(sent):
+    async def request(messages, settings, *, tools, usage, receipt=None):
+        sent.append(messages)
+        return stubborn_message(len(sent))
+
+    return request
+
+
+def cooperative_request(sent):
+    async def request(messages, settings, *, tools, usage, receipt=None):
+        sent.append(messages)
+        return runner.fake_generate(messages, tools, settings, {})
+
+    return request
+
+
+@contextlib.contextmanager
+def real_model(request):
+    with (
+        patch.dict(os.environ, REAL_ENV),
+        patch.object(cli, "load_environment", Mock()) as load,
+        patch("app.llm.client._request", request),
+    ):
+        yield load
+
+
 class RunCaseTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -86,6 +141,22 @@ class RunCaseTests(unittest.IsolatedAsyncioTestCase):
         return await runner.run_case(
             case, variant, self.ctx, self.db, repeat=1, generate=generate, **kwargs
         )
+
+    async def pending(self, pending, max_calls=None):
+        out = self.folder / "out"
+        out.mkdir(exist_ok=True)
+        with contextlib.redirect_stdout(io.StringIO()):
+            outcome = await runner.run_pending(
+                pending,
+                {self.ctx.request_id: self.ctx},
+                self.db,
+                out,
+                variant="V2",
+                generate=runner.fake_generate,
+                model=runner.FAKE_MODEL,
+                max_calls=max_calls,
+            )
+        return out, outcome
 
     async def test_run_case_completes_with_fake_and_counts_calls(self):
         case, _ = cited(self.cases[0], self.ctx)
@@ -105,6 +176,19 @@ class RunCaseTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(outcome.model, runner.FAKE_MODEL)
                 self.assertGreaterEqual(outcome.elapsed_ms, 0)
         self.assertIs(examiner.review_packet, REVIEW_PACKET)
+
+    async def test_case_calls_capped_per_case(self):
+        sent = []
+
+        def generate(messages, definitions, settings, receipt):
+            sent.append(messages)
+            return stubborn_message(len(sent))
+
+        outcome = await self.execute(self.cases[0], generate=generate)
+        self.assertEqual(outcome.status, "failed")
+        self.assertEqual(outcome.error_code, "BUDGET_EXCEEDED")
+        self.assertEqual(outcome.calls, runner.CALLS_PER_CASE)
+        self.assertEqual(len(sent), runner.CALLS_PER_CASE)
 
     async def test_failed_generation_is_recorded(self):
         async def boom(messages, definitions, settings, receipt):
@@ -195,21 +279,23 @@ class RunCaseTests(unittest.IsolatedAsyncioTestCase):
         entries = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual([e["role"] for e in entries], ["examiner"])
 
+    async def test_partial_recording_is_kept(self):
+        calls = self.folder / "out" / "calls"
+        calls.mkdir(parents=True)
+        stale = calls / "loop_clean__V2__1.json"
+        stale.write_text("partial", encoding="utf-8")
+        await self.pending([(self.cases[0], 1)])
+        entries = json.loads(stale.read_text(encoding="utf-8"))
+        self.assertEqual([e["role"] for e in entries], ["examiner"])
+        kept = [p for p in calls.iterdir() if p != stale]
+        self.assertEqual(len(kept), 1)
+        self.assertRegex(kept[0].name, r"^loop_clean__V2__1\.partial-\d{8}T\d{12}Z\.json$")
+        self.assertEqual(kept[0].read_text(encoding="utf-8"), "partial")
+
     async def test_stops_before_next_case_at_max_calls(self):
-        out = self.folder / "out"
-        out.mkdir()
-        pending = [(self.cases[0], 1), (self.cases[1], 1)]
-        with contextlib.redirect_stdout(io.StringIO()):
-            results, total, stopped = await runner.run_pending(
-                pending,
-                {self.ctx.request_id: self.ctx},
-                self.db,
-                out,
-                variant="V2",
-                generate=runner.fake_generate,
-                model=runner.FAKE_MODEL,
-                max_calls=1,
-            )
+        out, (results, total, stopped) = await self.pending(
+            [(self.cases[0], 1), (self.cases[1], 1)], max_calls=1
+        )
         self.assertTrue(stopped)
         self.assertEqual(len(results), 1)
         self.assertEqual(total, 1)
@@ -221,6 +307,7 @@ class CliTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.folder = Path(self.temp.name)
         self.src = asyncio.run(make_store(self.folder))
+        self.src_state = file_state(self.src)
         self.db = self.folder / "copy.sqlite3"
         self.out = self.folder / "out"
         self.cases = self.out / "cases.json"
@@ -234,15 +321,15 @@ class CliTests(unittest.TestCase):
     def call(self, *argv):
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            code = runner.main([str(a) for a in argv])
+            code = cli.main([str(a) for a in argv])
         return code, stdout.getvalue(), stderr.getvalue()
 
-    def run_args(self, out, *extra, variant="V2"):
+    def run_args(self, out, *extra, variant="V2", cases=None):
         return (
             "--db",
             self.db,
             "--cases",
-            self.cases,
+            cases or self.cases,
             "--variant",
             variant,
             "--out",
@@ -256,6 +343,7 @@ class CliTests(unittest.TestCase):
 
     def test_build_writes_cases_and_refuses_overwrite(self):
         self.assertTrue(self.db.exists())
+        self.assertEqual(file_state(self.src), self.src_state)
         cases = load_cases(self.cases)
         self.assertEqual([c.source for c in cases], ["clean", "seeded"])
         self.assertIn("clean 1", self.printed)
@@ -273,6 +361,7 @@ class CliTests(unittest.TestCase):
             self.call("build", "--src", self.src, "--db", self.src, "--out", fresh)[0], 2
         )
         self.assertFalse((fresh / "cases.json").exists())
+        self.assertEqual(file_state(self.src), self.src_state)
 
     def test_resume_skips_done_rows(self):
         out = self.folder / "V2"
@@ -286,10 +375,10 @@ class CliTests(unittest.TestCase):
                 "type": "header",
                 "variant": "V2",
                 "split": "tune",
-                "repeats": 1,
-                "model": runner.FAKE_MODEL,
                 "mode": "fake",
-                "max_calls": None,
+                "model": runner.FAKE_MODEL,
+                "first_repeats": 1,
+                "first_max_calls": None,
             },
         )
         self.assertEqual({r["type"] for r in rows}, {"result"})
@@ -308,61 +397,83 @@ class CliTests(unittest.TestCase):
         before = line_count(out / runner.RESULTS)
         self.assertEqual(self.call(*self.run_args(out, "--fake", variant="V1"))[0], 2)
         self.assertEqual(self.call(*self.run_args(out, "--fake", "--split", "all"))[0], 2)
+        with patch.object(cli, "load_environment", Mock()) as load:
+            code, _, err = self.call(*self.run_args(out, "--real", "--max-calls", "100"))
+        self.assertEqual(code, 2)
+        self.assertIn("mode", err)
+        load.assert_not_called()
         self.assertEqual(line_count(out / runner.RESULTS), before)
 
     def test_real_requires_max_calls_and_refuses_over_budget(self):
         out = self.folder / "real"
+        ghost = self.folder / "ghost.json"
+        dump_cases(
+            [dataclasses.replace(c, request_id="absent") for c in load_cases(self.cases)], ghost
+        )
         with (
-            patch.object(runner, "load_environment", Mock()) as load,
+            patch.object(cli, "load_environment", Mock()) as load,
             patch.object(runner, "run_case", AsyncMock()) as run_case,
         ):
             self.assertEqual(self.call(*self.run_args(out, "--real"))[0], 2)
             code, _, err = self.call(*self.run_args(out, "--real", "--max-calls", "1"))
             self.assertEqual(code, 2)
             self.assertIn("12", err)
+            code, _, err = self.call(
+                *self.run_args(out, "--real", "--max-calls", "100", cases=ghost)
+            )
+            self.assertEqual(code, 2)
+            self.assertIn("absent", err)
         load.assert_not_called()
         run_case.assert_not_called()
         self.assertFalse((out / runner.RESULTS).exists())
 
     def test_real_records_evaluator_model_in_header(self):
         out = self.folder / "real"
-        case = load_cases(self.cases)[0]
-        done = runner.CaseResult(
-            case_id=case.case_id,
-            variant="V2",
-            repeat=1,
-            status="completed",
-            error_code=None,
-            verdict="agree",
-            issues=[],
-            end_event={"issues_count": 0, "reads": 0, "rejections": 0, "model_calls": 1},
-            calls=1,
-            input_tokens=0,
-            output_tokens=0,
-            elapsed_ms=1,
-            model=None,
-            packet_chars=1,
-            omitted_fact_ids=0,
-        )
-        env = {
-            "EVALUATOR_LLM_MODEL": "eval-model",
-            "EVALUATOR_LLM_API_KEY": "placeholder-key",
-            "EVALUATOR_LLM_BASE_URL": "http://localhost",
-        }
-        with (
-            patch.dict(os.environ, env),
-            patch.object(runner, "load_environment", Mock()) as load,
-            patch.object(runner, "run_case", AsyncMock(return_value=done)) as run_case,
-        ):
+        sent = []
+        with real_model(cooperative_request(sent)) as load:
             code, _, err = self.call(*self.run_args(out, "--real", "--max-calls", "12"))
-        self.assertEqual(code, 0, err)
+            self.assertEqual(code, 0, err)
+            again, printed, _ = self.call(*self.run_args(out, "--real", "--max-calls", "12"))
+        self.assertEqual(again, 0)
+        self.assertIn("남은 사례가 없습니다", printed)
         load.assert_called_once_with()
-        self.assertIsNone(run_case.call_args.kwargs["generate"])
+        self.assertEqual(len(sent), 2)
         header, *rows = self.rows(out)
         self.assertEqual(header["model"], "eval-model")
         self.assertEqual(header["mode"], "real")
-        self.assertEqual(header["max_calls"], 12)
+        self.assertEqual(header["first_max_calls"], 12)
         self.assertEqual({r["model"] for r in rows}, {"eval-model"})
+        self.assertEqual([r["status"] for r in rows], ["completed", "completed"])
+        self.assertEqual([r["calls"] for r in rows], [1, 1])
+        written = [out / runner.RESULTS, *sorted((out / "calls").glob("*.json"))]
+        self.assertEqual(len(written), 3)
+        for path in written:
+            self.assertNotIn("placeholder-key", path.read_text(encoding="utf-8"))
+
+    def test_real_caps_calls_per_case(self):
+        one = self.folder / "one.json"
+        dump_cases(load_cases(self.cases)[:1], one)
+        out = self.folder / "capped"
+        sent = []
+        with real_model(stubborn_request(sent)):
+            code, _, err = self.call(*self.run_args(out, "--real", "--max-calls", "6", cases=one))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len(sent), runner.CALLS_PER_CASE)
+        (row,) = self.rows(out)[1:]
+        self.assertEqual(row["calls"], runner.CALLS_PER_CASE)
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["error_code"], "BUDGET_EXCEEDED")
+
+    def test_truncated_last_line_refused(self):
+        out = self.folder / "cut"
+        self.assertEqual(self.call(*self.run_args(out, "--fake"))[0], 0)
+        with (out / runner.RESULTS).open("a", encoding="utf-8") as handle:
+            handle.write('{"type": "res')
+        code, _, err = self.call(*self.run_args(out, "--fake", "--repeats", "2"))
+        self.assertEqual(code, 2)
+        self.assertIn("4번째 줄", err)
+        self.assertIn("마지막 줄이 끊겼습니다", err)
+        self.assertIn("그 줄을 지우고 다시 실행하세요", err)
 
     def test_split_defaults_to_tune(self):
         cases = load_cases(self.cases)
@@ -378,7 +489,7 @@ class CliTests(unittest.TestCase):
 
     def test_refuses_db_inside_protected_folder(self):
         out = self.folder / "guard"
-        with patch.object(runner, "PROTECTED", self.folder):
+        with patch.object(cli, "PROTECTED", self.folder):
             self.assertEqual(self.call(*self.run_args(out, "--fake"))[0], 2)
         self.assertFalse((out / runner.RESULTS).exists())
 
