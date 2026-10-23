@@ -26,8 +26,17 @@ def _floor(value, *, preference=False):
     if not isinstance(value, str):
         return None
     suffix = r"(?:\s+접근 우선 가정)?" if preference else ""
-    match = re.fullmatch(r"\s*(지하|지상)?\s*([1-9]\d*)\s*층" + suffix + r"\s*", value)
-    return int(match[2]) * (-1 if match[1] == "지하" else 1) if match else None
+    match = re.fullmatch(
+        r"\s*(지하|지상|지|B)?\s*0*([1-9][0-9]*)"
+        r"(?:\s*(층|F)(?:\s*[0-9]+\s*호)?|\s+[0-9]+\s*호)?" + suffix + r"\s*",
+        value,
+        flags=re.IGNORECASE,
+    )
+    # 호수·추측 문장에서 숫자만 뽑지 않고, 층 접두어나 단위가 명시된 값만 비교합니다.
+    if match is None or not (match[1] or match[3]):
+        return None
+    basement = (match[1] or "").casefold() in {"지하", "지", "b"}
+    return int(match[2]) * (-1 if basement else 1)
 
 
 def _area_fit(requirement, answer):
