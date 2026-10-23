@@ -14,15 +14,15 @@ V0_PERSONA = (
 )
 
 
-def _definitions_with_query_raw(self):
-    permitted = (
-        tools.EVALUATOR_READS | {"submit_review"}
-        if self.actor in tools.EVALUATORS
-        else {"get_facts"}
-        if self.actor == "advisor"
-        else set(tools.TOOL_INPUTS) - {"submit_review"}
-    )
-    return [d for d in tools.tool_definitions() if d["function"]["name"] in permitted]
+def _with_query_raw(original):
+    def definitions(self):
+        defs = original(self)
+        if self.actor != "examiner" or any(d["function"]["name"] == "query_raw" for d in defs):
+            return defs
+        extra = [d for d in tools.tool_definitions() if d["function"]["name"] == "query_raw"]
+        return [*defs, *extra[:1]]
+
+    return definitions
 
 
 @contextmanager
@@ -34,7 +34,11 @@ def use_variant(name):
             stack.enter_context(patch.dict(evaluators.PERSONAS, {"examiner": V0_PERSONA}))
             stack.enter_context(patch.object(examiner, "review_packet", evaluators.review_packet))
             stack.enter_context(
-                patch.object(tools.ToolExecutor, "definitions", _definitions_with_query_raw)
+                patch.object(
+                    tools.ToolExecutor,
+                    "definitions",
+                    _with_query_raw(tools.ToolExecutor.definitions),
+                )
             )
         elif name == "V1":
             stack.enter_context(patch.dict(evaluators.PERSONAS, {"examiner": frozen_v1.PERSONA}))

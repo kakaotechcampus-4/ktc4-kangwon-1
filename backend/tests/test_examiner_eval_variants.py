@@ -3,6 +3,7 @@
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.agentic import evaluators, examiner
 from app.agentic.tools import ToolExecutor
@@ -63,6 +64,15 @@ class VariantsTest(unittest.TestCase):
             }
         self.assertEqual(before, after)
 
+    def test_v0_wraps_original_definitions(self):
+        fake = [{"function": {"name": "fake_tool"}}]
+        with patch.object(ToolExecutor, "definitions", lambda self: list(fake)):
+            with use_variant("V0"):
+                names = examiner_tool_names()
+                other = ToolExecutor(None, None, actor="decision").definitions()
+        self.assertEqual(names, {"fake_tool", "query_raw"})
+        self.assertEqual(other, fake)
+
     def test_v1_uses_frozen_copy(self):
         persona = evaluators.PERSONAS["examiner"]
         packet = examiner.review_packet
@@ -100,7 +110,7 @@ class VariantsTest(unittest.TestCase):
 
     def test_frozen_v1_has_no_relative_imports(self):
         source = Path(frozen_v1.__file__).read_text(encoding="utf-8")
-        self.assertIsNone(re.search(r"^from \.", source, re.MULTILINE))
+        self.assertIsNone(re.search(r"^\s*from \.", source, re.MULTILINE))
 
 
 if __name__ == "__main__":
