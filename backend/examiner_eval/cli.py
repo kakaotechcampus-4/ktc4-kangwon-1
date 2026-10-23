@@ -20,6 +20,7 @@ from examiner_eval.runner import (
     read_results,
     run_pending,
 )
+from examiner_eval.score import REPORT_FILES, rejection_reasons, score_case, write_report
 from examiner_eval.store import copy_store, load_contexts
 from examiner_eval.variants import VARIANTS
 
@@ -67,6 +68,15 @@ def _build_parser():
     parser = argparse.ArgumentParser(prog="python -m examiner_eval build")
     parser.add_argument("--src", type=Path, required=True)
     parser.add_argument("--db", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    return parser
+
+
+def _report_parser():
+    parser = argparse.ArgumentParser(prog="python -m examiner_eval report")
+    parser.add_argument("--db", type=Path, required=True)
+    parser.add_argument("--cases", type=Path, required=True)
+    parser.add_argument("--runs", type=Path, nargs="+", required=True)
     parser.add_argument("--out", type=Path, required=True)
     return parser
 
@@ -194,8 +204,62 @@ def run(args) -> int:
     return 0
 
 
+def report(args) -> int:
+    existing = [name for name in REPORT_FILES if (args.out / name).exists()]
+    if existing:
+        return _refuse("이미 보고 파일이 있습니다: " + ", ".join(existing))
+    if not args.db.exists():
+        return _refuse(f"복사본 DB가 없습니다: {args.db}")
+    if not args.cases.exists():
+        return _refuse(f"사례 파일이 없습니다: {args.cases}")
+    cases = {c.case_id: c for c in load_cases(args.cases)}
+    per_run = []
+    for run_dir in args.runs:
+        path = run_dir / RESULTS
+        if not path.exists():
+            return _refuse(f"결과 파일이 없습니다: {path}")
+        try:
+            _, rows = read_results(path)
+        except ValueError as exc:
+            return _refuse(str(exc))
+        unknown = sorted({r.case_id for r in rows} - set(cases))
+        if unknown:
+            return _refuse("사례 파일에 없는 case_id입니다: " + ", ".join(unknown))
+        per_run.append((run_dir, rows))
+    results = [r for _, rows in per_run for r in rows]
+    keys = Counter((r.case_id, r.variant, r.repeat) for r in results)
+    duplicated = sorted(k for k, n in keys.items() if n > 1)
+    if duplicated:
+        return _refuse("같은 사례·버전·회차가 여러 번 있습니다: " + ", ".join(map(str, duplicated)))
+    contexts = {ctx.request_id: ctx for ctx in load_contexts(args.db)}
+    missing = sorted({cases[r.case_id].request_id for r in results} - set(contexts))
+    if missing:
+        return _refuse("복사본 DB에 없는 요청입니다: " + ", ".join(missing))
+    facts: dict[str, dict[str, set[str]]] = {}
+    for request_id, ctx in contexts.items():
+        by_code: dict[str, set[str]] = {}
+        for (code, _, _), fact_id in ctx.facts.items():
+            by_code.setdefault(code, set()).add(fact_id)
+        facts[request_id] = by_code
+    scores = [score_case(cases[r.case_id], r, facts[cases[r.case_id].request_id]) for r in results]
+    splits = {case_id: case.split for case_id, case in cases.items()}
+    rejections: dict = {}
+    for run_dir, rows in per_run:
+        for key, counter in rejection_reasons(run_dir, rows, splits).items():
+            if counter is None:
+                rejections.setdefault(key, None)
+            else:
+                rejections[key] = rejections.get(key) or Counter()
+                rejections[key].update(counter)
+    write_report(results, scores, args.out, rejections=rejections)
+    print(f"보고서: {args.out} (결과 {len(results)}건)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["build"]:
         return build(_build_parser().parse_args(argv[1:]))
+    if argv[:1] == ["report"]:
+        return report(_report_parser().parse_args(argv[1:]))
     return run(_run_parser().parse_args(argv))
