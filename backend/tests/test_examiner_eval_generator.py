@@ -1,11 +1,12 @@
 """심사위원 시험용 초안 생성 테스트."""
 
 import random
+import re
 import unittest
 
 from app.schemas import Site
 from app.text import has_digit
-from examiner_eval.generator import PHRASES, build_cases, clean_draft, seeded_draft
+from examiner_eval.generator import BARE_PHRASES, PHRASES, build_cases, clean_draft, seeded_draft
 from examiner_eval.store import RequestContext
 
 CS = "commercial_area"
@@ -99,6 +100,7 @@ class GeneratorTest(unittest.TestCase):
         ctx = make_ctx("r1", full_spec())
         draft, seeds = seeded_draft(ctx, random.Random(2))
         self.assertEqual(draft["report_id"], "rep-r1:seeded")
+        self.assertEqual(len(seeds), 3)
         self.assertEqual(sorted(s.kind for s in seeds), ["E1", "E2", "E3"])
         self.assertEqual(len({s.industry_code for s in seeds}), 3)
 
@@ -178,6 +180,66 @@ class GeneratorTest(unittest.TestCase):
             self.assertIn("최근 한 해", phrase)
         for phrase in PHRASES["oldest_year_close_rate"]:
             self.assertIn("가장 이른 해", phrase)
+
+    def test_unique_assignment_always_places_three_seeds(self):
+        spec = {
+            "CSA": FULL,
+            "CSB": (
+                (CS, "store_count"),
+                (BL, "recent_year_close_rate"),
+                (BL, "oldest_year_close_rate"),
+            ),
+            "CSC": ((CS, "store_count"),),
+        }
+        for seed_value in range(30):
+            _, seeds = seeded_draft(make_ctx("r1", spec), random.Random(seed_value))
+            self.assertEqual(len(seeds), 3)
+            self.assertEqual(len({s.industry_code for s in seeds}), 3)
+
+    def test_e1_replaces_sentence_with_bare_phrase(self):
+        metrics = ("store_count", "pattern_fit_index", "recent_year_close_rate")
+        for seed_value in range(10):
+            ctx = make_ctx("r1", full_spec())
+            draft, seeds = seeded_draft(ctx, random.Random(seed_value))
+            seed = next(s for s in seeds if s.kind == "E1")
+            cand = next(c for c in draft["top5"] if c["industry_code"] == seed.industry_code)
+            slot_ids = [s["fact_id"] for s in fact_slots(cand[seed.field])]
+            self.assertNotIn(seed.support_fact_ids[0], slot_ids)
+            metric = next(m for m in metrics if seed.support_fact_ids[0].endswith(m))
+            texts = [
+                s["text"].strip()
+                for s in cand[seed.field]
+                if s["type"] == "text" and s["text"].strip() in BARE_PHRASES[metric]
+            ]
+            self.assertEqual(len(texts), 1)
+
+    def test_bare_phrases_shape(self):
+        self.assertEqual(
+            set(BARE_PHRASES),
+            {"store_count", "pattern_fit_index", "recent_year_close_rate"},
+        )
+        for phrases in BARE_PHRASES.values():
+            self.assertGreaterEqual(len(phrases), 3)
+            for phrase in phrases:
+                self.assertNotIn("{fact}", phrase)
+                self.assertFalse(has_digit(phrase))
+
+    def test_sentences_are_separated_by_space(self):
+        for seed_value in range(10):
+            ctx = make_ctx("r1", full_spec())
+            drafts = [
+                clean_draft(ctx, random.Random(seed_value)),
+                seeded_draft(ctx, random.Random(seed_value))[0],
+            ]
+            for draft in drafts:
+                for cand in draft["top5"]:
+                    for field in ("reasons_segments", "risks_segments"):
+                        text = "".join(s.get("text", "|") for s in cand[field])
+                        self.assertIsNone(re.search(r"\.\S", text))
+
+    def test_build_cases_rejects_duplicate_request_ids(self):
+        with self.assertRaises(ValueError):
+            build_cases([make_ctx("r1", full_spec()), make_ctx("r1", full_spec())])
 
     def test_deterministic_regardless_of_order(self):
         a = make_ctx("ra", full_spec())
