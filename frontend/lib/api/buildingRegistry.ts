@@ -78,15 +78,14 @@ export const LOOKUP_ERROR_NOTE =
   '건축물대장을 불러오지 못했어요. 직접 입력해 주세요.';
 
 export function normalizeFloor(floorUnit: string): string | null {
-  const match = floorUnit.match(/(?:^|\s|동|제)(지하|지|[Bb])?\s*(\d+)\s*층/);
-  if (!match) {
+  const match = floorUnit.match(
+    /^\s*(?:[0-9A-Za-z가-힣]+동\s*)?제?\s*(지하|지상|지|B)?\s*0*([1-9][0-9]*)(?:\s*(층|F)(?:\s*[A-Za-z]?[0-9]+(?:-[0-9]+)?\s*호)?|\s+[A-Za-z]?[0-9]+(?:-[0-9]+)?\s*호)?\s*$/i
+  );
+  if (!match || !(match[1] || match[3])) {
     return null;
   }
-  const level = Number(match[2]);
-  if (level < 1 || level > 999) {
-    return null;
-  }
-  return match[1] ? `지하 ${level}층` : `${level}층`;
+  const basement = ['지하', '지', 'b'].includes((match[1] ?? '').toLowerCase());
+  return `${basement ? '지하 ' : ''}${match[2]}층`;
 }
 
 function unitFromFloorUnit(floorUnit: string): string | null {

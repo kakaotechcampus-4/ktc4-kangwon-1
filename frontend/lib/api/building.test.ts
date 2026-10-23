@@ -183,7 +183,7 @@ describe('건축물대장 응답을 화면 칸으로 옮기기', () => {
   });
 
   it('입력 층을 못 읽으면 층 용도와 면적을 비워 둔다', () => {
-    const info = toBuildingInfo(REGISTRY, '', '1F');
+    const info = toBuildingInfo(REGISTRY, '', '1층 또는 2층');
     expect(info.floorLabel).toBe('해당 층');
     expect(info.floorUse.value).toBeNull();
     expect(info.exclusiveAreaM2.value).toBeNull();
@@ -200,7 +200,7 @@ describe('층 표기 맞추기', () => {
     ['1층 B101호', '1층'],
     ['401호', null],
     ['0층', null],
-    ['1F', null],
+    ['1F', '1층'],
     ['', null],
     ['지1층', '지하 1층'],
     ['지1층 B01호', '지하 1층'],
@@ -214,7 +214,7 @@ describe('층 표기 맞추기', () => {
     ['제3층', '3층'],
     ['제3층 301호', '3층'],
     ['신관2층', null],
-    ['3F', null],
+    ['3F', '3층'],
   ])('%s → %s', (input, expected) => {
     expect(normalizeFloor(input)).toBe(expected);
   });
