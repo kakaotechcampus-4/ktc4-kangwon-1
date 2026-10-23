@@ -43,6 +43,16 @@ class StoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ctx.facts)
         db = sqlite3.connect(self.path)
         try:
+            excluded = {
+                r[0]
+                for r in db.execute(
+                    "SELECT fact_id FROM facts WHERE request_id=? AND snapshot_id=? "
+                    "AND (status<>'observed' OR citable<>1)",
+                    (ctx.request_id, ctx.snapshot_id),
+                )
+            }
+            self.assertTrue(excluded)
+            self.assertFalse(excluded & set(ctx.facts.values()))
             for (industry, source, metric), fid in ctx.facts.items():
                 row = db.execute(
                     "SELECT industry_code, source, metric, status, citable FROM facts "
@@ -59,6 +69,25 @@ class StoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(dest.exists())
         with self.assertRaises(FileExistsError):
             store.copy_store(self.path, dest)
+
+    async def test_copy_failure_leaves_no_dest(self):
+        dest = Path(self.temp.name) / "missing-copy.sqlite3"
+        with self.assertRaises(sqlite3.Error):
+            store.copy_store(Path(self.temp.name) / "absent.sqlite3", dest)
+        self.assertFalse(dest.exists())
+
+    async def test_skipped_request_logs_warning(self):
+        await self.submit()
+        db = sqlite3.connect(self.path)
+        try:
+            with db:
+                db.execute("UPDATE analysis_requests SET site_json=NULL")
+        finally:
+            db.close()
+        with self.assertLogs("examiner_eval.store", level="WARNING") as logs:
+            contexts = store.load_contexts(self.path)
+        self.assertEqual(contexts, [])
+        self.assertIn(self.scope.request_id, logs.output[0])
 
     async def test_make_scope_fields(self):
         await self.submit()

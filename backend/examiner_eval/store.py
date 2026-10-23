@@ -1,6 +1,7 @@
 """저장된 요청 DB에서 심사 시험에 쓸 요청 재료를 읽습니다."""
 
 import json
+import logging
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from pathlib import Path
 
 from app.schemas import Site
 from app.storage.raw import CaptureScope
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -30,8 +33,12 @@ def copy_store(src: Path, dest: Path) -> Path:
     dest = Path(dest)
     if dest.exists():
         raise FileExistsError(dest)
-    with closing(open_readonly(src)) as source, closing(sqlite3.connect(dest)) as target:
-        source.backup(target)
+    try:
+        with closing(open_readonly(src)) as source, closing(sqlite3.connect(dest)) as target:
+            source.backup(target)
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
     return dest
 
 
@@ -49,7 +56,10 @@ def load_contexts(db_path: Path) -> list[RequestContext]:
                 "ORDER BY created_at, report_id LIMIT 1",
                 (request_id,),
             ).fetchone()
-            if draft is None or not request["site_json"]:
+            if draft is None:
+                continue
+            if not request["site_json"]:
+                LOGGER.warning("요청 %s 건너뜀: site_json 없음", request_id)
                 continue
             snapshot_id = draft["snapshot_id"]
             run = db.execute(
@@ -58,6 +68,9 @@ def load_contexts(db_path: Path) -> list[RequestContext]:
                 (request_id, snapshot_id),
             ).fetchone()
             if run is None:
+                LOGGER.warning(
+                    "요청 %s 건너뜀: snapshot %s의 agentic_runs 행 없음", request_id, snapshot_id
+                )
                 continue
             facts = {}
             for fact in db.execute(
