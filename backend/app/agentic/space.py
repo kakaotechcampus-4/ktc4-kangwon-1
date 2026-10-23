@@ -10,6 +10,11 @@ from app.industries.catalog import INDUSTRIES
 
 from .facts import register_fact
 
+FACILITY_LEVELS = frozenset({"required", "preferred", "conditional", "false"})
+FLOOR_LEVELS = frozenset({"ground_required", "ground_preferred", "basement_preferred", "false"})
+GROUND_LEVELS = frozenset({"ground_required", "ground_preferred"})
+NEEDED_LEVELS = frozenset({True, "true", "required", "preferred"})
+
 _AREA = re.compile(r"(?:약\s*)?(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
 _AREA_ANSWER = re.compile(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?")
 _AREA_RANGE = re.compile(r"(\d+(?:\.\d+)?)\s*[~-]\s*(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
@@ -105,9 +110,10 @@ def compare_space(profile, answers):
         "floor": "미확인",
         "area": _area_fit(profile.get("area_band"), answers.get("exclusive_area")),
     }
-    expected_floor = _floor(profile.get("floor_preference"), preference=True)
+    preference = profile.get("floor_preference")
+    expected_floor = 1 if preference in GROUND_LEVELS else _floor(preference, preference=True)
     actual_floor = _floor(answers.get("floor"))
-    if profile.get("floor_preference") in (False, "false"):
+    if preference in (False, "false", "basement_preferred"):
         result["floor"] = "해당 없음"
     elif expected_floor is not None and actual_floor is not None:
         result["floor"] = "일치" if expected_floor == actual_floor else "불일치"
@@ -117,7 +123,7 @@ def compare_space(profile, answers):
         result[field] = "미확인"
         if requirement in (False, "false"):
             result[field] = "해당 없음"
-        elif requirement in (True, "true") and facilities[field] is not None:
+        elif requirement in NEEDED_LEVELS and facilities[field] is not None:
             result[field] = "일치" if facilities[field] else "불일치"
     result["reviewed"] = profile.get("reviewed", False) in (True, "true")
     result["confidence"] = profile.get("confidence", "low")

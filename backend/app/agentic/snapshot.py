@@ -22,6 +22,7 @@ from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
 from .facts import CALC_VERSION, register_fact
 from .inputs import format_snapshot
 from .scoring import WEIGHTS, evaluate
+from .space import FACILITY_LEVELS, FLOOR_LEVELS
 
 METRICS = {
     "D1": ("pattern_fit_index", "배수", "floating_population"),
@@ -129,7 +130,7 @@ def snapshot_config(scope, *, local=False):
 
 
 def persist_space_requirements(scope):
-    """검토 전 운영 가설을 CSV 원문 행과 함께 요청 DB에 보존합니다."""
+    """검토한 공간 요건 표를 CSV 원문 행과 함께 요청 DB에 보존합니다."""
     path = DATA_DIR / "industry_space_requirements.csv"
     raw = path.read_bytes()
     rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))))
@@ -152,18 +153,18 @@ def persist_space_requirements(scope):
         or any(
             set(row) != required
             or row["industry_name"] != INDUSTRIES[row["industry_code"]]
-            or row["reviewed"] != "false"
+            or row["reviewed"] != "true"
             or row["confidence"] != "low"
             or not all(row.values())
-            or row["water_supply_needed"] not in {"true", "false"}
+            or row["floor_preference"] not in FLOOR_LEVELS
             or any(
-                row[key] not in {"true", "false", "conditional"}
-                for key in ("kitchen_needed", "ventilation_needed")
+                row[key] not in FACILITY_LEVELS
+                for key in ("kitchen_needed", "ventilation_needed", "water_supply_needed")
             )
             for row in rows
         )
     ):
-        raise ValueError("검토 전 51업종 공간 요건 초안이 필요합니다.")
+        raise ValueError("검토한 51업종 공간 요건 표가 필요합니다.")
     digest = file_sha256(path)
     with connect(scope.path) as db:
         existing = db.execute(
@@ -177,7 +178,7 @@ def persist_space_requirements(scope):
         else scope.record_sync(
             source="industry_profile",
             source_type="file",
-            args={"file_name": path.name, "file_hash": digest, "reviewed": False},
+            args={"file_name": path.name, "file_hash": digest, "reviewed": True},
             page="file",
             status=None,
             payload={"rows": rows},
@@ -198,13 +199,13 @@ def persist_space_requirements(scope):
                 industry_code=row["industry_code"],
                 source="industry_profile",
                 metric="space_requirements",
-                value={**row, "reviewed": False},
-                unit="검토 전 공간 요건 초안(운영 가설)",
+                value={**row, "reviewed": True},
+                unit="공간 요건(시설·층 검토, 면적 추정)",
                 status="observed",
-                period="초안 작성 시점",
+                period="검토 시점",
                 row_ids=[references[row["industry_code"]]],
                 response_ids=[response_id],
-                comparison={"file_hash": digest, "reviewed": False},
+                comparison={"file_hash": digest, "reviewed": True},
                 connection=db,
             )
 
