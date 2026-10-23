@@ -12,7 +12,7 @@ from app.errors import AnalysisConflictError
 
 from .contracts import QuestionSessionRef, ToolReply
 from .facts import register_fact
-from .space import ensure_space_fits
+from .space import CONFIRMED_UNIT, ensure_space_fits
 from .sql_tool import error
 
 
@@ -115,7 +115,7 @@ def save_confirmed_space(scope, values):
                 source="user",
                 metric=field,
                 value=value,
-                unit="확인 화면 확정값",
+                unit=CONFIRMED_UNIT,
                 status="observed",
                 row_ids=[ref],
                 field_pointer="/" + field,

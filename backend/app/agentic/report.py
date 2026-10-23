@@ -13,7 +13,9 @@ from app.text import has_digit
 
 from .contracts import FactView, FinalCandidate, LRecord, LSelection
 from .read_tools import score_summary
-from .scoring import WEIGHTS, rank_candidates, result, summarize
+from .scoring import WEIGHTS, apply_space, rank_candidates, result, summarize
+from .space import confirmed_answers
+from .space_rules import judge, load_requirements
 
 NEW_METRICS = {
     "place_name",
@@ -273,16 +275,17 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         else {}
     )
     indexed = {r.industry_code: r for r in records}
+    answers = confirmed_answers(scope)
+    requirements = load_requirements()
     rows = []
     for original in base_rows:
         record = indexed[original["code"]]
         items = deepcopy(original["items"])
         items["L"] = result("L", record.grade if record.status == "observed" else None)
-        rows.append(
-            summarize(
-                original["code"], items, restrictions.get(original["code"], original["regulation"])
-            )
+        scored = summarize(
+            original["code"], items, restrictions.get(original["code"], original["regulation"])
         )
+        rows.append(apply_space(scored, judge(requirements.get(original["code"], {}), answers)))
     score_id = "ss_" + str(uuid.uuid4())
     with connect(scope.path) as db:
         db.execute(

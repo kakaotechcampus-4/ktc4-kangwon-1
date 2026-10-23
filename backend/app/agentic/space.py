@@ -15,6 +15,7 @@ FLOOR_LEVELS = frozenset({"ground_required", "ground_preferred", "basement_prefe
 GROUND_LEVELS = frozenset({"ground_required", "ground_preferred"})
 NEEDED_LEVELS = frozenset({True, "true", "required", "preferred"})
 CONFIRMED_STATES = {"present": True, "unavailable": False, "installable": None}
+CONFIRMED_UNIT = "확인 화면 확정값"
 
 _AREA = re.compile(r"(?:약\s*)?(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
 _AREA_ANSWER = re.compile(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?")
@@ -142,6 +143,26 @@ def _readable(metric, value):
     if not isinstance(value, str):
         return False
     return bool(_AREA_ANSWER.fullmatch(value.strip()))
+
+
+def confirmed_answers(scope, *, connection=None):
+    with connect(scope.path) if connection is None else nullcontext(connection) as db:
+        rows = db.execute(
+            "SELECT metric,value_json FROM facts WHERE request_id=? AND snapshot_id=? "
+            "AND source='user' AND status='observed' AND citable=1 AND unit=? "
+            "AND metric IN ('floor','exclusive_area','existing_facilities') "
+            "ORDER BY created_at DESC,fact_id DESC",
+            (scope.request_id, scope.snapshot_id, CONFIRMED_UNIT),
+        ).fetchall()
+    answers = {}
+    for metric, raw in rows:
+        value = json.loads(raw)
+        if metric == "existing_facilities":
+            if isinstance(value, dict):
+                answers.setdefault("confirmed_facilities", value)
+        else:
+            answers.setdefault(metric, value)
+    return answers
 
 
 def ensure_space_fits(scope, *, connection=None):
