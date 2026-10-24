@@ -21,7 +21,7 @@ from examiner_eval.runner import (
     run_pending,
 )
 from examiner_eval.score import REPORT_FILES, rejection_reasons, score_case, write_report
-from examiner_eval.store import copy_store, load_contexts
+from examiner_eval.store import candidate_facts, copy_store, load_contexts
 from examiner_eval.variants import VARIANTS
 
 CASES = "cases.json"
@@ -231,16 +231,12 @@ def report(args) -> int:
     duplicated = sorted(k for k, n in keys.items() if n > 1)
     if duplicated:
         return _refuse("같은 사례·버전·회차가 여러 번 있습니다: " + ", ".join(map(str, duplicated)))
-    contexts = {ctx.request_id: ctx for ctx in load_contexts(args.db)}
+    loaded = load_contexts(args.db)
+    contexts = {ctx.request_id: ctx for ctx in loaded}
     missing = sorted({cases[r.case_id].request_id for r in results} - set(contexts))
     if missing:
         return _refuse("복사본 DB에 없는 요청입니다: " + ", ".join(missing))
-    facts: dict[str, dict[str, set[str]]] = {}
-    for request_id, ctx in contexts.items():
-        by_code: dict[str, set[str]] = {}
-        for (code, _, _), fact_id in ctx.facts.items():
-            by_code.setdefault(code, set()).add(fact_id)
-        facts[request_id] = by_code
+    facts = candidate_facts(args.db, loaded)
     scores = [score_case(cases[r.case_id], r, facts[cases[r.case_id].request_id]) for r in results]
     splits = {case_id: case.split for case_id, case in cases.items()}
     rejections: dict = {}

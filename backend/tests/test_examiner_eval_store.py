@@ -63,6 +63,28 @@ class StoreTests(unittest.IsolatedAsyncioTestCase):
         finally:
             db.close()
 
+    async def test_candidate_facts_keep_every_fact_of_an_industry(self):
+        await self.submit()
+        contexts = store.load_contexts(self.path)
+        ctx = contexts[0]
+        (code, source, metric), kept = next(
+            (key, fid) for key, fid in ctx.facts.items() if key[0] is not None
+        )
+        db = sqlite3.connect(self.path)
+        db.row_factory = sqlite3.Row
+        try:
+            with db:
+                row = dict(db.execute("SELECT * FROM facts WHERE fact_id=?", (kept,)).fetchone())
+                row.update(fact_id="f_second-same-key", identity_hash="second-same-key")
+                db.execute(
+                    f"INSERT INTO facts({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                    list(row.values()),
+                )
+        finally:
+            db.close()
+        found = store.candidate_facts(self.path, contexts)[ctx.request_id]
+        self.assertTrue({kept, "f_second-same-key"} <= found[code])
+
     async def test_copy_refuses_existing(self):
         dest = Path(self.temp.name) / "copy.sqlite3"
         self.assertEqual(store.copy_store(self.path, dest), dest)

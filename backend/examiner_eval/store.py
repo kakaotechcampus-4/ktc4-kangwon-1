@@ -94,6 +94,23 @@ def load_contexts(db_path: Path) -> list[RequestContext]:
     return contexts
 
 
+def candidate_facts(
+    db_path: Path, contexts: list[RequestContext]
+) -> dict[str, dict[str | None, set[str]]]:
+    found: dict[str, dict[str | None, set[str]]] = {}
+    with closing(open_readonly(db_path)) as db:
+        for ctx in contexts:
+            by_code: dict[str | None, set[str]] = {}
+            for fact in db.execute(
+                "SELECT fact_id, industry_code FROM facts "
+                "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1",
+                (ctx.request_id, ctx.snapshot_id),
+            ):
+                by_code.setdefault(fact["industry_code"], set()).add(fact["fact_id"])
+            found[ctx.request_id] = by_code
+    return found
+
+
 def make_scope(ctx: RequestContext, db_path: Path) -> CaptureScope:
     return CaptureScope(
         request_id=ctx.request_id,
