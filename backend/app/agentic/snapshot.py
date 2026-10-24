@@ -22,7 +22,7 @@ from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
 from .facts import CALC_VERSION, register_fact
 from .inputs import format_snapshot
 from .scoring import WEIGHTS, evaluate
-from .space import FACILITY_LEVELS, FLOOR_LEVELS
+from .space_values import FACILITY_LEVELS, FLOOR_LEVELS
 
 METRICS = {
     "D1": ("pattern_fit_index", "배수", "floating_population"),

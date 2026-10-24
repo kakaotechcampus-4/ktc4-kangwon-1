@@ -1,7 +1,6 @@
 """업종 공간 요건을 명시된 임대인 답변과만 대조합니다."""
 
 import json
-import math
 import re
 from contextlib import nullcontext
 
@@ -9,17 +8,17 @@ from app.db.connection import connect
 from app.industries.catalog import INDUSTRIES
 
 from .facts import register_fact
+from .space_values import (
+    CONFIRMED_STATES,
+    GROUND_LEVELS,
+    NEEDED_LEVELS,
+    area_fit,
+    floor_number,
+    readable_answer,
+)
 
-FACILITY_LEVELS = frozenset({"required", "preferred", "conditional", "false"})
-FLOOR_LEVELS = frozenset({"ground_required", "ground_preferred", "basement_preferred", "false"})
-GROUND_LEVELS = frozenset({"ground_required", "ground_preferred"})
-NEEDED_LEVELS = frozenset({True, "true", "required", "preferred"})
-CONFIRMED_STATES = {"present": True, "unavailable": False, "installable": None}
 CONFIRMED_UNIT = "확인 화면 확정값"
 
-_AREA = re.compile(r"(?:약\s*)?(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
-_AREA_ANSWER = re.compile(rf"{_AREA.pattern}(?:\s*\(\s*{_AREA.pattern}\s*\))?")
-_AREA_RANGE = re.compile(r"(\d+(?:\.\d+)?)\s*[~-]\s*(\d+(?:\.\d+)?)\s*(㎡|m2|m²|평)")
 _FACILITY = re.compile(
     r"(?P<names>(?:주방|배기|후드|급배수)(?:\s*(?:·|/|및|와)\s*(?:주방|배기|후드|급배수))*)"
     r"\s*(?:설비|시설)?\s*(?:은|는|이|가)?\s*[:=]?\s*"
@@ -27,56 +26,6 @@ _FACILITY = re.compile(
     r"\s*(?=$|[,;\n])",
     re.IGNORECASE,
 )
-
-
-def _floor(value, *, preference=False):
-    if not isinstance(value, str):
-        return None
-    suffix = r"(?:\s+접근 우선 가정)?" if preference else ""
-    match = re.fullmatch(
-        r"\s*(지하|지상|지|B)?\s*0*([1-9][0-9]*)"
-        r"(?:\s*(층|F)(?:\s*[0-9]+\s*호)?|\s+[0-9]+\s*호)?" + suffix + r"\s*",
-        value,
-        flags=re.IGNORECASE,
-    )
-    # 호수·추측 문장에서 숫자만 뽑지 않고, 층 접두어나 단위가 명시된 값만 비교합니다.
-    if match is None or not (match[1] or match[3]):
-        return None
-    basement = (match[1] or "").casefold() in {"지하", "지", "b"}
-    return int(match[2]) * (-1 if basement else 1)
-
-
-def _area_fit(requirement, answer):
-    if requirement in (False, "false"):
-        return "해당 없음"
-    if not isinstance(requirement, str) or not isinstance(answer, str):
-        return "미확인"
-    observed = _AREA_ANSWER.fullmatch(answer.strip())
-    bounds = _AREA_RANGE.fullmatch(requirement.strip())
-    if not observed or not bounds:
-        return "미확인"
-    expected_factor = 400 / 121 if bounds[3] == "평" else 1
-    actual_factor = 400 / 121 if observed[2] == "평" else 1
-    low, high = float(bounds[1]) * expected_factor, float(bounds[2]) * expected_factor
-    value = float(observed[1]) * actual_factor
-    if (
-        not all(math.isfinite(v) for v in (low, high, value))
-        or low <= 0
-        or high < low
-        or value <= 0
-    ):
-        return "미확인"
-    if observed[3] is not None:
-        second_factor = 400 / 121 if observed[4] == "평" else 1
-        second = float(observed[3]) * second_factor
-        # 병기 단위는 각 표기 자릿수의 반올림 범위가 겹칠 때만 같은 면적으로 봅니다.
-        rounding = sum(
-            factor * 0.5 * 10 ** (-len(number.partition(".")[2]))
-            for number, factor in ((observed[1], actual_factor), (observed[3], second_factor))
-        )
-        if not math.isfinite(second) or second <= 0 or abs(value - second) > rounding:
-            return "미확인"
-    return "일치" if low <= value <= high else "불일치"
 
 
 def _facilities(answers):
@@ -110,11 +59,11 @@ def compare_space(profile, answers):
     """설명 문장에서 면적 기준이나 급배수 요건을 새로 추론하지 않습니다."""
     result = {
         "floor": "미확인",
-        "area": _area_fit(profile.get("area_band"), answers.get("exclusive_area")),
+        "area": area_fit(profile.get("area_band"), answers.get("exclusive_area")),
     }
     preference = profile.get("floor_preference")
-    expected_floor = 1 if preference in GROUND_LEVELS else _floor(preference, preference=True)
-    actual_floor = _floor(answers.get("floor"))
+    expected_floor = 1 if preference in GROUND_LEVELS else floor_number(preference, preference=True)
+    actual_floor = floor_number(answers.get("floor"))
     if preference in (False, "false", "basement_preferred"):
         result["floor"] = "해당 없음"
     elif expected_floor is not None and actual_floor is not None:
@@ -135,14 +84,6 @@ def compare_space(profile, answers):
     result["reviewed"] = profile.get("reviewed", False) in (True, "true")
     result["confidence"] = profile.get("confidence", "low")
     return result
-
-
-def _readable(metric, value):
-    if metric == "floor":
-        return _floor(value) is not None
-    if not isinstance(value, str):
-        return False
-    return bool(_AREA_ANSWER.fullmatch(value.strip()))
 
 
 def confirmed_answers(scope, *, connection=None):
@@ -195,7 +136,7 @@ def ensure_space_fits(scope, *, connection=None):
                 candidates.setdefault(key, []).append((row[0], value))
         for metric, rows in candidates.items():
             if metric in {"floor", "exclusive_area"}:
-                chosen = next((c for c in rows if _readable(metric, c[1])), rows[0])
+                chosen = next((c for c in rows if readable_answer(metric, c[1])), rows[0])
             else:
                 chosen = rows[0]
             answer_ids[metric], answers[metric] = chosen

@@ -6,7 +6,7 @@ from functools import cache
 
 from app.industries import DATA_DIR
 
-from .space import GROUND_LEVELS, _area_fit, _floor
+from .space_values import GROUND_LEVELS, area_fit, floor_number
 
 FACILITY_NAMES = {"kitchen": "주방", "ventilation": "배기(덕트)", "water_supply": "급배수"}
 FACILITY_STATES = frozenset({"present", "installable", "unavailable"})
@@ -61,7 +61,7 @@ def judge(profile: dict, answers: dict) -> SpaceJudgement:
                 notes.append(f"{name} 설치 불가: 메뉴·작업 방식 확인 필요")
         elif state == "installable" and level == "required":
             notes.append(f"{name} 설치 공사 필요")
-    floor = _floor(answers.get("floor"))
+    floor = floor_number(answers.get("floor"))
     floor_level = profile.get("floor_preference")
     if floor_level in GROUND_LEVELS:
         if floor is None:
@@ -74,6 +74,6 @@ def judge(profile: dict, answers: dict) -> SpaceJudgement:
     elif floor_level == "basement_preferred" and floor is not None and floor < 0:
         adjustment += 3
     area = answers.get("exclusive_area")
-    if area is not None and _area_fit(profile.get("area_band"), area) == "불일치":
+    if area is not None and area_fit(profile.get("area_band"), area) == "불일치":
         notes.append(f"면적이 업종 일반 범위({profile.get('area_band')}) 밖")
     return SpaceJudgement(bool(reasons), tuple(reasons), adjustment, tuple(notes))
