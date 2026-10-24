@@ -10,17 +10,12 @@ SQL = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|BEGIN|WITH|CREATE)\b")
 MODEL_SQL_TOOL = "sql_tool.py"
 PENDING = {
     "advisor.py",
-    "aliases.py",
-    "customer_rubric.py",
     "evaluators.py",
     "examiner.py",
-    "facts.py",
     "founder.py",
     "inputs.py",
     "l_input.py",
-    "landlord.py",
     "map_regulation.py",
-    "preflight.py",
     "questions.py",
     "read_tools.py",
     "report.py",
