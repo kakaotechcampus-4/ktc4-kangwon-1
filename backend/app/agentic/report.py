@@ -11,9 +11,15 @@ from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 from app.schemas import DecisionResult
 from app.text import has_digit
 
-from .contracts import FactView, FinalCandidate, LRecord, LSelection
+from .contracts import (
+    ConditionExcludedCandidate,
+    FactView,
+    FinalCandidate,
+    LRecord,
+    LSelection,
+)
 from .read_tools import score_summary
-from .scoring import WEIGHTS, apply_space, rank_candidates, result, summarize
+from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
 from .space import confirmed_answers
 from .space_rules import FACILITY_NAMES, judge, load_requirements
 
@@ -76,6 +82,20 @@ def rule_scored_space(fact, component, industry_code):
     return fact["metric"] == "existing_facilities" and isinstance(
         json.loads(fact["value_json"]), dict
     )
+
+
+def condition_excluded(rows):
+    ranked = sorted((r for r in rows if r["regulation"] != "금지"), key=rank_key)
+    return [
+        ConditionExcludedCandidate(
+            industry_code=r["code"],
+            industry_name=r["name"],
+            reasons=r["space"]["exclusion_reasons"],
+            score_rank=rank,
+        )
+        for rank, r in enumerate(ranked, 1)
+        if r.get("space", {}).get("excluded", False)
+    ]
 
 
 def fact_rows(scope, ids):
@@ -464,6 +484,7 @@ def finalize(
         summary_segments=proposal.summary_segments,
         top5=top,
         excluded_candidates=excluded,
+        condition_excluded=condition_excluded(rows),
         facts=views,
         L_records=all_records,
         evaluator_reviews=reviews
