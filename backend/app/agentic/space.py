@@ -86,23 +86,31 @@ def compare_space(profile, answers):
     return result
 
 
-def confirmed_answers(scope, *, connection=None):
+def _chosen_answer(metric, rows):
+    return next((row for row in rows if readable_answer(metric, row[1])), rows[0])
+
+
+def rule_answers(scope, *, connection=None):
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
         rows = db.execute(
-            "SELECT metric,value_json FROM facts WHERE request_id=? AND snapshot_id=? "
-            "AND source='user' AND status='observed' AND citable=1 AND unit=? "
+            "SELECT fact_id,metric,value_json,unit FROM facts WHERE request_id=? "
+            "AND snapshot_id=? AND source='user' AND status='observed' AND citable=1 "
             "AND metric IN ('floor','exclusive_area','existing_facilities') "
             "ORDER BY created_at DESC,fact_id DESC",
-            (scope.request_id, scope.snapshot_id, CONFIRMED_UNIT),
+            (scope.request_id, scope.snapshot_id),
         ).fetchall()
-    answers = {}
-    for metric, raw in rows:
+    answers, candidates = {}, {}
+    for fact_id, metric, raw, unit in rows:
         value = json.loads(raw)
         if metric == "existing_facilities":
-            if isinstance(value, dict):
+            if isinstance(value, dict) and unit == CONFIRMED_UNIT:
                 answers.setdefault("confirmed_facilities", value)
         else:
-            answers.setdefault(metric, value)
+            candidates.setdefault(metric, []).append((fact_id, value))
+    for metric, found in candidates.items():
+        chosen = _chosen_answer(metric, found)
+        if readable_answer(metric, chosen[1]):
+            answers[metric] = chosen[1]
     return answers
 
 
@@ -136,7 +144,7 @@ def ensure_space_fits(scope, *, connection=None):
                 candidates.setdefault(key, []).append((row[0], value))
         for metric, rows in candidates.items():
             if metric in {"floor", "exclusive_area"}:
-                chosen = next((c for c in rows if readable_answer(metric, c[1])), rows[0])
+                chosen = _chosen_answer(metric, rows)
             else:
                 chosen = rows[0]
             answer_ids[metric], answers[metric] = chosen

@@ -20,7 +20,7 @@ from .contracts import (
 )
 from .read_tools import score_summary
 from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
-from .space import confirmed_answers
+from .space import rule_answers
 from .space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
@@ -317,7 +317,7 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         else {}
     )
     indexed = {r.industry_code: r for r in records}
-    answers = confirmed_answers(scope)
+    answers = rule_answers(scope)
     requirements = load_requirements()
     rows = []
     for original in base_rows:

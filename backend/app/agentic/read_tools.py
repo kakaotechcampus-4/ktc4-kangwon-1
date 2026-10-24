@@ -15,7 +15,7 @@ from .contracts import (
     ScoreItem,
 )
 from .scoring import apply_space, rank_key, summarize
-from .space import confirmed_answers
+from .space import rule_answers
 from .space_rules import judge, load_requirements
 from .sql_tool import error
 
@@ -41,7 +41,7 @@ def _scorecards(scope, input):
         ).fetchone()
         if snapshot is None:
             return error("SOURCE_UNAVAILABLE", "저장된 코드 점수가 없습니다.")
-        answers = confirmed_answers(scope, connection=db)
+        answers = rule_answers(scope, connection=db)
         requirements = load_requirements()
         rows = [
             apply_space(

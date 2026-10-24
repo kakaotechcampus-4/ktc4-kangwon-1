@@ -19,7 +19,7 @@ from app.agentic.scoring import (
     summarize,
 )
 from app.agentic.snapshot import persist_report, persist_space_requirements
-from app.agentic.space import confirmed_answers
+from app.agentic.space import ensure_space_fits, rule_answers
 from app.agentic.space_rules import SpaceJudgement, judge, load_requirements
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
@@ -162,15 +162,16 @@ class RecomputeSpaceTests(unittest.IsolatedAsyncioTestCase):
         score_id, rows = recompute_l_scores(self.scope, records, base_id, base_rows)
         return score_id, {r["code"]: r for r in rows}, rows
 
-    async def test_confirmed_answers_reads_only_confirmed_values(self):
+    async def test_rule_answers_use_latest_readable_floor(self):
         save_confirmed_space(
             self.scope, {"floor": "4층", "existing_facilities": {"ventilation": "unavailable"}}
         )
         self.ai_answer("floor", "1층")
+        self.ai_answer("floor", "높은 층")
         self.ai_answer("existing_facilities", "배기 있음")
         self.assertEqual(
-            confirmed_answers(self.scope),
-            {"floor": "4층", "confirmed_facilities": {"ventilation": "unavailable"}},
+            rule_answers(self.scope),
+            {"floor": "1층", "confirmed_facilities": {"ventilation": "unavailable"}},
         )
 
     async def test_recompute_applies_confirmed_space(self):
@@ -188,10 +189,29 @@ class RecomputeSpaceTests(unittest.IsolatedAsyncioTestCase):
             ).fetchone()[0]
         self.assertEqual(json.loads(stored), top)
 
-    async def test_recompute_reads_confirmed_values_only(self):
+    async def test_recompute_uses_readable_landlord_floor_answer(self):
         self.ai_answer("floor", "4층")
         self.ai_answer("existing_facilities", "배기 없음")
         _, by_code, _ = self.recompute()
+        self.assertEqual(by_code["G204"]["space"]["adjustment"], -10)
+        self.assertNotIn("층 확인 필요", by_code["G204"]["space"]["notes"])
+        self.assertTrue(by_code["S203"]["space"]["excluded"])
+        self.assertFalse(by_code["I201"]["space"]["excluded"])
+
+    async def test_unreadable_floor_answer_stays_unconfirmed(self):
+        self.ai_answer("floor", "높은 층")
+        _, by_code, _ = self.recompute()
         self.assertEqual(by_code["G204"]["space"]["adjustment"], 0)
         self.assertIn("층 확인 필요", by_code["G204"]["space"]["notes"])
-        self.assertFalse(by_code["I201"]["space"]["excluded"])
+
+    async def test_space_fit_and_rules_read_the_same_floor(self):
+        save_confirmed_space(self.scope, {"floor": "1층"})
+        self.ai_answer("floor", "4층")
+        current = ensure_space_fits(self.scope)
+        with connect(self.path) as db:
+            value = db.execute(
+                "SELECT value_json FROM facts WHERE fact_id=?", (current["G204"],)
+            ).fetchone()[0]
+        self.assertEqual(json.loads(value)["floor"], "불일치")
+        _, by_code, _ = self.recompute()
+        self.assertEqual(by_code["G204"]["space"]["adjustment"], -10)
