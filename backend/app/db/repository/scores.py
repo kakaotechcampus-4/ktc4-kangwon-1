@@ -14,3 +14,11 @@ def item_fact_ids(db, score_snapshot_id):
         "SELECT industry_code,item,fact_ids_json FROM scores WHERE score_snapshot_id=?",
         (score_snapshot_id,),
     ).fetchall()
+
+
+def insert_score_snapshot(db, values):
+    db.execute("INSERT INTO score_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)", values)
+
+
+def insert_score(db, values):
+    db.execute("INSERT INTO scores VALUES(?,?,?,?,?,?,?,?)", values)

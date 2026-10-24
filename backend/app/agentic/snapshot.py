@@ -14,6 +14,8 @@ from app.canonical import canonical_json, file_sha256
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import raw as raw_db
+from app.db.repository import scores as score_db
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 from app.storage.raw import RawStorageError, current_capture
@@ -95,11 +97,7 @@ def snapshot_config(scope, *, local=False):
         if local:
             continue
         with connect(scope.path) as db:
-            old = db.execute(
-                "SELECT response_id FROM raw_responses WHERE snapshot_id=? AND "
-                "source='baseline' AND json_extract(request_args_json,'$.file_hash')=?",
-                (scope.snapshot_id, digest),
-            ).fetchone()
+            old = raw_db.baseline_response_id(db, scope.snapshot_id, digest)
         if not old:
             scope.record_sync(
                 source="baseline",
@@ -114,13 +112,7 @@ def snapshot_config(scope, *, local=False):
     with connect(scope.path) as db:
         profile_refs = {}
         shared = []
-        for row in db.execute(
-            "SELECT r.raw_row_id,r.raw_json FROM raw_rows r "
-            "JOIN raw_response_rows e USING(raw_row_id) JOIN raw_responses p "
-            "USING(response_id) WHERE p.snapshot_id=? AND p.source='baseline' AND "
-            "e.duplicate_of IS NULL",
-            (scope.snapshot_id,),
-        ):
+        for row in raw_db.baseline_rows(db, scope.snapshot_id):
             value = json.loads(row[1])
             if value.get("industry_code"):
                 profile_refs[value["industry_code"]] = row[0]
@@ -167,13 +159,9 @@ def persist_space_requirements(scope):
         raise ValueError("검토한 51업종 공간 요건 표가 필요합니다.")
     digest = file_sha256(path)
     with connect(scope.path) as db:
-        existing = db.execute(
-            "SELECT response_id FROM raw_responses WHERE request_id=? AND snapshot_id=? "
-            "AND source='industry_profile' AND json_extract(request_args_json,'$.file_hash')=?",
-            (scope.request_id, scope.snapshot_id, digest),
-        ).fetchone()
+        existing = raw_db.profile_response_id(db, scope.request_id, scope.snapshot_id, digest)
     response_id = (
-        existing[0]
+        existing
         if existing
         else scope.record_sync(
             source="industry_profile",
@@ -187,11 +175,7 @@ def persist_space_requirements(scope):
     with connect(scope.path) as db:
         references = {
             json.loads(row[1])["industry_code"]: row[0]
-            for row in db.execute(
-                "SELECT r.raw_row_id,r.raw_json FROM raw_rows r "
-                "JOIN raw_response_rows e USING(raw_row_id) WHERE e.response_id=?",
-                (response_id,),
-            )
+            for row in raw_db.response_rows(db, response_id)
         }
         for row in rows:
             register_fact(
@@ -314,8 +298,8 @@ def persist_report(scope, report, lineage, responses, version=None):
                         connection=db,
                     )
                     facts_by_item[(row["code"], item)].append(scale)
-        db.execute(
-            "INSERT INTO score_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
+        score_db.insert_score_snapshot(
+            db,
             (
                 score_id,
                 scope.request_id,
@@ -331,8 +315,8 @@ def persist_report(scope, report, lineage, responses, version=None):
         )
         for row in report["rows"]:
             for item, score in row["items"].items():
-                db.execute(
-                    "INSERT INTO scores VALUES(?,?,?,?,?,?,?,?)",
+                score_db.insert_score(
+                    db,
                     (
                         score_id,
                         row["code"],
