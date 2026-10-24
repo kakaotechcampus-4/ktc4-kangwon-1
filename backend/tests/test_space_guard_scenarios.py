@@ -131,7 +131,10 @@ class ServicePathScenarioTests(unittest.TestCase):
             f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true",
             json={
                 "question_session_id": waiting["question_session_id"],
-                "answers": {q["field"]: "1층" for q in waiting["questions"]},
+                "answers": {
+                    q["field"]: "4층" if q["field"] == "floor" else "모름"
+                    for q in waiting["questions"]
+                },
             },
         )
         self.assertEqual(response.status_code, 200, response.text)
