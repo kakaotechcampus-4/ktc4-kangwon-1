@@ -7,7 +7,7 @@ from app.text import has_digit
 
 from .aliases import decode
 from .contracts import LInput, LRecord
-from .report import fact_rows, l_grade
+from .report import RULE_SPACE_MESSAGE, fact_rows, l_grade, rule_scored_space
 
 
 def build_record(scope, raw, base_id, base_rows):
@@ -45,17 +45,20 @@ def build_record(scope, raw, base_id, base_rows):
                 if direction == "adverse"
                 else {"일치", "불일치"}
             )
+            matched = [
+                key
+                for key in ("floor", "area", "kitchen", "ventilation", "water_supply")
+                if value.get(key) in wanted
+            ]
             component = next(
-                (
-                    key
-                    for key in ("floor", "area", "kitchen", "ventilation", "water_supply")
-                    if value.get(key) in wanted
-                ),
+                (key for key in matched if not rule_scored_space(fact, key, item.industry_code)),
                 None,
             )
             if component is None:
                 raise ValueError(
-                    "해당 없음·미확인은 L 요인이 아닙니다. 확인된 일치/불일치 근거를 쓰세요."
+                    RULE_SPACE_MESSAGE
+                    if matched
+                    else "해당 없음·미확인은 L 요인이 아닙니다. 확인된 일치/불일치 근거를 쓰세요."
                 )
             claim = (
                 {

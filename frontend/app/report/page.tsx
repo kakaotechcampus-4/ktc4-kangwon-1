@@ -744,6 +744,7 @@ export default function ReportPage() {
               <IndustryReview
                 top5={analysisResult?.top5}
                 excluded={analysisResult?.excluded_candidates}
+                conditionExcluded={analysisResult?.condition_excluded}
                 facts={factIndex}
               />
               {analysisResult && (

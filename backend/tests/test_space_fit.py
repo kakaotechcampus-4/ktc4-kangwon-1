@@ -225,7 +225,7 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertEqual(len(profiles), 51)
             self.assertEqual(profiles["G204"]["water_supply_needed"], "false")
-            self.assertEqual(profiles["I212"]["water_supply_needed"], "true")
+            self.assertEqual(profiles["I212"]["water_supply_needed"], "required")
             rows = db.execute(
                 "SELECT status,citable,value_json FROM facts WHERE metric='space_fit'"
             ).fetchall()
@@ -257,7 +257,7 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 (fit[0], fit[1], json.loads(fit[2])["floor"]), ("observed", 1, "불일치")
             )
-            self.assertFalse(json.loads(fit[2])["reviewed"])
+            self.assertTrue(json.loads(fit[2])["reviewed"])
             self.assertIsNotNone(
                 db.execute(
                     "SELECT 1 FROM fact_parents WHERE fact_id=? AND parent_fact_id=?",

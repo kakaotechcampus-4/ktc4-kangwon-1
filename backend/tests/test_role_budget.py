@@ -133,8 +133,26 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
         executor.shared.measurement = measurement
         return executor
 
-    async def test_only_four_evaluator_tools_and_three_reads_in_measurement(self):
-        expected = {"get_scorecard", "get_facts", "query_raw", "submit_review"}
+    async def test_examiner_reads_without_raw_rows_and_others_keep_four_tools(self):
+        founder = self.executor("founder")
+        self.assertEqual(
+            {definition["function"]["name"] for definition in founder.definitions()},
+            {"get_scorecard", "get_facts", "query_raw", "submit_review"},
+        )
+        with patch("app.agentic.tools._audit"):
+            denied = await self.executor().execute("query_raw", {"sql": "SELECT 1"})
+        self.assertEqual(denied.error.code, "INVALID_ARGUMENT")
+
+    async def test_get_facts_rule_message_names_the_broken_rule(self):
+        executor = self.executor()
+        with patch("app.agentic.tools._audit"):
+            reply = await executor.execute("get_facts", {"source": "commercial_area"})
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        self.assertIn("업종·출처·지표를 모두 지정해야 합니다.", reply.error.message)
+        self.assertLessEqual(len(reply.error.message), 400)
+
+    async def test_only_three_examiner_tools_and_three_reads_in_measurement(self):
+        expected = {"get_scorecard", "get_facts", "submit_review"}
         for measurement in (False, True):
             executor = self.executor(
                 measurement=measurement,
@@ -303,6 +321,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             reviews = await asyncio.gather(
                 *(
@@ -347,6 +369,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             result = await evaluators.review(loop, "examiner", executor, self.draft())
         self.assertEqual(result.status, "completed")
@@ -354,6 +380,99 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definitions_seen[3:], [{"submit_review"}] * 3)
         self.assertEqual(executor.shared.calls[("examiner", "total")], 3)
         self.assertFalse(budget.submitting)
+        self.assertEqual(
+            loop.event.await_args_list[-1].args,
+            (
+                "evaluation",
+                "completed",
+                {
+                    "actor": "examiner",
+                    "error_code": None,
+                    "issues_count": 0,
+                    "reads": 3,
+                    "rejections": 2,
+                    "model_calls": 6,
+                },
+            ),
+        )
+
+    async def test_final_event_counts_accepted_issues(self):
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        executor = ToolExecutor(scope, None, actor="examiner")
+        fact_id = "f_00000000-0000-4000-8000-000000000001"
+        issue = {
+            "issue_id": "evidence",
+            "target": "claim",
+            "kind": "missing_evidence",
+            "comment": "문장의 근거가 없습니다.",
+            "fact_ids": [fact_id],
+            "suggested_check": "근거를 붙이세요.",
+        }
+        message = call(
+            "submit_review", {"draft_id": "draft", "verdict": "conditional", "issues": [issue]}
+        )
+        loop = SimpleNamespace(
+            scope=scope,
+            budget=RuntimeBudget(),
+            _model=AsyncMock(return_value=(message, {})),
+            event=AsyncMock(),
+        )
+        with (
+            patch(
+                "app.agentic.evaluators.fact_rows",
+                return_value={fact_id: {"citable": True, "status": "observed"}},
+            ),
+            patch("app.agentic.evaluators.save_review"),
+            patch("app.agentic.tools._audit"),
+            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
+        ):
+            result = await evaluators.review(loop, "examiner", executor, self.draft())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(
+            loop.event.await_args_list[-1].args[2],
+            {
+                "actor": "examiner",
+                "error_code": None,
+                "issues_count": 1,
+                "reads": 0,
+                "rejections": 0,
+                "model_calls": 1,
+            },
+        )
+
+    async def test_final_event_counts_zero_when_packet_fails(self):
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        loop = SimpleNamespace(
+            scope=scope, budget=RuntimeBudget(), _model=AsyncMock(), event=AsyncMock()
+        )
+        with (
+            patch("app.agentic.examiner.review_packet", side_effect=ValueError("over")),
+            patch("app.agentic.evaluators.save_review"),
+        ):
+            result = await evaluators.review(
+                loop, "examiner", ToolExecutor(scope, None, actor="examiner"), self.draft()
+            )
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        loop._model.assert_not_awaited()
+        self.assertEqual(
+            loop.event.await_args_list[-1].args,
+            (
+                "evaluation",
+                "failed",
+                {
+                    "actor": "examiner",
+                    "error_code": "SOURCE_UNAVAILABLE",
+                    "issues_count": 0,
+                    "reads": 0,
+                    "rejections": 0,
+                    "model_calls": 0,
+                },
+            ),
+        )
 
     async def test_packet_all_industry_counts_without_all_industry_records(self):
         draft = self.draft()
@@ -384,12 +503,27 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.save_review"),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             result = await evaluators.review(loop, "examiner", executor, self.draft())
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.error_code, "DRAFT_MISMATCH")
         self.assertEqual(loop._model.await_count, 3)
         self.assertEqual(executor.shared.calls[("examiner", "submit_review")], 0)
+        self.assertEqual(
+            loop.event.await_args_list[-1].args[2],
+            {
+                "actor": "examiner",
+                "error_code": "DRAFT_MISMATCH",
+                "issues_count": 0,
+                "reads": 0,
+                "rejections": 3,
+                "model_calls": 3,
+            },
+        )
 
 
 class SpaceFitCacheTests(unittest.IsolatedAsyncioTestCase):

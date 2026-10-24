@@ -230,7 +230,7 @@ async def find_education_zones(
         # EPSG:4326 기준이라 경도가 x, 위도가 y입니다.
         "geomFilter": f"POINT({longitude} {latitude})",
         # 점으로만 봅니다. 50m·200m 거리는 이미 고시된 폴리곤에 들어 있습니다.
-        "buffer": 0,
+        "buffer": 1,
         "geometry": "true" if with_geometry else "false",
         "attribute": "true",
         "crs": "EPSG:4326",

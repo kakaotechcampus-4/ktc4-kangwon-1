@@ -34,7 +34,7 @@ class C1AlphaTests(unittest.TestCase):
         from scripts.rubric_dryrun import WEIGHTS, result, summarize
 
         items = {k: result(k, 3) for k in WEIGHTS}
-        items["C1"] = result("C1", 0, value=4)
+        items["C1"] = result("C1", 0, value=4, agglomeration="근처형")
         base = {"address": "대역", "rows": [summarize("I201", items, "해당 없음")]}
         sample = {"floating_population": {"benchmark": {"mean_daily_per_trade_area": 40}}}
         with (
@@ -49,3 +49,25 @@ class C1AlphaTests(unittest.TestCase):
                 alpha_reports([sample], 1)[0]["rows"][0]["items"]["C1"]["status"], "unknown"
             )
             self.assertEqual(alpha_reports([sample], 0)[0]["rows"][0]["items"]["C1"]["value"], 4)
+
+    def test_cluster_and_unrelated_rows_are_left_out(self):
+        from scripts.rubric_dryrun import WEIGHTS, result, summarize
+
+        rows = []
+        for code, kind, value in (
+            ("G204", "근처형", 4),
+            ("I201", "모임형", 2),
+            ("M103", "무관", None),
+        ):
+            items = {k: result(k, 3) for k in WEIGHTS}
+            items["C1"] = result("C1", 2, value=value, reason="다른 문구", agglomeration=kind)
+            rows.append(summarize(code, items, "해당 없음"))
+        base = {"address": "대역", "rows": rows}
+        sample = {"floating_population": {"benchmark": {"mean_daily_per_trade_area": 40}}}
+        with (
+            patch("scripts.validate_c1_alpha.evaluate", return_value=base),
+            patch("scripts.validate_c1_alpha.DAILY_TOTAL_PERCENTILES", {50: 10}),
+        ):
+            report = alpha_reports([sample], 0.5)[0]
+            self.assertEqual([r["code"] for r in report["rows"]], ["G204"])
+            self.assertEqual(correlations([report], False, "S1")["eligible"], 1)

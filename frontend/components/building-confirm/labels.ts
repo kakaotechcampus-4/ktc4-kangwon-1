@@ -1,8 +1,10 @@
-import type {
-  LookupId,
-  NeighborhoodFacility,
-  ParkingAvailability,
+import {
+  normalizeFloor,
+  type LookupId,
+  type NeighborhoodFacility,
+  type ParkingAvailability,
 } from '@/lib/api/building';
+import type { FacilityKey, FacilityState } from '@/lib/api/types';
 
 // 상가 정보 확인 화면의 표시 문구 — 컴포넌트 여러 곳에서 같이 쓴다.
 
@@ -38,18 +40,30 @@ export const FACILITY_SHORT_LABELS: Record<NeighborhoodFacility, string> = {
   none: '해당없음',
 };
 
+export const SPACE_FACILITY_ORDER: FacilityKey[] = [
+  'ventilation',
+  'kitchen',
+  'water_supply',
+];
+
+export const SPACE_FACILITY_LABELS: Record<FacilityKey, string> = {
+  ventilation: '배기(덕트)',
+  kitchen: '주방',
+  water_supply: '급배수',
+};
+
+export const FACILITY_STATE_LABELS: Record<FacilityState, string> = {
+  present: '있음',
+  installable: '설치 가능',
+  unavailable: '불가',
+  unknown: '모름',
+};
+
 export function formatArea(value: number): string {
   return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡`;
 }
 
 // 백엔드 공간 비교와 같은 표기를 지원하며, 지하 접두어를 버리고 지상층으로 읽지 않는다.
 export function floorFromUnit(floorUnit: string): string {
-  const match = floorUnit.match(
-    /^\s*(지하|지상|지|B)?\s*0*([1-9][0-9]*)(?:\s*(층|F)(?:\s*[0-9]+\s*호)?|\s+[0-9]+\s*호)?\s*$/i
-  );
-  if (!match || !(match[1] || match[3])) {
-    return '해당 층';
-  }
-  const basement = ['지하', '지', 'b'].includes((match[1] ?? '').toLowerCase());
-  return `${basement ? '지하 ' : ''}${match[2]}층`;
+  return normalizeFloor(floorUnit) ?? '해당 층';
 }
