@@ -1,6 +1,7 @@
 """심사관이 초안 문장과 근거를 대조하도록 문장·문항 근거·근거 카드를 제한된 크기로 제공합니다."""
 
 import json
+import re
 
 from app.canonical import canonical_json
 from app.db.connection import connect
@@ -12,6 +13,10 @@ PERSONA = (
     "심사관입니다. 점수·순위는 바꾸지 않고 보고서 문장과 근거가 맞는지 검토합니다. "
     "candidates의 상위 후보마다 reasons·risks·confirmation_conditions 문장을 하나씩 보고 "
     "근거·출처·기간 범위·중복의 네 칸을 확인하세요. "
+    "checks를 먼저 보세요. checks.uncited는 fact 슬롯이 없는 문장의 후보·칸·순번이고 "
+    "순번은 칸 안 문장을 영부터 센 값입니다. 그 후보 score_items에서 문장을 뒷받침할 "
+    "fact_id를 골라 missing_evidence로 지적하세요. checks.shared_sources는 같은 원천 "
+    "지표를 쓰는 점수 문항 묶음이니 중복 칸 판단에 참고하세요. "
     "근거 칸: 문장에 fact 슬롯이 없으면 그 후보 score_items에서 문장을 뒷받침할 fact_id를 골라 "
     "target=claim, kind=missing_evidence로 지적하세요. "
     "출처 칸: 인용 fact의 source·metric이 문장 내용과 다르면 scope_mismatch입니다. "
@@ -29,6 +34,7 @@ PERSONA = (
     "인용 근거가 문장과 반대 방향이면 oppose입니다."
 )
 MAX_PACKET_CHARS = 12000
+SENTENCE_END = re.compile(r"(?<=[.!?])")
 MAX_VALUE_CHARS = 500
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 SEGMENTS = ("reasons_segments", "risks_segments", "confirmation_conditions_segments")
@@ -75,6 +81,54 @@ def _score_items(scope, score_snapshot_id, codes):
 
 def _cited(segments):
     return [s["fact_id"] for s in segments if s.get("type") == "fact"]
+
+
+def _sentences(segments):
+    found, text, cited = [], "", False
+    for segment in segments:
+        if segment.get("type") == "fact":
+            cited = True
+            continue
+        parts = SENTENCE_END.split(segment.get("text", ""))
+        for part in parts[:-1]:
+            text += part
+            found.append((text.strip(), cited))
+            text, cited = "", False
+        text += parts[-1]
+    if text.strip():
+        found.append((text.strip(), cited))
+    return found
+
+
+def _uncited(candidates, payload):
+    groups = [(c["industry_code"], key, c.get(key, [])) for c in candidates for key in SEGMENTS]
+    groups += [
+        (None, key, payload.get(key, [])) for key in ("summary_segments", "limitations_segments")
+    ]
+    return [
+        {"industry_code": code, "field": key, "sentence": index}
+        for code, key, segments in groups
+        for index, (_, cited) in enumerate(_sentences(segments))
+        if not cited
+    ]
+
+
+def _shared_sources(codes, items, rows, allowed):
+    found = []
+    for code in codes:
+        groups = {}
+        for entry in items[code]:
+            keys = {
+                (rows[f]["source"], rows[f]["metric"]) for f in entry["fact_ids"] if f in allowed
+            }
+            for key in sorted(keys):
+                groups.setdefault(key, []).append(entry["item"])
+        found += [
+            {"industry_code": code, "source": source, "metric": metric, "items": names}
+            for (source, metric), names in sorted(groups.items())
+            if len(names) >= 2
+        ]
+    return found
 
 
 def review_packet(scope, draft):
@@ -131,6 +185,10 @@ def review_packet(scope, draft):
         "spatial_scopes": {ref: json.loads(raw) for raw, ref in scopes.items()},
         "facts": facts,
         "omitted_fact_ids": [],
+        "checks": {
+            "uncited": _uncited(top5, payload),
+            "shared_sources": _shared_sources(codes, items, rows, allowed),
+        },
     }
     packet = encode(scope, packet)
     for candidate in packet["candidates"]:

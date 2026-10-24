@@ -134,6 +134,72 @@ class ExaminerPacketLimitTests(unittest.TestCase):
         self.assertIn("null", packet["note"])
 
 
+class ExaminerChecksTests(unittest.TestCase):
+    def build(self, items, rows, reasons):
+        with (
+            patch("app.agentic.examiner._score_items", return_value={"I201": items}),
+            patch("app.agentic.examiner.fact_rows", return_value=rows),
+            patch("app.agentic.examiner.encode", side_effect=lambda scope, value: value),
+        ):
+            return examiner.review_packet(None, draft(reasons))
+
+    def test_persona_points_to_checks(self):
+        self.assertIn("checks", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_checks_list_uncited_sentences(self):
+        ids = [fact_id(0)]
+        items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]
+        reasons = [
+            {"type": "text", "text": "점포가 "},
+            {"type": "fact", "fact_id": ids[0], "format": "count"},
+            {"type": "text", "text": "개로 많습니다. 손님이 꾸준합니다."},
+        ]
+        packet = self.build(items, {ids[0]: row(ids[0])}, reasons)
+        self.assertEqual(
+            packet["checks"]["uncited"],
+            [
+                {"industry_code": "I201", "field": "reasons_segments", "sentence": 1},
+                {"industry_code": "I201", "field": "risks_segments", "sentence": 0},
+                {"industry_code": None, "field": "summary_segments", "sentence": 0},
+            ],
+        )
+
+    def test_checks_group_shared_sources(self):
+        ids = [fact_id(i) for i in range(3)]
+        rows = {
+            ids[0]: row(ids[0], source="floating_population", metric="by_time"),
+            ids[1]: row(ids[1], source="floating_population", metric="by_time"),
+            ids[2]: row(ids[2]),
+        }
+        items = [
+            {"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": [ids[0]]},
+            {"item": "D3", "status": "observed", "grade": 2, "points": 2.5, "fact_ids": [ids[1]]},
+            {"item": "C1", "status": "observed", "grade": 2, "points": 7.5, "fact_ids": [ids[2]]},
+        ]
+        packet = self.build(items, rows, [{"type": "text", "text": "이유 문장"}])
+        self.assertEqual(
+            packet["checks"]["shared_sources"],
+            [
+                {
+                    "industry_code": "I201",
+                    "source": "floating_population",
+                    "metric": "by_time",
+                    "items": ["D1", "D3"],
+                }
+            ],
+        )
+
+    def test_packet_with_checks_stays_under_cap(self):
+        ids = [fact_id(i) for i in range(100)]
+        items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]
+        reasons = [{"type": "text", "text": "근거 없는 이유 문장입니다. " * 20}]
+        packet = self.build(items, {fid: row(fid) for fid in ids}, reasons)
+        self.assertLessEqual(len(canonical_json(packet)), examiner.MAX_PACKET_CHARS)
+        self.assertEqual(len(packet["checks"]["uncited"]), 22)
+        self.assertTrue(packet["omitted_fact_ids"])
+
+
 class ExaminerPacketStoreTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = fixtures.RuntimeTests.asyncSetUp
     asyncTearDown = fixtures.RuntimeTests.asyncTearDown
