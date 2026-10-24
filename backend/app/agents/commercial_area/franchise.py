@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import re
 from collections import Counter
@@ -18,11 +19,28 @@ from .schemas import Franchise, FranchiseByMiddle, MiddleCategory, Store
 MIN_BRAND_LENGTH = 2
 NORMALIZE_PATTERN = re.compile(r"[\s\(\)\[\]\-_.,'\"·&]+")
 BRANCH_SUFFIX_PATTERN = re.compile(r"(점|지점|본점|직영점)$")
+PAREN_PATTERN = re.compile(r"\(([^()]*)\)")
+LATIN_RUN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9\s&.'\-]*")
+CORPORATE_PREFIX_PATTERN = re.compile(r"^\s*(\(주\)|㈜|주식회사|\(유\)|유한회사)\s*")
+MIN_PREFIX_ALIAS_LENGTH = 3
+LONG_ALIAS_LENGTH = 5
 
 
 def normalize_name(value: str) -> str:
     text = NORMALIZE_PATTERN.sub("", value or "").lower()
     return BRANCH_SUFFIX_PATTERN.sub("", text)
+
+
+def brand_keys(brand: str) -> tuple[set[str], set[str]]:
+    text = html.unescape(brand or "")
+    names = {normalize_name(brand or "")}
+    aliases = {
+        normalize_name(text),
+        normalize_name(PAREN_PATTERN.sub(" ", text)),
+        *map(normalize_name, PAREN_PATTERN.findall(text)),
+    }
+    names = {key for key in names if len(key) >= MIN_BRAND_LENGTH}
+    return names, {key for key in aliases if len(key) >= MIN_BRAND_LENGTH} - names
 
 
 def brand_cache_path(settings: Settings) -> Path:
@@ -113,13 +131,31 @@ async def load_brands(settings: Settings) -> list[str] | None:
     return brands
 
 
-def is_franchise(store: Store, normalized_brands: set[str]) -> bool:
+def is_franchise(
+    store: Store, normalized_brands: set[str], aliases: set[str] | None = None
+) -> bool:
     candidate = normalize_name(store.name)
     if len(candidate) < MIN_BRAND_LENGTH:
         return False
-    if candidate in normalized_brands:
+    aliases = aliases or set()
+    if candidate in normalized_brands or candidate in aliases:
         return True
-    return any(brand in candidate for brand in normalized_brands if len(brand) >= 3)
+    if any(brand in candidate for brand in normalized_brands if len(brand) >= 3):
+        return True
+    if not aliases:
+        return False
+    body = CORPORATE_PREFIX_PATTERN.sub("", store.name or "").lstrip()
+    first_run = LATIN_RUN_PATTERN.match(body)
+    if first_run and normalize_name(first_run.group()) in aliases:
+        return True
+    head = NORMALIZE_PATTERN.sub("", body).lower()
+    for size in range(MIN_PREFIX_ALIAS_LENGTH, len(head) + 1):
+        alias, rest = head[:size], head[size:]
+        if alias.isascii() or alias not in aliases:
+            continue
+        if size >= LONG_ALIAS_LENGTH or not rest or rest.endswith("점"):
+            return True
+    return False
 
 
 def build_franchise(
@@ -128,12 +164,14 @@ def build_franchise(
     middle_rows: Sequence[MiddleCategory],
     base_year: int | None = None,
 ) -> Franchise:
-    normalized_brands = {
-        normalized
-        for normalized in (normalize_name(b) for b in brands)
-        if len(normalized) >= MIN_BRAND_LENGTH
-    }
-    matched = [s for s in stores if is_franchise(s, normalized_brands)]
+    normalized_brands: set[str] = set()
+    aliases: set[str] = set()
+    for brand in brands:
+        brand_names, brand_aliases = brand_keys(brand)
+        normalized_brands |= brand_names
+        aliases |= brand_aliases
+    aliases -= normalized_brands
+    matched = [s for s in stores if is_franchise(s, normalized_brands, aliases)]
     totals = {row.code: row.count for row in middle_rows}
     counts = Counter(s.middle_code for s in matched if s.middle_code in totals)
     names = {row.code: row.name for row in middle_rows}

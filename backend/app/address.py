@@ -12,6 +12,8 @@ from app.config import AddressSettings
 from app.schemas import Site
 
 KAKAO_ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json"
+MAX_ADDRESS_LENGTH = 200
+REGION_TOKEN_PATTERN = re.compile(r"[가-힣0-9·.]+(?:시|군|구|읍|면|동|가|리)")
 BASE_PATTERN = re.compile(
     r"^(?P<region>.*?)[가-힣0-9·.]+(?:로|길|동|가|읍|면|리)"
     r"\s+(?:지하\s*|산\s*)?\d+(?:-\d+)?(?=$|[\s,(])"
@@ -113,6 +115,8 @@ async def resolve_site(
     cleaned = address.strip()
     if not cleaned:
         raise GeocodeError("EMPTY_ADDRESS", "주소가 비어 있습니다.")
+    if len(cleaned) > MAX_ADDRESS_LENGTH:
+        raise GeocodeError("ADDRESS_TOO_LONG", "주소는 200자 이내로 입력하세요.")
     settings = settings or AddressSettings.from_env()
     if (
         not isinstance(settings.api_key, str)
@@ -133,7 +137,7 @@ async def resolve_site(
         or len(normalized) < 3
         or normalized[0] not in REGION_ALIASES.values()
         or any(
-            re.fullmatch(r"[가-힣0-9·.]+(?:시|군|구|읍|면|동|가|리)", part) is None
+            REGION_TOKEN_PATTERN.fullmatch(part) is None
             for part in match.group("region").split()[1:]
         )
     ):

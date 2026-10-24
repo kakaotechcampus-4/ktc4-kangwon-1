@@ -4,12 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.clock import utc_now_iso
 from app.db.connection import connect
-from app.db.types import (
-    AnalysisEvent,
-)
 
-from .common import _dumps, _now, _request_row, _text
+from .common import _dumps, _request_row, _text
 
 
 def append_event(
@@ -36,7 +34,7 @@ def append_event(
                 _text(stage),
                 event,
                 _dumps(detail),
-                _now(),
+                utc_now_iso(),
             ),
         )
     return seq
@@ -44,7 +42,7 @@ def append_event(
 
 def list_events(
     request_id: str, *, after: int = 0, db_path: str | Path | None = None
-) -> list[AnalysisEvent]:
+) -> list[dict[str, Any]]:
     """after 다음 순번부터 진행 이벤트를 돌려줍니다."""
     with connect(db_path) as db:
         return _list_events(db, request_id, after=after)

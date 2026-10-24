@@ -2,6 +2,8 @@
 
 import httpx
 
+from app.storage.raw import capture_http
+
 
 class SeoulOpenApiError(RuntimeError):
     """키나 원문 응답을 노출하지 않는 서울 API 오류입니다."""
@@ -12,10 +14,16 @@ class SeoulOpenApiTimeout(SeoulOpenApiError):
 
 
 def previous_quarter(code: str) -> str:
+    return shift_quarter(code, -1)
+
+
+def shift_quarter(code: str, count: int) -> str:
+    """YYYYQ 분기를 이동합니다. 양수는 이후, 음수는 이전 분기입니다."""
     if len(code) != 5 or not code.isdigit() or code[-1] not in "1234":
         raise ValueError("분기는 YYYYQ 형식이어야 합니다.")
     year, quarter = int(code[:4]), int(code[-1])
-    return f"{year - 1}4" if quarter == 1 else f"{year}{quarter - 1}"
+    index = year * 4 + quarter - 1 + count
+    return f"{index // 4}{index % 4 + 1}"
 
 
 async def request_json(
@@ -27,12 +35,28 @@ async def request_json(
     start: int,
     end: int,
     extra: str | None = None,
+    capture_source: str | None = None,
 ) -> dict:
     url = f"{base_url.rstrip('/')}/{api_key}/json/{service}/{start}/{end}/"
     if extra:
         url += extra.strip("/") + "/"
     try:
         response = await http.get(url)
+        if capture_source is not None:
+            await capture_http(
+                capture_source,
+                response,
+                secrets=[api_key],
+                page=f"{start}:{end}",
+                args={
+                    "url": url,
+                    "service": service,
+                    "extra": extra or "",
+                    "start": start,
+                    "end": end,
+                    "probe": start == end,
+                },
+            )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):

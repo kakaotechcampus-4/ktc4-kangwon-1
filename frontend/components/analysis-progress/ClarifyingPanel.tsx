@@ -37,6 +37,11 @@ type ClarifyingPanelProps = {
   questions: ClarifyingQuestion[];
   onSubmit: (answers: ClarifyingAnswers, note: string) => void;
   onViewReport: () => void;
+  // 앞 단계에서 이미 받은 값으로 미리 채운 답(예: 층·전용면적). 질문이 바뀌면
+  // 부모가 key를 바꿔 이 값으로 다시 시작하게 한다.
+  initialAnswers?: ClarifyingAnswers;
+  // "추가로 알려주실 내용" 칸. 실제 백엔드는 이 값을 받을 필드가 없어 숨긴다.
+  showNote?: boolean;
 };
 
 /**
@@ -50,9 +55,12 @@ export default function ClarifyingPanel({
   questions,
   onSubmit,
   onViewReport,
+  initialAnswers,
+  showNote = true,
 }: ClarifyingPanelProps) {
-  // 답변/입력값은 로컬 state로만 관리한다 — 실제 제출 API는 아직 없다.
-  const [answers, setAnswers] = useState<ClarifyingAnswers>({});
+  const [answers, setAnswers] = useState<ClarifyingAnswers>(
+    initialAnswers ?? {}
+  );
   const [note, setNote] = useState('');
 
   if (stage === 'analyzing') {
@@ -161,26 +169,28 @@ export default function ClarifyingPanel({
         ))}
       </div>
 
-      <label className="flex flex-col gap-2">
-        <span
-          className="text-sm font-semibold"
-          style={{ color: colors.text.secondary }}
-        >
-          추가로 알려주실 내용 <span className="font-normal">(선택)</span>
-        </span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={2}
-          placeholder="예: 2층까지 함께 임대 가능해요"
-          className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
-          style={{
-            borderColor: colors.neutral.border,
-            backgroundColor: colors.neutral.white,
-            color: colors.text.primary,
-          }}
-        />
-      </label>
+      {showNote && (
+        <label className="flex flex-col gap-2">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            추가로 알려주실 내용 <span className="font-normal">(선택)</span>
+          </span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={2}
+            placeholder="예: 2층까지 함께 임대 가능해요"
+            className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
+            style={{
+              borderColor: colors.neutral.border,
+              backgroundColor: colors.neutral.white,
+              color: colors.text.primary,
+            }}
+          />
+        </label>
+      )}
 
       <div className="flex flex-col gap-2">
         <Button
@@ -364,9 +374,9 @@ function QuestionCard({
 // "무엇을 보고 있는지"를 짧은 말로 바꿔 쓴다.
 
 const ANALYSIS_FOCUS: { stepId: string; label: string }[] = [
-  { stepId: 'commercial-area', label: '상권 경쟁도' },
-  { stepId: 'floating-population', label: '유동인구 패턴' },
-  { stepId: 'business-lifecycle', label: '개폐업 추이' },
+  { stepId: 'local-data', label: '상권·유동인구·개폐업 채점' },
+  { stepId: 'decision', label: '업종별 적합도 판단' },
+  { stepId: 'evaluation', label: '평가자 4명 검토' },
 ];
 
 // 질문이 생기기 전 — 빈 로딩 화면처럼 보이지 않게 지금 도는 분석만 가볍게 보여준다.
@@ -396,8 +406,8 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
         </p>
         <p className="text-15" style={{ color: colors.text.secondary }}>
           {runningCount > 0
-            ? `현재 ${runningCount}개의 분석이 진행 중이에요`
-            : '주변 자료를 모은 뒤 3가지 분석을 동시에 시작해요'}
+            ? `현재 ${focus.find((item) => item.status === 'in_progress')?.label} 중이에요`
+            : '주소를 확인한 뒤 주변 자료로 51개 업종을 채점해요'}
         </p>
       </div>
 

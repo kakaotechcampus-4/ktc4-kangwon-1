@@ -22,7 +22,10 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* 모든 페이지가 같은 글꼴을 쓰도록 body에서 정한다(헤더 포함).
+     Geist에는 한글 글자가 없어 한글은 뒤의 시스템 한글 폰트가 그린다. */
+  font-family:
+    var(--font-sans), 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   /* 클래스가 없는 텍스트도 배율을 따르게 한다. */
   font-size: var(--text-base);
 }
@@ -33,9 +36,12 @@ body {
  * 간격(padding·margin·gap)은 rem 기준이라 루트 글씨 크기는 건드리지 않고,
  * 아래 글씨 크기 토큰에만 배율을 곱한다.
  * 특정 영역만 배율에서 빼려면 그 요소에 [--font-scale:1]을 지정한다.
+ * 사이트 기본값은 --site-font-scale에 따로 두어, 리포트의 "글씨 크게 보기"처럼
+ * 영역 안에서 배율을 덮어쓸 때도 이 값을 기준으로 곱할 수 있게 한다.
  */
 :root {
-  --font-scale: 1.125;
+  --site-font-scale: 1.125;
+  --font-scale: var(--site-font-scale);
 }
 
 /*

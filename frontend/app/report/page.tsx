@@ -21,23 +21,29 @@ import Header from '@/components/layout/Header';
 import SchoolRegulation from '@/components/report/SchoolRegulation';
 import SchoolRegulationMap from '@/components/report/SchoolRegulationMap';
 import IndustryReview, {
+  candidateChecks,
+  candidateScore,
   industrySymbol,
 } from '@/components/report/IndustryReview';
 import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
 import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
 import OpenCloseTrendSection from '@/components/report/OpenCloseTrendSection';
+import {
+  FactCompetitionSection,
+  FactFloatingPopulationSection,
+  FactLifecycleSection,
+} from '@/components/report/FactSections';
+import EvaluatorReviews from '@/components/report/EvaluatorReviews';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import './report.css';
 import { mockReportData } from '@/lib/mockData/report';
 import { mockProperty } from '@/lib/mockData/property';
-import type {
-  BusinessLifecycleData,
-  CommercialAreaData,
-  FloatingPopulationData,
-} from '@/lib/mockData/report';
 import {
   loadAnalysisResult,
+  loadAnalysisFacts,
+  loadRequestId,
+  saveAnalysisFacts,
   loadConfirmedBuilding,
   loadVacancyInput,
   type VacancyInput,
@@ -48,15 +54,14 @@ import {
   FACILITY_LABELS,
   formatArea,
 } from '@/components/building-confirm/labels';
-import type {
-  AgentAnalysis,
-  AgentId,
-  DecisionResult,
-  IndustryAssessment,
-} from '@/lib/api/types';
-import { adaptCommercialArea } from '@/lib/api/adapters/commercialArea';
-import { adaptBusinessLifecycle } from '@/lib/api/adapters/businessLifecycle';
-import { adaptFloatingPopulation } from '@/lib/api/adapters/floatingPopulation';
+import type { DecisionResult, FactView } from '@/lib/api/types';
+import { getAnalysisFacts } from '@/lib/api/analyses';
+import { indexFacts, renderSegments } from '@/lib/api/segments';
+import {
+  competitionFromFacts,
+  floatingPopulationFromFacts,
+  lifecycleFromFacts,
+} from '@/lib/api/adapters/facts';
 
 const chapters = [
   ['space', '상가 정보'],
@@ -204,81 +209,41 @@ function ActionChecklist() {
   );
 }
 
-function MissingData({ label }: { label: string }) {
+// loading: 받는 중, failed: 서버에서 받지 못함, empty: 받았지만 이 위치에 자료가 없음
+type FactsState = 'loading' | 'failed' | 'empty';
+
+function MissingData({
+  label,
+  state,
+  onRetry,
+}: {
+  label: string;
+  state: FactsState;
+  onRetry?: () => void;
+}) {
   return (
-    <p
-      className="rounded-xl border bg-white p-6 text-lg"
+    <div
+      className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-white p-6 text-lg"
       style={{ borderColor: colors.neutral.border }}
     >
-      {label} 데이터를 받아오지 못했습니다. 자료가 확보되면 이곳에 표시합니다.
-    </p>
-  );
-}
-
-function findAgent(
-  result: DecisionResult,
-  agentId: AgentId
-): AgentAnalysis | undefined {
-  return result.source_analyses.find((agent) => agent.agent_id === agentId);
-}
-
-/**
- * agent.data는 백엔드 계약상 Record<string, unknown>이고, 어떤 필드를
- * 담을지는 각 분석 에이전트가 정한다(backend/app/schemas.py 주석 참고).
- *
- * 세 에이전트(floating_population, commercial_area, business_lifecycle)
- * 모두 default_agents()(backend/app/agents/orchestration/workflow.py)에
- * 등록돼 있어 실호출로 진짜 데이터가 온다. 각자 전용 어댑터
- * (lib/api/adapters/floatingPopulation.ts, commercialArea.ts,
- * businessLifecycle.ts)로 실제 snake_case 출력을 화면 타입으로 옮긴다.
- * status/warnings는 data 안이 아니라 AgentAnalysis 봉투에 있어 envelope
- * 인자로 따로 넘긴다.
- */
-function extractFloatingPopulationData(
-  agent: AgentAnalysis | undefined
-): FloatingPopulationData | null {
-  if (!agent) {
-    return null;
-  }
-  return adaptFloatingPopulation(agent.data, {
-    status: agent.status,
-    warnings: agent.warnings,
-    errorMessage: agent.error?.message,
-  });
-}
-
-function extractCommercialAreaData(
-  agent: AgentAnalysis | undefined
-): CommercialAreaData | null {
-  if (!agent) {
-    return null;
-  }
-  return adaptCommercialArea(agent.data, {
-    status: agent.status,
-    warnings: agent.warnings,
-    errorMessage: agent.error?.message,
-  });
-}
-
-// 결정 에이전트의 recommendations/not_recommended에서 업종명(category.middle)만
-// 뽑는다 — adaptBusinessLifecycle이 개폐업 에이전트의 70여 개 업종 중 이
-// 리포트가 다루는 10개만 골라내는 데 쓴다.
-function industryNames(items: IndustryAssessment[]): string[] {
-  return items.map((item) => item.category.middle);
-}
-
-function extractBusinessLifecycleData(
-  agent: AgentAnalysis | undefined,
-  recommendedNames: string[],
-  notRecommendedNames: string[]
-): BusinessLifecycleData | null {
-  if (!agent || agent.status === 'error') {
-    return null;
-  }
-  return adaptBusinessLifecycle(
-    agent.data,
-    recommendedNames,
-    notRecommendedNames
+      <p>
+        {state === 'loading'
+          ? `${label} 자료를 불러오고 있습니다.`
+          : state === 'failed'
+            ? `서버에 연결하지 못해 ${label} 자료를 불러오지 못했습니다.`
+            : `이 위치에서는 ${label} 자료를 찾지 못했습니다.`}
+      </p>
+      {state === 'failed' && onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="min-h-11 shrink-0 rounded-lg border px-4 text-base font-semibold"
+          style={{ borderColor: colors.neutral.border }}
+        >
+          다시 불러오기
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -316,21 +281,66 @@ export default function ReportPage() {
     setBuilding(loadConfirmedBuilding());
   }, []);
 
-  const floatingPopulationData = analysisResult
-    ? extractFloatingPopulationData(
-        findAgent(analysisResult, 'floating_population')
-      )
-    : undefined;
-  const competitorData = analysisResult
-    ? extractCommercialAreaData(findAgent(analysisResult, 'commercial_area'))
-    : undefined;
-  const businessLifecycleData = analysisResult
-    ? extractBusinessLifecycleData(
-        findAgent(analysisResult, 'business_lifecycle'),
-        industryNames(analysisResult.recommendations),
-        industryNames(analysisResult.not_recommended)
-      )
-    : undefined;
+  // 차트용 전체 fact. 결과의 facts는 보고서가 인용한 것만 담아 따로 받는다.
+  // undefined = 받는 중, null = 받지 못함
+  const [allFacts, setAllFacts] = useState<FactView[] | null | undefined>();
+  // "다시 불러오기"를 누를 때마다 바뀌어 조회를 다시 시작한다.
+  const [factsAttempt, setFactsAttempt] = useState(0);
+  useEffect(() => {
+    if (!analysisResult) {
+      return;
+    }
+    const requestId = loadRequestId() ?? analysisResult.request_id;
+    // 이미 받아 둔 fact가 있으면 서버를 다시 부르지 않는다.
+    const saved = loadAnalysisFacts(requestId);
+    if (saved) {
+      // sessionStorage는 브라우저 전용이라 마운트 후에 읽는다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAllFacts(saved);
+      return;
+    }
+    let cancelled = false;
+    setAllFacts(undefined);
+    getAnalysisFacts(requestId)
+      .then((page) => {
+        if (cancelled) return;
+        // 자료 조회 전이면 빈 목록이 온다 — 저장하지 않고 다음에 다시 받는다.
+        if (page.facts.length) saveAnalysisFacts(requestId, page.facts);
+        setAllFacts(page.facts);
+      })
+      .catch((error: unknown) => {
+        // 화면에서 실패를 안내하므로 개발 모드 오류 표시는 띄우지 않는다.
+        console.warn('[ReportPage] 차트 자료 조회 실패:', error);
+        if (!cancelled) setAllFacts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisResult, factsAttempt]);
+  const factsState: FactsState =
+    allFacts === undefined ? 'loading' : allFacts === null ? 'failed' : 'empty';
+  const retryFacts = () => setFactsAttempt((attempt) => attempt + 1);
+
+  // 문장 속 fact는 결과의 인용 fact로 충분하지만, 전체 fact가 오면 함께 찾는다.
+  const factIndex = indexFacts([
+    ...(allFacts ?? []),
+    ...(analysisResult?.facts ?? []),
+  ]);
+  const candidateCodes = analysisResult
+    ? [
+        ...analysisResult.top5.map((item) => item.industry_code),
+        ...analysisResult.excluded_candidates.map((item) => item.industry_code),
+      ]
+    : [];
+  const floatingPopulationData = allFacts
+    ? floatingPopulationFromFacts(allFacts)
+    : null;
+  const competitorData = allFacts
+    ? competitionFromFacts(allFacts, candidateCodes)
+    : null;
+  const businessLifecycleData = allFacts
+    ? lifecycleFromFacts(allFacts, candidateCodes)
+    : null;
 
   const analyzedDate = analysisResult
     ? new Date().toLocaleDateString('ko-KR')
@@ -340,8 +350,7 @@ export default function ReportPage() {
         .filter(Boolean)
         .join(' ')
     : undefined;
-  const headerAddress = analysisResult?.address ?? inputAddress;
-  const address = headerAddress ?? mockReportData.address;
+  const address = inputAddress ?? mockReportData.address;
   const displayAddress = address.replace(/\s+\d+층(?:\s+\d+호)?$/, '');
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
@@ -367,17 +376,38 @@ export default function ReportPage() {
         ? '100m'
         : '미입력';
 
-  const top = analysisResult?.recommendations[0];
+  const top = analysisResult?.top5[0];
   const topName = analysisResult
-    ? top?.category.middle
+    ? top?.industry_name
     : mockReportData.recommended[0]?.name;
   const TopSymbol = industrySymbol(topName ?? '');
-  const summaryText =
-    analysisResult?.summary ??
-    mockReportData.aiAnalysisSummary.recommendationReason;
+  const summaryText = analysisResult
+    ? renderSegments(analysisResult.summary_segments, factIndex)
+    : mockReportData.aiAnalysisSummary.recommendationReason;
+  const topReason = top
+    ? renderSegments(top.reasons_segments, factIndex).trim()
+    : '';
   const primaryReasons = analysisResult
-    ? (top?.reasons ?? [])
+    ? topReason
+      ? [topReason]
+      : []
     : (mockReportData.recommended[0]?.tags ?? []);
+  const topScore = top ? candidateScore(top) : null;
+  // 확인된 자료 기준 점수(하한)를 보인다.
+  const scoreLabel = analysisResult
+    ? topScore?.low.toString()
+    : mockReportData.recommended[0]?.score.toString();
+  const topChecks = top ? candidateChecks(top, factIndex) : [];
+  // 결과 전체에 걸린 확인 조건과 한계(평가 미완료 등)
+  const resultChecks = analysisResult
+    ? renderSegments(analysisResult.confirmation_conditions_segments, factIndex)
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+  const limitations = analysisResult
+    ? renderSegments(analysisResult.limitations_segments, factIndex).trim()
+    : '';
   const navigation = (
     <nav aria-label="리포트 목차" className="flex flex-col gap-1">
       {chapters.map(([id, label], index) => (
@@ -426,7 +456,14 @@ export default function ReportPage() {
       <Header />
       <div
         className="report-page mx-auto max-w-[1360px] px-5 pb-20 pt-0 sm:px-8"
-        style={{ '--font-scale': largeText ? 1.2 : 1 } as CSSProperties}
+        // 기본은 사이트 글씨 배율을 그대로 쓰고, "글씨 크게 보기"는 그 위에 1.2배를 곱한다.
+        style={
+          {
+            '--font-scale': largeText
+              ? 'calc(var(--site-font-scale) * 1.2)'
+              : 'var(--site-font-scale)',
+          } as CSSProperties
+        }
       >
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -452,7 +489,7 @@ export default function ReportPage() {
           <header className="report-masthead">
             <div>
               <p className="report-masthead-eyebrow">상가 분석</p>
-              <h1 className="report-cover-title text-[34px] font-bold leading-snug sm:text-[44px]">
+              <h1 className="report-cover-title font-bold leading-snug">
                 상가 업종 분석 리포트
               </h1>
             </div>
@@ -622,15 +659,10 @@ export default function ReportPage() {
                     <a href="#compare">
                       업종 순위 보러가기 <ArrowDownRight size={20} />
                     </a>
-                    {(top?.score ??
-                      (!analysisResult
-                        ? mockReportData.recommended[0]?.score
-                        : undefined)) !== undefined && (
+                    {scoreLabel && (
                       <p className="cover-score">
-                        <strong>
-                          {top?.score ?? mockReportData.recommended[0]?.score}점
-                        </strong>
-                        <span>업종 적합도</span>
+                        <strong>{scoreLabel}점</strong>
+                        <span>업종 적합도{top ? ` · ${top.badge}` : ''}</span>
                       </p>
                     )}
                   </div>
@@ -669,9 +701,9 @@ export default function ReportPage() {
                   <h3>입점 전 확인할 사항</h3>
                 </div>
                 {analysisResult ? (
-                  top?.risks?.length ? (
+                  topChecks.length || resultChecks.length ? (
                     <ul>
-                      {top.risks.map((text, i) => (
+                      {[...topChecks, ...resultChecks].map((text, i) => (
                         <li key={i}>{text}</li>
                       ))}
                     </ul>
@@ -710,23 +742,38 @@ export default function ReportPage() {
               title="이 상가에 맞는 업종 순위"
             >
               <IndustryReview
-                recommendations={analysisResult?.recommendations}
-                notRecommended={analysisResult?.not_recommended}
+                top5={analysisResult?.top5}
+                excluded={analysisResult?.excluded_candidates}
+                conditionExcluded={analysisResult?.condition_excluded}
+                facts={factIndex}
               />
+              {analysisResult && (
+                <EvaluatorReviews
+                  reviews={analysisResult.evaluator_reviews}
+                  completeness={analysisResult.review_completeness}
+                  limitations={limitations}
+                />
+              )}
             </Chapter>
             <Chapter
               id="customers"
 
               title="주변에는 어떤 사람들이 오갈까요?"
             >
-              {analysisResult && !floatingPopulationData ? (
-                <MissingData label="유동인구" />
+              {analysisResult ? (
+                floatingPopulationData ? (
+                  <FactFloatingPopulationSection
+                    data={floatingPopulationData}
+                  />
+                ) : (
+                  <MissingData
+                    label="유동인구"
+                    state={factsState}
+                    onRetry={retryFacts}
+                  />
+                )
               ) : (
-                <FloatingPopulationSection
-                  reportLayout
-                  compactReference
-                  data={floatingPopulationData ?? undefined}
-                />
+                <FloatingPopulationSection reportLayout compactReference />
               )}
             </Chapter>
             <Chapter
@@ -734,15 +781,18 @@ export default function ReportPage() {
 
               title="같은 업종은 얼마나 있을까요?"
             >
-              {analysisResult && !competitorData ? (
-                <MissingData label="경쟁업체" />
+              {analysisResult ? (
+                competitorData ? (
+                  <FactCompetitionSection data={competitorData} />
+                ) : (
+                  <MissingData
+                    label="경쟁업체"
+                    state={factsState}
+                    onRetry={retryFacts}
+                  />
+                )
               ) : (
-                <CompetitorAnalysisSection
-                  reportLayout
-                  data={competitorData ?? undefined}
-                  recommendations={analysisResult?.recommendations}
-                  notRecommended={analysisResult?.not_recommended}
-                />
+                <CompetitorAnalysisSection reportLayout />
               )}
             </Chapter>
             <Chapter
@@ -750,25 +800,29 @@ export default function ReportPage() {
 
               title="새로 열고, 문을 닫는 흐름은?"
             >
-              {analysisResult && !businessLifecycleData ? (
-                <MissingData label="개폐업" />
+              {analysisResult ? (
+                businessLifecycleData ? (
+                  <FactLifecycleSection data={businessLifecycleData} />
+                ) : (
+                  <MissingData
+                    label="개폐업"
+                    state={factsState}
+                    onRetry={retryFacts}
+                  />
+                )
               ) : (
-                <OpenCloseTrendSection
-                  reportLayout
-                  compactReference
-                  data={businessLifecycleData ?? undefined}
-                />
+                <OpenCloseTrendSection reportLayout compactReference />
               )}
             </Chapter>
             <Chapter id="actions" title="리포트를 읽은 뒤 확인할 일">
               <ActionChecklist />
-              {top?.risks?.length ? (
+              {topChecks.length ? (
                 <div className="mt-6 rounded-xl bg-white p-6">
                   <h3 className="mb-3 text-xl font-semibold">
                     우선 검토 업종의 주의사항
                   </h3>
                   <ul className="list-disc space-y-3 pl-5 text-lg">
-                    {top.risks.map((risk, i) => (
+                    {topChecks.map((risk, i) => (
                       <li key={i}>{risk}</li>
                     ))}
                   </ul>

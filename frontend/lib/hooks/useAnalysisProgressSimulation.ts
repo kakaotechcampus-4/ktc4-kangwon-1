@@ -10,31 +10,37 @@ import type {
 /**
  * 분석 진행 화면의 mock 시뮬레이션.
  *
- *   데이터 수집 → (상권 · 유동인구 · 개폐업 병렬) → 추가 정보 확인(답변 대기)
- *   → 사용자가 답변 제출 → 최종 판단 → 완료
+ *   주소 확인 → 자료 조회·채점 → 업종 판단 → 추가 정보 확인(답변 대기)
+ *   → 사용자가 답변 제출 → 업종 판단 마무리 → 평가자 검토 → 최종 리포트 → 완료
  *
- * 실제 백엔드 진행 신호(폴링/웹소켓)가 생기면 타이머 대신 그 이벤트가 각
- * 단계의 status와 stage를 결정한다. 컴포넌트는 반환값 모양에만 의존한다.
+ * 실제 백엔드 진행 이벤트를 쓰는 화면은 useAnalysisProgress가 같은 모양을 돌려준다.
  */
-const DATA_COLLECTION_ID = 'data-collection';
-const CLARIFICATION_ID = 'clarification';
+const ADDRESS_ID = 'address';
+const LOCAL_DATA_ID = 'local-data';
 const DECISION_ID = 'decision';
+const CLARIFICATION_ID = 'clarification';
+const EVALUATION_ID = 'evaluation';
+const REPORT_ID = 'report';
 
-const DATA_COLLECTION_DURATION_MS = 3_000;
-// 세 분석은 서로 다른 데이터 소스를 병렬로 본다고 가정해 동시에 시작하고
-// 각자 다른 시간에 끝난다.
-const PARALLEL_ANALYSIS_DURATIONS_MS: Record<string, number> = {
-  'commercial-area': 4_000,
-  'floating-population': 5_500,
-  'business-lifecycle': 7_000,
-};
-const DECISION_DURATION_MS = 8_000;
+// 질문 전까지 차례로 끝나는 단계와 각 소요 시간
+const BEFORE_QUESTION_MS: [string, number][] = [
+  [ADDRESS_ID, 2_000],
+  [LOCAL_DATA_ID, 4_000],
+];
+// 업종 판단을 시작하고 질문이 생기기까지
+const UNTIL_QUESTION_MS = 4_000;
+// 답변 뒤 차례로 끝나는 단계와 각 소요 시간
+const AFTER_QUESTION_MS: [string, number][] = [
+  [DECISION_ID, 3_000],
+  [EVALUATION_ID, 4_000],
+  [REPORT_ID, 3_000],
+];
 
 // 마운트 시 mock 데이터의 status는 무시하고 첫 단계만 진행 중으로 시작한다.
 function toInitialSteps(steps: ProgressStep[]): ProgressStep[] {
   return steps.map((step) => ({
     ...step,
-    status: (step.id === DATA_COLLECTION_ID
+    status: (step.id === ADDRESS_ID
       ? 'in_progress'
       : 'pending') as ProgressStepStatus,
   }));
@@ -61,52 +67,57 @@ export function useAnalysisProgressSimulation(
     );
   }, []);
 
+  // 단계를 하나씩 진행 중 → 완료로 넘기고, 다 끝나면 onDone을 부른다.
+  const runSequence = useCallback(
+    (sequence: [string, number][], onDone: () => void) => {
+      let delay = 0;
+      sequence.forEach(([id, duration], index) => {
+        timersRef.current.push(
+          setTimeout(() => setStatus([id], 'in_progress'), delay)
+        );
+        delay += duration;
+        timersRef.current.push(
+          setTimeout(() => {
+            setStatus([id], 'done');
+            if (index === sequence.length - 1) {
+              onDone();
+            }
+          }, delay)
+        );
+      });
+    },
+    [setStatus]
+  );
+
   useEffect(() => {
     const timers = timersRef.current;
-    const parallelIds = Object.keys(PARALLEL_ANALYSIS_DURATIONS_MS);
-
-    timers.push(
-      setTimeout(() => {
-        setStatus([DATA_COLLECTION_ID], 'done');
-        setStatus(parallelIds, 'in_progress');
-
-        let remaining = parallelIds.length;
-        parallelIds.forEach((id) => {
-          timers.push(
-            setTimeout(() => {
-              setStatus([id], 'done');
-              remaining -= 1;
-              if (remaining === 0) {
-                // 분석 중 판단에 필요한 정보가 부족하다는 걸 발견한 시점.
-                setStatus([CLARIFICATION_ID], 'waiting');
-                setStage('awaiting_input');
-              }
-            }, PARALLEL_ANALYSIS_DURATIONS_MS[id])
-          );
-        });
-      }, DATA_COLLECTION_DURATION_MS)
-    );
+    runSequence(BEFORE_QUESTION_MS, () => {
+      setStatus([DECISION_ID], 'in_progress');
+      timers.push(
+        setTimeout(() => {
+          // 판단 중 필요한 정보가 부족하다는 걸 발견한 시점.
+          setStatus([DECISION_ID], 'pending');
+          setStatus([CLARIFICATION_ID], 'waiting');
+          setStage('awaiting_input');
+        }, UNTIL_QUESTION_MS)
+      );
+    });
 
     return () => {
       timers.forEach(clearTimeout);
       timers.length = 0;
     };
-  }, [setStatus]);
+  }, [runSequence, setStatus]);
 
   // 사용자가 답변을 제출하면 멈춰 있던 분석을 이어간다.
   const resume = useCallback(() => {
     setStatus([CLARIFICATION_ID], 'done');
-    setStatus([DECISION_ID], 'in_progress');
     setStage('resuming');
-
-    timersRef.current.push(
-      setTimeout(() => {
-        setStatus([DECISION_ID], 'done');
-        setStage('completed');
-        onCompleteRef.current?.();
-      }, DECISION_DURATION_MS)
-    );
-  }, [setStatus]);
+    runSequence(AFTER_QUESTION_MS, () => {
+      setStage('completed');
+      onCompleteRef.current?.();
+    });
+  }, [runSequence, setStatus]);
 
   return { steps, stage, resume };
 }

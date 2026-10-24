@@ -8,7 +8,6 @@ import openai
 from llm_stream_fixture import stream_response
 from openai.types.chat import ChatCompletionMessage
 
-from app.agents.decision.llm import generate_decision
 from app.llm.client import LLMResponseError, complete_json
 from app.llm.config import LLMSettings
 
@@ -93,13 +92,38 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
         self.assertNotIn("SECRET", str(caught.exception))
 
-    async def test_schema_fields_are_safe(self):
+    async def test_duplicate_key_is_named_without_the_reply(self):
+        reply = '{"items": [{"evidence": [1], "risks": ["SECRET"], "evidence": [2]}]}'
         with patch(
-            "app.agents.decision.llm.client.complete_json",
-            return_value={"status": "ok", "SECRET": "SECRET"},
+            "app.llm.client._complete",
+            return_value=ChatCompletionMessage(role="assistant", content=reply),
         ):
             with self.assertRaises(LLMResponseError) as caught:
-                await generate_decision("", "{}", settings=LLMSettings())
-        self.assertEqual(caught.exception.code, "LLM_SCHEMA_INVALID")
-        self.assertIn("summary", str(caught.exception.diagnostics))
-        self.assertNotIn("SECRET", str(caught.exception) + str(caught.exception.diagnostics))
+                await complete_json("", "{}", LLMSettings())
+        self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
+        self.assertEqual(caught.exception.diagnostics, {"duplicate_key": "evidence"})
+        self.assertNotIn("SECRET", str(caught.exception))
+
+    async def test_repeated_list_that_extends_the_first_keeps_the_longer_list(self):
+        reply = '{"items": [{"evidence": [1, 2], "risks": ["{2}"], "evidence": [1, 2, 3]}]}'
+        with patch(
+            "app.llm.client._complete",
+            return_value=ChatCompletionMessage(role="assistant", content=reply),
+        ):
+            result = await complete_json("", "{}", LLMSettings())
+        self.assertEqual(result, {"items": [{"evidence": [1, 2, 3], "risks": ["{2}"]}]})
+
+    async def test_repeated_key_that_drops_or_changes_values_is_rejected(self):
+        for reply in (
+            '{"evidence": [1, 2, 3], "evidence": [1, 2]}',
+            '{"evidence": [1, 2], "evidence": [1, 3, 4]}',
+            '{"summary": "a", "summary": "a"}',
+        ):
+            with self.subTest(reply=reply):
+                with patch(
+                    "app.llm.client._complete",
+                    return_value=ChatCompletionMessage(role="assistant", content=reply),
+                ):
+                    with self.assertRaises(LLMResponseError) as caught:
+                        await complete_json("", "{}", LLMSettings())
+                self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")

@@ -30,7 +30,8 @@ export type AnalysisStage =
   | 'analyzing' // 추가 질문이 생기기 전까지 분석 중
   | 'awaiting_input' // 정보가 부족해 사용자 답변을 기다리는 중
   | 'resuming' // 답변을 받아 최종 판단을 이어가는 중
-  | 'completed';
+  | 'completed'
+  | 'failed'; // 분석 실패(실제 백엔드 연결 시)
 
 export type ClarifyingOption = {
   id: string;
@@ -71,29 +72,24 @@ export type AnalysisSummary = {
 };
 
 export const mockAnalysisProgress = {
+  // 단계 id는 lib/api/adapters/progress.ts STEP과 같다(백엔드 진행 이벤트 순서).
   steps: [
     {
-      id: 'data-collection',
-      label: '데이터 수집',
-      description: '건물 정보와 주변 상권·유동인구·개폐업 자료',
+      id: 'address',
+      label: '주소 확인',
+      description: '입력한 주소의 위치와 분석 반경 확인',
       status: 'pending',
     },
     {
-      id: 'commercial-area',
-      label: '상권·경쟁 업종 분석',
-      description: '반경 안 업종 분포와 경쟁 점포 수',
+      id: 'local-data',
+      label: '주변 자료 조회·채점',
+      description: '상권·유동인구·개폐업 자료로 51개 업종 점수 계산',
       status: 'pending',
     },
     {
-      id: 'floating-population',
-      label: '유동인구 분석',
-      description: '시간대별·요일별 오가는 사람 수',
-      status: 'pending',
-    },
-    {
-      id: 'business-lifecycle',
-      label: '개폐업 추이 분석',
-      description: '최근 3년 업종별 개업·폐업 흐름',
+      id: 'decision',
+      label: '업종 판단',
+      description: 'AI가 근거를 확인하며 업종별 적합도 판단',
       status: 'pending',
     },
     {
@@ -103,9 +99,15 @@ export const mockAnalysisProgress = {
       status: 'pending',
     },
     {
-      id: 'decision',
-      label: '최종 판단',
-      description: '추천·비추천 업종 선정과 리포트 작성',
+      id: 'evaluation',
+      label: '평가자 검토',
+      description: '심사위원·창업자·고객·임대인 관점 4명이 판단 검토',
+      status: 'pending',
+    },
+    {
+      id: 'report',
+      label: '최종 리포트 작성',
+      description: '검토 의견을 반영해 추천 업종과 확인 조건 정리',
       status: 'pending',
     },
   ] as ProgressStep[],

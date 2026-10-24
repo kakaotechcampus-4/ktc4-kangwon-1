@@ -2,6 +2,7 @@
 
 import json
 import time
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -37,6 +38,12 @@ class LLMResponseError(RuntimeError):
         if code == "LLM_SCHEMA_INVALID":
             message += " 확인 항목: " + ", ".join(diagnostics.get("fields", []))
         super().__init__(message)
+
+
+class _DuplicateKey(ValueError):
+    def __init__(self, key: str):
+        super().__init__(key)
+        self.key = key
 
 
 class LLMHTTPError(RuntimeError):
@@ -84,9 +91,15 @@ class LLMHTTPError(RuntimeError):
 
 
 async def _complete(
-    messages: list[Any], settings: LLMSettings, *, tools: list[Any] | None = None
+    messages: list[Any],
+    settings: LLMSettings,
+    *,
+    tools: list[Any] | None = None,
+    receipt: dict[str, Any] | None = None,
 ) -> ChatCompletionMessage:
     settings.require_credentials()
+    if receipt is not None and receipt.get("_record_raw"):
+        receipt["sent_messages"] = deepcopy(messages)
     budget, role, final = current_scope()
     attempt = (
         await budget.reserve(
@@ -98,8 +111,9 @@ async def _complete(
     started = time.monotonic()
     usage: list[Any] = []
     status = "error"
+    metadata: dict[str, Any] = receipt if receipt is not None else {}
     try:
-        result = await _request(messages, settings, tools=tools, usage=usage)
+        result = await _request(messages, settings, tools=tools, usage=usage, receipt=metadata)
         status = "ok"
         return result
     finally:
@@ -109,10 +123,11 @@ async def _complete(
                 status=status,
                 elapsed_ms=int((time.monotonic() - started) * 1000),
                 usage=usage[0] if usage else None,
+                model=metadata.get("model"),
             )
 
 
-async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage:
+async def _request(messages, settings, *, tools, usage, receipt=None) -> ChatCompletionMessage:
     options: dict[str, Any] = {}
     if settings.max_tokens is not None:
         options["max_completion_tokens"] = settings.max_tokens
@@ -157,6 +172,14 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
     ):
         raise LLMResponseError("LLM_INVALID_RESPONSE")
     usage.append(response.usage)
+    if receipt is not None:
+        if receipt.get("_record_raw"):
+            receipt["raw_response"] = response.model_dump(mode="json")
+        receipt.update(
+            model=response.model,
+            http_status=200,
+            usage=response.usage.model_dump() if response.usage is not None else None,
+        )
     choice = response.choices[0]
     if not isinstance(choice, Choice) or not isinstance(choice.message, ChatCompletionMessage):
         raise LLMResponseError("LLM_INVALID_RESPONSE")
@@ -176,7 +199,11 @@ async def _request(messages, settings, *, tools, usage) -> ChatCompletionMessage
 
 
 async def complete_json(
-    system_prompt: str, input_json: str, settings: LLMSettings
+    system_prompt: str,
+    input_json: str,
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     message = await _complete(
         [
@@ -184,6 +211,7 @@ async def complete_json(
             {"role": "user", "content": input_json},
         ],
         settings,
+        receipt=receipt,
     )
     try:
         # 표준 JSON에 없는 NaN·Infinity도 모델의 잘못된 응답입니다.
@@ -193,7 +221,15 @@ async def complete_json(
         def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             result = dict(pairs)
             if len(result) != len(pairs):
-                raise ValueError
+                seen: dict[str, Any] = {}
+                for key, value in pairs:
+                    if key in seen and not (
+                        isinstance(seen[key], list)
+                        and isinstance(value, list)
+                        and value[: len(seen[key])] == seen[key]
+                    ):
+                        raise _DuplicateKey(key)
+                    seen[key] = value
             return result
 
         result = json.loads(
@@ -203,12 +239,18 @@ async def complete_json(
         )
         if not isinstance(result, dict):
             raise ValueError
+    except _DuplicateKey as error:
+        raise LLMResponseError("LLM_INVALID_JSON", duplicate_key=error.key[:50]) from None
     except (ValueError, TypeError):
         raise LLMResponseError("LLM_INVALID_JSON") from None
     return result
 
 
 async def complete_tools(
-    messages: list[Any], definitions: list[Any], settings: LLMSettings
+    messages: list[Any],
+    definitions: list[Any],
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
 ) -> ChatCompletionMessage:
-    return await _complete(messages, settings, tools=definitions)
+    return await _complete(messages, settings, tools=definitions, receipt=receipt)

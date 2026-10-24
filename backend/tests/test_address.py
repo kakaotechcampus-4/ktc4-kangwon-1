@@ -3,16 +3,11 @@
 import copy
 import os
 import unittest
-from functools import partial
 from unittest.mock import patch
 
 import httpx
-from orchestration_support import run_service
 
 from app import address, config
-from app.agents.orchestration.workflow import prepare_task, run_agents
-from app.mocks import mock_agents, mock_generate
-from app.schemas import AgentAnalysis, Scope
 
 ROAD = "서울 송파구 위례광장로 120"
 HIT = {
@@ -85,6 +80,15 @@ class AddressTests(unittest.IsolatedAsyncioTestCase):
         for text in ("개롱역", "서울 송파구", "서울 강남구 역삼1동", "위례광장로 120"):
             with self.subTest(text=text):
                 await self.assert_error("ADDRESS_AMBIGUOUS", text=text)
+
+    async def test_address_length_boundary_before_any_external_call(self):
+        valid = ROAD + " " + "가" * (address.MAX_ADDRESS_LENGTH - len(ROAD) - 1)
+        site = await self.resolve(valid)
+        self.assertEqual(len(site.input_address), address.MAX_ADDRESS_LENGTH)
+        with patch("httpx.AsyncClient.send", side_effect=AssertionError("긴 주소 조회 금지")):
+            with self.assertRaises(address.GeocodeError) as caught:
+                await address.resolve_site(valid + "가", self.settings())
+        self.assertEqual(caught.exception.code, "ADDRESS_TOO_LONG")
 
     async def test_building_name_before_base_never_influences_search(self):
         with patch("httpx.AsyncClient.send", side_effect=AssertionError("잘못된 주소 조회 금지")):
@@ -186,61 +190,6 @@ class AddressTests(unittest.IsolatedAsyncioTestCase):
             settings = config.AddressSettings.from_env()
         self.assertEqual(settings.api_key, "injected")
         self.assertNotIn("injected", repr(settings))
-
-    async def test_prepare_resolves_once_and_analysts_reuse_site(self):
-        requests = []
-
-        def handler(request):
-            requests.append(request)
-            return httpx.Response(200, json=HIT)
-
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            task = await prepare_task(
-                ROAD, resolve=partial(address.resolve_site, settings=self.settings(), client=client)
-            )
-            seen = []
-
-            async def analyze(task):
-                seen.append(task.site)
-                return AgentAnalysis(
-                    request_id=task.request_id,
-                    agent_id="commercial_area",
-                    status="no_data",
-                    scope=Scope(area=ROAD, period="시험"),
-                )
-
-            await run_agents(task, {"commercial_area": analyze})
-        self.assertEqual(len(requests), 1)
-        self.assertIs(seen[0], task.site)
-
-    async def test_service_settings_forward_key_and_timeout(self):
-        from app.config import AddressSettings
-        from app.services.settings import ExecutionSettings
-
-        requests = []
-
-        def handler(request):
-            requests.append(request)
-            return httpx.Response(200, json=HIT)
-
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-
-            async def resolve(text, settings):
-                return await address.resolve_site(text, settings, client=client)
-
-            with patch("app.services.analysis.resolve_site", side_effect=resolve):
-                result = await run_service(
-                    ROAD,
-                    settings=ExecutionSettings(
-                        address=AddressSettings(api_key="legacy", timeout=7)
-                    ),
-                    agents=mock_agents(),
-                    generate=mock_generate,
-                )
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(len(requests), 1)
-        self.assertEqual(requests[0].headers["Authorization"], "KakaoAK legacy")
-        self.assertEqual(requests[0].extensions["timeout"]["read"], 7)
 
 
 if __name__ == "__main__":

@@ -1,15 +1,36 @@
+import { API_BASE_URL } from '@/lib/api/baseUrl';
+import { MOCK_MODE } from '@/lib/api/mockMode';
 import { mockProperty } from '@/lib/mockData/property';
+import {
+  ADDRESS_ERROR_NOTE,
+  LOOKUP_ERROR_NOTE,
+  REGISTRY_SECTIONS,
+  emptyBuildingInfo,
+  facilityFromMainUse,
+  registryField,
+  toBuildingInfo,
+  type BuildingRegistryResponse,
+} from './buildingRegistry';
+
+export {
+  ADDRESS_ERROR_NOTE,
+  LOOKUP_ERROR_NOTE,
+  normalizeFloor,
+  registryField,
+  toBuildingInfo,
+  type BuildingRegistryResponse,
+} from './buildingRegistry';
 /**
  * 상가 정보 확인(/building-confirm) 화면이 쓰는 건축물대장 조회.
  *
- * 백엔드에 국토교통부 건축물대장 HUB 연동이 아직 없어 지금은 mock 응답을
- * setTimeout으로 항목별 순차 완료시키며 돌려준다. 실제 API가 생기면
- * fetchBuildingInfo 안쪽만 바꾸면 되도록, 화면은 아래 타입과 onStepChange
+ * 백엔드 GET /api/v1/building-registry를 한 번 불러 항목별 진행 상태를
+ * onStepChange로 알린다. 프론트 mock 모드에서는 mock 응답을 setTimeout으로
+ * 항목별 순차 완료시키며 돌려준다. 화면은 아래 타입과 onStepChange
  * 콜백에만 의존한다.
  *
- * 조회한 값은 분석 요청 본문에 넣지 않는다(백엔드 AnalysisRequest가 정의되지
- * 않은 필드를 거절한다). 확인한 값은 resultStore의 saveConfirmedBuilding으로
- * sessionStorage에만 남긴다.
+ * 확인한 층·전용면적만 분석 요청 본문에 싣는다(analyses.ts의
+ * buildAnalysisRequestBody). 확인한 값 전체는 resultStore의
+ * saveConfirmedBuilding으로 sessionStorage에 남긴다.
  */
 
 // registry: 건축물대장 값 그대로 / user: 사용자가 고치거나 채움 / missing: 건축물대장에 없음
@@ -68,29 +89,8 @@ type FetchOptions = {
   signal?: AbortSignal;
   // 화면 확인용: 여기 넣은 항목은 일부러 실패시켜 missing 흐름을 볼 수 있다.
   failLookups?: LookupId[];
+  floorUnit?: string;
 };
-
-export function registryField<T>(value: T | null): BuildingField<T> {
-  return value === null
-    ? { value: null, registryValue: null, source: 'missing' }
-    : { value, registryValue: value, source: 'registry' };
-}
-
-// 건물 주용도 문자열에서 근린생활시설 종류를 읽는다.
-function facilityFromMainUse(
-  mainUse: string | null
-): NeighborhoodFacility | null {
-  if (mainUse === null) {
-    return null;
-  }
-  if (mainUse.includes('제1종근린생활시설')) {
-    return 'type1';
-  }
-  if (mainUse.includes('제2종근린생활시설')) {
-    return 'type2';
-  }
-  return 'none';
-}
 
 // mock — 9/17 건축물대장 HUB 실호출 결과(성희프라자 4층)를 옮겨 둔 값
 const MOCK_REGISTRY = {
@@ -123,7 +123,7 @@ function wait(ms: number, signal?: AbortSignal) {
  * 건축물대장 4개 항목을 차례로 조회한다. 한 항목이 실패해도 멈추지 않고,
  * 그 항목에서 오는 필드를 missing으로 채워 돌려준다.
  */
-export async function fetchBuildingInfo(
+async function fetchMockBuildingInfo(
   address: string,
   { onStepChange, signal, failLookups = [] }: FetchOptions = {}
 ): Promise<BuildingInfo> {
@@ -160,6 +160,48 @@ export async function fetchBuildingInfo(
     facility: registryField(facilityFromMainUse(mainUse)),
     sewage: registryField(results.sewage ? MOCK_REGISTRY.sewage.sewage : null),
   };
+}
+
+export async function fetchBuildingInfo(
+  address: string,
+  options: FetchOptions = {}
+): Promise<BuildingInfo> {
+  if (MOCK_MODE) {
+    return fetchMockBuildingInfo(address, options);
+  }
+  const { onStepChange, signal, floorUnit = '', failLookups = [] } = options;
+  for (const id of LOOKUP_ORDER) {
+    onStepChange?.(id, 'loading');
+  }
+  let registry: BuildingRegistryResponse | null = null;
+  let note = LOOKUP_ERROR_NOTE;
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/building-registry?address=${encodeURIComponent(address)}`,
+      { signal }
+    );
+    if (response.ok) {
+      registry = (await response.json()) as BuildingRegistryResponse;
+    } else if (response.status === 400) {
+      note = ADDRESS_ERROR_NOTE;
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+  }
+  if (registry) {
+    registry = { ...registry };
+    for (const id of failLookups) {
+      registry[REGISTRY_SECTIONS[id]] = null;
+    }
+  }
+  for (const id of LOOKUP_ORDER) {
+    onStepChange?.(id, registry?.[REGISTRY_SECTIONS[id]] ? 'done' : 'failed');
+  }
+  return registry
+    ? toBuildingInfo(registry, address, floorUnit)
+    : emptyBuildingInfo(address, floorUnit, note);
 }
 
 /**
