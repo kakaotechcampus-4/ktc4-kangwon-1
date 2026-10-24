@@ -11,6 +11,7 @@ type BuildingFieldRowProps<T> = {
   editable: boolean;
   // editable일 때 값 대신 보여줄 입력 칸
   editor: ReactNode;
+  showSource?: boolean;
 };
 
 /** 수정 가능한 한 행 — 라벨 · 값(또는 입력 칸) · 출처 배지. 건축물대장에 없는 행은 주황 배경. */
@@ -20,6 +21,7 @@ export default function BuildingFieldRow<T>({
   format,
   editable,
   editor,
+  showSource = true,
 }: BuildingFieldRowProps<T>) {
   return (
     <div
@@ -50,12 +52,14 @@ export default function BuildingFieldRow<T>({
           </p>
         )}
       </div>
-      <SourceBadge
-        source={field.source}
-        registryText={
-          field.registryValue === null ? null : format(field.registryValue)
-        }
-      />
+      {showSource && (
+        <SourceBadge
+          source={field.source}
+          registryText={
+            field.registryValue === null ? null : format(field.registryValue)
+          }
+        />
+      )}
     </div>
   );
 }
