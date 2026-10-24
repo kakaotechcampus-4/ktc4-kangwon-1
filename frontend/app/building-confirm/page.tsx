@@ -185,7 +185,7 @@ export default function BuildingConfirmPage() {
         : input.roadAddress;
       // 분석을 백그라운드로 시작하고(202) 바로 진행 화면으로 간다. 진행 상황과
       // 질문·결과는 진행 화면이 요청 ID로 받아 온다.
-      const { request_id: requestId } = await startAnalysis({
+      const { request_id: requestId, facilitiesDropped } = await startAnalysis({
         address: fullAddress,
         radiusM: parseRadius(input.radius),
         allowQuestions: true,
@@ -193,6 +193,11 @@ export default function BuildingConfirmPage() {
         exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,
         facilities,
       });
+      if (facilitiesDropped) {
+        alert(
+          '서버가 아직 배기·주방·급배수 입력을 받지 못해 이번 분석에는 시설 정보가 빠졌어요.'
+        );
+      }
       // 이전 분석 결과가 리포트에 섞이지 않게 지우고 새 요청 ID만 남긴다.
       clearAnalysisResult();
       saveRequestId(requestId);
