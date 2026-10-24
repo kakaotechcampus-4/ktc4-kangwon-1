@@ -1,4 +1,4 @@
-"""검토 전 공간 가설을 명시된 임대인 답변과만 대조합니다."""
+"""업종 공간 요건을 명시된 임대인 답변과만 대조합니다."""
 
 import json
 import math
@@ -215,7 +215,7 @@ def ensure_space_fits(scope, *, connection=None):
                 source="industry_profile",
                 metric="space_fit",
                 value=value,
-                unit="검토 전 공간 가설과 임대인 답변의 비교",
+                unit="업종 공간 요건과 임대인 답변의 비교",
                 status="observed" if observed else "unknown",
                 row_ids=[],
                 parent_fact_ids=[profile_id, *answer_ids.values()],
@@ -226,7 +226,7 @@ def ensure_space_fits(scope, *, connection=None):
                     "profile_fact_id": profile_id,
                     "user_fact_ids": answer_ids,
                 },
-                period="현재 임대인 답변과 공간 초안",
+                period="현재 임대인 답변과 업종 공간 요건",
                 connection=db,
             )
             db.execute(
