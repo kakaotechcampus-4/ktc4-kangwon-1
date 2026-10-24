@@ -82,7 +82,7 @@ class EducationZoneTests(unittest.IsolatedAsyncioTestCase):
         await self.scan(handler)
         self.assertEqual(seen["data"], ez.EDUCATION_ZONE_LAYER)
         self.assertEqual(seen["geomFilter"], f"POINT({LNG} {LAT})")
-        self.assertEqual(seen["buffer"], "0")
+        self.assertEqual(seen["buffer"], "1")
         self.assertEqual(seen["geometry"], "false")
         self.assertEqual(seen["crs"], "EPSG:4326")
         self.assertEqual(seen["request"], "GetFeature")
