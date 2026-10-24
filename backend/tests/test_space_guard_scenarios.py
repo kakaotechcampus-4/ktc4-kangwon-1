@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.agentic.scoring import evaluate, profiles
+from app.agentic import scoring
+from app.agentic.scoring import evaluate, profiles, result
 from app.agentic.space_rules import load_requirements
 from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
 from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
@@ -21,6 +22,18 @@ from app.services.settings import ExecutionSettings
 
 def codes_with(level, key):
     return {code for code, row in load_requirements().items() if row[key] == level}
+
+
+REAL_SCORE_ITEM = scoring.score_item
+
+
+def raised(grades):
+    def score_item(item, profile, code, *args, **kwargs):
+        if item == "C1" and code in grades:
+            return result("C1", grades[code], reason="시험용 고정 등급", agglomeration="무관")
+        return REAL_SCORE_ITEM(item, profile, code, *args, **kwargs)
+
+    return patch("app.agentic.scoring.score_item", side_effect=score_item)
 
 
 class ServicePathScenarioTests(unittest.TestCase):
@@ -53,41 +66,66 @@ class ServicePathScenarioTests(unittest.TestCase):
             ).fetchone()
         return json.loads(row[0])
 
+    def submitted_top5(self, request_id):
+        with closing(sqlite3.connect(self.path)) as db:
+            replies = [
+                json.loads(row[0])
+                for row in db.execute(
+                    "SELECT reply_json FROM tool_calls WHERE request_id=? AND tool_name='submit_l' "
+                    "ORDER BY created_at",
+                    (request_id,),
+                )
+            ]
+        closed = [r["data"] for r in replies if r["status"] == "ok" and r["data"]["closed"]]
+        return [s["industry_code"] for s in closed[-1]["scorecard"]["summaries"]]
+
+    def codes(self, result):
+        return [c.industry_code for c in result.top5]
+
     def test_fourth_floor_excludes_ground_required(self):
+        self.enterContext(raised({"S203": 4}))
+        plain = DecisionResult.model_validate(self.run_analysis())
+        self.assertEqual(self.codes(plain)[0], "S203")
         result = DecisionResult.model_validate(self.run_analysis(floor="4층"))
         ground_required = codes_with("ground_required", "floor_preference")
         self.assertEqual(ground_required, {"S203", "S204"})
-        top = {c.industry_code for c in result.top5}
-        self.assertFalse(top & ground_required)
+        self.assertFalse(set(self.codes(result)) & ground_required)
         excluded = {c.industry_code: c for c in result.condition_excluded}
         self.assertEqual(set(excluded), ground_required)
         self.assertEqual(excluded["S203"].reasons, ["1층이 아님"])
+        self.assertEqual(excluded["S203"].score_rank, 1)
 
-    def test_fourth_floor_lowers_ground_preferred(self):
+    def test_upper_floor_lowers_ground_preferred_by_floor(self):
+        self.enterContext(raised({"G202": 4}))
         plain = DecisionResult.model_validate(self.run_analysis())
-        upper = DecisionResult.model_validate(self.run_analysis(floor="4층"))
-        preferred = codes_with("ground_preferred", "floor_preference")
-        plain_rank = {c.industry_code: i for i, c in enumerate(plain.top5)}
-        for index, candidate in enumerate(upper.top5):
-            if candidate.industry_code in preferred and candidate.industry_code in plain_rank:
-                with self.subTest(code=candidate.industry_code):
-                    self.assertGreaterEqual(index, plain_rank[candidate.industry_code])
+        self.assertEqual(self.codes(plain)[0], "G202")
+        second = DecisionResult.model_validate(self.run_analysis(floor="2층"))
+        self.assertEqual(self.codes(second)[0], "G202")
+        self.assertEqual(second.top5[0].B, plain.top5[0].B)
+        fourth = DecisionResult.model_validate(self.run_analysis(floor="4층"))
+        self.assertNotEqual(self.codes(fourth)[0], "G202")
+        self.assertNotIn("G202", {c.industry_code for c in fourth.condition_excluded})
 
     def test_ventilation_unavailable_excludes_required(self):
+        self.enterContext(raised({"I201": 4}))
+        plain = DecisionResult.model_validate(self.run_analysis())
+        self.assertEqual(self.codes(plain)[0], "I201")
         result = DecisionResult.model_validate(
             self.run_analysis(facilities={"ventilation": "unavailable"})
         )
         required = codes_with("required", "ventilation_needed")
         self.assertEqual(len(required), 8)
-        self.assertFalse({c.industry_code for c in result.top5} & required)
+        self.assertFalse(set(self.codes(result)) & required)
         excluded = {c.industry_code: c for c in result.condition_excluded}
         self.assertEqual(set(excluded), required)
         self.assertTrue(all(c.reasons == ["배기(덕트) 설치 불가"] for c in excluded.values()))
+        self.assertEqual(excluded["I201"].score_rank, 1)
 
     def test_resume_keeps_space_guard(self):
-        waiting = self.run_analysis(
-            floor="4층", facilities={"ventilation": "unavailable"}, allow_questions=True
-        )
+        self.enterContext(raised({"I201": 4, "S203": 4}))
+        fields = {"floor": "4층", "facilities": {"ventilation": "unavailable"}}
+        straight = DecisionResult.model_validate(self.run_analysis(**fields))
+        waiting = self.run_analysis(**fields, allow_questions=True)
         self.assertEqual(waiting["status"], "waiting_for_input")
         response = self.client.post(
             f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true",
@@ -97,17 +135,19 @@ class ServicePathScenarioTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200, response.text)
-        result = DecisionResult.model_validate(response.json())
-        excluded = {c.industry_code for c in result.condition_excluded}
+        resumed = DecisionResult.model_validate(response.json())
+        self.assertEqual(self.codes(resumed), self.codes(straight))
+        excluded = {c.industry_code for c in resumed.condition_excluded}
         self.assertTrue({"S203", "S204"} <= excluded)
         self.assertTrue(codes_with("required", "ventilation_needed") <= excluded)
 
     def test_decision_top5_matches_final_with_exclusion(self):
+        self.enterContext(raised({"I201": 4}))
         payload = self.run_analysis(floor="4층", facilities={"ventilation": "unavailable"})
         result = DecisionResult.model_validate(payload)
-        self.assertEqual(
-            [c.industry_code for c in result.top5], self.stored_top5(result.request_id)
-        )
+        self.assertNotIn("I201", self.codes(result))
+        self.assertEqual(self.codes(result), self.stored_top5(result.request_id))
+        self.assertEqual(self.codes(result), self.submitted_top5(result.request_id))
         self.assertTrue(result.condition_excluded)
 
 

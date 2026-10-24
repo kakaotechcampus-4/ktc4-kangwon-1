@@ -350,3 +350,4 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
         reply = await self.loop.tools.execute("submit_l", {"L_records": [record]})
         self.assertEqual(reply.data.accepted, [])
         self.assertEqual(reply.data.rejected[0]["industry_code"], "I201")
+        self.assertIn("규칙이 채점합니다", reply.data.rejected[0]["reason"])

@@ -110,7 +110,7 @@ export default function IndustryReview({
   }[] = [
     {
       title: '검토 후보 업종',
-      description: '점수가 높은 순서입니다. 배지와 확인 조건을 함께 보세요',
+      description: '추천 순서입니다. 배지와 확인 조건을 함께 보세요',
       positive: true,
       items:
         top5?.map((item) => toItem(item, index)) ??

@@ -500,10 +500,11 @@ def apply_space(row, judgement):
             "notes": list(judgement.notes),
         },
     }
-    if judgement.notes:
-        applied["confirmation_conditions"] = [*row["confirmation_conditions"], *judgement.notes]
-        if row["badge"] == "추천":
-            applied["badge"] = "조건부"
+    added = [*judgement.notes, *(f"추천 제외: {r}" for r in judgement.exclusion_reasons)]
+    if added:
+        applied["confirmation_conditions"] = [*row["confirmation_conditions"], *added]
+    if judgement.notes and row["badge"] == "추천":
+        applied["badge"] = "조건부"
     return applied
 
 

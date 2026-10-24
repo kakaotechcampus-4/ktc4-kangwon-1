@@ -14,6 +14,9 @@ from .contracts import (
     ScorecardSummary,
     ScoreItem,
 )
+from .scoring import apply_space, rank_key, summarize
+from .space import confirmed_answers
+from .space_rules import judge, load_requirements
 from .sql_tool import error
 
 
@@ -38,8 +41,16 @@ def _scorecards(scope, input):
         ).fetchone()
         if snapshot is None:
             return error("SOURCE_UNAVAILABLE", "저장된 코드 점수가 없습니다.")
-        rows = json.loads(snapshot[1])
-        rows.sort(key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]))
+        answers = confirmed_answers(scope, connection=db)
+        requirements = load_requirements()
+        rows = [
+            apply_space(
+                summarize(r["code"], r["items"], r["regulation"]),
+                judge(requirements.get(r["code"], {}), answers),
+            )
+            for r in json.loads(snapshot[1])
+        ]
+        rows.sort(key=lambda r: (r["regulation"] == "금지" or r["space"]["excluded"], rank_key(r)))
         if input.industry_codes:
             rows = [r for r in rows if r["code"] in input.industry_codes]
         offset = _cursor(input.cursor)

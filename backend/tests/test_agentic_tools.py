@@ -235,6 +235,33 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(unknown.error.code, "INVALID_ARGUMENT")
 
+    async def test_scorecard_follows_confirmed_space(self):
+        from app.agentic.contracts import ScorecardResult
+        from app.agentic.questions import save_confirmed_space
+        from app.agentic.scoring import WEIGHTS, apply_space, result, summarize
+        from app.agentic.snapshot import persist_report
+        from app.agentic.space_rules import judge, load_requirements
+
+        requirements = load_requirements()
+        rows = [
+            apply_space(
+                summarize(code, {key: result(key) for key in WEIGHTS}, "해당 없음"),
+                judge(requirements[code], {}),
+            )
+            for code in ("G202", "I201", "L102")
+        ]
+        persist_report(self.scope, {"rows": rows, "top5": rows}, {}, [])
+        save_confirmed_space(
+            self.scope, {"floor": "2층", "existing_facilities": {"ventilation": "unavailable"}}
+        )
+        reply = await self.executor().execute("get_scorecard", {"limit": 5})
+        summaries = ScorecardResult.model_validate(reply.data).summaries
+        self.assertEqual([s.industry_code for s in summaries], ["L102", "G202", "I201"])
+        conditions = {s.industry_code: s.confirmation_conditions for s in summaries}
+        self.assertNotIn("층 확인 필요", conditions["G202"])
+        self.assertIn("추천 제외: 배기(덕트) 설치 불가", conditions["I201"])
+        self.assertNotIn("배기(덕트) 확인 필요", conditions["I201"])
+
     async def test_duplicate_and_invalid_argument(self):
         tool = self.executor()
         self.assertEqual(
