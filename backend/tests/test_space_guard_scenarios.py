@@ -1,0 +1,162 @@
+"""멘토 리뷰의 네 가지 비추천 경우를 서비스 경로와 채점 단계에서 끝까지 확인합니다."""
+
+import json
+import sqlite3
+import tempfile
+import unittest
+from contextlib import closing
+from pathlib import Path
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+from app.agentic.scoring import evaluate, profiles
+from app.agentic.space_rules import load_requirements
+from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+from app.main import create_app
+from app.schemas import DecisionResult
+from app.services.settings import ExecutionSettings
+
+
+def codes_with(level, key):
+    return {code for code, row in load_requirements().items() if row[key] == level}
+
+
+class ServicePathScenarioTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(
+            patch(
+                "httpx.AsyncHTTPTransport.handle_async_request",
+                side_effect=AssertionError("외부 연결 금지"),
+            )
+        )
+        self.directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.path = Path(self.directory) / "scenario.sqlite3"
+        self.client = self.enterContext(
+            TestClient(create_app(settings=ExecutionSettings(db_path=self.path), load_env=False))
+        )
+
+    def run_analysis(self, **fields):
+        response = self.client.post(
+            "/api/v1/analyses?mock=true", json={"address": "시험", **fields}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def stored_top5(self, request_id):
+        with closing(sqlite3.connect(self.path)) as db:
+            row = db.execute(
+                "SELECT top5_json FROM score_snapshots WHERE request_id=? "
+                "AND L_review_state='reviewed' ORDER BY created_at DESC LIMIT 1",
+                (request_id,),
+            ).fetchone()
+        return json.loads(row[0])
+
+    def test_fourth_floor_excludes_ground_required(self):
+        result = DecisionResult.model_validate(self.run_analysis(floor="4층"))
+        ground_required = codes_with("ground_required", "floor_preference")
+        self.assertEqual(ground_required, {"S203", "S204"})
+        top = {c.industry_code for c in result.top5}
+        self.assertFalse(top & ground_required)
+        excluded = {c.industry_code: c for c in result.condition_excluded}
+        self.assertEqual(set(excluded), ground_required)
+        self.assertEqual(excluded["S203"].reasons, ["1층이 아님"])
+
+    def test_fourth_floor_lowers_ground_preferred(self):
+        plain = DecisionResult.model_validate(self.run_analysis())
+        upper = DecisionResult.model_validate(self.run_analysis(floor="4층"))
+        preferred = codes_with("ground_preferred", "floor_preference")
+        plain_rank = {c.industry_code: i for i, c in enumerate(plain.top5)}
+        for index, candidate in enumerate(upper.top5):
+            if candidate.industry_code in preferred and candidate.industry_code in plain_rank:
+                with self.subTest(code=candidate.industry_code):
+                    self.assertGreaterEqual(index, plain_rank[candidate.industry_code])
+
+    def test_ventilation_unavailable_excludes_required(self):
+        result = DecisionResult.model_validate(
+            self.run_analysis(facilities={"ventilation": "unavailable"})
+        )
+        required = codes_with("required", "ventilation_needed")
+        self.assertEqual(len(required), 8)
+        self.assertFalse({c.industry_code for c in result.top5} & required)
+        excluded = {c.industry_code: c for c in result.condition_excluded}
+        self.assertEqual(set(excluded), required)
+        self.assertTrue(all(c.reasons == ["배기(덕트) 설치 불가"] for c in excluded.values()))
+
+    def test_resume_keeps_space_guard(self):
+        waiting = self.run_analysis(
+            floor="4층", facilities={"ventilation": "unavailable"}, allow_questions=True
+        )
+        self.assertEqual(waiting["status"], "waiting_for_input")
+        response = self.client.post(
+            f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true",
+            json={
+                "question_session_id": waiting["question_session_id"],
+                "answers": {q["field"]: "1층" for q in waiting["questions"]},
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = DecisionResult.model_validate(response.json())
+        excluded = {c.industry_code for c in result.condition_excluded}
+        self.assertTrue({"S203", "S204"} <= excluded)
+        self.assertTrue(codes_with("required", "ventilation_needed") <= excluded)
+
+    def test_decision_top5_matches_final_with_exclusion(self):
+        payload = self.run_analysis(floor="4층", facilities={"ventilation": "unavailable"})
+        result = DecisionResult.model_validate(payload)
+        self.assertEqual(
+            [c.industry_code for c in result.top5], self.stored_top5(result.request_id)
+        )
+        self.assertTrue(result.condition_excluded)
+
+
+class ScoringScenarioTests(unittest.TestCase):
+    def test_absolute_school_zone_excludes_lodging_bar_amusement(self):
+        report = evaluate(
+            {
+                "address": "시험",
+                "education_zones": {"status": "ok", "zones": [{"name": "절대보호구역"}]},
+            }
+        )
+        banned = {"I101", "I102", "I211", "R104"}
+        rows = {r["code"]: r for r in report["rows"]}
+        self.assertTrue(all(rows[c]["regulation"] == "금지" for c in banned))
+        self.assertFalse({r["code"] for r in report["top5"]} & banned)
+
+    def test_relative_school_zone_keeps_bar_and_amusement_conditional(self):
+        report = evaluate(
+            {
+                "address": "시험",
+                "education_zones": {"status": "ok", "zones": [{"name": "상대보호구역"}]},
+            }
+        )
+        rows = {r["code"]: r for r in report["rows"]}
+        self.assertEqual(rows["I211"]["regulation"], "조건부")
+        self.assertEqual(rows["R104"]["regulation"], "조건부")
+
+    def test_extreme_density_nearby_type_not_first(self):
+        nearby = [code for code, p in profiles().items() if p["agglomeration"] == "근처형"]
+        self.assertIn("G204", nearby)
+        by_middle = [
+            {"code": code, "density_per_km2": SEOUL_INDUSTRY_DENSITY_PERCENTILES[code][50]}
+            for code in nearby
+            if code in SEOUL_INDUSTRY_DENSITY_PERCENTILES
+        ]
+        crowded = SEOUL_INDUSTRY_DENSITY_PERCENTILES["G204"][95] * 3
+        by_middle = [
+            {**m, "density_per_km2": crowded} if m["code"] == "G204" else m for m in by_middle
+        ]
+        report = evaluate(
+            {
+                "address": "시험",
+                "commercial_area": {"radius_m": 500, "by_middle": by_middle},
+                "commercial_collection_complete": True,
+                "floating_population": {
+                    "benchmark": {"mean_daily_per_trade_area": DAILY_TOTAL_PERCENTILES[50]}
+                },
+            }
+        )
+        rows = {r["code"]: r for r in report["rows"]}
+        self.assertEqual(rows["G204"]["items"]["C1"]["status"], "observed")
+        self.assertNotEqual(report["top5"][0]["code"], "G204")
