@@ -190,6 +190,48 @@ class RunCaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome.calls, runner.CALLS_PER_CASE)
         self.assertEqual(len(sent), runner.CALLS_PER_CASE)
 
+    async def test_every_submit_rejection_is_kept_including_the_last(self):
+        submits = []
+
+        def generate(messages, definitions, settings, receipt):
+            packet = json.loads(messages[1]["content"])
+            code = packet["candidates"][0]["industry_code"]
+            submits.append(code)
+            issue = {
+                "issue_id": f"i{len(submits)}",
+                "industry_code": code,
+                "target": "claim",
+                "kind": "missing_evidence",
+                "comment": "근거가 없습니다.",
+                "fact_ids": [],
+                "suggested_check": "근거를 붙이세요.",
+            }
+            return ChatCompletionMessage(
+                role="assistant",
+                tool_calls=[
+                    {
+                        "id": f"s{len(submits)}",
+                        "type": "function",
+                        "function": {
+                            "name": "submit_review",
+                            "arguments": json.dumps(
+                                {
+                                    "draft_id": packet["draft_id"],
+                                    "verdict": "conditional",
+                                    "issues": [issue],
+                                },
+                                ensure_ascii=False,
+                            ),
+                        },
+                    }
+                ],
+            )
+
+        outcome = await self.execute(self.cases[0], generate=generate)
+        self.assertEqual(outcome.status, "failed")
+        self.assertGreaterEqual(len(submits), 2)
+        self.assertEqual(len(outcome.rejected_reasons), len(submits))
+
     async def test_failed_generation_is_recorded(self):
         async def boom(messages, definitions, settings, receipt):
             raise RuntimeError("boom")

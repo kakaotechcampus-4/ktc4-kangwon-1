@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 
 from examiner_eval.cases import Case, Seed
-from examiner_eval.runner import CaseResult
+from examiner_eval.runner import CaseResult, submit_rejections
 
 SCOPE_KINDS = ("missing_evidence", "scope_mismatch", "factual_error")
 OTHER_KINDS = ("action_condition", "duplicate_score")
@@ -217,26 +217,17 @@ def _recording_name(case_id: str, variant: str, repeat: int) -> str:
     return re.sub(r"[^0-9A-Za-z_-]", "_", case_id) + f"__{variant}__{repeat}.json"
 
 
-def _rejected_reasons(content) -> list[str]:
-    try:
-        body = json.loads(content) if isinstance(content, str) else None
-    except ValueError:
-        return []
-    if not isinstance(body, dict) or body.get("status") != "error":
-        return []
-    data = body.get("data")
-    rejected = data.get("rejected") if isinstance(data, dict) else None
-    if not isinstance(rejected, list):
-        return []
-    return [str(r["reason"]) for r in rejected if isinstance(r, dict) and r.get("reason")]
-
-
 def rejection_reasons(run_dir: Path, results: list[CaseResult], splits: dict[str, str]):
     calls = Path(run_dir) / "calls"
     counters: dict[tuple[str, str], Counter | None] = {}
     for result in results:
         key = (result.variant, splits[result.case_id])
         counters.setdefault(key, None)
+        if result.rejected_reasons is not None:
+            counter = counters[key] if counters[key] is not None else Counter()
+            counters[key] = counter
+            counter.update(result.rejected_reasons)
+            continue
         path = calls / _recording_name(result.case_id, result.variant, result.repeat)
         if not path.exists():
             continue
@@ -255,7 +246,7 @@ def rejection_reasons(run_dir: Path, results: list[CaseResult], splits: dict[str
                 if mark in seen:
                     continue
                 seen.add(mark)
-                counter.update(_rejected_reasons(message.get("content")))
+                counter.update(submit_rejections(message.get("content")))
     return counters
 
 

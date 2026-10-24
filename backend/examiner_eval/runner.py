@@ -3,7 +3,7 @@
 import copy
 import json
 import re
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
@@ -43,6 +43,21 @@ class CaseResult:
     model: str | None
     packet_chars: int
     omitted_fact_ids: int
+    rejected_reasons: list[str] | None = field(default=None)
+
+
+def submit_rejections(content) -> list[str]:
+    try:
+        body = json.loads(content) if isinstance(content, str) else None
+    except ValueError:
+        return []
+    if not isinstance(body, dict) or body.get("status") != "error":
+        return []
+    data = body.get("data")
+    rejected = data.get("rejected") if isinstance(data, dict) else None
+    if not isinstance(rejected, list):
+        return []
+    return [str(r["reason"]) for r in rejected if isinstance(r, dict) and r.get("reason")]
 
 
 class CaseDraft:
@@ -117,6 +132,19 @@ def _watch(loop, seen, events):
     loop.model_call, loop.event = watched_call, watched_event
 
 
+def _capture_rejections(executor, rejected):
+    execute = executor.execute
+
+    async def captured(name, arguments):
+        reply = await execute(name, arguments)
+        if name == "submit_review":
+            rejected.extend(submit_rejections(reply.model_dump_json()))
+        return reply
+
+    executor.execute = captured
+    return executor
+
+
 def _omitted(content):
     try:
         packet = json.loads(content)
@@ -138,6 +166,7 @@ async def run_case(
     started = monotonic()
     seen: dict[str, str] = {}
     events: list[tuple[str, dict]] = []
+    rejected: list[str] = []
     loop = None
     review = None
     failure = None
@@ -151,9 +180,8 @@ async def run_case(
                 measurement=False,
             )
             _watch(loop, seen, events)
-            review = await evaluators.review(
-                loop, "examiner", loop.evaluator_executors()["examiner"], CaseDraft(case.draft)
-            )
+            executor = _capture_rejections(loop.evaluator_executors()["examiner"], rejected)
+            review = await evaluators.review(loop, "examiner", executor, CaseDraft(case.draft))
         except Exception as exc:
             failure = type(exc).__name__
     rows = [c for c in loop.budget.calls if c.get("role") == "examiner"] if loop else []
@@ -177,6 +205,7 @@ async def run_case(
         model=next((r["model"] for r in rows if r.get("model")), None),
         packet_chars=len(packet),
         omitted_fact_ids=_omitted(packet),
+        rejected_reasons=rejected,
     )
 
 

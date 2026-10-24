@@ -327,6 +327,19 @@ class CliReportTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertTrue(err)
 
+    def test_report_counts_rejections_kept_in_results(self):
+        header = {"type": "header", "variant": "V2", "split": "all", "mode": "fake"}
+        runner.append_row(self.run_dir / runner.RESULTS, header | {"model": "fake"})
+        row = dataclasses.asdict(
+            result(self.case.case_id, model="fake", rejected_reasons=["마지막 거절", "마지막 거절"])
+        )
+        runner.append_row(self.run_dir / runner.RESULTS, {"type": "result", **row})
+        out = self.folder / "rep"
+        self.assertEqual(self.call(*self.report_args(out, self.run_dir))[0], 0)
+        summary = (out / "요약.md").read_text(encoding="utf-8")
+        self.assertIn("마지막 거절", summary)
+        self.assertNotIn("기록 없음", summary)
+
     def test_report_without_recordings_says_so(self):
         self.write_run(self.run_dir, self.case.case_id, with_calls=False)
         out = self.folder / "rep"
