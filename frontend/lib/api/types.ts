@@ -91,6 +91,17 @@ export interface FinalCandidate {
   review_state: ReviewState;
 }
 
+export type FacilityKey = 'kitchen' | 'ventilation' | 'water_supply';
+export type FacilityState =
+  'present' | 'installable' | 'unavailable' | 'unknown';
+
+export interface ConditionExcludedCandidate {
+  industry_code: string;
+  industry_name: string;
+  reasons: string[];
+  score_rank: number;
+}
+
 export interface NewFactor {
   direction: 'favorable' | 'adverse' | 'neutral';
   claim: string;
@@ -171,6 +182,7 @@ export interface DecisionResult {
   summary_segments: FactSegment[];
   top5: FinalCandidate[];
   excluded_candidates: FinalCandidate[];
+  condition_excluded?: ConditionExcludedCandidate[];
   // 보고서가 인용한 fact만 담는다. 차트용 전체 fact는 getAnalysisFacts로 받는다.
   facts: FactView[];
   L_records: LRecord[];

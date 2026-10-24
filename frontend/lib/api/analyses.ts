@@ -3,6 +3,8 @@ import type {
   AnalysisEvents,
   AnswerSubmission,
   DecisionResult,
+  FacilityKey,
+  FacilityState,
   RequestFacts,
   StoredAnalysis,
   WaitingForInput,
@@ -115,9 +117,19 @@ export type AnalysisRequestInput = {
   allowQuestions?: boolean;
   floor?: string;
   exclusiveAreaM2?: number;
+  facilities?: Partial<Record<FacilityKey, FacilityState>>;
 };
 
 const FLOOR_PATTERN = /^(지하 )?[1-9]\d{0,2}층$/;
+
+function knownFacilities(
+  facilities: AnalysisRequestInput['facilities']
+): Partial<Record<FacilityKey, FacilityState>> | null {
+  const known = Object.fromEntries(
+    Object.entries(facilities ?? {}).filter(([, state]) => state !== 'unknown')
+  );
+  return Object.keys(known).length > 0 ? known : null;
+}
 
 function validArea(value: number | undefined): value is number {
   return (
@@ -139,6 +151,7 @@ export function buildAnalysisRequestBody({
   allowQuestions = false,
   floor,
   exclusiveAreaM2,
+  facilities,
 }: AnalysisRequestInput): Record<string, unknown> {
   if (
     radiusM !== undefined &&
@@ -146,6 +159,7 @@ export function buildAnalysisRequestBody({
   ) {
     throw new Error('분석 반경은 미터 단위의 양의 정수로 입력해 주세요.');
   }
+  const known = knownFacilities(facilities);
   return {
     address,
     ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
@@ -154,6 +168,7 @@ export function buildAnalysisRequestBody({
     ...(validArea(exclusiveAreaM2)
       ? { exclusive_area_m2: exclusiveAreaM2 }
       : {}),
+    ...(known ? { facilities: known } : {}),
   };
 }
 

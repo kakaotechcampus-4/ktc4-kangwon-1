@@ -18,10 +18,14 @@ import ConfirmSidePanel from '@/components/building-confirm/ConfirmSidePanel';
 import {
   FACILITY_LABELS,
   FACILITY_SHORT_LABELS,
+  FACILITY_STATE_LABELS,
   PARKING_LABELS,
+  SPACE_FACILITY_LABELS,
+  SPACE_FACILITY_ORDER,
   floorFromUnit,
   formatArea,
 } from '@/components/building-confirm/labels';
+import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
 import { startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
@@ -57,6 +61,10 @@ const FACILITY_OPTIONS = (
   Object.keys(FACILITY_SHORT_LABELS) as NeighborhoodFacility[]
 ).map((value) => ({ value, label: FACILITY_SHORT_LABELS[value] }));
 
+const FACILITY_STATE_OPTIONS = (
+  Object.keys(FACILITY_STATE_LABELS) as FacilityState[]
+).map((value) => ({ value, label: FACILITY_STATE_LABELS[value] }));
+
 // 반경 입력칸 값 — 비어 있거나 양의 정수가 아니면 보내지 않는다(서버 기본 반경).
 function parseRadius(text: string): number | undefined {
   const trimmed = text.trim();
@@ -81,6 +89,9 @@ export default function BuildingConfirmPage() {
   const [areaText, setAreaText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [facilities, setFacilities] = useState<
+    Record<FacilityKey, FacilityState>
+  >({ ventilation: 'unknown', kitchen: 'unknown', water_supply: 'unknown' });
 
   useEffect(() => {
     // 개발 환경에서 조회 중 화면을 고정해 디자인을 확인한다.
@@ -186,6 +197,7 @@ export default function BuildingConfirmPage() {
         allowQuestions: true,
         floor: normalizeFloor(input.floorUnit) ?? undefined,
         exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,
+        facilities,
       });
       // 이전 분석 결과가 리포트에 섞이지 않게 지우고 새 요청 ID만 남긴다.
       clearAnalysisResult();
@@ -355,6 +367,30 @@ export default function BuildingConfirmPage() {
                     </select>
                   }
                 />
+
+                {SPACE_FACILITY_ORDER.map((key) => (
+                  <BuildingFieldRow
+                    key={key}
+                    label={SPACE_FACILITY_LABELS[key]}
+                    field={{
+                      value: facilities[key],
+                      registryValue: null,
+                      source: 'user',
+                    }}
+                    format={(value) => FACILITY_STATE_LABELS[value]}
+                    editable
+                    editor={
+                      <SegmentedSelector
+                        options={FACILITY_STATE_OPTIONS}
+                        value={facilities[key]}
+                        onChange={(value) =>
+                          setFacilities({ ...facilities, [key]: value })
+                        }
+                        ariaLabel={SPACE_FACILITY_LABELS[key]}
+                      />
+                    }
+                  />
+                ))}
 
                 <div
                   className="flex justify-end gap-4 px-10 py-8"

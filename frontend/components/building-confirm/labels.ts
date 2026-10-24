@@ -4,6 +4,7 @@ import {
   type NeighborhoodFacility,
   type ParkingAvailability,
 } from '@/lib/api/building';
+import type { FacilityKey, FacilityState } from '@/lib/api/types';
 
 // 상가 정보 확인 화면의 표시 문구 — 컴포넌트 여러 곳에서 같이 쓴다.
 
@@ -37,6 +38,25 @@ export const FACILITY_SHORT_LABELS: Record<NeighborhoodFacility, string> = {
   type1: '제1종',
   type2: '제2종',
   none: '해당없음',
+};
+
+export const SPACE_FACILITY_ORDER: FacilityKey[] = [
+  'ventilation',
+  'kitchen',
+  'water_supply',
+];
+
+export const SPACE_FACILITY_LABELS: Record<FacilityKey, string> = {
+  ventilation: '배기(덕트)',
+  kitchen: '주방',
+  water_supply: '급배수',
+};
+
+export const FACILITY_STATE_LABELS: Record<FacilityState, string> = {
+  present: '있음',
+  installable: '설치 가능',
+  unavailable: '불가',
+  unknown: '모름',
 };
 
 export function formatArea(value: number): string {

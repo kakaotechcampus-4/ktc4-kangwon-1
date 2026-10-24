@@ -98,6 +98,38 @@ describe('확인 화면 값 경계와 분석 시작 요청', () => {
     );
   });
 
+  it('설비 상태는 모름이 아닌 것만 facilities로 보낸다', () => {
+    expect(
+      buildAnalysisRequestBody({
+        address: '테스트 주소',
+        facilities: {
+          ventilation: 'unavailable',
+          kitchen: 'present',
+          water_supply: 'unknown',
+        },
+      })
+    ).toEqual({
+      address: '테스트 주소',
+      facilities: { ventilation: 'unavailable', kitchen: 'present' },
+    });
+  });
+
+  it('설비가 모두 모름이면 facilities를 보내지 않는다', () => {
+    expect(
+      buildAnalysisRequestBody({
+        address: '테스트 주소',
+        facilities: {
+          ventilation: 'unknown',
+          kitchen: 'unknown',
+          water_supply: 'unknown',
+        },
+      })
+    ).toEqual({ address: '테스트 주소' });
+    expect(
+      buildAnalysisRequestBody({ address: '테스트 주소', facilities: {} })
+    ).toEqual({ address: '테스트 주소' });
+  });
+
   it('분석 시작은 wait=false로 층과 전용면적을 본문에 싣는다', async () => {
     const fetch = mockFetch();
     await startAnalysis({
