@@ -162,10 +162,37 @@ export interface FactCompetitionRow {
   storeCount: number | null;
   densityPerKm2: number | null;
   // 유동인구 규모를 감안한 서울 대비 같은 업종 밀도(배수, 채점표 C1).
-  // 1.0이면 서울 같은 업종 수준이고 높을수록 경쟁 부담이 크다.
+  // 1.0이면 서울 같은 업종 수준이고, 높을 때 유리한지는 업종 집적 유형에 따라 다르다.
   competitionIndex: number | null;
   // 비교 반경 대비 이 반경의 업종 비중(배수, 1보다 크면 이 주변에 더 몰려 있음)
   lq: number | null;
+  densityKind: DensityKind | null;
+}
+
+export type DensityKind = '모임형' | '근처형' | '무관';
+
+function densityKinds(facts: readonly FactView[]): Map<string, DensityKind> {
+  const kinds = new Map<string, DensityKind>();
+  for (const fact of facts) {
+    if (
+      fact.metric !== 'competition_index' ||
+      fact.status !== 'observed' ||
+      !fact.industry_code
+    ) {
+      continue;
+    }
+    const kind = fact.unit.includes('모임형')
+      ? '모임형'
+      : fact.unit.includes('근처형')
+        ? '근처형'
+        : fact.unit === '업종 집적 유형(프로필)'
+          ? '무관'
+          : null;
+    if (kind) {
+      kinds.set(fact.industry_code, kind);
+    }
+  }
+  return kinds;
 }
 
 export interface FactCompetition {
@@ -194,6 +221,7 @@ export function competitionFromFacts(
   const density = byIndustry(facts, source, 'density_per_km2');
   const competition = byIndustry(facts, source, 'competition_index');
   const lq = byIndustry(facts, source, 'lq');
+  const kinds = densityKinds(facts);
   const anchor = observed(facts, source, 'store_count')[0];
 
   const row = (code: string): FactCompetitionRow => ({
@@ -203,6 +231,7 @@ export function competitionFromFacts(
     densityPerKm2: density.get(code) ?? null,
     competitionIndex: competition.get(code) ?? null,
     lq: lq.get(code) ?? null,
+    densityKind: kinds.get(code) ?? null,
   });
 
   const storeTotal = [...counts.values()].reduce(

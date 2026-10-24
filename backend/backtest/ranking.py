@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.agentic.scoring import regulation
+from app.agentic.scoring import adjusted_lower, regulation
 from app.industries.catalog import INDUSTRIES, INDUSTRIES_WITHOUT_SEOUL
 
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
@@ -10,7 +10,8 @@ G_INDUSTRIES = frozenset(code for code in INDUSTRIES if regulation(code, G_PROBE
 
 
 def _order(row: dict) -> tuple[bool, float, float]:
-    return (row["regulation"] == "금지", -row["lower"], -(row["coverage"] or 0))
+    blocked = row["regulation"] == "금지" or row.get("space", {}).get("excluded", False)
+    return (blocked, -adjusted_lower(row), -(row["coverage"] or 0))
 
 
 def rank_rows(rows: list[dict]) -> list[dict]:

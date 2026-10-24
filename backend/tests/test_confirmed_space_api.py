@@ -48,6 +48,47 @@ class ConfirmedSpaceApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertIsNone(seen["confirmed_space"])
 
+    def test_facilities_field_accepts_states(self):
+        response, seen = self.post(
+            floor="1층", facilities={"ventilation": "unavailable", "kitchen": "present"}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            seen["confirmed_space"],
+            {
+                "floor": "1층",
+                "existing_facilities": {"kitchen": "present", "ventilation": "unavailable"},
+            },
+        )
+
+    def test_installable_and_all_three_keys(self):
+        _, seen = self.post(
+            facilities={"kitchen": "installable", "ventilation": "present", "water_supply": None}
+        )
+        self.assertEqual(
+            seen["confirmed_space"],
+            {"existing_facilities": {"kitchen": "installable", "ventilation": "present"}},
+        )
+
+    def test_empty_facilities_saves_nothing(self):
+        for facilities in ({}, {"kitchen": None, "ventilation": None, "water_supply": None}):
+            with self.subTest(facilities=facilities):
+                response, seen = self.post(facilities=facilities)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertIsNone(seen["confirmed_space"])
+
+    def test_facilities_rejects_unknown_value_and_extra_key(self):
+        for facilities in (
+            {"ventilation": "maybe"},
+            {"ventilation": "unknown"},
+            {"duct": "present"},
+            "present",
+        ):
+            with self.subTest(facilities=facilities):
+                response, seen = self.post(facilities=facilities)
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertEqual(seen, {})
+
     def test_bad_values_are_422(self):
         for fields in (
             {"floor": "4층 401호"},

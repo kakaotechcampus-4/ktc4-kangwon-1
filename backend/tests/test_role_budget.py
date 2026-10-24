@@ -315,6 +315,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("app.agentic.evaluators.fact_rows", return_value={}),
             patch("app.agentic.evaluators.save_review"),
+            patch(
+                "app.agentic.landlord.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
             patch(

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from app.agentic.facts import register_fact
 from app.agentic.questions import save_confirmed_space
 from app.agentic.scoring import WEIGHTS, result, summarize
 from app.agentic.snapshot import persist_report, persist_space_requirements
@@ -70,6 +71,73 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
             [("exclusive_area", "85㎡", "확인 화면 확정값"), ("floor", "1층", "확인 화면 확정값")],
         )
         self.assertEqual(raw[0], 1)
+
+    async def test_confirmed_facilities_saved_as_user_fact(self):
+        persist_space_requirements(self.scope)
+        saved = save_confirmed_space(
+            self.scope,
+            {"existing_facilities": {"ventilation": "unavailable", "kitchen": "present"}},
+        )
+        self.assertEqual(set(saved["fact_ids"]), {"existing_facilities"})
+        with connect(self.path) as db:
+            facts = db.execute(
+                "SELECT metric,value_json,unit FROM facts WHERE source='user'"
+            ).fetchall()
+        self.assertEqual(
+            [(m, json.loads(v), u) for m, v, u in facts],
+            [
+                (
+                    "existing_facilities",
+                    {"ventilation": "unavailable", "kitchen": "present"},
+                    "확인 화면 확정값",
+                )
+            ],
+        )
+        value = self.space_fit("I201")
+        self.assertEqual((value["ventilation"], value["kitchen"]), ("불일치", "일치"))
+        self.assertEqual(value["water_supply"], "미확인")
+
+    async def test_installable_facility_stays_unknown_in_space_fit(self):
+        persist_space_requirements(self.scope)
+        save_confirmed_space(self.scope, {"existing_facilities": {"ventilation": "installable"}})
+        self.assertEqual(self.space_fit("I201")["ventilation"], "미확인")
+
+    async def test_structured_facility_overrides_free_text(self):
+        persist_space_requirements(self.scope)
+        save_confirmed_space(self.scope, {"existing_facilities": {"ventilation": "unavailable"}})
+        response = self.scope.record_sync(
+            source="user",
+            source_type="api",
+            args={},
+            page="answer",
+            status=200,
+            payload={"rows": [{"existing_facilities": "배기 있음, 주방 있음"}]},
+        )
+        with connect(self.path) as db:
+            ref = db.execute(
+                "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
+            ).fetchone()[0]
+        register_fact(
+            self.scope,
+            industry_code=None,
+            source="user",
+            metric="existing_facilities",
+            value="배기 있음, 주방 있음",
+            unit="임대인 답변",
+            status="observed",
+            row_ids=[ref],
+        )
+        value = self.space_fit("I201")
+        self.assertEqual((value["ventilation"], value["kitchen"]), ("불일치", "일치"))
+
+    async def test_old_db_accepts_confirmed_facilities(self):
+        with connect(self.path) as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 5)
+        saved = save_confirmed_space(
+            self.scope, {"existing_facilities": {"water_supply": "present"}}
+        )
+        self.assertIn("existing_facilities", saved["fact_ids"])
 
     async def test_without_values_space_fit_stays_unknown(self):
         persist_space_requirements(self.scope)

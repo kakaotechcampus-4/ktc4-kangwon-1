@@ -14,7 +14,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { mockReportData } from '@/lib/mockData/report';
-import type { FinalCandidate } from '@/lib/api/types';
+import type {
+  ConditionExcludedCandidate,
+  FinalCandidate,
+} from '@/lib/api/types';
+import { conditionExcludedLines } from './conditionExcluded';
 import { renderSegments, type FactIndex } from '@/lib/api/segments';
 
 export function industrySymbol(name: string): LucideIcon {
@@ -88,13 +92,16 @@ function toItem(candidate: FinalCandidate, facts: FactIndex): ReviewItem {
 export default function IndustryReview({
   top5,
   excluded,
+  conditionExcluded,
   facts,
 }: {
   top5?: FinalCandidate[];
   excluded?: FinalCandidate[];
+  conditionExcluded?: ConditionExcludedCandidate[];
   facts?: FactIndex;
 }) {
   const index = facts ?? new Map();
+  const conditionLines = conditionExcludedLines(conditionExcluded);
   const groups: {
     title: string;
     description: string;
@@ -103,7 +110,7 @@ export default function IndustryReview({
   }[] = [
     {
       title: '검토 후보 업종',
-      description: '점수가 높은 순서입니다. 배지와 확인 조건을 함께 보세요',
+      description: '추천 순서입니다. 배지와 확인 조건을 함께 보세요',
       positive: true,
       items:
         top5?.map((item) => toItem(item, index)) ??
@@ -225,6 +232,16 @@ export default function IndustryReview({
           </div>
         ))}
       </div>
+      {conditionLines && (
+        <div className="industry-risks">
+          <strong>조건 때문에 뺀 업종</strong>
+          <ul>
+            {conditionLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -26,6 +26,8 @@ from app.agents.floating_population.population import (
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 
+from .space_rules import judge, load_requirements
+
 WEIGHTS = {
     "D1": 10,
     "D2": 10,
@@ -372,7 +374,7 @@ def regulation(code: str, scan: dict) -> str:
     relative = any("상대" in n for n in names)
     if not absolute and not relative:
         return "unknown"
-    if absolute and code in {"I101", "I102"}:
+    if absolute:
         return "금지"
     return "조건부"
 
@@ -469,27 +471,63 @@ def profiles() -> dict:
     return {r["industry_code"]: r for r in rows}
 
 
+def adjusted_lower(row):
+    return row["lower"] + row.get("space", {}).get("adjustment", 0)
+
+
+def rank_key(row):
+    return (-adjusted_lower(row), -(row["coverage"] or 0), row["code"])
+
+
 def rank_candidates(rows, limit=5):
     return sorted(
-        [r for r in rows if r["regulation"] != "금지"],
-        key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]),
+        [
+            r
+            for r in rows
+            if r["regulation"] != "금지" and not r.get("space", {}).get("excluded", False)
+        ],
+        key=rank_key,
     )[:limit]
 
 
+def apply_space(row, judgement):
+    applied = {
+        **row,
+        "space": {
+            "excluded": judgement.excluded,
+            "exclusion_reasons": list(judgement.exclusion_reasons),
+            "adjustment": judgement.adjustment,
+            "notes": list(judgement.notes),
+        },
+    }
+    added = [*judgement.notes, *(f"추천 제외: {r}" for r in judgement.exclusion_reasons)]
+    if added:
+        applied["confirmation_conditions"] = [*row["confirmation_conditions"], *added]
+    if judgement.notes and row["badge"] == "추천":
+        applied["badge"] = "조건부"
+    return applied
+
+
 def evaluate(
-    sample: dict, *, exposure_min=40, c1_alpha=0.5, profile_rows=None, **thresholds
+    sample: dict,
+    *,
+    exposure_min=40,
+    c1_alpha=0.5,
+    profile_rows=None,
+    space_answers: dict | None = None,
+    **thresholds,
 ) -> dict:
     rows = []
+    requirements = load_requirements()
     for code, profile in (profiles() if profile_rows is None else profile_rows).items():
         items = {
             item: score_item(item, profile, code, sample, exposure_min, c1_alpha)
             for item in WEIGHTS
         }
-        rows.append(
-            summarize(
-                code, items, regulation(code, sample.get("education_zones", {})), **thresholds
-            )
+        scored = summarize(
+            code, items, regulation(code, sample.get("education_zones", {})), **thresholds
         )
+        rows.append(apply_space(scored, judge(requirements.get(code, {}), space_answers or {})))
     top = rank_candidates(rows)
     return {
         "address": sample["address"],

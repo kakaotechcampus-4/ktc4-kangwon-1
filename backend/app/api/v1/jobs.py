@@ -3,6 +3,7 @@
 import asyncio
 import os
 from collections.abc import Coroutine
+from typing import Literal
 
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -18,6 +19,16 @@ WAIT_QUERY = Query(
 )
 
 
+FacilityState = Literal["present", "installable", "unavailable"]
+
+
+class Facilities(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kitchen: FacilityState | None = None
+    ventilation: FacilityState | None = None
+    water_supply: FacilityState | None = None
+
+
 class AnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     address: str = Field(min_length=1, max_length=200)
@@ -26,6 +37,7 @@ class AnalysisRequest(BaseModel):
     with_map: StrictBool = False
     floor: str | None = Field(default=None, pattern=r"^(지하 )?[1-9][0-9]{0,2}층$")
     exclusive_area_m2: float | None = Field(default=None, ge=0.01, le=100000, strict=True)
+    facilities: Facilities | None = None
 
 
 def request_headers(request_id):

@@ -76,6 +76,10 @@ def space_answers(body):
         values["floor"] = body.floor
     if body.exclusive_area_m2 is not None:
         values["exclusive_area"] = f"{body.exclusive_area_m2:.2f}".rstrip("0").rstrip(".") + "㎡"
+    if body.facilities is not None:
+        facilities = body.facilities.model_dump(exclude_none=True)
+        if facilities:
+            values["existing_facilities"] = facilities
     return values or None
 
 

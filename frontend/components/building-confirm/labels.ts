@@ -4,6 +4,7 @@ import {
   type NeighborhoodFacility,
   type ParkingAvailability,
 } from '@/lib/api/building';
+import type { FacilityKey, FacilityState } from '@/lib/api/types';
 
 // 상가 정보 확인 화면의 표시 문구 — 컴포넌트 여러 곳에서 같이 쓴다.
 
@@ -39,11 +40,30 @@ export const FACILITY_SHORT_LABELS: Record<NeighborhoodFacility, string> = {
   none: '해당없음',
 };
 
+export const SPACE_FACILITY_ORDER: FacilityKey[] = [
+  'ventilation',
+  'kitchen',
+  'water_supply',
+];
+
+export const SPACE_FACILITY_LABELS: Record<FacilityKey, string> = {
+  ventilation: '배기(덕트)',
+  kitchen: '주방',
+  water_supply: '급배수',
+};
+
+export const FACILITY_STATE_LABELS: Record<FacilityState, string> = {
+  present: '있음',
+  installable: '설치 가능',
+  unavailable: '불가',
+  unknown: '모름',
+};
+
 export function formatArea(value: number): string {
   return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡`;
 }
 
-// 입력값의 층/호수에서 "4층", "지하 1층" 부분만 뽑는다. 없으면 "해당 층".
+// 백엔드 공간 비교와 같은 표기를 지원하며, 지하 접두어를 버리고 지상층으로 읽지 않는다.
 export function floorFromUnit(floorUnit: string): string {
   return normalizeFloor(floorUnit) ?? '해당 층';
 }
