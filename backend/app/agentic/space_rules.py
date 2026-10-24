@@ -10,6 +10,7 @@ from .space import GROUND_LEVELS, _area_fit, _floor
 
 FACILITY_NAMES = {"kitchen": "주방", "ventilation": "배기(덕트)", "water_supply": "급배수"}
 FACILITY_STATES = frozenset({"present", "installable", "unavailable"})
+FACILITY_STATE_TEXT = {"present": "있음", "installable": "설치 가능", "unavailable": "설치 불가"}
 ACTIVE_LEVELS = frozenset({"required", "preferred", "conditional"})
 
 

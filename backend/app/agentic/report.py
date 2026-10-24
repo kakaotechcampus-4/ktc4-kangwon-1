@@ -21,7 +21,7 @@ from .contracts import (
 from .read_tools import score_summary
 from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
 from .space import confirmed_answers
-from .space_rules import FACILITY_NAMES, judge, load_requirements
+from .space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
 RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
@@ -380,6 +380,12 @@ def render_segment(segment, facts):
     fact = facts[segment.fact_id]
     value = json.loads(fact["value_json"])
     if segment.format == "text":
+        if fact["metric"] == "existing_facilities" and isinstance(value, dict):
+            return " · ".join(
+                f"{name} {FACILITY_STATE_TEXT[value[key]]}"
+                for key, name in FACILITY_NAMES.items()
+                if value.get(key) in FACILITY_STATE_TEXT
+            )
         return str(value)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
