@@ -36,6 +36,10 @@ class RuleScoredSpaceTests(unittest.TestCase):
         free_text = fact("existing_facilities", "user", "배기 없음")
         self.assertFalse(rule_scored_space(free_text, None, "I201"))
 
+    def test_partial_fact_rows_without_source_are_untouched(self):
+        self.assertFalse(rule_scored_space({"metric": "lq"}, None, "I201"))
+        self.assertFalse(rule_scored_space({"metric": "existing_facilities"}, None, "I201"))
+
     def test_other_facts_are_untouched(self):
         self.assertFalse(rule_scored_space(fact("place_name", "map", "가게"), None, "I201"))
         self.assertFalse(rule_scored_space(fact("space_condition", "user", "지상"), None, "I201"))

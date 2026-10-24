@@ -70,18 +70,18 @@ def load_base(scope):
 
 
 def rule_scored_space(fact, component, industry_code):
-    if fact["metric"] == "space_fit":
+    metric = fact.get("metric")
+    if metric == "space_fit":
         if component == "floor":
             return True
         level = load_requirements().get(industry_code, {}).get(f"{component}_needed")
         return component in FACILITY_NAMES and level in RULE_FACILITY_LEVELS
-    if fact["source"] != "user":
+    if fact.get("source") != "user":
         return False
-    if fact["metric"] == "floor":
+    if metric == "floor":
         return True
-    return fact["metric"] == "existing_facilities" and isinstance(
-        json.loads(fact["value_json"]), dict
-    )
+    raw = fact.get("value_json")
+    return metric == "existing_facilities" and raw is not None and isinstance(json.loads(raw), dict)
 
 
 def condition_excluded(rows):
