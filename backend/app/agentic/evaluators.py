@@ -50,9 +50,10 @@ PERSONAS = {
 }
 COMMON = """검토 패킷을 읽고 읽기 도구는 최대 세 번 사용한 뒤 submit_review를 제출하세요.
 get_facts는 업종·source·metrics 또는 받은 fact_ids로 좁혀 조회하고 같은 요청을 반복하지 마세요.
-공간 요건은 source=industry_profile, metrics=[space_requirements]의 reviewed=false 초안입니다.
-공간 비교 space_fit의 확인된 일치·불일치와 초안 표시를 검토하세요.
-해당 없음·미확인을 불리 요인으로 쓰거나 초안을 법규·확정 시설 요건으로 단정하면 지적하세요.
+공간 요건은 source=industry_profile, metrics=[space_requirements]의 검토한 요건표입니다.
+요건표의 면적만 운영 추정입니다.
+공간 비교 space_fit의 확인된 일치·불일치를 검토하세요.
+해당 없음·미확인을 불리 요인으로 쓰거나 면적 추정을 법규 기준으로 단정하면 지적하세요.
 패킷의 생략 표시가 있으면 get_facts로 원문을 확인하세요. fact_id는 요청 전용 별칭입니다.
 새 점수·순위를 만들지 마세요. 지적마다 실제 fact_id 근거를 최대 다섯 개 붙이세요.
 문장에 숫자를 직접 쓰지 말고 fact_ids로 인용하세요. 확인하지 못한 것은 확인 조건으로 남기세요.

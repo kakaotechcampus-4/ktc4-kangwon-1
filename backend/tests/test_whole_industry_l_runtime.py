@@ -101,14 +101,14 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("L_top10", context)
         self.assertEqual(set(context["L_industry_codes"]), set(INDUSTRIES))
 
-    async def observed(self, code, value="지상", read=True):
+    async def observed(self, code, value="지상", read=True, metric="space_condition"):
         response = await self.scope.record(
             source="user",
             source_type="api",
             args={},
-            page="floor",
+            page="space",
             status=200,
-            payload={"rows": [{"floor": value}]},
+            payload={"rows": [{metric: value}]},
         )
         with connect(self.path) as db:
             ref = db.execute(
@@ -118,12 +118,12 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
             self.scope,
             industry_code=code,
             source="user",
-            metric="floor",
+            metric=metric,
             value=value,
             unit="임대인 답변",
             status="observed",
             row_ids=[ref],
-            field_pointer="/floor",
+            field_pointer="/" + metric,
         )
         if read:
             await self.loop.tools.execute("get_facts", {"fact_ids": [fact]})
@@ -223,7 +223,7 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
             metric="space_fit",
             value={
                 "floor": "일치",
-                "area": "미확인",
+                "area": "일치",
                 "kitchen": "해당 없음",
                 "ventilation": "해당 없음",
                 "water_supply": "미확인",
@@ -246,7 +246,7 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.status, "ok", reply.error)
         self.assertEqual(self.loop.state["L_records"]["G204"]["grade"], 3)
         self.assertEqual(
-            self.loop.state["L_records"]["G204"]["new_factors"][0]["space_fit_component"], "floor"
+            self.loop.state["L_records"]["G204"]["new_factors"][0]["space_fit_component"], "area"
         )
         await self.loop.tools.execute("submit_draft", {"phase": "draft", "report": {}})
         view = next(f for f in self.loop.done.facts if f.fact_id == fact)
@@ -274,19 +274,25 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c.industry_code for c in self.loop.done.excluded_candidates], ["S209"])
 
     async def test_space_directions_infer_components_and_reject_duplicate_direction(self):
-        record = await self.observed("I201")
+        record = await self.observed("I212")
         user_fact = record["factors"][0]["fact_id"]
         with connect(self.path) as db:
             profile = db.execute(
                 "SELECT fact_id FROM facts WHERE source='industry_profile' "
-                "AND metric='space_requirements' AND industry_code='I201'"
+                "AND metric='space_requirements' AND industry_code='I212'"
             ).fetchone()[0]
         fact = register_fact(
             self.scope,
-            industry_code="I201",
+            industry_code="I212",
             source="industry_profile",
             metric="space_fit",
-            value={"floor": "일치", "kitchen": "불일치", "reviewed": False, "confidence": "low"},
+            value={
+                "floor": "일치",
+                "area": "일치",
+                "kitchen": "불일치",
+                "reviewed": True,
+                "confidence": "low",
+            },
             unit="공간 비교",
             status="observed",
             row_ids=[],
@@ -299,13 +305,48 @@ class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):
         ]
         duplicate = await self.loop.tools.execute("submit_l", {"L_records": [record]})
         self.assertEqual(duplicate.status, "ok", duplicate.error)
-        self.assertEqual(duplicate.data.rejected[0]["industry_code"], "I201")
+        self.assertEqual(duplicate.data.rejected[0]["industry_code"], "I212")
         self.assertEqual(self.loop.state["L_records"], {})
         record["factors"][1]["direction"] = "adverse"
         accepted = await self.loop.tools.execute("submit_l", {"L_records": [record]})
         self.assertEqual(accepted.status, "ok", accepted.error)
-        self.assertEqual(self.loop.state["L_records"]["I201"]["grade"], 2)
+        self.assertEqual(self.loop.state["L_records"]["I212"]["grade"], 2)
         self.assertEqual(
-            [f["space_fit_component"] for f in self.loop.state["L_records"]["I201"]["new_factors"]],
-            ["floor", "kitchen"],
+            [f["space_fit_component"] for f in self.loop.state["L_records"]["I212"]["new_factors"]],
+            ["area", "kitchen"],
         )
+
+    async def test_l_rejects_user_floor_fact(self):
+        record = await self.observed("S209", "4층", metric="floor")
+        reply = await self.loop.tools.execute("submit_l", {"L_records": [record]})
+        self.assertEqual(reply.data.accepted, [])
+        self.assertIn("규칙이 채점합니다", reply.data.rejected[0]["reason"])
+
+    async def test_l_rejects_required_facility_space_fit(self):
+        record = await self.observed("I201")
+        with connect(self.path) as db:
+            profile = db.execute(
+                "SELECT fact_id FROM facts WHERE source='industry_profile' "
+                "AND metric='space_requirements' AND industry_code='I201'"
+            ).fetchone()[0]
+        fact = register_fact(
+            self.scope,
+            industry_code="I201",
+            source="industry_profile",
+            metric="space_fit",
+            value={
+                "floor": "불일치",
+                "ventilation": "불일치",
+                "reviewed": True,
+                "confidence": "low",
+            },
+            unit="공간 비교",
+            status="observed",
+            row_ids=[],
+            parent_fact_ids=[profile, record["factors"][0]["fact_id"]],
+        )
+        await self.loop.tools.execute("get_facts", {"fact_ids": [fact]})
+        record["factors"] = [{"fact_id": fact, "direction": "adverse"}]
+        reply = await self.loop.tools.execute("submit_l", {"L_records": [record]})
+        self.assertEqual(reply.data.accepted, [])
+        self.assertEqual(reply.data.rejected[0]["industry_code"], "I201")

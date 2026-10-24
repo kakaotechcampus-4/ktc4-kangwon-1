@@ -7,7 +7,7 @@ from app.text import has_digit
 
 from .aliases import decode
 from .contracts import LInput, LRecord
-from .report import fact_rows, l_grade
+from .report import fact_rows, l_grade, rule_scored_space
 
 
 def build_record(scope, raw, base_id, base_rows):
@@ -50,6 +50,7 @@ def build_record(scope, raw, base_id, base_rows):
                     key
                     for key in ("floor", "area", "kitchen", "ventilation", "water_supply")
                     if value.get(key) in wanted
+                    and not rule_scored_space(fact, key, item.industry_code)
                 ),
                 None,
             )

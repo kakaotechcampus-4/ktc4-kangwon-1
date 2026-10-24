@@ -15,8 +15,9 @@ from .contracts import FactView, FinalCandidate, LRecord, LSelection
 from .read_tools import score_summary
 from .scoring import WEIGHTS, apply_space, rank_candidates, result, summarize
 from .space import confirmed_answers
-from .space_rules import judge, load_requirements
+from .space_rules import FACILITY_NAMES, judge, load_requirements
 
+RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
 NEW_METRICS = {
     "place_name",
     "kakao_category",
@@ -60,6 +61,21 @@ def load_base(scope):
     rows = json.loads(row[1])
     rows.sort(key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]))
     return row[0], rows
+
+
+def rule_scored_space(fact, component, industry_code):
+    if fact["metric"] == "space_fit":
+        if component == "floor":
+            return True
+        level = load_requirements().get(industry_code, {}).get(f"{component}_needed")
+        return component in FACILITY_NAMES and level in RULE_FACILITY_LEVELS
+    if fact["source"] != "user":
+        return False
+    if fact["metric"] == "floor":
+        return True
+    return fact["metric"] == "existing_facilities" and isinstance(
+        json.loads(fact["value_json"]), dict
+    )
 
 
 def fact_rows(scope, ids):
@@ -191,6 +207,13 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
                     for f in factor.fact_ids
                 ):
                     raise ReportInvalid("L 근거의 업종이 검토 업종과 다릅니다.")
+                if any(
+                    rule_scored_space(facts[f], factor.space_fit_component, record.industry_code)
+                    for f in factor.fact_ids
+                ):
+                    raise ReportInvalid(
+                        "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
+                    )
                 if factor.major_constraint and factor.direction != "adverse":
                     raise ReportInvalid("큰 운영 제약은 불리 요인으로 기록해야 합니다.")
                 if any(
