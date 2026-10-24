@@ -20,7 +20,7 @@ PERSONA = (
     "target=score, kind=duplicate_score입니다. "
     "확인하지 못한 칸은 kind=action_condition으로 남기세요. "
     "공간·운영 적합성은 창업자, 손님 수요는 손님, 임대 지속성은 임대인 평가자의 몫이므로 "
-    "공간 초안 경고를 되풀이하지 마세요. unknown 이유와 L 중복 채점은 서버가 검사합니다. "
+    "공간 요건 경고를 되풀이하지 마세요. unknown 이유와 L 중복 채점은 서버가 검사합니다. "
     "facts와 score_items의 관측 fact만 인용하고 "
     "제공 근거가 충분하면 읽기 도구 없이 제출해도 됩니다. "
     "제출 전에 지적마다 fact_ids가 있는지, comment와 suggested_check에 숫자가 없는지 확인하세요. "
