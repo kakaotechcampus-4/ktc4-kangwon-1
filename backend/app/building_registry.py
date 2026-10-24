@@ -31,8 +31,9 @@ PAGE_SIZE = 100
 MAX_PAGES = 30
 # 표제부의 옥내·옥외 기계식·자주식 주차 대수입니다. 합이 건물 전체 주차 대수입니다.
 PARKING_FIELDS = ("indrMechUtcnt", "oudrMechUtcnt", "indrAutoUtcnt", "oudrAutoUtcnt")
-# 건축HUB는 지하층을 "지1층"으로 줍니다. 화면 표기("지하 1층")로 바꿉니다.
-BASEMENT = re.compile(r"지(?:하)?\s*(\d+)\s*층")
+# 건축HUB는 지하층을 "지1층"·"지1"로 줍니다. 화면 표기("지하 1층")로 바꿉니다.
+BASEMENT = re.compile(r"지(?:하)?\s*(\d+)\s*층?")
+GROUND = re.compile(r"(?:지상\s*)?(\d+)\s*층")
 
 # 화면의 오수정화시설 선택지입니다(SEWAGE_OPTIONS에서 사용자 몫인 '모름'만 뺌).
 SewageMethod = Literal["하수종말처리장 연결", "정화조", "오수처리시설"]
@@ -149,10 +150,17 @@ def _count(value: Any) -> int | None:
     return int(number) if number is not None else None
 
 
-def _floor(value: Any) -> str | None:
-    text = _text(value)
-    match = BASEMENT.fullmatch(text) if text else None
-    return f"지하 {match.group(1)}층" if match else text
+def _floor(row: dict[str, Any]) -> str | None:
+    text = _text(row.get("flrNoNm"))
+    if text and (match := BASEMENT.fullmatch(text)):
+        return f"지하 {int(match.group(1))}층"
+    if text and (match := GROUND.fullmatch(text)):
+        return f"{int(match.group(1))}층"
+    number = _count(row.get("flrNo"))
+    kind = str(row.get("flrGbCd") or "").strip()
+    if (number or 0) > 0 and kind in {"10", "20"}:
+        return f"지하 {number}층" if kind == "10" else f"{number}층"
+    return text
 
 
 async def _parcel(
@@ -306,7 +314,7 @@ def _floors(rows: list[dict[str, Any]]) -> list[FloorOverview]:
     return [
         FloorOverview(
             dong_name=_text(row.get("dongNm")),
-            floor=_floor(row.get("flrNoNm")),
+            floor=_floor(row),
             use=_text(row.get("mainPurpsCdNm")),
             use_detail=_text(row.get("etcPurps")),
             area_m2=_number(row.get("area")),
@@ -331,7 +339,7 @@ def _units(rows: list[dict[str, Any]]) -> list[Unit]:
         units[key] = Unit(
             dong_name=key[0],
             unit_name=key[1],
-            floor=_floor(row.get("flrNoNm")),
+            floor=_floor(row),
             use=_text(row.get("mainPurpsCdNm")),
             use_detail=_text(row.get("etcPurps")),
             area_m2=area,

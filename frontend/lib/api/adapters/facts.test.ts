@@ -180,6 +180,41 @@ describe('competitionFromFacts', () => {
   it('점포 수 fact가 없으면 null', () => {
     expect(competitionFromFacts([], ['I201'])).toBeNull();
   });
+
+  it('밀도 비교 값의 단위로 업종 집적 유형을 읽는다', () => {
+    const data = competitionFromFacts(
+      [
+        ...facts,
+        fact('commercial_area', 'competition_index', 1.8, {
+          industry: 'G204',
+          unit: '배수(근처형: 유동 보정 밀도, 낮을수록 유리)',
+        }),
+        fact('commercial_area', 'competition_index', 2.1, {
+          industry: 'G208',
+          unit: '배수(모임형: 서울 중앙 밀도 대비, 높을수록 유리·상위 5% 초과 감점)',
+        }),
+        fact(
+          'industry_profile',
+          'competition_index',
+          { agglomeration: '무관', grade: 2 },
+          { industry: 'L102', unit: '업종 집적 유형(프로필)' }
+        ),
+      ],
+      ['G204', 'G208', 'L102', 'I201']
+    );
+    expect(
+      data?.selected.map((row) => [
+        row.code,
+        row.competitionIndex,
+        row.densityKind,
+      ])
+    ).toEqual([
+      ['G204', 1.8, '근처형'],
+      ['G208', 2.1, '모임형'],
+      ['L102', null, '무관'],
+      ['I201', null, null],
+    ]);
+  });
 });
 
 describe('lifecycleFromFacts', () => {

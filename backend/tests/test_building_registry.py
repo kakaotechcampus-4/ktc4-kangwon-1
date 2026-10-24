@@ -161,6 +161,34 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
             [("하수종말처리장 연결", "하수종말처리장연결")],
         )
 
+    async def test_floor_text_first_then_floor_codes(self):
+        floors = [
+            {"flrGbCd": "10", "flrNo": "1", "flrNoNm": "지1", "mainPurpsCdNm": "판매시설"},
+            {"flrGbCd": "10", "flrNo": 2, "flrNoNm": " ", "mainPurpsCdNm": "주차장"},
+            {"flrGbCd": "20", "flrNo": "9", "flrNoNm": "9층", "mainPurpsCdNm": "업무시설"},
+            {"flrGbCd": "10", "flrNo": "0", "flrNoNm": "지4~지1", "mainPurpsCdNm": "주차장"},
+            {"flrGbCd": "40", "flrNo": "0", "flrNoNm": "각층", "mainPurpsCdNm": "계단실"},
+            {"flrGbCd": "30", "flrNo": "1", "flrNoNm": "옥탑1", "mainPurpsCdNm": "기계실"},
+        ]
+        units = [
+            {"hoNm": "B105호", "flrGbCd": "10", "flrNo": "1", "flrNoNm": "지1"},
+            {"hoNm": "905호", "flrGbCd": "20", "flrNo": "9", "flrNoNm": "각층"},
+            {"hoNm": "4704", "flrGbCd": "10", "flrNo": 47, "flrNoNm": "47층"},
+        ]
+        result, _ = await self.lookup(
+            answers(
+                getBrFlrOulnInfo=httpx.Response(200, json=hub(floors)),
+                getBrExposPubuseAreaInfo=httpx.Response(
+                    200, json=hub([{**u, "exposPubuseGbCdNm": "전유", "area": 30} for u in units])
+                ),
+            )
+        )
+        self.assertEqual(
+            [f.floor for f in result.floors],
+            ["지하 1층", "지하 2층", "9층", "지4~지1", "각층", "옥탑1"],
+        )
+        self.assertEqual([u.floor for u in result.units], ["지하 1층", "9층", "47층"])
+
     async def test_sewage_and_parking_follow_screen(self):
         rows = [
             {"modeCdNm": "부패탱크방법"},
