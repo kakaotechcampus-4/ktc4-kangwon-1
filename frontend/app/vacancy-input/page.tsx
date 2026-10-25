@@ -49,7 +49,7 @@ export default function VacancyInputPage() {
             VACANCY ANALYSIS
           </p>
           <h1
-            className="font-light tracking-[-0.035em]"
+            className="font-extrabold tracking-[-0.04em]"
             style={{
               color: colors.brand.dark,
               fontSize: 'clamp(32px, 3.4vw, 46px)',
