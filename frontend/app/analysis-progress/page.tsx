@@ -329,7 +329,7 @@ function ProgressView({
   return (
     <div
       className="flex min-h-screen flex-col"
-      style={{ backgroundColor: colors.brand.wash }}
+      style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
 
