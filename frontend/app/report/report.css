@@ -3210,10 +3210,7 @@
 .report-page .conclusion-lead,
 .report-page .conclusion-checks,
 .report-page .key-evidence,
-.report-page .industry-group,
-.report-page .fp-root,
-.report-page .ca-root,
-.report-page .oc-root {
+.report-page .industry-group {
   border: 0;
   border-radius: 22px;
   background: #ffffff;
@@ -3304,4 +3301,12 @@
 }
 .report-page .decision-cover .recommendation-footer > a:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* 05~08 장은 바깥 흰 컨테이너 없이 안쪽 카드만 보이게 둔다. */
+.report-page .action-plan {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
