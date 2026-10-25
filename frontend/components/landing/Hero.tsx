@@ -19,24 +19,30 @@ export default function Hero() {
       <HeroIllustration className="absolute inset-x-0 bottom-[210px] h-[44%] w-full sm:bottom-10 sm:h-[calc(100%-120px)]" />
 
       <div className="pointer-events-none absolute inset-x-0 top-[30%] -translate-y-1/2 text-center sm:top-1/2 sm:-translate-y-[58%]">
-        {/* CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고 */}
+        {/*
+          CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고.
+          보이지 않는 CHUM.AI로 자리 폭을 먼저 잡고 그 왼쪽 끝에 글자를 붙여서,
+          AI가 빠지고 붙는 동안 CH는 제자리에 있다.
+        */}
         <p
           aria-label="CHAIUM, chum.ai"
-          className="wordmark leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
+          className="wordmark relative inline-block text-left leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
           style={{ fontSize: 'clamp(60px, 17vw, 280px)' }}
         >
-          <span aria-hidden="true" className="wordmark-fill">
-            CH
+          <span aria-hidden="true" className="invisible">
+            CHUM.AI
           </span>
-          <span aria-hidden="true" className="wordmark-ai-out">
-            AI
-          </span>
-          <span aria-hidden="true" className="wordmark-fill">
-            UM
-          </span>
-          <span aria-hidden="true" className="wordmark-ai-in">
-            <span className="wordmark-dot">.</span>
-            <span className="wordmark-ai-land">AI</span>
+          <span
+            aria-hidden="true"
+            className="wordmark-line absolute top-0 left-0"
+          >
+            <span className="wordmark-fill">CH</span>
+            <span className="wordmark-ai-out">AI</span>
+            <span className="wordmark-fill">UM</span>
+            <span className="wordmark-ai-in">
+              <span className="wordmark-dot">.</span>
+              <span className="wordmark-ai-land">AI</span>
+            </span>
           </span>
         </p>
       </div>
