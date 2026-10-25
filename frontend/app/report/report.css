@@ -3126,9 +3126,9 @@
 .report-page .report-masthead .report-cover-title {
   max-width: none;
   margin: 0;
-  font-size: calc(clamp(32px, 3.6vw, 52px) * var(--font-scale));
+  font-size: calc(clamp(28px, 3vw, 42px) * var(--font-scale));
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.3;
   letter-spacing: -0.05em;
   color: #10233a;
 }
