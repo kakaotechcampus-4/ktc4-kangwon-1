@@ -29,7 +29,7 @@ function TestimonialCard({ item }: { item: Testimonial }) {
                 key={index}
                 size={20}
                 aria-hidden="true"
-                fill={index < item.rating ? colors.brand.primary : '#D5DEE7'}
+                fill={index < item.rating ? '#F2B84B' : '#D5DEE7'}
                 strokeWidth={0}
               />
             ))}
