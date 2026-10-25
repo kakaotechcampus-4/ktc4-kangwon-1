@@ -146,7 +146,7 @@ body {
 /*
  * 랜딩 히어로 워드마크 — CHAIUM에서 AI가 오른쪽으로 빠져나가 CHUM.AI가 된다.
  * "빈 자리(CH_UM)를 AI로 채운다"는 뜻이라, AI가 빠지는 순간 CHUM이 남색으로 채워진다.
- * 1.2s~2.4s AI 이동 · 1.7s~2.7s CHUM 채움 · 1.9s~3.1s 점과 AI 도착. 한 번만 재생한다.
+ * 0.7s~1.9s AI 이동 · 1.2s~2.2s CHUM 채움 · 1.4s~2.6s 점과 AI 도착. 한 번만 재생한다.
  */
 .wordmark {
   --wm-blue: #2453d6;
@@ -160,17 +160,17 @@ body {
 .wordmark-fill {
   color: transparent;
   -webkit-text-stroke: 3px var(--wm-blue);
-  animation: wordmark-fill 1s ease 1.7s forwards;
+  animation: wordmark-fill 1s ease 1.2s forwards;
 }
 .wordmark-ai-out {
   max-width: 1.1em;
   color: var(--wm-blue);
-  animation: wordmark-ai-out 1.2s cubic-bezier(0.6, 0, 0.3, 1) 1.2s forwards;
+  animation: wordmark-ai-out 1.2s cubic-bezier(0.6, 0, 0.3, 1) 0.7s forwards;
 }
 .wordmark-ai-in {
   max-width: 0;
   opacity: 0;
-  animation: wordmark-ai-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.9s forwards;
+  animation: wordmark-ai-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s forwards;
 }
 .wordmark-ai-in > span {
   display: inline-block;
@@ -179,12 +179,12 @@ body {
   color: var(--wm-amber);
   transform: scale(0);
   transform-origin: 50% 85%;
-  animation: wordmark-dot 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 2.5s forwards;
+  animation: wordmark-dot 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 2s forwards;
 }
 .wordmark-ai-land {
   color: var(--wm-blue);
   transform: translateX(-0.6em);
-  animation: wordmark-ai-land 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.9s forwards;
+  animation: wordmark-ai-land 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s forwards;
 }
 @keyframes wordmark-fill {
   to {
@@ -230,7 +230,7 @@ body {
 /*
  * 히어로 슬로건 — 워드마크(CHUM.AI)가 완성된 뒤 두 줄이 아래에서 올라오고,
  * 둘째 줄 "새로운 가치를 채우다"는 옅은 외곽선에서 왼쪽부터 파랑으로 채워진다.
- * 3.1s 첫 줄 · 3.3s 둘째 줄 등장 · 3.8s~5.2s 채움.
+ * 2.6s 첫 줄 · 2.8s 둘째 줄 등장 · 3.3s~4.7s 채움.
  */
 .slogan-line {
   display: block;
@@ -240,10 +240,10 @@ body {
 .slogan-rise {
   display: inline-block;
   transform: translateY(110%);
-  animation: slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 3.1s forwards;
+  animation: slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 2.6s forwards;
 }
 .slogan-rise-late {
-  animation-delay: 3.3s;
+  animation-delay: 2.8s;
 }
 .slogan-fill {
   color: transparent;
@@ -254,8 +254,8 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   animation:
-    slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 3.3s forwards,
-    slogan-fill 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.8s forwards;
+    slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 2.8s forwards,
+    slogan-fill 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.3s forwards;
 }
 @keyframes slogan-rise {
   to {
