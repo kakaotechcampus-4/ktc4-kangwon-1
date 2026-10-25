@@ -13,7 +13,7 @@ export default function Hero() {
       className="relative w-full overflow-hidden"
       style={{
         backgroundColor: colors.brand.wash,
-        height: 'clamp(720px, calc(100svh + 80px), 1080px)',
+        height: 'clamp(640px, 100svh, 940px)',
       }}
     >
       <HeroIllustration className="absolute inset-x-0 bottom-[210px] h-[44%] w-full sm:bottom-10 sm:h-[calc(100%-120px)]" />
@@ -47,7 +47,7 @@ export default function Hero() {
         </p>
       </div>
 
-      <div className="absolute inset-x-4 bottom-[76px] flex flex-col items-start justify-between gap-6 sm:inset-x-10 sm:flex-row sm:items-end">
+      <div className="absolute inset-x-4 bottom-[128px] flex flex-col items-start justify-between gap-6 sm:inset-x-10 sm:flex-row sm:items-end">
         <h1
           className="font-extrabold tracking-[-0.05em]"
           style={{
