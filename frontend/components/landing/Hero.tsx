@@ -40,7 +40,7 @@ export default function Hero() {
 
       <div className="absolute inset-x-4 bottom-[76px] flex flex-col items-start justify-between gap-6 sm:inset-x-10 sm:flex-row sm:items-end">
         <h1
-          className="font-light tracking-[-0.035em]"
+          className="font-extrabold tracking-[-0.05em]"
           style={{
             color: colors.brand.dark,
             fontSize: 'clamp(34px, 4.4vw, 64px)',
@@ -49,7 +49,9 @@ export default function Hero() {
         >
           비어 있는 자리를,
           <br />
-          가장 어울리는 가게로
+          <span style={{ color: colors.brand.primary }}>
+            가장 어울리는 가게로
+          </span>
         </h1>
         <Link
           href="#report-preview"
