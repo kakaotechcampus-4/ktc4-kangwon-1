@@ -27,7 +27,7 @@ export default function Hero() {
         <p
           aria-label="CHAIUM, chum.ai"
           className="wordmark relative inline-block text-left leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
-          style={{ fontSize: 'clamp(60px, 17vw, 280px)' }}
+          style={{ fontSize: 'clamp(52px, 11vw, 176px)' }}
         >
           <span aria-hidden="true" className="invisible">
             CHUM.AI
