@@ -89,10 +89,6 @@ export default function Hero() {
           </span>
         </Link>
       </div>
-
-      <p className="absolute inset-x-0 bottom-[52px] text-center text-13 tracking-[0.08em] text-[#5B6B78]">
-        (SCROLL)
-      </p>
     </section>
   );
 }
