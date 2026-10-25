@@ -68,6 +68,7 @@ const chapters = [
   ['regulations', '입점 규제 확인'],
   ['conclusion', '핵심 결론'],
   ['compare', '업종 비교'],
+  ['reviews', '교차 검토'],
   ['customers', '유동인구'],
   ['competition', '경쟁업체'],
   ['lifecycle', '개폐업 추이'],
@@ -77,10 +78,13 @@ const chapters = [
 function Chapter({
   id,
   title,
+  aside,
   children,
 }: {
   id: string;
   title: string;
+  // 설명 문장과 같은 줄 오른쪽에 붙는 보조 정보
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -100,13 +104,16 @@ function Chapter({
             {chapters.find(([chapterId]) => chapterId === id)?.[1] ?? title}
           </span>
         </h2>
-        <p className="chapter-description">
-          {id === 'space'
-            ? '분석 대상 상가의 기본 정보를 확인하세요.'
-            : id === 'conclusion'
-              ? '추천 업종과 주요 판단 근거를 확인하세요.'
-              : title}
-        </p>
+        <div className="chapter-description-row">
+          <p className="chapter-description">
+            {id === 'space'
+              ? '분석 대상 상가의 기본 정보를 확인하세요.'
+              : id === 'conclusion'
+                ? '추천 업종과 주요 판단 근거를 확인하세요.'
+                : title}
+          </p>
+          {aside && <span className="chapter-aside">{aside}</span>}
+        </div>
       </header>
       <div className="original-report-content">{children}</div>
     </section>
@@ -405,6 +412,8 @@ export default function ReportPage() {
         .map((line) => line.trim())
         .filter(Boolean)
     : [];
+  const reviewerList =
+    analysisResult?.evaluator_reviews ?? mockReportData.evaluatorReviews;
   const limitations = analysisResult
     ? renderSegments(analysisResult.limitations_segments, factIndex).trim()
     : '';
@@ -746,13 +755,27 @@ export default function ReportPage() {
                 excluded={analysisResult?.excluded_candidates}
                 facts={factIndex}
               />
-              {analysisResult && (
-                <EvaluatorReviews
-                  reviews={analysisResult.evaluator_reviews}
-                  completeness={analysisResult.review_completeness}
-                  limitations={limitations}
-                />
-              )}
+            </Chapter>
+            <Chapter
+              id="reviews"
+              title="같은 추천 결과를, 서로 다른 입장에서 살펴봤어요."
+              aside={`${
+                reviewerList.filter((r) => r.status === 'completed').length
+              } / ${reviewerList.length}명 검토 완료`}
+            >
+              <EvaluatorReviews
+                reviews={reviewerList}
+                resolutions={
+                  analysisResult?.review_resolutions ??
+                  mockReportData.reviewResolutions
+                }
+                facts={
+                  analysisResult
+                    ? factIndex
+                    : indexFacts(mockReportData.reviewFacts)
+                }
+                limitations={limitations}
+              />
             </Chapter>
             <Chapter
               id="customers"

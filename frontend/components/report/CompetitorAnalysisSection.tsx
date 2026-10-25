@@ -498,23 +498,39 @@ function IndustryCompetitionGrid({
       title="업종별 경쟁 지표"
       description="추천·비추천 업종 각각이 이 상권에서 얼마나 밀집해 있는지 보여줍니다. lq는 좋고 나쁨의 지표가 아니라 기준 대비 배수입니다."
     >
-      <div className="ca-industry-grid">
-        {recommended.map((item) => (
-          <IndustryCompetitionCard
-            key={item.key}
-            item={item}
-            recommended
-            data={data}
-          />
-        ))}
-        {notRecommended.map((item) => (
-          <IndustryCompetitionCard
-            key={item.key}
-            item={item}
-            recommended={false}
-            data={data}
-          />
-        ))}
+      {/* 추천·비추천을 한 그리드에 섞으면 1열(모바일)에서 작은 배지 말고는
+          구분할 단서가 없다. 그룹 제목을 달아 두 묶음으로 나눈다. */}
+      <div className="ca-industry-groups">
+        {[
+          { label: '추천 업종', items: recommended, isRecommended: true },
+          { label: '비추천 업종', items: notRecommended, isRecommended: false },
+        ]
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <section
+              key={group.label}
+              className="ca-industry-group"
+              data-recommended={group.isRecommended}
+            >
+              <p className="ca-industry-group-title">
+                <span className="ca-industry-group-dot" />
+                {group.label}
+                <span className="ca-industry-group-count">
+                  {group.items.length}
+                </span>
+              </p>
+              <div className="ca-industry-grid">
+                {group.items.map((item) => (
+                  <IndustryCompetitionCard
+                    key={item.key}
+                    item={item}
+                    recommended={group.isRecommended}
+                    data={data}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
       </div>
     </SectionCard>
   );
@@ -947,6 +963,46 @@ export default function CompetitorAnalysisSection({
         }
 
         /* ---- B. 업종별 경쟁 지표 카드 ---- */
+        .ca-industry-groups {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: clamp(18px, calc(18px + (100vw - 375px) * 0.007512), 26px);
+        }
+        .ca-industry-group {
+          --ca-group-color: ${colors.brand.dark};
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
+        }
+        .ca-industry-group[data-recommended='false'] {
+          --ca-group-color: ${colors.status.notRecommend};
+        }
+        .ca-industry-group-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 700;
+          color: var(--ca-group-color);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px) *
+              var(--font-scale)
+          );
+        }
+        .ca-industry-group-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background-color: var(--ca-group-color);
+        }
+        .ca-industry-group-count {
+          font-weight: 500;
+          color: var(--color-gray-400);
+        }
+        .ca-industry-group .ca-industry-card {
+          border-left: 3px solid var(--ca-group-color) !important;
+        }
         .ca-industry-grid {
           display: grid;
           grid-template-columns: 1fr;
