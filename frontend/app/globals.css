@@ -275,3 +275,32 @@ body {
     animation-delay: 0s;
   }
 }
+
+/*
+ * 랜딩 "이런 분들께 필요해요" 카드 띠 — 같은 카드 두 벌을 이어 붙여 왼쪽으로
+ * 천천히 흐른다. 마우스를 올리거나 카드에 포커스가 가면 멈춘다.
+ */
+.usecase-track {
+  animation: usecase-marquee 60s linear infinite;
+}
+.usecase-viewport:hover .usecase-track,
+.usecase-viewport:focus-within .usecase-track {
+  animation-play-state: paused;
+}
+@keyframes usecase-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* 움직임 줄이기를 켠 사용자는 흐르지 않고 손으로 옆으로 넘겨 본다. */
+@media (prefers-reduced-motion: reduce) {
+  .usecase-viewport {
+    overflow-x: auto;
+  }
+  .usecase-track {
+    animation: none;
+  }
+  .usecase-copy {
+    display: none;
+  }
+}
