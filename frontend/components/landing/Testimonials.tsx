@@ -51,7 +51,7 @@ export default function Testimonials() {
           className="text-sm font-bold tracking-[0.08em]"
           style={{ color: colors.brand.primary }}
         >
-          고객 사례
+          VOICES
         </p>
         <h2
           className="mt-3.5 text-4xl font-extrabold tracking-[-0.02em]"
