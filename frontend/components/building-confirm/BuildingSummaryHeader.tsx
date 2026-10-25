@@ -1,12 +1,9 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 import type { BuildingField, BuildingInfo } from '@/lib/api/building';
 import { formatArea } from './labels';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 type BuildingSummaryHeaderProps = {
   building: BuildingInfo;
@@ -49,7 +46,7 @@ export default function BuildingSummaryHeader({
           className={`${dmMono.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
           style={{
             backgroundColor: `${colors.neutral.white}14`,
-            color: '#7FDCCF',
+            color: '#7F9BDC',
           }}
         >
           건축물대장 HUB

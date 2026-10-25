@@ -1,4 +1,4 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { Check, Loader2, Pause } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -8,10 +8,7 @@ import type {
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 type ProgressTrackerProps = {
   steps: ProgressStep[];

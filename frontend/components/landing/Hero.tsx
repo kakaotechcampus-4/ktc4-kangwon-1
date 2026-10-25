@@ -4,20 +4,14 @@ import { mockProperty } from '@/lib/mockData/property';
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import type { CSSProperties, ReactNode } from 'react';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700', '800'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 type InfoCard = {
   id: string;

@@ -2,21 +2,15 @@
 
 import { mockProperty } from '@/lib/mockData/property';
 
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 type Rank = {
   id: string;

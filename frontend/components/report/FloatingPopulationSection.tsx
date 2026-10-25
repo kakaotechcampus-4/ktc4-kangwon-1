@@ -1,6 +1,6 @@
 'use client';
 
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import { Users, Clock3, CalendarDays, Activity } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
@@ -14,15 +14,9 @@ import {
   type ReliabilityLevel,
 } from '@/lib/mockData/report';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(
@@ -342,11 +336,11 @@ function CoreStat({ data }: { data: FloatingPopulationData }) {
 
 // 도넛, 범례, 구성 비율 막대가 동일한 연령대 팔레트를 공유합니다.
 const AGE_COLORS = [
-  '#19B3A2',
-  '#258F91',
+  '#1947B3',
+  '#254591',
   '#F0AE6A',
-  '#97DCD0',
-  '#60B8AE',
+  '#97ACDC',
+  '#607AB8',
   '#F6CCA8',
 ];
 

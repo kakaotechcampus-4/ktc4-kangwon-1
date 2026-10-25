@@ -5,7 +5,7 @@
 }
 .unit {
   font-size: calc(11px * var(--font-scale, 1));
-  color: #76858c;
+  color: #767d8c;
   text-align: right;
   margin-bottom: 12px;
 }
@@ -22,13 +22,13 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  border-bottom: 1px solid #cbd6d9;
+  border-bottom: 1px solid #cbcfd9;
   background: repeating-linear-gradient(
     to top,
     transparent 0,
     transparent 49px,
-    #edf1f2 49px,
-    #edf1f2 50px
+    #edeef2 49px,
+    #edeef2 50px
   );
 }
 .barGroup {
@@ -39,20 +39,20 @@
 .bar {
   width: 100%;
   height: 100%;
-  background: #6ebbb1;
+  background: #6e85bb;
   border-radius: 4px 4px 0 0;
   transform-origin: center bottom;
   transform: scaleY(0);
 }
 .latest {
-  background: #008f83;
+  background: #002b8f;
 }
 .value {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  color: #34585b;
+  color: #34405b;
   font-size: calc(13px * var(--font-scale, 1));
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -64,7 +64,7 @@
   margin-top: 10px;
   font-size: calc(12px * var(--font-scale, 1));
   line-height: 1.5;
-  color: #667780;
+  color: #666e80;
   white-space: pre-line;
 }
 .chart[data-visible='true'] .bar {

@@ -1,14 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Outfit } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Button from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
 export default function CTABanner() {
   const router = useRouter();

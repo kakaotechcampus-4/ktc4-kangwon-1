@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import AreaChart from '@/components/charts/AreaChart';
@@ -18,15 +18,9 @@ import {
   type RecommendedIndustry,
 } from '@/lib/mockData/report';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(

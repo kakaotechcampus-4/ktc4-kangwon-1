@@ -489,7 +489,7 @@ export default function ReportPage() {
               className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
               style={{ borderColor: colors.neutral.border }}
             >
-              <span className="mr-2 text-[#006b65]" aria-hidden="true">
+              <span className="mr-2 text-[#1E44B8]" aria-hidden="true">
                 Aa
               </span>
               {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}

@@ -1,4 +1,4 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import {
   AlertTriangle,
   ArrowRight,
@@ -19,10 +19,7 @@ import {
 } from '@/lib/api/building';
 import { LOOKUP_LABELS } from './labels';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 const STATUS_TEXT: Record<LookupStatus, string> = {
   pending: '대기',

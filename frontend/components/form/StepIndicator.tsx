@@ -1,11 +1,8 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { Check } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['500'],
-});
+const dmMono = pretendard;
 
 type Step = {
   id: string;

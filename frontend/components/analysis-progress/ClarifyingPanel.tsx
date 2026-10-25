@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { Check, ChevronDown, Info, Loader2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -16,10 +16,7 @@ import type {
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 function isAnswerComplete(
   question: ClarifyingQuestion,
