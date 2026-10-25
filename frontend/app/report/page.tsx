@@ -7,7 +7,6 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   Menu,
@@ -18,8 +17,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
-import SchoolRegulation from '@/components/report/SchoolRegulation';
-import SchoolRegulationMap from '@/components/report/SchoolRegulationMap';
+import PropertyMap from '@/components/report/PropertyMap';
 import IndustryReview, {
   candidateChecks,
   candidateScore,
@@ -65,7 +63,6 @@ import {
 
 const chapters = [
   ['space', '상가 정보'],
-  ['regulations', '입점 규제 확인'],
   ['conclusion', '핵심 결론'],
   ['compare', '업종 비교'],
   ['reviews', '교차 검토'],
@@ -125,8 +122,8 @@ const followUpSteps = [
     title: '입점 가능한 업종인지 확인',
     detail:
       '건축물 용도와 학교 주변 규제 내용을 확인하고, 해당 업종의 인허가 조건을 관할 기관에 문의하세요.',
-    target: '#regulations',
-    link: '입점 규제 보기',
+    target: '#space',
+    link: '상가 정보 보기',
     stage: '먼저 확인',
   },
   {
@@ -383,6 +380,17 @@ export default function ReportPage() {
         ? '100m'
         : '미입력';
 
+  // 입점 규제(금지·조건부)가 걸린 후보 업종 — 따로 장을 두지 않고 주소 아래에 짧게 표시한다.
+  const regulatedCandidates = analysisResult
+    ? [...analysisResult.top5, ...analysisResult.excluded_candidates].filter(
+        (item) => item.G === '금지' || item.G === '조건부'
+      )
+    : [];
+  const regulatedCount = regulatedCandidates.length;
+  const regulatedNames = regulatedCandidates
+    .slice(0, 3)
+    .map((item) => item.industry_name);
+
   const top = analysisResult?.top5[0];
   const topName = analysisResult
     ? top?.industry_name
@@ -559,17 +567,20 @@ export default function ReportPage() {
               <header className="property-card-address">
                 <p className="property-address-label">분석 대상 주소</p>
                 <h3 className="property-address">{displayAddress}</h3>
+                {regulatedNames.length > 0 && (
+                  <p className="property-regulation-note">
+                    <TriangleAlert size={16} aria-hidden="true" />
+                    <span>
+                      입점 규제 확인 필요 · {regulatedNames.join(', ')}
+                      {regulatedCount > regulatedNames.length &&
+                        ` 외 ${regulatedCount - regulatedNames.length}개`}{' '}
+                      업종은 이 자리에서 금지·조건부 대상이에요.
+                    </span>
+                  </p>
+                )}
               </header>
               <div className="property-photo-layout">
-                <figure className="property-preview-photo">
-                  <Image
-                    src="/images/property-interior-example.png"
-                    alt="큰 창이 있는 빈 상가 내부"
-                    fill
-                    sizes="(max-width: 900px) 100vw, 40vw"
-                    className="object-cover"
-                  />
-                </figure>
+                <PropertyMap address={displayAddress} />
                 <div className="property-preview-info">
                   <dl className="property-facts property-main-facts">
                     <div>
@@ -633,14 +644,6 @@ export default function ReportPage() {
                   </dl>
                 </div>
               </div>
-            </Chapter>
-            <Chapter
-              id="regulations"
-              title="추천 업종보다 먼저, 입점 규제를 확인하세요"
-            >
-              <SchoolRegulation>
-                <SchoolRegulationMap embedded />
-              </SchoolRegulation>
             </Chapter>
             <Chapter id="conclusion" title="이 상가의 핵심 결론">
               <div className="conclusion-lead">
@@ -737,8 +740,8 @@ export default function ReportPage() {
                       <p>
                         학교 주변 보호구역과 대상 업종의 제한 여부를 확인하세요.
                       </p>
-                      <a href="#regulations">
-                        규제 확인하기 <ChevronRight size={14} />
+                      <a href="#space">
+                        규제 표시 보기 <ChevronRight size={14} />
                       </a>
                     </div>
                   </div>

@@ -3050,3 +3050,40 @@
 .report-page .industry-item-wide .industry-reason-labels:empty {
   display: none;
 }
+
+/* 분석 대상 위치 지도 — 상가 사진 자리를 대신한다. */
+.report-page .property-map {
+  background: #eef2f7;
+}
+.report-page .property-map-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(14px * var(--font-scale));
+  color: #10233a;
+}
+.report-page .property-map-caption a {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: #2453d6;
+}
+/* 금지·조건부 업종이 있을 때만 주소 아래에 짧게 표시한다. */
+.report-page .property-regulation-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: -12px 0 24px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fff4de;
+  font-size: calc(14px * var(--font-scale));
+  line-height: 1.5;
+  color: #925b08;
+}
+.report-page .property-regulation-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
