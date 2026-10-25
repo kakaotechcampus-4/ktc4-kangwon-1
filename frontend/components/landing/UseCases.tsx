@@ -6,7 +6,7 @@ import { colors } from '@/styles/tokens';
 /**
  * "이런 분들께 필요해요" — 실제 후기가 아니라 채움을 쓰는 상황 예시다.
  * 서비스가 MVP 단계라 사용자 후기 대신 상황과 리포트의 쓰임을 보여준다.
- * 카드는 옆으로 천천히 흐르고, 마우스를 올리면 멈춘다(globals.css .usecase-track).
+ * 카드는 옆으로 천천히 흐른다(globals.css .usecase-track).
  */
 type UseCase = {
   Icon: LucideIcon;
