@@ -67,11 +67,11 @@ export default function Hero() {
           </span>
         </h1>
         <Link
-          href="#report-preview"
+          href="/vacancy-input"
           className="inline-flex items-center gap-3.5 text-sm font-bold tracking-[0.04em]"
           style={{ color: colors.brand.dark }}
         >
-          리포트 예시 보기
+          분석 시작
           <span
             className="inline-flex size-8 items-center justify-center border-[1.5px]"
             style={{ borderColor: colors.brand.dark }}

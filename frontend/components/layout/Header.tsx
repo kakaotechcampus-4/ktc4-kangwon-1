@@ -121,25 +121,16 @@ export default function Header({ overlay = false }: HeaderProps) {
         </nav>
 
         <div className="hidden justify-self-end sm:block">
+          {/* 로그인 기능 연결 전이라 준비 중 안내 화면(/login)으로 보낸다. */}
           <Link
-            href="/vacancy-input"
-            className="inline-flex h-11 items-center gap-3 rounded-md border-[1.5px] px-4 text-15 font-bold transition-colors hover:bg-white/60"
+            href="/login"
+            className="inline-flex h-11 items-center rounded-md border-[1.5px] px-5 text-15 font-bold transition-colors hover:bg-white/60"
             style={{
               borderColor: colors.brand.dark,
               color: colors.brand.dark,
             }}
           >
-            분석 시작
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-              <path
-                d="M2 7h10M8 3l4 4-4 4"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            로그인
           </Link>
         </div>
       </div>
