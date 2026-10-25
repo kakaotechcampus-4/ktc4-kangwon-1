@@ -52,7 +52,7 @@ export default function Hero() {
           가장 어울리는 가게로
         </h1>
         <Link
-          href="#services"
+          href="#report-preview"
           className="inline-flex items-center gap-3.5 text-sm font-bold tracking-[0.04em]"
           style={{ color: colors.brand.dark }}
         >
