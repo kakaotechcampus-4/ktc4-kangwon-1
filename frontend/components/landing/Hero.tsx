@@ -8,8 +8,6 @@ import { colors } from '@/styles/tokens';
  * 헤더는 이 섹션 위에 overlay로 겹쳐 놓는다(app/page.tsx).
  */
 export default function Hero() {
-  const outline = { WebkitTextStroke: `3px ${colors.brand.primary}` };
-
   return (
     <section
       className="relative w-full overflow-hidden"
@@ -21,19 +19,24 @@ export default function Hero() {
       <HeroIllustration className="absolute inset-x-0 bottom-[210px] h-[44%] w-full sm:bottom-10 sm:h-[calc(100%-120px)]" />
 
       <div className="pointer-events-none absolute inset-x-0 top-[30%] -translate-y-1/2 text-center sm:top-1/2 sm:-translate-y-[58%]">
+        {/* CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고 */}
         <p
-          aria-label="CHAIUM"
-          className="leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
-          style={{ fontSize: 'clamp(84px, 18vw, 290px)' }}
+          aria-label="CHAIUM, chum.ai"
+          className="wordmark leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
+          style={{ fontSize: 'clamp(60px, 17vw, 280px)' }}
         >
-          <span aria-hidden="true" className="text-transparent" style={outline}>
+          <span aria-hidden="true" className="wordmark-fill">
             CH
           </span>
-          <span aria-hidden="true" style={{ color: colors.brand.primary }}>
+          <span aria-hidden="true" className="wordmark-ai-out">
             AI
           </span>
-          <span aria-hidden="true" className="text-transparent" style={outline}>
+          <span aria-hidden="true" className="wordmark-fill">
             UM
+          </span>
+          <span aria-hidden="true" className="wordmark-ai-in">
+            <span className="wordmark-dot">.</span>
+            <span className="wordmark-ai-land">AI</span>
           </span>
         </p>
       </div>
