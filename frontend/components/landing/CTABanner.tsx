@@ -28,26 +28,41 @@ export default function CTABanner() {
     router.push('/building-confirm');
   }
 
+  // 진한 파랑 통 박스는 눈이 피로해서, 연한 하늘색 바탕에 남색 글자와
+  // 파랑 버튼 하나만 강조하는 차분한 구성으로 둔다.
   return (
     <section className="w-full px-4 py-26 sm:px-8">
       <div
-        className="mx-auto flex max-w-[1120px] flex-col gap-8 rounded-[28px] px-8 py-14 sm:px-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between"
-        style={{ backgroundColor: colors.brand.primary }}
+        className="mx-auto flex max-w-[1120px] flex-col gap-8 rounded-[28px] border px-8 py-14 sm:px-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between"
+        style={{
+          backgroundColor: colors.brand.wash,
+          borderColor: '#D5E1EC',
+        }}
       >
         <div>
-          <h2 className="text-34 leading-[1.35] font-extrabold tracking-[-0.02em] text-white">
+          <p
+            className="text-sm font-bold tracking-[0.08em]"
+            style={{ color: colors.brand.primary }}
+          >
+            START ANALYSIS
+          </p>
+          <h2
+            className="mt-3 text-34 leading-[1.35] font-extrabold tracking-[-0.03em]"
+            style={{ color: colors.brand.dark }}
+          >
             이 자리의 다음을
             <br />
-            찾아볼까요?
+            <span style={{ color: colors.brand.primary }}>찾아볼까요?</span>
           </h2>
-          <p className="mt-3.5 text-base text-[#DCE6FF]">
+          <p className="mt-3.5 text-base text-[#4B5866]">
             상가 주소를 입력해 분석을 시작해 보세요.
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="flex w-full flex-wrap gap-2.5 rounded-2xl bg-white p-2 lg:max-w-[480px]"
+          className="flex w-full flex-wrap gap-2.5 rounded-2xl border bg-white p-2 shadow-[0_10px_30px_rgba(16,35,58,0.06)] lg:max-w-[480px]"
+          style={{ borderColor: '#D5DEE7' }}
         >
           <label htmlFor="landing-address" className="sr-only">
             분석할 상가 주소
@@ -62,8 +77,8 @@ export default function CTABanner() {
           />
           <button
             type="submit"
-            className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-extrabold text-[#1B2A33] transition-opacity hover:opacity-90"
-            style={{ backgroundColor: '#F2B84B' }}
+            className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-bold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: colors.brand.primary }}
           >
             분석 시작
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
