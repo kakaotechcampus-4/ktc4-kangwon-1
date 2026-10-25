@@ -174,88 +174,151 @@ export function FactFloatingPopulationSection({
 }) {
   const busiest = peak(data.timeBands);
   const largestAge = peak(data.ageShares);
+  const insights = [
+    largestAge &&
+      `가장 많이 오가는 연령대는 ${largestAge.label}로, 전체의 ${percent(largestAge.share)}예요.`,
+    data.weekendIndex !== null &&
+      (data.weekendIndex >= 1
+        ? `주말 유동인구가 서울 평균의 ${times(data.weekendIndex)}로, 주말에 더 붐비는 편이에요.`
+        : `주말 유동인구가 서울 평균의 ${times(data.weekendIndex)}로, 평일 중심 상권이에요.`),
+    data.yoyChange !== null &&
+      `전년 같은 분기보다 유동인구가 ${signed(data.yoyChange * 100)}% ${data.yoyChange >= 0 ? '늘었어요' : '줄었어요'}.`,
+  ].filter((line): line is string => Boolean(line));
 
+  // 리포트용 읽기형 구성 — 결론 → 핵심 숫자 → 근거(질문별 행) → 각주.
+  // 스타일은 app/report/report.css의 .story 블록을 목업 경로와 함께 쓴다.
   return (
-    <div className="flex w-full flex-col gap-5">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat
-          label="상권 1곳의 하루 평균 유동인구"
-          value={
-            data.dailyPerTradeArea === null
-              ? null
-              : Math.round(data.dailyPerTradeArea).toLocaleString('ko-KR')
-          }
-          unit="명"
-          note={
-            data.tradeAreaCount === null
-              ? undefined
-              : `주변 상권 ${data.tradeAreaCount}곳 평균`
-          }
-        />
-        <Stat
-          label="주말 유동인구 (서울 평균 대비)"
-          value={data.weekendIndex === null ? null : times(data.weekendIndex)}
-          note="1.0배보다 높으면 서울보다 주말에 더 붐빕니다"
-        />
-        <Stat
-          label="전년 같은 분기 대비"
-          value={
-            data.yoyChange === null ? null : `${signed(data.yoyChange * 100)}%`
-          }
-        />
+    <div className="fp-root fp-root-story flex w-full flex-col">
+      <div className="story">
+        <header className="story-lead">
+          <h3>
+            {busiest ? (
+              <>
+                이 주변은 <em>{busiest.label}</em>에 가장 붐벼요
+              </>
+            ) : (
+              '주변 유동인구를 요약했어요'
+            )}
+          </h3>
+          {insights.length > 0 && (
+            <ul className="story-insights">
+              {insights.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </header>
+
+        <dl className="story-stats">
+          <div>
+            <dt>상권 1곳 하루 평균</dt>
+            <dd>
+              {data.dailyPerTradeArea === null ? (
+                '자료 없음'
+              ) : (
+                <>
+                  {Math.round(data.dailyPerTradeArea).toLocaleString('ko-KR')}
+                  <small>명</small>
+                </>
+              )}
+            </dd>
+            {data.tradeAreaCount !== null && (
+              <p>주변 상권 {data.tradeAreaCount}곳 평균</p>
+            )}
+          </div>
+          <div>
+            <dt>주말 (서울 평균 대비)</dt>
+            <dd>
+              {data.weekendIndex === null ? (
+                '자료 없음'
+              ) : (
+                <>
+                  {data.weekendIndex.toFixed(2)}
+                  <small>배</small>
+                </>
+              )}
+            </dd>
+            <p>1.0배보다 높으면 주말에 더 붐벼요</p>
+          </div>
+          <div>
+            <dt>전년 같은 분기 대비</dt>
+            <dd>
+              {data.yoyChange === null ? (
+                '자료 없음'
+              ) : (
+                <>
+                  {signed(data.yoyChange * 100)}
+                  <small>%</small>
+                </>
+              )}
+            </dd>
+          </div>
+          {largestAge && (
+            <div>
+              <dt>가장 많은 연령대</dt>
+              <dd>
+                {largestAge.label}
+                <small>{percent(largestAge.share)}</small>
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        <section className="story-row">
+          <div className="story-row-text">
+            <p className="story-question">언제 붐비나요?</p>
+            <h4>시간대별 유동인구</h4>
+            <p>
+              시간대마다 구간 길이가 달라 한 시간당 비중으로 맞춰 비교해요. 파란
+              막대가 가장 붐비는 시간대예요.
+            </p>
+          </div>
+          <div className="story-row-figure">
+            {data.timeBands.length === 0 ? (
+              <p>시간대 자료가 없습니다.</p>
+            ) : (
+              <Bars
+                rows={data.timeBands.map((band) => ({
+                  label: band.label,
+                  value: band.share,
+                }))}
+                format={percent}
+                highlight={(key) => key === busiest?.label}
+              />
+            )}
+          </div>
+        </section>
+
+        <section className="story-row">
+          <div className="story-row-text">
+            <p className="story-question">누가 오가나요?</p>
+            <h4>연령대별 구성</h4>
+            <p>주변 상권을 오가는 사람의 연령대 비율이에요.</p>
+          </div>
+          <div className="story-row-figure">
+            {data.ageShares.length === 0 ? (
+              <p>연령대 자료가 없습니다.</p>
+            ) : (
+              <Bars
+                rows={data.ageShares.map((age) => ({
+                  label: age.label,
+                  value: age.share,
+                }))}
+                format={percent}
+                highlight={(key) => key === largestAge?.label}
+              />
+            )}
+          </div>
+        </section>
       </div>
 
-      <Card
-        title="시간대별 유동인구"
-        description="시간대마다 구간 길이가 달라 한 시간당 비중으로 맞춰 비교합니다."
-      >
-        {data.timeBands.length === 0 ? (
-          <p>시간대 자료가 없습니다.</p>
-        ) : (
-          <>
-            <Bars
-              rows={data.timeBands.map((band) => ({
-                label: band.label,
-                value: band.share,
-              }))}
-              format={percent}
-              highlight={(key) => key === busiest?.label}
-            />
-            {busiest && (
-              <p className="mt-4 text-base">
-                한 시간당 사람이 가장 많은 때는 <strong>{busiest.label}</strong>
-                입니다.
-              </p>
-            )}
-          </>
-        )}
-      </Card>
-
-      <Card
-        title="연령대별 구성"
-        description="주변 상권을 오가는 사람의 연령대 비율입니다."
-      >
-        {data.ageShares.length === 0 ? (
-          <p>연령대 자료가 없습니다.</p>
-        ) : (
-          <Bars
-            rows={data.ageShares.map((age) => ({
-              label: age.label,
-              value: age.share,
-            }))}
-            format={percent}
-            highlight={(key) => key === largestAge?.label}
-          />
-        )}
-      </Card>
-
-      <SourceNote>
+      <p className="fp-source">
         자료: 서울시 상권분석서비스 길단위인구 · {data.period}
         {data.radiusM !== null && ` · 반경 ${data.radiusM}m`}
         <br />
         상가 앞 통행량이나 중복을 뺀 방문자 수가 아니라 주변 상권의 추정
         통행량입니다.
-      </SourceNote>
+      </p>
     </div>
   );
 }
