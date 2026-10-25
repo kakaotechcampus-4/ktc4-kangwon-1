@@ -66,9 +66,7 @@ export default function Header({ overlay = false }: HeaderProps) {
       }
     >
       <div
-        className={`mx-auto flex w-full max-w-[1440px] items-center justify-between px-4 sm:grid sm:grid-cols-3 sm:px-8 ${
-          overlay ? 'h-20' : 'h-16'
-        }`}
+        className={`mx-auto flex w-full max-w-[1440px] items-center justify-between px-4 sm:grid sm:grid-cols-3 sm:px-8 h-16`}
       >
         <Link href="/" className="flex items-center gap-2.5 justify-self-start">
           <LogoMark />
