@@ -47,7 +47,7 @@ export default function Hero() {
         </p>
       </div>
 
-      <div className="absolute inset-x-4 bottom-[128px] flex flex-col items-start justify-between gap-6 sm:inset-x-10 sm:flex-row sm:items-end">
+      <div className="absolute inset-x-4 bottom-[112px] flex flex-col items-start justify-between gap-6 sm:inset-x-10 sm:flex-row sm:items-end">
         <h1
           className="font-extrabold tracking-[-0.05em]"
           style={{
