@@ -2,7 +2,7 @@ import Header from '@/components/layout/Header';
 import Hero from '@/components/landing/Hero';
 import TwoViews from '@/components/landing/TwoViews';
 import ReportPreview from '@/components/landing/ReportPreview';
-import UseCases from '@/components/landing/UseCases';
+import Testimonials from '@/components/landing/Testimonials';
 import CTABanner from '@/components/landing/CTABanner';
 
 export default function Home() {
@@ -12,7 +12,7 @@ export default function Home() {
       <Hero />
       <TwoViews />
       <ReportPreview />
-      <UseCases />
+      <Testimonials />
       <CTABanner />
       <footer className="w-full border-t border-[#EEF1F4] px-4 py-10 sm:px-8">
         <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3 text-sm text-[#5B6470]">
