@@ -66,17 +66,22 @@ export default function Hero() {
             </span>
           </span>
         </h1>
+        {/* 파란 알약 버튼 — 오른쪽 흰 원 안의 화살표가 마우스를 올리면 살짝 앞으로 나간다. */}
         <Link
           href="/vacancy-input"
-          className="inline-flex items-center gap-3.5 text-sm font-bold tracking-[0.04em]"
-          style={{ color: colors.brand.dark }}
+          className="group inline-flex h-14 items-center gap-4 rounded-full py-2 pr-2 pl-7 text-base font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(36,83,214,0.4)]"
+          style={{ backgroundColor: colors.brand.primary }}
         >
-          분석 시작
-          <span
-            className="inline-flex size-8 items-center justify-center border-[1.5px]"
-            style={{ borderColor: colors.brand.dark }}
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">
+          분석 시작하기
+          <span className="inline-flex size-10 items-center justify-center rounded-full bg-white">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 14 14"
+              aria-hidden="true"
+              className="transition-transform duration-200 group-hover:translate-x-0.5"
+              style={{ color: colors.brand.primary }}
+            >
               <path
                 d="M2 7h10M8 3l4 4-4 4"
                 stroke="currentColor"
