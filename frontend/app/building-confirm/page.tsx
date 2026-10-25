@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import StepIndicator from '@/components/form/StepIndicator';
+import FlowPageTitle from '@/components/form/FlowPageTitle';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -204,25 +205,28 @@ export default function BuildingConfirmPage() {
   return (
     <div
       className="flex min-h-screen flex-col"
-      style={{ backgroundColor: colors.neutral.background }}
+      style={{ backgroundColor: colors.brand.wash }}
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-6 px-4 py-6 sm:gap-8 sm:px-8 sm:py-10">
-        <StepIndicator currentStep={2} />
-
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
         {!building ? (
-          <BuildingLoading
-            statuses={statuses}
-            floorLabel={floorLabel}
-            address={input?.roadAddress}
-          />
+          <>
+            <StepIndicator currentStep={2} />
+            <BuildingLoading
+              statuses={statuses}
+              floorLabel={floorLabel}
+              address={input?.roadAddress}
+            />
+          </>
         ) : (
           <>
-            <PageTitle
+            <FlowPageTitle
+              eyebrow="BUILDING CHECK"
               title="이 정보가 맞나요?"
               description="건축물대장에 적힌 내용이에요. 실제와 다르면 고쳐 주세요. 고친 값으로 분석하고, 리포트에 건축물대장과 다르다고 표시해 둘게요."
             />
+            <StepIndicator currentStep={2} />
 
             {/* 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다. */}
             <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_440px]">
@@ -230,8 +234,8 @@ export default function BuildingConfirmPage() {
                 className="w-full gap-0"
                 style={{
                   padding: 0,
-                  borderRadius: '12px',
-                  borderWidth: '1px',
+                  borderRadius: '24px',
+                  borderWidth: '0px',
                 }}
               >
                 <BuildingSummaryHeader building={building} />
@@ -397,31 +401,6 @@ export default function BuildingConfirmPage() {
           </>
         )}
       </main>
-    </div>
-  );
-}
-
-function PageTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <h1
-        className="text-fluid-24-32 leading-tight font-bold break-keep"
-        style={{ color: colors.text.primary }}
-      >
-        {title}
-      </h1>
-      <p
-        className="text-fluid-15-16 leading-relaxed"
-        style={{ color: colors.text.secondary }}
-      >
-        {description}
-      </p>
     </div>
   );
 }

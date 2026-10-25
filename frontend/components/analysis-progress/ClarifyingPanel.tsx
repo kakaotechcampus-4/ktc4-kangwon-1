@@ -392,8 +392,8 @@ function AnalyzingOverview({ steps }: { steps: ProgressStep[] }) {
       className="w-full items-center gap-6 text-center [--card-pad:32px_20px] sm:[--card-pad:48px_36px]"
       style={{
         padding: 'var(--card-pad)',
-        borderRadius: '12px',
-        borderWidth: '1px',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <div className="flex flex-col items-center gap-3">
@@ -506,8 +506,8 @@ function ResumingPanel({
       className="w-full gap-6 [--card-pad:20px] sm:[--card-pad:28px]"
       style={{
         padding: 'var(--card-pad)',
-        borderRadius: '12px',
-        borderWidth: '1px',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <div className="flex items-start gap-3.5">

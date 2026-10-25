@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import StepIndicator from '@/components/form/StepIndicator';
+import FlowPageTitle from '@/components/form/FlowPageTitle';
 import ProgressTracker from '@/components/analysis-progress/ProgressTracker';
 import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
@@ -328,28 +329,17 @@ function ProgressView({
   return (
     <div
       className="flex min-h-screen flex-col"
-      style={{ backgroundColor: colors.neutral.background }}
+      style={{ backgroundColor: colors.brand.wash }}
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-6 px-4 py-6 sm:gap-8 sm:px-8 sm:py-10">
-        <StepIndicator currentStep={3} />
-
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
         <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:justify-between sm:gap-6">
-          <div className="flex flex-col items-start gap-3">
-            <h1
-              className="text-fluid-24-32 leading-tight font-bold break-keep"
-              style={{ color: colors.text.primary }}
-            >
-              {copy.title}
-            </h1>
-            <p
-              className="text-fluid-15-16 leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              {copy.description}
-            </p>
-          </div>
+          <FlowPageTitle
+            eyebrow="AI ANALYSIS"
+            title={copy.title}
+            description={copy.description}
+          />
 
           <div
             className="flex w-full shrink-0 items-center gap-3 rounded-xl px-5 py-3.5 sm:w-auto"
@@ -381,6 +371,8 @@ function ProgressView({
             </div>
           </div>
         </div>
+
+        <StepIndicator currentStep={3} />
 
         {/* 넓은 화면(xl)은 3컬럼: 진행 현황 · 질문·결과 · 분석 대상.
             태블릿·작은 노트북(md~lg)은 왼쪽에 진행 현황과 분석 대상을 쌓고 오른쪽에 질문·결과.
@@ -423,7 +415,7 @@ function FailedNotice({
 }) {
   return (
     <div
-      className="flex w-full flex-col gap-4 rounded-xl border p-5 sm:p-8"
+      className="flex w-full flex-col gap-4 rounded-3xl shadow-[0_18px_40px_rgba(16,35,58,0.06)] p-5 sm:p-8"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,

@@ -48,9 +48,8 @@ const TONE_STYLES: Record<Judgement['tone'], { bg: string; color: string }> = {
 // 여백은 화면 폭에 따라 --card-pad로 바꾼다(Card 기본 p-7보다 style이 우선한다).
 const CARD_STYLE = {
   padding: 'var(--card-pad)',
-  borderRadius: '12px',
-  borderWidth: '1px',
-  boxShadow: 'none',
+  borderRadius: '24px',
+  borderWidth: '0px',
 };
 
 const CARD_CLASS = 'w-full gap-5 [--card-pad:20px] sm:[--card-pad:32px]';

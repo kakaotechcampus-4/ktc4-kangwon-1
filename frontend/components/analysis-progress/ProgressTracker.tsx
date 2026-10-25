@@ -38,8 +38,8 @@ export default function ProgressTracker({
       className="w-full gap-6 [--card-pad:20px] sm:[--card-pad:26px_28px]"
       style={{
         padding: 'var(--card-pad)',
-        borderRadius: '12px',
-        borderWidth: '1px',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <div className="flex flex-col gap-3">

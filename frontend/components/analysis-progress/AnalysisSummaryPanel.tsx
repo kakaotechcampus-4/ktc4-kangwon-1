@@ -24,7 +24,7 @@ export default function AnalysisSummaryPanel({
 
   return (
     <div
-      className="flex w-full flex-col gap-4 rounded-xl border p-5"
+      className="flex w-full flex-col gap-4 rounded-3xl shadow-[0_18px_40px_rgba(16,35,58,0.06)] p-5"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
