@@ -1,6 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { colors } from '@/styles/tokens';
@@ -21,34 +22,17 @@ const navAccentStyle = {
   '--nav-accent': colors.brand.primary,
 } as CSSProperties;
 
-/** 원 안에 지붕(꺾쇠)과 앰버 점 — "빈 자리를 채운다"는 뜻의 로고 마크 */
+/** 서비스 로고 마크(public/images/logo-mark.svg) — 남색·파랑 두 쪽이 맞물린 집 모양 */
 export function LogoMark({ size = 28 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 28 28"
+    <Image
+      src="/images/logo-mark.svg"
+      alt=""
       aria-hidden="true"
+      width={Math.round((size * 25) / 28)}
+      height={size}
       className="shrink-0"
-    >
-      <circle
-        cx="14"
-        cy="14"
-        r="12"
-        fill="none"
-        stroke={colors.brand.dark}
-        strokeWidth="2"
-      />
-      <path
-        d="M8 17l6-6 6 6"
-        stroke={colors.brand.dark}
-        strokeWidth="2"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="14" cy="18.5" r="2.5" fill="#F2B84B" />
-    </svg>
+    />
   );
 }
 
