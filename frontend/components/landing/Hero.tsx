@@ -52,7 +52,7 @@ export default function Hero() {
           className="font-extrabold tracking-[-0.05em]"
           style={{
             color: colors.brand.dark,
-            fontSize: 'clamp(34px, 4.4vw, 64px)',
+            fontSize: 'clamp(32px, 4vw, 58px)',
             lineHeight: 1.22,
           }}
         >
