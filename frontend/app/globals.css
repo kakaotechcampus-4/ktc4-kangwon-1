@@ -226,3 +226,52 @@ body {
     animation-delay: 0s;
   }
 }
+
+/*
+ * 히어로 슬로건 — 워드마크(CHUM.AI)가 완성된 뒤 두 줄이 아래에서 올라오고,
+ * 둘째 줄 "새로운 가치를 채우다"는 옅은 외곽선에서 왼쪽부터 파랑으로 채워진다.
+ * 3.1s 첫 줄 · 3.3s 둘째 줄 등장 · 3.8s~5.2s 채움.
+ */
+.slogan-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+}
+.slogan-rise {
+  display: inline-block;
+  transform: translateY(110%);
+  animation: slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 3.1s forwards;
+}
+.slogan-rise-late {
+  animation-delay: 3.3s;
+}
+.slogan-fill {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(36, 83, 214, 0.45);
+  background-image: linear-gradient(90deg, #2453d6 50%, transparent 50%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation:
+    slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 3.3s forwards,
+    slogan-fill 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.8s forwards;
+}
+@keyframes slogan-rise {
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes slogan-fill {
+  to {
+    background-position: 0 0;
+    -webkit-text-stroke-color: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slogan-rise,
+  .slogan-fill {
+    animation-duration: 0s;
+    animation-delay: 0s;
+  }
+}

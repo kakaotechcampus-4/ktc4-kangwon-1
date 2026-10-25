@@ -56,10 +56,14 @@ export default function Hero() {
             lineHeight: 1.22,
           }}
         >
-          빈 공실에
-          <br />
-          <span style={{ color: colors.brand.primary }}>
-            새로운 가치를 채우다
+          {/* 워드마크가 완성된 뒤 올라오고, 둘째 줄은 파랑이 차오른다(globals.css .slogan 블록) */}
+          <span className="slogan-line">
+            <span className="slogan-rise">빈 공실에</span>
+          </span>
+          <span className="slogan-line">
+            <span className="slogan-rise slogan-rise-late slogan-fill">
+              새로운 가치를 채우다
+            </span>
           </span>
         </h1>
         <Link
