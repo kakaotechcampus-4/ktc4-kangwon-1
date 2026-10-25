@@ -3087,3 +3087,221 @@
   flex-shrink: 0;
   margin-top: 2px;
 }
+
+/* ==========================================================================
+ * 2026-10 리디자인 — 랜딩과 같은 톤(연한 하늘색 띠, 파란 영문 라벨, 둥근 카드,
+ * 남색 강조 카드)으로 맞춘다. 위쪽 규칙을 덮어쓰도록 파일 끝에 둔다.
+ * ======================================================================== */
+
+/* 머리 — 랜딩 히어로처럼 화면 폭 전체의 연한 하늘색 띠 */
+.report-page .report-intro {
+  position: relative;
+  margin-bottom: 40px;
+  padding: 28px 0 56px;
+  background: #eaf2f7;
+  box-shadow: 0 0 0 100vmax #eaf2f7;
+  clip-path: inset(0 -100vmax);
+}
+.report-page .report-masthead {
+  display: block;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.report-page .report-masthead::before,
+.report-page .report-masthead::after {
+  display: none;
+}
+.report-page .report-masthead-eyebrow {
+  margin: 0 0 16px;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #2453d6;
+}
+.report-page .report-masthead-eyebrow::before {
+  display: none;
+}
+.report-page .report-masthead .report-cover-title {
+  max-width: none;
+  margin: 0;
+  font-size: calc(clamp(32px, 3.6vw, 52px) * var(--font-scale));
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.05em;
+  color: #10233a;
+}
+.report-page .report-cover-accent {
+  color: #2453d6;
+}
+.report-page .report-masthead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.report-page .report-masthead-meta li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 600;
+  color: #10233a;
+}
+.report-page .report-masthead-meta svg {
+  color: #2453d6;
+}
+
+/* 목차 — 둥근 흰 카드, 지금 장은 파란 알약 */
+.report-page .report-toc {
+  padding: 20px 12px;
+  border: 0;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(16, 35, 58, 0.06);
+}
+.report-page aside.report-toc {
+  border-left: 0;
+}
+.report-page .report-toc nav a {
+  border-radius: 999px;
+}
+.report-page .report-toc nav a[aria-current] .toc-number {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* 장 제목 — 세로 막대 대신 파란 영문 라벨 + 굵은 제목 */
+.report-page .chapter-eyebrow {
+  margin: 0 0 10px;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #2453d6;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .chapter-heading,
+.report-page .chapter-numbered-title,
+.report-page .report-chapter > .chapter-numbered-title {
+  padding-left: 0;
+  border-left: 0;
+}
+.report-page .chapter-heading::before,
+.report-page .chapter-numbered-title::before {
+  display: none;
+}
+.report-page .chapter-numbered-title {
+  font-size: calc(clamp(26px, 2.4vw, 34px) * var(--font-scale));
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #10233a;
+}
+.report-page .chapter-description {
+  color: #5b6672;
+}
+
+/* 카드 — 테두리 대신 둥근 모서리와 옅은 그림자 */
+.report-page #space > .original-report-content,
+.report-page .conclusion-lead,
+.report-page .conclusion-checks,
+.report-page .key-evidence,
+.report-page .industry-group,
+.report-page .fp-root,
+.report-page .ca-root,
+.report-page .oc-root {
+  border: 0;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(16, 35, 58, 0.06);
+}
+.report-page .property-preview-photo {
+  border-radius: 18px;
+}
+
+/* 핵심 결론 — 남색 카드로 리포트에서 가장 눈에 띄게 */
+.report-page .decision-cover {
+  gap: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 22px;
+  background: #10233a;
+  box-shadow: 0 24px 48px rgba(16, 35, 58, 0.18);
+}
+.report-page .decision-cover .recommended-focus {
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+}
+.report-page .decision-cover .recommended-focus > p:first-child {
+  color: #9db5f2;
+}
+.report-page .decision-cover .recommended-focus h3,
+.report-page .decision-cover .cover-score strong {
+  color: #ffffff;
+}
+.report-page .decision-cover .cover-score span,
+.report-page .decision-cover .recommended-focus a {
+  color: #c3ccd8;
+}
+.report-page .decision-cover .cover-industry-icon {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #9db5f2;
+}
+.report-page .decision-cover .key-evidence {
+  margin: 12px;
+  border-radius: 18px;
+  box-shadow: none;
+}
+.report-page .decision-cover .key-evidence svg {
+  color: #2453d6;
+}
+
+/* 다음 할 일 — 랜딩 "건물 안과 밖"처럼 번호 카드 */
+.report-page .action-plan-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  border: 0;
+}
+.report-page .action-plan-list > li {
+  border: 0;
+  border-radius: 22px;
+  background: #eaf2f7;
+  padding: 28px;
+}
+.report-page .action-plan-list > li.is-complete {
+  background: #f2f5f9;
+}
+.report-page .action-step-number {
+  color: #2453d6;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .report-page .action-plan-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 장 제목 막대·들여쓰기 제거 (위쪽 .chapter-heading 규칙보다 구체적으로) */
+.report-page .report-chapter .chapter-heading .chapter-numbered-title {
+  padding-left: 0;
+  border-left: 0;
+}
+.report-page .report-chapter .chapter-heading .chapter-description {
+  padding-left: 0;
+}
+/* 남색 결론 카드 안의 "업종 순위 보러가기" */
+.report-page .decision-cover .recommendation-footer > a {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #ffffff;
+}
+.report-page .decision-cover .recommendation-footer > a:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

@@ -15,6 +15,7 @@ import {
   ArrowDownRight,
   CheckCircle2,
   TriangleAlert,
+  MapPin,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PropertyMap from '@/components/report/PropertyMap';
@@ -61,6 +62,18 @@ import {
   lifecycleFromFacts,
 } from '@/lib/api/adapters/facts';
 
+// 장 제목 위 영문 라벨 — 랜딩 섹션 라벨과 같은 형식
+const chapterEyebrows: Record<string, string> = {
+  space: 'SPACE',
+  conclusion: 'CONCLUSION',
+  compare: 'COMPARE',
+  reviews: 'CROSS REVIEW',
+  customers: 'FOOT TRAFFIC',
+  competition: 'COMPETITION',
+  lifecycle: 'OPEN · CLOSE',
+  actions: 'NEXT STEPS',
+};
+
 const chapters = [
   ['space', '상가 정보'],
   ['conclusion', '핵심 결론'],
@@ -91,12 +104,13 @@ function Chapter({
       style={{ borderColor: colors.neutral.border }}
     >
       <header className="chapter-heading">
+        <p className="chapter-eyebrow">
+          {String(
+            chapters.findIndex(([chapterId]) => chapterId === id) + 1
+          ).padStart(2, '0')}
+          {chapterEyebrows[id] ? ` · ${chapterEyebrows[id]}` : ''}
+        </p>
         <h2 className="chapter-numbered-title">
-          <span className="chapter-number">
-            {String(
-              chapters.findIndex(([chapterId]) => chapterId === id) + 1
-            ).padStart(2, '0')}
-          </span>
           <span>
             {chapters.find(([chapterId]) => chapterId === id)?.[1] ?? title}
           </span>
@@ -435,9 +449,9 @@ export default function ReportPage() {
           aria-current={active === id ? 'location' : undefined}
           className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base"
           style={{
-            color: active === id ? reportPalette.navy : colors.text.secondary,
+            color: active === id ? colors.neutral.white : colors.text.secondary,
             backgroundColor:
-              active === id ? `${reportPalette.brand}12` : 'transparent',
+              active === id ? reportPalette.brand : 'transparent',
             fontWeight: active === id ? 700 : 400,
           }}
         >
@@ -505,14 +519,22 @@ export default function ReportPage() {
           </div>
           <header className="report-masthead">
             <div>
-              <p className="report-masthead-eyebrow">상가 분석</p>
-              <h1 className="report-cover-title font-bold leading-snug">
-                상가 업종 분석 리포트
+              <p className="report-masthead-eyebrow">ANALYSIS REPORT</p>
+              <h1 className="report-cover-title">
+                이 자리에 가장 어울리는 업종은
+                <br />
+                <span className="report-cover-accent">
+                  {topName ?? '아직 분석 결과가 없어요'}
+                </span>
               </h1>
-            </div>
-            <div className="report-masthead-date">
-              <span>분석일</span>
-              <p>{analyzedDate}</p>
+              <ul className="report-masthead-meta">
+                <li>
+                  <MapPin size={16} aria-hidden="true" />
+                  {displayAddress}
+                </li>
+                <li>분석일 {analyzedDate}</li>
+                <li>반경 {radiusLabel}</li>
+              </ul>
             </div>
           </header>
         </div>
