@@ -27,7 +27,7 @@ export default function Hero() {
         <p
           aria-label="CHAIUM, chum.ai"
           className="wordmark relative inline-block text-left leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
-          style={{ fontSize: 'clamp(52px, 11vw, 176px)' }}
+          style={{ fontSize: 'clamp(56px, 14vw, 228px)' }}
         >
           <span aria-hidden="true" className="invisible">
             CHUM.AI
@@ -56,10 +56,10 @@ export default function Hero() {
             lineHeight: 1.22,
           }}
         >
-          비어 있는 자리를,
+          빈 공실에
           <br />
           <span style={{ color: colors.brand.primary }}>
-            가장 어울리는 가게로
+            새로운 가치를 채우다
           </span>
         </h1>
         <Link
