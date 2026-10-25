@@ -1,102 +1,41 @@
-'use client';
-
-import { useRouter } from 'next/navigation';
-import { pretendard } from '@/styles/fonts';
-import Button from '@/components/ui/Button';
+import Link from 'next/link';
 import { colors } from '@/styles/tokens';
 
-const outfit = pretendard;
-
 export default function CTABanner() {
-  const router = useRouter();
-
-  const handleStartAnalysis = () => {
-    router.push('/vacancy-input');
-  };
-
   return (
-    <div
-      className="flex w-full flex-col items-center py-16"
-      style={{
-        backgroundColor: colors.neutral.white,
-        borderTop: `1px solid ${colors.neutral.border}`,
-      }}
-    >
-      <div className="cta-row flex w-full max-w-[1440px] items-center justify-between px-[100px]">
-        <div className="flex flex-col items-start">
-          <h2
-            className={`cta-title ${outfit.className} text-44 font-bold`}
-            style={{ color: colors.neutral.black }}
-          >
-            지금 바로 공실을 분석해보세요.
+    <section className="w-full px-4 py-26 sm:px-8">
+      <div
+        className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-8 rounded-[28px] px-8 py-14 sm:px-12 sm:py-16"
+        style={{ backgroundColor: colors.brand.primary }}
+      >
+        <div>
+          <h2 className="text-34 leading-[1.35] font-extrabold tracking-[-0.02em] text-white">
+            우리 건물 공실,
+            <br />
+            지금 바로 분석해 보세요
           </h2>
-          <p className="cta-subtitle pt-1 text-15 text-gray-600">
-            도면과 임대 조건만 입력하면 AI가 업종 적합도를 분석합니다.
+          <p className="mt-3.5 text-base text-[#DCE6FF]">
+            주소 하나로 시작하는 공실 리포트
           </p>
         </div>
-
-        <Button
-          type="button"
-          variant="primary"
-          className={`cta-button ${outfit.className}`}
-          style={{ padding: '16px 32px' }}
-          onClick={handleStartAnalysis}
+        <Link
+          href="/vacancy-input"
+          className="inline-flex h-14 items-center gap-2.5 rounded-xl px-7 text-base font-extrabold text-[#1B2A33] transition-opacity hover:opacity-90"
+          style={{ backgroundColor: '#F2B84B' }}
         >
-          공실 분석 시작하기 →
-        </Button>
+          공실 분석 시작하기
+          <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
+            <path
+              d="M2 7h10M8 3l4 4-4 4"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
       </div>
-
-      {/*
-        1024px 미만 전용 축소 처리. 1024px 이상 구간(기존 px-[100px]/text-[44px]/
-        leading-[50px]/text-[15px]/버튼 padding 등 className·inline style)은 절대
-        건드리지 않고, 아래 @media (max-width: 1023.98px) 블록에서만 !important로
-        덮어써 좌측 텍스트 + 우측 버튼 가로 배치는 유지한 채 컨테이너 padding·
-        타이틀/서브텍스트 폰트·버튼 크기를 함께 줄인다.
-
-        cta-button은 Button 컴포넌트 내부에서 렌더링되는 <button> 엘리먼트라 scoped
-        <style jsx>로는 룰이 전혀 매칭되지 않아(ProblemCards.tsx의 Card/Badge와 동일한
-        문제) global로 선언한다. 클래스명이 이 파일에서만 쓰이는 것을 확인했으므로
-        다른 컴포넌트와 충돌하지 않는다.
-
-        모든 값은 vw=900px~1024px 구간에서 "MIN + (MAX-MIN) * (100vw-900px)/124"
-        형태로 선형 보간해 1024px 지점에서 기존 값과 정확히 일치하고(경계에서 끊기지
-        않음), 900px 지점에서 축소된 값에 도달한다.
-      */}
-      <style jsx global>{`
-        @media (max-width: 1023.98px) {
-          .cta-row {
-            padding-inline: clamp(
-              40px,
-              calc(40px + (100vw - 900px) * 0.48387),
-              100px
-            ) !important;
-          }
-
-          .cta-title {
-            font-size: calc(
-              clamp(26px, calc(26px + (100vw - 900px) * 0.14516), 44px) *
-                var(--font-scale)
-            ) !important;
-            line-height: 1.18 !important;
-          }
-
-          .cta-subtitle {
-            font-size: calc(
-              clamp(12px, calc(12px + (100vw - 900px) * 0.02419), 15px) *
-                var(--font-scale)
-            ) !important;
-          }
-
-          .cta-button {
-            font-size: calc(
-              clamp(12px, calc(12px + (100vw - 900px) * 0.01613), 14px) *
-                var(--font-scale)
-            ) !important;
-            padding: clamp(10px, calc(10px + (100vw - 900px) * 0.04839), 16px)
-              clamp(18px, calc(18px + (100vw - 900px) * 0.1129), 32px) !important;
-          }
-        }
-      `}</style>
-    </div>
+    </section>
   );
 }

@@ -1,25 +1,25 @@
 import Header from '@/components/layout/Header';
 import Hero from '@/components/landing/Hero';
-import StatsRow from '@/components/landing/StatsRow';
-import ProblemCards from '@/components/landing/ProblemCards';
-import ValueSteps from '@/components/landing/ValueSteps';
-import ReportPreview from '@/components/landing/ReportPreview';
+import ServiceSection from '@/components/landing/ServiceSection';
+import HowItWorks from '@/components/landing/HowItWorks';
 import CTABanner from '@/components/landing/CTABanner';
-import { colors } from '@/styles/tokens';
 
 export default function Home() {
   return (
-    <div
-      className="flex flex-1 flex-col"
-      style={{ backgroundColor: colors.neutral.background }}
-    >
-      <Header />
+    <div className="relative flex flex-1 flex-col bg-white">
+      <Header overlay />
       <Hero />
-      <StatsRow />
-      <ProblemCards />
-      <ValueSteps />
-      <ReportPreview />
+      <ServiceSection />
+      <HowItWorks />
       <CTABanner />
+      <footer className="w-full border-t border-[#EEF1F4] px-4 py-10 sm:px-8">
+        <div className="mx-auto flex max-w-[1280px] flex-wrap justify-between gap-4 text-sm text-[#5B6470]">
+          <p>
+            <span className="font-extrabold text-[#111827]">채움</span> ·
+            chum.ai — 카카오테크캠퍼스 4기 강원 1팀
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
