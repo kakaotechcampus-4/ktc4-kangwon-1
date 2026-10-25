@@ -15,6 +15,7 @@ import {
   ArrowDownRight,
   CheckCircle2,
   TriangleAlert,
+  MapPin,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PropertyMap from '@/components/report/PropertyMap';
@@ -519,8 +520,12 @@ export default function ReportPage() {
           <header className="report-masthead">
             <div>
               <p className="report-masthead-eyebrow">ANALYSIS REPORT</p>
-              <h1 className="report-cover-title">{displayAddress}</h1>
+              <h1 className="report-cover-title">상가 업종 분석 리포트</h1>
               <ul className="report-masthead-meta">
+                <li>
+                  <MapPin size={16} aria-hidden="true" />
+                  {displayAddress}
+                </li>
                 <li>분석일 {analyzedDate}</li>
                 <li>반경 {radiusLabel}</li>
               </ul>
