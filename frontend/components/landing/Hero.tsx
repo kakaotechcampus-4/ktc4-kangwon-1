@@ -18,9 +18,9 @@ export default function Hero() {
         height: 'clamp(640px, 100svh, 940px)',
       }}
     >
-      <HeroIllustration className="absolute inset-x-0 bottom-10 h-[calc(100%-120px)] w-full" />
+      <HeroIllustration className="absolute inset-x-0 bottom-[210px] h-[44%] w-full sm:bottom-10 sm:h-[calc(100%-120px)]" />
 
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-[58%] text-center">
+      <div className="pointer-events-none absolute inset-x-0 top-[30%] -translate-y-1/2 text-center sm:top-1/2 sm:-translate-y-[58%]">
         <p
           aria-label="CHAIUM"
           className="leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
