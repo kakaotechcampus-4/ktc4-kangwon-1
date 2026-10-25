@@ -146,7 +146,7 @@ body {
 /*
  * 랜딩 히어로 워드마크 — CHAIUM에서 AI가 오른쪽으로 빠져나가 CHUM.AI가 된다.
  * "빈 자리(CH_UM)를 AI로 채운다"는 뜻이라, AI가 빠지는 순간 CHUM이 남색으로 채워진다.
- * 0.8s~1.4s AI 이동 · 1.05s~1.55s CHUM 채움 · 1.2s~1.8s 점과 AI 도착. 한 번만 재생한다.
+ * 1.2s~2.4s AI 이동 · 1.7s~2.7s CHUM 채움 · 1.9s~3.1s 점과 AI 도착. 한 번만 재생한다.
  */
 .wordmark {
   --wm-blue: #2453d6;
@@ -160,17 +160,17 @@ body {
 .wordmark-fill {
   color: transparent;
   -webkit-text-stroke: 3px var(--wm-blue);
-  animation: wordmark-fill 0.5s ease 1.05s forwards;
+  animation: wordmark-fill 1s ease 1.7s forwards;
 }
 .wordmark-ai-out {
   max-width: 1.1em;
   color: var(--wm-blue);
-  animation: wordmark-ai-out 0.6s cubic-bezier(0.6, 0, 0.3, 1) 0.8s forwards;
+  animation: wordmark-ai-out 1.2s cubic-bezier(0.6, 0, 0.3, 1) 1.2s forwards;
 }
 .wordmark-ai-in {
   max-width: 0;
   opacity: 0;
-  animation: wordmark-ai-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.2s forwards;
+  animation: wordmark-ai-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.9s forwards;
 }
 .wordmark-ai-in > span {
   display: inline-block;
@@ -179,12 +179,12 @@ body {
   color: var(--wm-amber);
   transform: scale(0);
   transform-origin: 50% 85%;
-  animation: wordmark-dot 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) 1.45s forwards;
+  animation: wordmark-dot 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 2.5s forwards;
 }
 .wordmark-ai-land {
   color: var(--wm-blue);
   transform: translateX(-0.6em);
-  animation: wordmark-ai-land 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.2s forwards;
+  animation: wordmark-ai-land 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.9s forwards;
 }
 @keyframes wordmark-fill {
   to {
