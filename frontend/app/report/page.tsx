@@ -498,7 +498,7 @@ export default function ReportPage() {
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
             <Link
-              href="/"
+              href="/reports"
               className="inline-flex min-h-11 items-center text-sm"
             >
               ← 리포트 목록 보기

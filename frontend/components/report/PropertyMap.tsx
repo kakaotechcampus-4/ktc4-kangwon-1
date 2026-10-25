@@ -118,7 +118,7 @@ export default function PropertyMap({ address }: { address: string }) {
 }
 
 /** 지도 키가 없을 때 보여주는 간단한 동네 지도 그림(실제 위치가 아님) */
-function MapIllustration() {
+export function MapIllustration() {
   return (
     <svg
       viewBox="0 0 400 380"

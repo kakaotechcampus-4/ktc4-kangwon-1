@@ -15,7 +15,11 @@ const navLinks = [
     href: '/vacancy-input',
     matchPaths: ['/vacancy-input', '/building-confirm', '/analysis-progress'],
   },
-  { label: '리포트', href: '/report', matchPaths: ['/report'] },
+  {
+    label: '리포트',
+    href: '/report',
+    matchPaths: ['/report', '/reports'],
+  },
 ];
 
 const navAccentStyle = {
