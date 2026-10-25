@@ -17,12 +17,27 @@ from .catalog import (
     INDUSTRY_TERMS,
     INDUSTRY_TO_SEOUL,
     LEGACY70_TO_INDUSTRY,
+    MIDDLE_TO_INDUSTRY,
     SEOUL_TO_INDUSTRY,
+    SMALL_TO_INDUSTRY,
+    SPLIT_MIDDLES,
 )
 from .models import Industry
 
 _TAIL = re.compile(r"(소매업|판매업|운영업|서비스업|전문점|판매|소매|업소|업|점)$")
 _NOISE = re.compile(r"[\s\-,·ㆍ/()]|및")
+
+
+def service_code(middle_code: str, small_code: str | None = None) -> str | None:
+    """확인된 소분류를 먼저 적용하며 분할 중분류는 불명확한 점포를 배분하지 않습니다."""
+    if small_code in SMALL_TO_INDUSTRY:
+        target = SMALL_TO_INDUSTRY[small_code]
+        return target if middle_code in {small_code[:4], target} else None
+    if middle_code in SPLIT_MIDDLES:
+        return None
+    if middle_code in INDUSTRIES and middle_code not in MIDDLE_TO_INDUSTRY:
+        return middle_code
+    return MIDDLE_TO_INDUSTRY.get(middle_code)
 
 
 def normalize_name(name: str) -> str:
@@ -89,9 +104,3 @@ def from_legacy70(legacy_id: int) -> tuple[Industry, ...]:
     0~100 점수라 **여기 나온 업종들에 그대로 복제하면 안 된다.** 가중 방식은 팀 미합의 사항이다.
     """
     return tuple(get(code) for code in LEGACY70_TO_INDUSTRY.get(legacy_id, ()))
-
-
-def as_category(code: str) -> tuple[str, str]:
-    """`app.schemas.Category(major=..., middle=...)` 에 넣을 두 값."""
-    industry = get(code)
-    return industry.major_name, industry.name

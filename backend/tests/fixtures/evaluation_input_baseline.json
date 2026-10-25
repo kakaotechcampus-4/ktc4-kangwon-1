@@ -6,7 +6,7 @@
         "category": {
           "code": "I201",
           "major": "음식점업",
-          "middle": "한식 음식점업"
+          "middle": "한식 음식점"
         },
         "score": 72,
         "reasons": [
@@ -32,7 +32,7 @@
         "category": {
           "code": "I212",
           "major": "음식점업",
-          "middle": "비알코올 음료점업"
+          "middle": "카페·비알코올 음료점"
         },
         "score": 28,
         "reasons": [
@@ -57,7 +57,7 @@
   "industry_digest": [
     {
       "code": "I201",
-      "name": "한식 음식점업",
+      "name": "한식 음식점",
       "metrics": [
         {
           "agent_id": "commercial_area",
@@ -73,7 +73,7 @@
     },
     {
       "code": "I212",
-      "name": "비알코올 음료점업",
+      "name": "카페·비알코올 음료점",
       "metrics": [
         {
           "agent_id": "commercial_area",

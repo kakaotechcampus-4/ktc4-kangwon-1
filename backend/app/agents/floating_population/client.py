@@ -195,6 +195,7 @@ class SeoulOpenDataClient:
     async def _get(self, service: str, start: int, end: int, extra: str | None = None) -> dict:
         return await request_json(
             self.http(),
+            capture_source="floating_population",
             base_url=self.settings.base_url,
             api_key=self.settings.api_key or "",
             service=service,

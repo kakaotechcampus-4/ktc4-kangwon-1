@@ -90,6 +90,12 @@ def main() -> int:
     parser.add_argument("--official-csv", type=Path)
     parser.add_argument("--radius", type=int, default=1000)
     args = parser.parse_args()
+    if (
+        MASTER_PATH.exists()
+        and "source_middle_codes" in MASTER_PATH.read_text(encoding="utf-8-sig").splitlines()[0]
+    ):
+        print("service-51 마스터는 공식 원천 중분류 목록으로 덮어쓸 수 없습니다.")
+        return 1
 
     load_dotenv_if_present()
     settings = Settings.from_env()

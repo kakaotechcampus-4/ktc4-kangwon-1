@@ -48,7 +48,7 @@ def circle_overlap_ratio(distance_m: float, radius_m: float, area_radius_m: floa
 _MAX_AREA_REACH_RATIO = 0.5
 
 
-def _overlapping_areas(
+def overlapping_areas(
     areas: list[TrdarArea], x: float, y: float, radius_m: float
 ) -> list[tuple[TrdarArea, float]]:
     """반경과 구역이 겹치는 상권을 (상권, 대표점까지의 거리) 로 가까운 순 반환.

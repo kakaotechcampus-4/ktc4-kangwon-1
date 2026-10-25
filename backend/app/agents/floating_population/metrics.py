@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from app.seoul import shift_quarter
+
 from . import baseline
 from .geo import circle_overlap_ratio
 from .models import (
@@ -28,7 +30,7 @@ from .schemas import (
 )
 
 
-def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
+def aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     """여러 상권의 같은 분기 레코드를 하나로 합산하고 비중까지 계산한다.
 
     원본 인원수는 **분기 합계**다. 결정 에이전트가 다른 에이전트의 "명/일" 과 나란히 읽게
@@ -71,7 +73,7 @@ def _aggregate(records: list[FlpopRecord], quarter: str) -> Population:
     )
 
 
-def _benchmark(
+def daily_benchmark(
     population: Population, quarter_total: float | None, trade_area_count: int, days: int
 ) -> Benchmark:
     """서울 평균 대비 상대지표. 결정 에이전트가 점수를 계산하는 근거다.
@@ -100,7 +102,11 @@ def _benchmark(
     )
 
 
-def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) -> Trend:
+def trend(
+    series: list[tuple[str, list[FlpopRecord]]],
+    main_codes: set[str],
+    warnings: list[str] | None = None,
+) -> Trend:
     """분기별 추세. 최신 1개 분기만 보던 단면 분석의 한계를 푼다.
 
     **같은 상권 집합으로 분기마다 다시 합산한다.** 반경 판정은 상권영역(시점 없는 현재
@@ -112,12 +118,14 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
     최대 2% 의 가짜 증감이 섞인다.
     """
     points_by_quarter: dict[str, QuarterPoint] = {}
+    codes_by_quarter: dict[str, set[str]] = {}
     latest_quarter = max((quarter for quarter, _ in series), default=None)
     for quarter, records in series:
         rs = [r for r in records if r.trdar_cd in main_codes]
         if not rs:
             continue  # 그 분기 자료가 없는 구간. 점을 만들지 않아 그래프에 구멍으로 남는다.
-        pop = _aggregate(rs, quarter)
+        codes_by_quarter[quarter] = {r.trdar_cd for r in rs}
+        pop = aggregate(rs, quarter)
         points_by_quarter[quarter] = QuarterPoint(
             period_code=quarter,
             period=period_ko(quarter),
@@ -132,18 +140,18 @@ def _trend(series: list[tuple[str, list[FlpopRecord]]], main_codes: set[str]) ->
     def change(new: float | None, old: float | None) -> float | None:
         return round((new - old) / old, 4) if new is not None and old else None
 
-    def previous_quarter(quarter: str, count: int = 1) -> str:
-        year, number = int(quarter[:4]), int(quarter[4])
-        index = year * 4 + number - 1 - count
-        return f"{index // 4}{index % 4 + 1}"
-
     latest = points_by_quarter.get(latest_quarter or "")
-    previous = points_by_quarter.get(previous_quarter(latest_quarter)) if latest_quarter else None
+    previous = points_by_quarter.get(shift_quarter(latest_quarter, -1)) if latest_quarter else None
     previous_year = (
-        points_by_quarter.get(previous_quarter(latest_quarter, 4)) if latest_quarter else None
+        points_by_quarter.get(shift_quarter(latest_quarter, -4)) if latest_quarter else None
     )
     qoq = change(latest.daily_avg, previous.daily_avg) if latest and previous else None
-    yoy = change(latest.daily_avg, previous_year.daily_avg) if latest and previous_year else None
+    yoy = None
+    if latest and previous_year:
+        if codes_by_quarter[latest.period_code] == codes_by_quarter[previous_year.period_code]:
+            yoy = change(latest.daily_avg, previous_year.daily_avg)
+        elif warnings is not None:
+            warnings.append("전년 동기의 관측 상권 집합이 달라 yoy_change를 null로 남겼습니다.")
 
     # 전년 동기가 있으면 그걸로 본다 — 계절성이 빠져서 판단에 낫다.
     basis = yoy if yoy is not None else qoq

@@ -1,7 +1,15 @@
-import type { DecisionResult, StoredAnalysis } from '@/lib/api/types';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+import type {
+  AcceptedAnalysis,
+  AnalysisEvents,
+  AnswerSubmission,
+  DecisionResult,
+  FacilityKey,
+  FacilityState,
+  RequestFacts,
+  StoredAnalysis,
+  WaitingForInput,
+} from '@/lib/api/types';
+import { API_BASE_URL } from '@/lib/api/baseUrl';
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
@@ -40,7 +48,7 @@ export async function createAnalysis(
   // 맞춘다. 개발 중 백엔드 키 없이 화면만 확인하려면 호출부에서 임시로
   // { mock: true }를 넘긴다.
   options: { mock?: boolean; radiusM?: number } = {}
-): Promise<{ result: DecisionResult; requestId: string }> {
+): Promise<{ result: DecisionResult | WaitingForInput; requestId: string }> {
   const { mock = false, radiusM } = options;
   if (
     radiusM !== undefined &&
@@ -83,28 +91,189 @@ export async function createAnalysis(
     throw new AnalysisApiError(response.status, detail);
   }
 
-  const result = (await response.json()) as DecisionResult;
-  // 백엔드가 아직 X-Request-ID 응답 헤더를 내려주지 않으므로(현재
-  // backend/app/api/v1/routes.py 기준), 헤더가 있으면 그걸 쓰고 없으면
-  // 응답 본문의 request_id로 대체한다. 헤더가 추가되면 자동으로 그쪽을
-  // 우선하게 된다.
+  // allow_questions를 보내지 않으므로 보통 최종 결과지만, 계약상 질문 대기도 올 수 있다.
+  const result = (await response.json()) as DecisionResult | WaitingForInput;
+  // X-Request-ID 헤더를 우선하고, 없으면 응답 본문의 request_id로 대체한다.
   const requestId = response.headers.get('X-Request-ID') ?? result.request_id;
 
   return { result, requestId };
 }
 
 export async function getAnalysis(requestId: string): Promise<StoredAnalysis> {
-  const response = await fetch(
+  return requestJson<StoredAnalysis>(
     `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}`
   );
+}
 
-  if (response.status === 404) {
-    throw new AnalysisApiError(404, '분석 요청을 찾을 수 없습니다.');
+// ---------------------------------------------------------------------------
+// 진행 화면용 비동기 흐름 (docs/API_CONTRACT.md "비동기 실행과 진행 이벤트")
+//   POST /analyses?wait=false → 202 → GET /events 폴링 → GET /analyses/{id}
+//   질문 대기면 POST /answers?wait=false → 다시 events 폴링
+// ---------------------------------------------------------------------------
+
+export type AnalysisRequestInput = {
+  address: string;
+  radiusM?: number;
+  allowQuestions?: boolean;
+  floor?: string;
+  exclusiveAreaM2?: number;
+  facilities?: Partial<Record<FacilityKey, FacilityState>>;
+};
+
+const FLOOR_PATTERN = /^(지하 )?[1-9]\d{0,2}층$/;
+
+function knownFacilities(
+  facilities: AnalysisRequestInput['facilities']
+): Partial<Record<FacilityKey, FacilityState>> | null {
+  const known = Object.fromEntries(
+    Object.entries(facilities ?? {}).filter(([, state]) => state !== 'unknown')
+  );
+  return Object.keys(known).length > 0 ? known : null;
+}
+
+function validArea(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isFinite(value) &&
+    value >= 0.01 &&
+    value <= 100000
+  );
+}
+
+/**
+ * 분석 요청 본문. 백엔드 AnalysisRequest는 정의되지 않은 필드를 422로
+ * 거절하므로 여기서 정한 필드만 보낸다. 상가 정보 확인 화면의 주차·
+ * 근린생활시설·오수정화시설은 백엔드 필드가 생기면 이 함수에 추가한다.
+ */
+export function buildAnalysisRequestBody({
+  address,
+  radiusM,
+  allowQuestions = false,
+  floor,
+  exclusiveAreaM2,
+  facilities,
+}: AnalysisRequestInput): Record<string, unknown> {
+  if (
+    radiusM !== undefined &&
+    (!Number.isSafeInteger(radiusM) || radiusM <= 0)
+  ) {
+    throw new Error('분석 반경은 미터 단위의 양의 정수로 입력해 주세요.');
   }
+  const known = knownFacilities(facilities);
+  return {
+    address,
+    ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
+    ...(allowQuestions ? { allow_questions: true } : {}),
+    ...(floor !== undefined && FLOOR_PATTERN.test(floor) ? { floor } : {}),
+    ...(validArea(exclusiveAreaM2)
+      ? { exclusive_area_m2: exclusiveAreaM2 }
+      : {}),
+    ...(known ? { facilities: known } : {}),
+  };
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  return readJson<T>(await fetch(url, init));
+}
+
+async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const detail = await parseErrorDetail(response);
-    throw new AnalysisApiError(response.status, detail);
+    throw new AnalysisApiError(
+      response.status,
+      response.status === 404
+        ? '분석 요청을 찾을 수 없습니다.'
+        : await parseErrorDetail(response)
+    );
   }
+  return (await response.json()) as T;
+}
 
-  return (await response.json()) as StoredAnalysis;
+/** 분석을 백그라운드로 시작하고 request_id를 바로 받는다(202). */
+async function rejectsFacilities(response: Response): Promise<boolean> {
+  if (response.status !== 422) {
+    return false;
+  }
+  try {
+    const body: unknown = await response.clone().json();
+    const detail =
+      body && typeof body === 'object' && 'detail' in body
+        ? (body as { detail: unknown }).detail
+        : null;
+    return (
+      Array.isArray(detail) &&
+      detail.some((item: unknown) => {
+        const loc =
+          item && typeof item === 'object' && 'loc' in item
+            ? (item as { loc: unknown }).loc
+            : null;
+        return (
+          Array.isArray(loc) && loc[0] === 'body' && loc[1] === 'facilities'
+        );
+      })
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function startAnalysis(
+  input: AnalysisRequestInput
+): Promise<AcceptedAnalysis & { facilitiesDropped?: boolean }> {
+  const url = `${API_BASE_URL}/api/v1/analyses?wait=false`;
+  const body = buildAnalysisRequestBody(input);
+  const send = (payload: object) =>
+    requestJson<AcceptedAnalysis>(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  if (!('facilities' in body)) {
+    return send(body);
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (await rejectsFacilities(response)) {
+    const withoutFacilities: Record<string, unknown> = { ...body };
+    delete withoutFacilities.facilities;
+    return { ...(await send(withoutFacilities)), facilitiesDropped: true };
+  }
+  return readJson<AcceptedAnalysis>(response);
+}
+
+/** after 이후의 진행 이벤트. 다음 호출에는 응답의 next_after를 넘긴다. */
+export async function getAnalysisEvents(
+  requestId: string,
+  after: number
+): Promise<AnalysisEvents> {
+  return requestJson<AnalysisEvents>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/events?after=${after}`
+  );
+}
+
+/** 질문 답변을 제출하고 최종판단을 백그라운드로 재개한다(202). */
+export async function submitAnswers(
+  submission: AnswerSubmission
+): Promise<AcceptedAnalysis> {
+  const { request_id, question_session_id, answers } = submission;
+  return requestJson<AcceptedAnalysis>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(request_id)}/answers?wait=false`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // 백엔드 Answers는 정의되지 않은 필드를 422로 거절한다(request_id는 URL에만).
+      body: JSON.stringify({ question_session_id, answers }),
+    }
+  );
+}
+
+/** 리포트 차트용 전체 fact. 결과의 facts는 보고서가 인용한 것만 담는다. */
+export async function getAnalysisFacts(
+  requestId: string
+): Promise<RequestFacts> {
+  return requestJson<RequestFacts>(
+    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/facts`
+  );
 }

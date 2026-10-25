@@ -1,0 +1,10 @@
+﻿small_code,small_name,source_middle_code,industry_code,evidence,note
+G21301,서점,G213,G213,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21302,문구/회화용품 소매업,G213,G213,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21303,음반/비디오물 소매업,G213,,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),서비스 목표 범위에서 제외
+G21304,운동용품 소매업,G213,G203,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21305,자전거 소매업,G213,G203,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21306,장난감 소매업,G213,G213,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21501,약국,G215,G215,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21502,의료기기 소매업,G215,G215,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할
+G21503,화장품 소매업,G215,G215B,examples/schema_compare/upjong_small_official.csv (stdrDt=2023-02-28),목표 목록의 소분류 분할

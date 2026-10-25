@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   CheckCircle2,
   Loader2,
   PauseCircle,
@@ -15,6 +16,7 @@ import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
 import { colors } from '@/styles/tokens';
 import { formatArea } from '@/components/building-confirm/labels';
+import { normalizeFloor } from '@/lib/api/building';
 import {
   mockAnalysisProgress,
   type AnalysisStage,
@@ -23,8 +25,21 @@ import {
   type ClarifyingAnswers,
 } from '@/lib/mockData/analysisProgress';
 import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
-import { loadConfirmedBuilding, loadVacancyInput } from '@/lib/api/resultStore';
+import {
+  loadConfirmedBuilding,
+  loadVacancyInput,
+  saveAnalysisResult,
+  saveRequestId,
+} from '@/lib/api/resultStore';
+import { MOCK_MODE } from '@/lib/api/mockMode';
+import {
+  prefillAnswers,
+  toAnswerSubmission,
+  toClarifyingQuestions,
+} from '@/lib/api/adapters/progress';
+import { useAnalysisProgress } from '@/lib/hooks/useAnalysisProgress';
 import { useAnalysisProgressSimulation } from '@/lib/hooks/useAnalysisProgressSimulation';
+import type { ProgressStep } from '@/lib/mockData/analysisProgress';
 
 // 화면 상단 문구는 stage 하나로만 정한다 — "분석 중"과 "확인 필요"가 동시에
 // 보이지 않게 하려는 것. 우측 상태 표시(statusLabel/statusHint)는 짧은 시스템
@@ -36,7 +51,7 @@ const STAGE_COPY: Record<
     description: string;
     statusLabel: string;
     statusHint: string;
-    tone: 'progress' | 'waiting' | 'done';
+    tone: 'progress' | 'waiting' | 'done' | 'error';
     Icon: LucideIcon;
   }
 > = {
@@ -76,44 +91,43 @@ const STAGE_COPY: Record<
     tone: 'done',
     Icon: CheckCircle2,
   },
+  failed: {
+    title: '분석을 마치지 못했어요',
+    description:
+      '잠시 후 다시 시도해 주세요. 입력하신 정보는 그대로 남아 있어요.',
+    statusLabel: '분석 실패',
+    statusHint: '다시 시도해 주세요',
+    tone: 'error',
+    Icon: AlertCircle,
+  },
 };
 
 const TONE_COLORS = {
   progress: colors.brand.primary,
   waiting: colors.accent.orange,
   done: colors.brand.primary,
+  error: colors.status.notRecommend,
 } as const;
 
 const REPORT_PATH = '/report';
 // 1평 = 약 3.3058㎡
 const PYEONG_M2 = 3.3058;
 
-export default function AnalysisProgressPage() {
-  const router = useRouter();
-  // TODO: mock 타이머 대신 실제 분석 완료 신호(폴링/웹소켓)로 stage를 바꾸고,
-  // 완료 시 결과를 saveAnalysisResult()로 저장해 둔다. 저장된 결과가
-  // 없으면 리포트 화면은 mock 리포트를 보여준다.
-  const { steps, stage, resume } = useAnalysisProgressSimulation(
-    mockAnalysisProgress.steps
-  );
-  // 앞 단계(주소 입력·상가 정보 확인)에서 받은 값이 있으면 그걸로 채우고,
-  // 이 화면에 바로 들어온 경우에만 mock 값을 쓴다.
-  const [summary, setSummary] = useState<AnalysisSummary>(
-    mockAnalysisProgress.summary
-  );
-  const [questions, setQuestions] = useState<ClarifyingQuestion[]>(
-    mockAnalysisProgress.questions
-  );
+// 앞 단계(주소 입력·상가 정보 확인)에서 받은 값. 분석 대상 패널과
+// 질문 미리 채우기에 쓴다.
+type KnownSite = {
+  summary: AnalysisSummary;
+  floor?: string;
+  exclusiveArea?: string;
+  parking?: string | null;
+};
+
+function useKnownSite(): KnownSite {
+  const [known, setKnown] = useState<KnownSite>({
+    summary: mockAnalysisProgress.summary,
+  });
 
   useEffect(() => {
-    if (
-      process.env.NODE_ENV === 'development' &&
-      new URLSearchParams(window.location.search).get('demoQuestions') ===
-        'alternative'
-    ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setQuestions(demoClarifyingQuestions);
-    }
     const input = loadVacancyInput();
     if (!input) {
       return;
@@ -122,34 +136,75 @@ export default function AnalysisProgressPage() {
     const area = building?.exclusiveAreaM2.value ?? null;
     const radius = Number(input.radius.trim());
     // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
-    setSummary((prev) => ({
-      ...prev,
-      address: input.roadAddress,
-      floorAndUnit: input.floorUnit.trim() || '—',
-      radiusM:
-        input.radius.trim() && Number.isInteger(radius) && radius > 0
-          ? radius
-          : prev.radiusM,
-      exclusiveAreaText:
-        area === null
-          ? '확인 안 됨'
-          : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setKnown((prev) => ({
+      summary: {
+        ...prev.summary,
+        address: input.roadAddress,
+        floorAndUnit: input.floorUnit.trim() || '—',
+        radiusM:
+          input.radius.trim() && Number.isInteger(radius) && radius > 0
+            ? radius
+            : prev.summary.radiusM,
+        exclusiveAreaText:
+          area === null
+            ? '확인 안 됨'
+            : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
+      },
+      floor: normalizeFloor(input.floorUnit) ?? undefined,
+      exclusiveArea: area === null ? undefined : `${area}㎡`,
+      parking: building?.parking.value ?? null,
     }));
-    // 상가 정보 확인에서 주차를 이미 답했으면(가능/불가) 같은 질문을 다시 하지 않는다.
-    const parking = building?.parking.value;
-    if (parking === 'possible' || parking === 'impossible') {
-      setQuestions((prev) =>
-        prev.filter((question) => question.questionId !== 'parking')
-      );
-    }
   }, []);
 
-  // 완료돼도 자동으로 넘기지 않고, 사용자가 "리포트 보기"를 눌렀을 때만
-  // 이동한다. replace로 이동해 리포트에서 뒤로 가기를 눌러도 이미 끝난 진행
-  // 화면(=mock이 처음부터 다시 도는 화면)으로 돌아오지 않게 한다.
-  function goToReport() {
-    router.replace(REPORT_PATH);
+  return known;
+}
+
+export default function AnalysisProgressPage() {
+  // undefined = 아직 주소창을 읽기 전. mock 모드가 아니고 ?id=가 있으면
+  // 실제 백엔드 진행 상황을 보여준다.
+  const [requestId, setRequestId] = useState<string | null | undefined>();
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRequestId(
+      MOCK_MODE ? null : new URLSearchParams(window.location.search).get('id')
+    );
+  }, []);
+
+  if (requestId === undefined) {
+    return null;
   }
+  return requestId ? <LiveProgress requestId={requestId} /> : <MockProgress />;
+}
+
+/** 백엔드 없이 타이머로 흐름을 흉내 낸다(mock 모드 또는 요청 ID 없이 들어온 경우). */
+function MockProgress() {
+  const router = useRouter();
+  const known = useKnownSite();
+  const { steps, stage, resume } = useAnalysisProgressSimulation(
+    mockAnalysisProgress.steps
+  );
+  const [demoQuestions, setDemoQuestions] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDemoQuestions(
+      process.env.NODE_ENV === 'development' &&
+        new URLSearchParams(window.location.search).get('demoQuestions') ===
+          'alternative'
+    );
+  }, []);
+
+  // 상가 정보 확인에서 주차를 이미 답했으면(가능/불가) 같은 질문을 다시 하지 않는다.
+  const questions = useMemo(() => {
+    const base = demoQuestions
+      ? demoClarifyingQuestions
+      : mockAnalysisProgress.questions;
+    return known.parking === 'possible' || known.parking === 'impossible'
+      ? base.filter((question) => question.questionId !== 'parking')
+      : base;
+  }, [demoQuestions, known.parking]);
 
   function handleAnswersSubmit(answers: ClarifyingAnswers, note: string) {
     // mock 단계 — 실제 제출 API 없음. ClarifyingPanel이 이미 콘솔에 기록한다.
@@ -174,6 +229,100 @@ export default function AnalysisProgressPage() {
     resume();
   }
 
+  return (
+    <ProgressView
+      steps={steps}
+      stage={stage}
+      questions={questions}
+      summary={known.summary}
+      onSubmit={handleAnswersSubmit}
+      onViewReport={() => router.replace(REPORT_PATH)}
+    />
+  );
+}
+
+/** 실제 백엔드 진행 이벤트를 폴링한다(?id=요청 ID). */
+function LiveProgress({ requestId }: { requestId: string }) {
+  const router = useRouter();
+  const known = useKnownSite();
+  const { steps, stage, waiting, result, error, submit } = useAnalysisProgress(
+    requestId,
+    mockAnalysisProgress.steps
+  );
+
+  const questions = useMemo(
+    () => (waiting ? toClarifyingQuestions(waiting) : []),
+    [waiting]
+  );
+  // 층·전용면적 질문에는 앞에서 입력한 값을 미리 채운다.
+  const initialAnswers = useMemo(
+    () =>
+      waiting
+        ? prefillAnswers(waiting, {
+            floor: known.floor,
+            exclusiveArea: known.exclusiveArea,
+          })
+        : undefined,
+    [waiting, known.floor, known.exclusiveArea]
+  );
+
+  // 완료되면 리포트가 읽을 수 있게 결과를 저장한다.
+  useEffect(() => {
+    if (result) {
+      saveAnalysisResult(result);
+      saveRequestId(requestId);
+    }
+  }, [result, requestId]);
+
+  function handleAnswersSubmit(answers: ClarifyingAnswers) {
+    // 백엔드는 질문별 답만 받는다(자유 입력 "추가 조건"을 받을 필드가 없다).
+    if (waiting) {
+      void submit(toAnswerSubmission(waiting, answers));
+    }
+  }
+
+  return (
+    <ProgressView
+      steps={steps}
+      stage={stage}
+      questions={questions}
+      initialAnswers={initialAnswers}
+      questionKey={waiting?.question_session_id}
+      summary={known.summary}
+      error={error}
+      onSubmit={handleAnswersSubmit}
+      onViewReport={() => router.replace(REPORT_PATH)}
+      onRestart={() => router.replace('/building-confirm')}
+      showNote={false}
+    />
+  );
+}
+
+function ProgressView({
+  steps,
+  stage,
+  questions,
+  initialAnswers,
+  questionKey,
+  summary,
+  error,
+  onSubmit,
+  onViewReport,
+  onRestart,
+  showNote,
+}: {
+  steps: ProgressStep[];
+  stage: AnalysisStage;
+  questions: ClarifyingQuestion[];
+  initialAnswers?: ClarifyingAnswers;
+  questionKey?: string;
+  summary: AnalysisSummary;
+  error?: string | null;
+  onSubmit: (answers: ClarifyingAnswers, note: string) => void;
+  onViewReport: () => void;
+  onRestart?: () => void;
+  showNote?: boolean;
+}) {
   const copy = STAGE_COPY[stage];
   const toneColor = TONE_COLORS[copy.tone];
 
@@ -220,7 +369,9 @@ export default function AnalysisProgressPage() {
                   color:
                     copy.tone === 'waiting'
                       ? colors.accent.orange
-                      : colors.brand.dark,
+                      : copy.tone === 'error'
+                        ? colors.status.notRecommend
+                        : colors.brand.dark,
                 }}
               >
                 {copy.statusLabel}
@@ -236,16 +387,61 @@ export default function AnalysisProgressPage() {
             넓고, 좌측 진행 현황·우측 분석 대상은 고정 폭 보조 영역이다. */}
         <div className="grid w-full grid-cols-[340px_minmax(0,1fr)_300px] items-start gap-6">
           <ProgressTracker steps={steps} questionCount={questions.length} />
-          <ClarifyingPanel
-            stage={stage}
-            steps={steps}
-            questions={questions}
-            onSubmit={handleAnswersSubmit}
-            onViewReport={goToReport}
-          />
+          {stage === 'failed' ? (
+            <FailedNotice message={error} onRestart={onRestart} />
+          ) : (
+            <ClarifyingPanel
+              key={questionKey ?? 'none'}
+              stage={stage}
+              steps={steps}
+              questions={questions}
+              initialAnswers={initialAnswers}
+              showNote={showNote}
+              onSubmit={onSubmit}
+              onViewReport={onViewReport}
+            />
+          )}
           <AnalysisSummaryPanel summary={summary} />
         </div>
       </main>
+    </div>
+  );
+}
+
+function FailedNotice({
+  message,
+  onRestart,
+}: {
+  message?: string | null;
+  onRestart?: () => void;
+}) {
+  return (
+    <div
+      className="flex w-full flex-col gap-4 rounded-xl border p-8"
+      style={{
+        borderColor: colors.neutral.border,
+        backgroundColor: colors.neutral.white,
+      }}
+    >
+      <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
+        분석을 마치지 못했어요
+      </p>
+      <p className="text-base" style={{ color: colors.text.secondary }}>
+        {message ?? '잠시 후 다시 시도해 주세요.'}
+      </p>
+      {onRestart && (
+        <button
+          type="button"
+          onClick={onRestart}
+          className="w-fit rounded-lg px-5 py-3 text-base font-semibold"
+          style={{
+            backgroundColor: colors.brand.dark,
+            color: colors.neutral.white,
+          }}
+        >
+          다시 분석하기
+        </button>
+      )}
     </div>
   );
 }

@@ -4,12 +4,57 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
-from app.industries.catalog import INDUSTRIES, INDUSTRY_MAJORS
+from app.industries.catalog import (
+    EXCLUDED_SMALLS,
+    INDUSTRIES,
+    INDUSTRY_MAJORS,
+    INDUSTRY_SOURCE_MIDDLES,
+    SPLIT_MIDDLES,
+)
+from app.industries.lookup import service_code
 
 from .config import Settings
 from .schemas import MiddleCode, Store
+
+
+def map_stores(stores: Sequence[Store], master: Sequence[MiddleCode] | None = None) -> list[Store]:
+    """모든 집계의 입력을 같은 소분류 우선 서비스 업종으로 변환합니다."""
+    custom = {m.code: m for m in master or () if m.code not in INDUSTRIES}
+    mapped = []
+    for store in stores:
+        code = service_code(store.middle_code, store.small_code)
+        if code:
+            major, major_name = INDUSTRY_MAJORS[code]
+            mapped.append(
+                replace(
+                    store,
+                    middle_code=code,
+                    middle_name=INDUSTRIES[code],
+                    major_code=major,
+                    major_name=major_name,
+                )
+            )
+        elif store.middle_code in custom:
+            mapped.append(store)
+    return mapped
+
+
+def incomplete_split_codes(stores: Sequence[Store]) -> set[str]:
+    """분할 근거가 없는 중분류는 해당 서비스 업종의 LQ를 차단합니다."""
+
+    missing = {
+        s.middle_code
+        for s in stores
+        if s.middle_code in SPLIT_MIDDLES
+        and service_code(s.middle_code, s.small_code) is None
+        and s.small_code not in EXCLUDED_SMALLS
+    }
+    return {
+        code for code, sources in INDUSTRY_SOURCE_MIDDLES.items() if missing.intersection(sources)
+    }
 
 
 def load_middle_master(settings: Settings | None = None) -> list[MiddleCode]:

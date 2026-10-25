@@ -1,5 +1,5 @@
 import type { BuildingInfo } from '@/lib/api/building';
-import type { DecisionResult } from '@/lib/api/types';
+import type { DecisionResult, FactView } from '@/lib/api/types';
 
 const RESULT_STORAGE_KEY = 'chaeum:lastAnalysis';
 const REQUEST_ID_STORAGE_KEY = 'chaeum:lastRequestId';
@@ -23,6 +23,36 @@ export function loadAnalysisResult(): DecisionResult | null {
 
 export function clearAnalysisResult(): void {
   sessionStorage.removeItem(RESULT_STORAGE_KEY);
+  sessionStorage.removeItem(FACTS_STORAGE_KEY);
+}
+
+// 리포트 차트용 전체 fact(GET /facts). 한 번 받으면 저장해 두어 서버가 잠시
+// 끊겨도 새로고침한 리포트에 차트가 남게 한다. 다른 요청의 fact가 섞이지 않게
+// 요청 ID와 함께 저장한다.
+const FACTS_STORAGE_KEY = 'chaeum:lastAnalysisFacts';
+
+export function saveAnalysisFacts(requestId: string, facts: FactView[]): void {
+  try {
+    sessionStorage.setItem(
+      FACTS_STORAGE_KEY,
+      JSON.stringify({ requestId, facts })
+    );
+  } catch {
+    // 저장 공간이 모자라면 저장하지 않고, 다음에 다시 받아 온다.
+  }
+}
+
+export function loadAnalysisFacts(requestId: string): FactView[] | null {
+  const raw = sessionStorage.getItem(FACTS_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const saved = JSON.parse(raw) as { requestId: string; facts: FactView[] };
+    return saved.requestId === requestId ? saved.facts : null;
+  } catch {
+    return null;
+  }
 }
 
 export function saveRequestId(requestId: string): void {

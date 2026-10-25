@@ -1,6 +1,6 @@
 """주거인구·직장인구 집계와 인구 총괄.
 
-유동인구와 **같은 상권 집합**(`_overlapping_areas` 결과)을 쓴다. 따로 상권을 고르면 세 인구의
+유동인구와 **같은 상권 집합**(`overlapping_areas` 결과)을 쓴다. 따로 상권을 고르면 세 인구의
 분모가 달라져 같은 지역인데 서로 다른 구역을 세게 된다 — 이 블록을 별도 에이전트가 아니라
 유동인구 `data` 안에 두는 이유다.
 
@@ -22,7 +22,11 @@ from __future__ import annotations
 
 import csv
 import functools
+import hashlib
+import io
 from pathlib import Path
+
+from app.storage.raw import current_capture
 
 from .baseline import index
 from .models import AGE_BANDS, FlpopRecord, PopulationRecord, period_ko
@@ -71,6 +75,8 @@ def load_snapshot(kind: str, path: Path | None = None) -> list[PopulationRecord]
     다시 파싱하면 이벤트 루프를 약 30ms 막는다(세 에이전트가 병렬로 도는 동안). 읽기에 실패한
     결과는 캐시되지 않으므로 파일을 넣으면 다음 요청부터 바로 반영된다.
     """
+    if path is None and current_capture() is not None:
+        return _read(kind, SNAPSHOT_PATHS[kind])
     if path is None:
         return list(_bundled(kind))
     return _read(kind, path)
@@ -82,11 +88,26 @@ def _bundled(kind: str) -> tuple[PopulationRecord, ...]:
 
 
 def _read(kind: str, path: Path) -> list[PopulationRecord]:
-    with path.open(encoding="utf-8-sig", newline="") as f:
-        return [PopulationRecord.from_api_row(row, kind) for row in csv.DictReader(f)]
+    data = path.read_bytes()
+    rows = list(csv.DictReader(io.StringIO(data.decode("utf-8-sig"))))
+    capture = current_capture()
+    if capture is not None:
+        capture.record_sync(
+            source="resident_population" if kind == RESIDENT_KIND else "worker_population",
+            source_type="file",
+            args={
+                "file_name": path.name,
+                "file_hash": hashlib.sha256(data).hexdigest(),
+                "quarter": max((r.get("STDR_YYQU_CD", "") for r in rows), default=""),
+            },
+            page="file",
+            status=None,
+            payload={"rows": rows},
+        )
+    return [PopulationRecord.from_api_row(row, kind) for row in rows]
 
 
-def _age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
+def age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
     total = complete_sum(r.total for r in records)
     return {
         a: rounded(ratio(complete_sum(r.by_age[a] for r in records), total), 4) for a in AGE_BANDS
@@ -117,7 +138,7 @@ def _benchmark(
     label: str,
     with_households: bool,
 ) -> PopulationBenchmark:
-    local_share, seoul_share = _age_share(local), _age_share(seoul)
+    local_share, seoul_share = age_share(local), age_share(seoul)
     household_index = None
     if with_households:
         mine, avg = _persons_per_household(local), _persons_per_household(seoul)
@@ -149,7 +170,7 @@ def resident_block(
         count=complete_sum(r.total for r in local),
         households=complete_sum(r.households for r in local),
         persons_per_household=_persons_per_household(local),
-        age_share=_age_share(local),
+        age_share=age_share(local),
         trade_area_count=len(main_codes),
         covered_trade_areas=len(local),
         benchmark=_benchmark(local, seoul, quarter, "주거인구", with_households=True),
@@ -168,7 +189,7 @@ def worker_block(
         period_code=quarter,
         period=period_ko(quarter),
         count=complete_sum(r.total for r in local),
-        age_share=_age_share(local),
+        age_share=age_share(local),
         trade_area_count=len(main_codes),
         covered_trade_areas=len(local),
         benchmark=_benchmark(local, seoul, quarter, "직장인구", with_households=False),

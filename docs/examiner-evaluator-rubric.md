@@ -1,0 +1,72 @@
+# Examiner 전용 평가표 v0.1 — 문장·근거 대조
+
+작성: 2026-10-20 · 브랜치: `feature/examiner-review` · 상태: 대역 검증과 저장 초안 10곳 무료 측정 완료, 유료 실호출 전.
+
+## 목적과 범위
+
+보고서 문장이 근거와 맞는지 확인한다. 점수·순위·배지를 바꾸지 않고, decision의 반영 여부를 서버가 대조하지 않으며, 화면에 반영 결과를 따로 표시하지 않는다. 바꾸는 것은 examiner persona·examiner 전용 패킷·examiner의 query_raw 제외뿐이다. 제출 형식·서버 제출 검사·실패 처리·예산·COMMON·다른 세 평가자는 그대로 둔다.
+
+## 바꾼 이유 (2026-10-18 AI 포함 10곳 기록)
+
+| 관찰 | 값 |
+| --- | --- |
+| 기존 패킷의 초안 문장·근거 | 10곳 모두 문장 0·fact 0 (2,570~2,856자) |
+| AI 보고서 문장 중 fact 슬롯이 있는 문장 | 초안·최종 20건 311문장 중 0 |
+| 첫 submit_review 거절 | 완료 9곳 모두. 거절 지적 32개 중 fact 없음 23·미확인 인용 7·숫자 2 |
+| 공간 조회 | 읽기 27번 중 13번 |
+| 지시문 항목 중 서버가 이미 막는 것 | unknown 이유(report.py), L의 D/C/S 중복(report.py) |
+| query_raw 사용 | 0번 |
+
+## 전용 패킷 (`backend/app/agentic/examiner.py`)
+
+| 키 | 내용 |
+| --- | --- |
+| candidates | 상위 후보마다 code_points·B·H·coverage·badge·L_status, reasons·risks·confirmation_conditions 문장 조각 원문, 관측 fact_ids, score_items |
+| score_items | 문항 D1~D4·C1·C4·S1~S4·L의 행 `[item,status,grade,points,fact_ids]`. fact_ids는 observed·citable만 남긴다 |
+| facts | 근거 카드 행 `[fact_id,industry_code,source,metric,period,unit,spatial_scope_ref,value]`. observed·citable만 넣는다 |
+| spatial_scopes | 카드가 참조하는 공간 범위 원문 |
+| summary_segments·limitations_segments | 초안 요약·한계 문장 |
+| omitted_fact_ids | 상한 때문에 카드에서 뺀 fact 별칭 |
+
+- 카드 순서: 문장에 인용된 fact → 후보 fact_ids → 요약·한계 인용 → 문항 순서(D1부터 L)로 후보를 번갈아.
+- 상한 12,000자. 넘치면 뒤쪽 카드의 value부터 null로 바꾸고, 그래도 넘치면 뒤쪽 카드를 빼서 omitted_fact_ids에 남긴다. 출처·기간·범위는 카드가 남아 있는 한 지우지 않는다. 문장 조각과 score_items는 줄이지 않으며, 이것만으로 넘치면 평가 실패(SOURCE_UNAVAILABLE)다.
+- 값 원문이 500자를 넘는 카드는 value를 null로 두고 get_facts로 읽게 한다.
+- 별칭 변환 뒤 score_items·facts를 행으로 바꾼다. 키 반복을 없애 같은 카드 수를 담는다.
+
+## 고정 평가표 — 네 칸
+
+| 칸 | 보는 것 | 지적 |
+| --- | --- | --- |
+| 근거 | 문장에 fact 슬롯이 있는가 | 없으면 그 후보 score_items에서 문장을 뒷받침할 fact를 골라 target=claim, kind=missing_evidence |
+| 출처 | 인용 fact의 source·metric이 문장 내용과 맞는가 | 어긋나면 scope_mismatch |
+| 기간 범위 | fact의 period·spatial_scopes가 문장이 말하는 시점·범위와 맞는가 | 어긋나면 scope_mismatch |
+| 중복 | 같은 원천 지표가 두 문항에서 함께 점수가 되어 같은 현상을 두 번 세는가 | target=score, kind=duplicate_score |
+
+확인하지 못한 칸은 action_condition으로 남긴다. 공간·운영은 founder, 손님 수요는 customer, 임대 지속성은 landlord_advocate가 맡으므로 공간 초안 경고를 되풀이하지 않는다. unknown 이유와 L 중복 채점은 서버 검사에 맡긴다. persona에는 숫자를 넣지 않는다(지적 문장으로 옮겨 적어 거절되는 일을 막는다).
+
+## verdict 기준 (결과에는 영향 없음)
+
+| 판정 | 기준 |
+| --- | --- |
+| agree | 지적이 없을 때 |
+| conditional | 지적이나 확인 조건이 있을 때 |
+| oppose | 인용 근거가 문장과 반대 방향을 말할 때 |
+
+## 도구
+
+examiner는 get_scorecard·get_facts·submit_review만 받는다. 근거 값은 코드가 원자료에서 계산하므로 원자료 재대조는 테스트의 몫으로 두고, 출처·기간·범위 확인은 근거 카드로 한다. 다른 세 평가자는 query_raw를 그대로 쓴다.
+
+## 무료 측정 (요청 DB 복사본, 저장 초안 10곳)
+
+| 항목 | 기존 패킷(같은 저장 초안으로 다시 만듦) | 전용 패킷 |
+| --- | --- | --- |
+| 크기 | 2,322~2,604자 | 8,113~10,574자 |
+| 근거 카드 | 0 | 38~50 (값 포함 전부, 생략 0) |
+| 문장 조각 | 0 | 0 또는 15 (코드 점수 대체 초안 5곳은 문장 없음) |
+| 첫 호출 예산 추정(글자/2) | 약 4,000~4,150 | 약 7,650~9,050 |
+
+## 남은 위험과 다음 측정
+
+- 비측정 모드에서 examiner 역할 입력 한도 40,000은 읽기 단계에 적용된다. 첫 호출이 커졌으므로 읽기 세 번 중 한 번에 큰 응답(예: fact 서른두 개 조회)을 받으면 세 번째 읽기 전에 BUDGET_EXCEEDED로 실패할 수 있다. 측정 모드 실행은 이 한도를 검사하지 않으므로, 유료 측정 뒤 녹화의 호출별 입력으로 따로 확인한다.
+- 유료 측정(같은 10곳 한 회, 허락 뒤 실행)에서 볼 지표: 첫 제출 거절 수, fact 없음 거절 수, 문장·근거를 짚은 지적 수, 공간·L 경고 반복 수, examiner 호출·입력, 실패 수. 한 번 측정이라 경향만 본다.
+- landlord_advocate 브랜치도 evaluators.py에서 패킷을 고르는 줄을 바꾼다. 늦게 합치는 쪽이 한 줄을 맞춘다.

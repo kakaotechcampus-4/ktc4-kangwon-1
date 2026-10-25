@@ -1,0 +1,52 @@
+﻿industry_code,industry_name,kitchen_needed,ventilation_needed,water_supply_needed,floor_preference,area_band,confidence,rationale,reviewed
+G202,자동차부품 소매,false,false,false,ground_preferred,40~150㎡,low,가정: 부품 진열·재고와 차량 고객 접근을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G203,모터사이클·운동용품·자전거 소매,false,false,false,ground_preferred,40~180㎡,low,가정: 운동용품 진열과 자전거 반입·보관을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G204,종합 소매,false,false,false,ground_preferred,30~200㎡,low,가정: 생활상품 진열·재고와 고객 동선을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G205,식료품 소매,false,false,false,ground_preferred,20~100㎡,low,가정: 포장 식품 판매와 냉장 진열을 가정하며 현장 가공은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G208,가전·정보통신장비 소매,false,false,false,ground_preferred,30~150㎡,low,가정: 기기 진열·상담·재고 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G209,의류·신발·가방·섬유 소매,false,false,false,ground_preferred,20~100㎡,low,가정: 의류 진열·피팅·재고 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G210,철물·건설자재·생활용품 소매,false,false,false,ground_preferred,30~150㎡,low,가정: 자재·생활용품 진열과 재고 적재를 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G211,가구 소매,false,false,false,ground_preferred,100~500㎡,low,가정: 가구 실물 전시와 반입 동선을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G213,문화·오락·여가용품 소매,false,false,false,ground_preferred,20~100㎡,low,가정: 서적·취미용품 진열과 계산 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G215,의약품·의료기기 소매,false,false,false,false,30~100㎡,low,가정: 의약품·의료기기 진열과 상담을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G215B,화장품 소매,false,false,false,ground_preferred,15~80㎡,low,가정: 화장품 진열과 제품 상담을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G216,안경·정밀기기 소매,false,false,false,ground_preferred,25~100㎡,low,가정: 안경 진열·검사·조정 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G217,시계·귀금속 소매,false,false,false,ground_preferred,15~60㎡,low,가정: 귀금속 진열과 보안·상담 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G218,예술품·기념품 소매,false,false,false,ground_preferred,20~120㎡,low,가정: 작품·기념품 전시와 보관을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G219,화초·식물 소매,false,false,required,ground_preferred,15~80㎡,low,가정: 식물 진열·보관과 관수 작업을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G220,애완동물·관련용품 소매,false,false,false,false,25~120㎡,low,가정: 용품 판매 중심이며 생체 관리·미용의 급배수는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+G222,중고 상품 소매,false,false,false,ground_preferred,30~180㎡,low,가정: 중고 상품 진열·검수·보관을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I101,일반·생활 숙박,false,conditional,required,false,150~1000㎡,low,가정: 여러 객실·욕실·공용 공간을 가정하며 환기 방식은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I102,기타 숙박,false,conditional,required,false,80~500㎡,low,가정: 소규모 숙박의 객실·욕실을 가정하며 환기 방식은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I201,한식 음식점,required,required,required,false,40~150㎡,low,가정: 주방·가열 조리·세척과 객석을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I202,중식 음식점,required,required,required,false,50~180㎡,low,가정: 고온 조리·배기·세척과 객석을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I203,일식 음식점,required,required,required,false,40~150㎡,low,가정: 조리·세척과 객석을 가정하며 메뉴별 장비는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I204,양식·외국식 음식점,required,required,required,false,50~180㎡,low,가정: 가열 조리·세척과 객석을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I210,간이 음식점,required,required,required,ground_preferred,20~80㎡,low,가정: 간편식 조리·세척과 포장 동선을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I211,주점,conditional,conditional,required,false,30~150㎡,low,가정: 객석·주류 세척을 가정하며 안주 직접 조리에 따라 주방·배기 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I212,카페·비알코올 음료점,conditional,conditional,required,ground_preferred,15~100㎡,low,가정: 음료 제조·세척과 좌석을 가정하며 가열 메뉴에 따라 주방·배기 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+L102,부동산 관련 서비스,false,false,false,false,15~60㎡,low,가정: 상담·사무와 방문 고객 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M103,법무 서비스,false,false,false,false,20~100㎡,low,가정: 예약 상담·사무와 개인정보 보호 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M104,회계·세무 서비스,false,false,false,false,20~100㎡,low,가정: 사무·서류 보관과 상담을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M111,수의업,false,conditional,required,false,60~200㎡,low,가정: 진료·세척·대기·분리 공간을 가정하며 배기 방식은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M113,사진 촬영·처리,false,false,false,false,30~150㎡,low,가정: 디지털 촬영·편집·대기를 가정하며 현상 작업은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+N102,건물 청소·방제,false,conditional,false,false,20~100㎡,low,가정: 출장 업무의 사무·장비 보관을 가정하며 약제 작업은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+N105,여행 서비스,false,false,false,false,15~80㎡,low,가정: 온라인·예약 상담과 사무 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+N110,개인·가정용품 대여,false,false,false,false,30~150㎡,low,가정: 물품 보관·반납·검수를 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+P105,학원·교육기관,false,conditional,false,false,50~250㎡,low,가정: 강의·상담·대기를 가정하며 교육 형태별 환기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+Q102,의원,false,conditional,required,false,60~200㎡,low,가정: 진료·처치·기구 세척을 가정하며 진료과별 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+R102,독서실·유사 여가시설,false,conditional,false,false,50~250㎡,low,가정: 독서 좌석·분리·대기를 가정하며 환기 방식은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+R103,스포츠 서비스,false,conditional,false,basement_preferred,80~400㎡,low,가정: 운동·지도 공간을 가정하며 샤워·습식 시설은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+R104,오락 서비스,false,conditional,false,basement_preferred,40~200㎡,low,가정: 게임·오락 장비와 고객 좌석을 가정하며 환기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S202,통신장비 수리,false,conditional,false,false,15~60㎡,low,가정: 통신기기 수리·상담·부품 보관을 가정하며 납땜 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S203,자동차 수리·세차,false,required,required,ground_required,100~400㎡,low,가정: 차량 진입·정비·세차를 가정하며 작업 배기 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S204,모터사이클 수리,false,preferred,false,ground_required,40~150㎡,low,가정: 모터사이클 반입·정비·부품 보관을 가정하며 작업 배기 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S205,가전제품 수리,false,conditional,false,false,30~150㎡,low,가정: 제품 반입·수리·부품 보관을 가정하며 작업 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S207,이용·미용,false,conditional,required,false,20~100㎡,low,가정: 시술 좌석·머리 세척을 가정하며 약제 작업 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S209,세탁,false,required,required,false,20~100㎡,low,가정: 현장 세탁·건조·보관을 가정하며 수거 대행은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+I207,구내식당 및 뷔페,required,required,required,false,100~500㎡,low,가정: 대량 조리·배식·세척과 객석을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M107,회사 본부·경영 컨설팅 서비스,false,false,false,false,30~200㎡,low,가정: 사무·회의·기업 상담 공간을 가정. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+M114,인쇄 및 제품 제작,false,conditional,false,false,40~200㎡,low,가정: 제작 장비·재료·반입 동선을 가정하며 인쇄 방식별 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+N109,운송장비 대여,false,false,false,false,20~80㎡,low,가정: 예약 사무·차량 인도를 가정하며 주차 공간은 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S201,컴퓨터 및 주변기기 수리,false,conditional,false,false,20~80㎡,low,가정: 컴퓨터 수리·상담·보관을 가정하며 납땜 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
+S208,욕탕·마사지·신체관리 서비스,false,conditional,required,basement_preferred,50~300㎡,low,가정: 습식·시술·분리 공간을 가정하며 건식 시술과 배기는 별도 확인. 면적은 소규모 운영 추정이며 법규 기준이 아니다.,true
