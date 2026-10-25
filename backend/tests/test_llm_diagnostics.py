@@ -91,3 +91,39 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 await complete_json("", "{}", LLMSettings())
         self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
         self.assertNotIn("SECRET", str(caught.exception))
+
+    async def test_duplicate_key_is_named_without_the_reply(self):
+        reply = '{"items": [{"evidence": [1], "risks": ["SECRET"], "evidence": [2]}]}'
+        with patch(
+            "app.llm.client._complete",
+            return_value=ChatCompletionMessage(role="assistant", content=reply),
+        ):
+            with self.assertRaises(LLMResponseError) as caught:
+                await complete_json("", "{}", LLMSettings())
+        self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")
+        self.assertEqual(caught.exception.diagnostics, {"duplicate_key": "evidence"})
+        self.assertNotIn("SECRET", str(caught.exception))
+
+    async def test_repeated_list_that_extends_the_first_keeps_the_longer_list(self):
+        reply = '{"items": [{"evidence": [1, 2], "risks": ["{2}"], "evidence": [1, 2, 3]}]}'
+        with patch(
+            "app.llm.client._complete",
+            return_value=ChatCompletionMessage(role="assistant", content=reply),
+        ):
+            result = await complete_json("", "{}", LLMSettings())
+        self.assertEqual(result, {"items": [{"evidence": [1, 2, 3], "risks": ["{2}"]}]})
+
+    async def test_repeated_key_that_drops_or_changes_values_is_rejected(self):
+        for reply in (
+            '{"evidence": [1, 2, 3], "evidence": [1, 2]}',
+            '{"evidence": [1, 2], "evidence": [1, 3, 4]}',
+            '{"summary": "a", "summary": "a"}',
+        ):
+            with self.subTest(reply=reply):
+                with patch(
+                    "app.llm.client._complete",
+                    return_value=ChatCompletionMessage(role="assistant", content=reply),
+                ):
+                    with self.assertRaises(LLMResponseError) as caught:
+                        await complete_json("", "{}", LLMSettings())
+                self.assertEqual(caught.exception.code, "LLM_INVALID_JSON")

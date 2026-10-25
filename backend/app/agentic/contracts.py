@@ -620,6 +620,13 @@ class ReviewRef(Schema):
     status: Literal["submitted"] = "submitted"
 
 
+class ConditionExcludedCandidate(Schema):
+    industry_code: IndustryCode
+    industry_name: Text
+    reasons: list[Text] = Field(min_length=1, max_length=6)
+    score_rank: Annotated[int, Field(ge=1, le=51)]
+
+
 class FinalCandidate(ScorecardSummary):
     industry_name: Text
     reasons_segments: list[FactSegment]

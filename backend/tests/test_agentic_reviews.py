@@ -67,7 +67,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
             fid = db.execute("SELECT fact_id FROM facts LIMIT 1").fetchone()[0]
         with (
             patch(
-                "app.agentic.evaluators.review_packet",
+                "app.agentic.examiner.review_packet",
                 return_value={"draft_id": loop.done.report_id, "facts": [{"fact_id": fid}]},
             ),
             patch(

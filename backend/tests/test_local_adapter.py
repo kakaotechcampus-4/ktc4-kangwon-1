@@ -1,6 +1,7 @@
 """로컬 자료의 버전 고정과 원문 복사 없는 분석을 검증합니다."""
 
 import asyncio
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -115,21 +116,26 @@ class LocalAdapterTests(unittest.TestCase):
                 row.update(STDR_YYQU_CD="20262", TRDAR_CD="a", TRDAR_CD_NM="테스트")
                 raw[source] = row
             versions = []
+            second_store = {**store, "상가업소번호": "s2", "상권업종중분류코드": "G204"}
             for source, row in raw.items():
+                staged = [("s1" if source == "stores" else "a", row, "I201")]
+                if source == "stores":
+                    staged.append(("s2", second_store, "G204"))
                 versions.append(
                     market.stage(
                         source,
                         "" if source == "areas" else "20262",
                         [
                             {
-                                "row_key": "s1" if source == "stores" else "a",
-                                "payload": row,
+                                "row_key": key,
+                                "payload": payload,
                                 "area_code": "a",
-                                "industry_code": "I201",
+                                "industry_code": industry,
                                 "district_code": "11680",
                                 "latitude": 37.5,
                                 "longitude": 127.0,
                             }
+                            for key, payload, industry in staged
                         ],
                         source,
                     )
@@ -203,6 +209,31 @@ class LocalAdapterTests(unittest.TestCase):
                                 con.execute("SELECT COUNT(*) FROM local_provenance").fetchone()[0],
                                 10,
                             )
+                            floating = {
+                                v["version_id"]
+                                for v in adapter.versions
+                                if v["source"] == "floating"
+                            }
+                            stores = {
+                                v["version_id"] for v in adapter.versions if v["source"] == "stores"
+                            }
+                            c1 = {}
+                            for code, unit, versions_json in con.execute(
+                                "SELECT f.industry_code,f.unit,p.version_ids_json FROM facts f "
+                                "JOIN local_fact_lineage l USING(fact_id) "
+                                "JOIN local_provenance p USING(provenance_id) "
+                                "WHERE f.metric='competition_index'"
+                            ):
+                                c1[code] = (unit, set(json.loads(versions_json)))
+                            self.assertEqual(c1["M103"][0], "업종 집적 유형(프로필)")
+                            self.assertFalse(c1["M103"][1] & floating)
+                            self.assertFalse(c1["M103"][1] & stores)
+                            self.assertIn("모임형", c1["I201"][0])
+                            self.assertTrue(c1["I201"][1] & stores)
+                            self.assertFalse(c1["I201"][1] & floating)
+                            self.assertIn("근처형", c1["G204"][0])
+                            self.assertTrue(c1["G204"][1] & stores)
+                            self.assertTrue(c1["G204"][1] & floating)
                         await scope.finish()
                     from types import SimpleNamespace
                     from unittest.mock import AsyncMock

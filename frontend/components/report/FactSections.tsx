@@ -6,6 +6,7 @@ import { reportPalette } from '@/styles/reportPalette';
 import type {
   FactCompetition,
   FactCompetitionRow,
+  DensityKind,
   FactFloatingPopulation,
   FactLifecycle,
   FactShare,
@@ -264,6 +265,12 @@ export function FactFloatingPopulationSection({
 // 경쟁 점포
 // ---------------------------------------------------------------------------
 
+const DENSITY_NOTES: Record<DensityKind, string> = {
+  모임형: '몰릴수록 유리',
+  근처형: '낮을수록 유리',
+  무관: '밀도와 무관',
+};
+
 function CompetitionTable({ rows }: { rows: FactCompetitionRow[] }) {
   return (
     <div className="overflow-x-auto">
@@ -273,7 +280,7 @@ function CompetitionTable({ rows }: { rows: FactCompetitionRow[] }) {
             <th className="py-2 pr-3 font-medium">업종</th>
             <th className="py-2 pr-3 text-right font-medium">점포 수</th>
             <th className="py-2 pr-3 text-right font-medium">밀도(개/km²)</th>
-            <th className="py-2 pr-3 text-right font-medium">경쟁 부담</th>
+            <th className="py-2 pr-3 text-right font-medium">서울 대비 밀도</th>
             <th className="py-2 text-right font-medium">주변 대비 집중도</th>
           </tr>
         </thead>
@@ -294,9 +301,19 @@ function CompetitionTable({ rows }: { rows: FactCompetitionRow[] }) {
                   : row.densityPerKm2.toFixed(1)}
               </td>
               <td className="py-3 pr-3 text-right tabular-nums">
-                {row.competitionIndex === null
-                  ? '자료 없음'
-                  : times(row.competitionIndex)}
+                {row.competitionIndex !== null
+                  ? times(row.competitionIndex)
+                  : row.densityKind === '무관'
+                    ? '—'
+                    : '자료 없음'}
+                {row.densityKind && (
+                  <span
+                    className="ml-2 text-xs"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {DENSITY_NOTES[row.densityKind]}
+                  </span>
+                )}
               </td>
               <td className="py-3 text-right tabular-nums">
                 {row.lq === null ? '비교 불가' : times(row.lq)}
@@ -316,7 +333,7 @@ export function FactCompetitionSection({ data }: { data: FactCompetition }) {
       {data.selected.length > 0 && (
         <Card
           title="검토 후보 업종의 경쟁 상황"
-          description="경쟁 부담은 유동인구 규모를 감안해 서울 같은 업종 밀도와 비교한 값으로, 1.0배보다 높을수록 경쟁이 셉니다. 주변 대비 집중도는 넓은 주변 지역보다 이 반경에 그 업종이 얼마나 몰려 있는지입니다."
+          description="서울 대비 밀도는 유동인구 규모를 감안해 서울 같은 업종과 비교한 값입니다. 모임형 업종은 몰릴수록 손님이 모여 유리하고(서울 상위 5%를 넘으면 과밀), 근처형 업종은 적을수록 경쟁이 약해 유리합니다. 주변 대비 집중도는 넓은 주변 지역보다 이 반경에 그 업종이 얼마나 몰려 있는지입니다."
         >
           <CompetitionTable rows={data.selected} />
         </Card>

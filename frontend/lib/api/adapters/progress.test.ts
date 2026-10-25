@@ -9,6 +9,7 @@ import {
   toClarifyingQuestions,
   toWaiting,
 } from './progress';
+import { normalizeFloor } from '@/lib/api/building';
 import { pollInterval } from '@/lib/hooks/useAnalysisProgress';
 import { mockAnalysisProgress } from '@/lib/mockData/analysisProgress';
 import type { AnalysisEvent, WaitingForInput } from '@/lib/api/types';
@@ -137,6 +138,14 @@ describe('질문·답변 변환', () => {
     expect(
       prefillAnswers(waiting, { floor: ' 4층 401호 ', exclusiveArea: '85㎡' })
     ).toEqual({ floor: { optionId: ANSWERED_OPTION_ID, detail: '4층 401호' } });
+  });
+
+  it('입력 층을 정리한 값으로 층 질문을 미리 채운다', () => {
+    expect(
+      prefillAnswers(waiting, {
+        floor: normalizeFloor('4층 401호') ?? undefined,
+      })
+    ).toEqual({ floor: { optionId: ANSWERED_OPTION_ID, detail: '4층' } });
   });
 
   it('모든 질문에 빈칸 없는 답을 넣고 고르지 않은 질문은 건너뛰기 문장으로 보낸다', () => {

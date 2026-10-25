@@ -51,7 +51,8 @@ def validation_message(model, failure):
         context = detail.get("ctx") or {}
         upper = next((context[key] for key in ("max_length", "le", "lt") if key in context), None)
         maximum = f" max={upper}" if type(upper) in (int, float) else ""
-        issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum)
+        rule = " " + str(context["error"])[:120] if detail["type"] == "value_error" else ""
+        issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum + rule)
     return ("입력 오류: " + "; ".join(issues))[:400]
 
 
@@ -148,6 +149,8 @@ class ToolExecutor:
             if self.actor == "advisor"
             else set(TOOL_INPUTS) - {"submit_review"}
         )
+        if self.actor == "examiner":
+            permitted = permitted - {"query_raw"}
         return [d for d in tool_definitions() if d["function"]["name"] in permitted]
 
     def _reserve(self, name, args, *, duplicate=False):

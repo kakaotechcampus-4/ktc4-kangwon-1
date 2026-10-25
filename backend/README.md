@@ -84,10 +84,11 @@ python -m uvicorn app.main:create_app --factory --reload
 
 | 메서드 · 경로 | 설명 |
 | --- | --- |
-| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. |
+| `POST /analyses` | 분석 시작. `wait=false`면 202와 `request_id`를 즉시 돌려줍니다. `mock=true`는 외부 호출 없이 같은 계약으로 응답합니다. 선택 `floor`·`exclusive_area_m2`는 확인 화면에서 확정한 층·전용면적으로, 공간 비교에 바로 반영합니다. |
 | `GET /analyses/{request_id}` | 상태와 결과. 접수 직후에도 404가 아니라 현재 상태를 돌려줍니다. |
 | `GET /analyses/{request_id}/events?after=N` | 진행 단계. 1초 간격 폴링용입니다. |
 | `POST /analyses/{request_id}/answers` | `waiting_for_input`일 때 임대인 답변을 보내 재개합니다. |
+| `GET /building-registry?address=` | 건축물대장 표제부·층별개요·호실·오수정화시설 조회. 상가 정보 확인 화면용이며 저장하지 않습니다. `mock=true`는 고정 응답입니다. |
 | `GET /health` | 상태 확인 |
 
 요청 상태는 `pending` → `running` → (`waiting_for_input` ↔ `running`) → `completed` 또는 `failed`입니다.
@@ -103,6 +104,7 @@ python -m uvicorn app.main:create_app --factory --reload
 | `DECISION_LLM_*` · `EVALUATOR_LLM_*` · `ADVISOR_LLM_*` | 역할별 모델·키·주소·토큰·시간·reasoning. 비우면 공통 값을 씁니다. |
 | `GEOCODING_API_KEY` | 주소 변환과 지도 검색(카카오) |
 | `VWORLD_API_KEY` · `VWORLD_REFERER` | 규제·서울 경계 조회(V-World) |
+| `BUILDING_REGISTRY_API_KEY` | 상가 정보 확인 화면의 건축물대장 조회(공공데이터포털 건축HUB). Encoding·Decoding 두 개가 보이면 Decoding 키 |
 | `LOCAL_DATA_DB_PATH` | 자료 DB 경로 |
 | `SQLITE_PATH` | 요청 DB 경로 |
 | `FLOATING_POPULATION_API_KEY` · `BUSINESS_LIFECYCLE_API_KEY` · `SEOUL_OPEN_API_KEY` · `COMMERCIAL_AREA_API_KEY` · `FRANCHISE_API_KEY` | **자료 갱신과 연구 스크립트용** 키. 일반 요청에는 쓰지 않습니다. |
@@ -125,6 +127,17 @@ python -m uvicorn app.main:create_app --factory --reload
 
 실제 분석에는 자료 DB에 완전한 활성 묶음이 있어야 합니다. 구조와 ERD, 스키마 버전, 백업·초기화 절차는 [DATABASE.md](../docs/DATABASE.md)를 보세요.
 요청 DB는 이전 스키마를 자동 이전하지 않고 시작할 때 거절합니다. **자료 DB는 어떤 초기화 절차로도 삭제하지 않습니다.**
+
+## 자료 기간
+
+- 서비스 분석은 자료 DB의 활성 묶음을 씁니다. 2026년 10월 기준 최신 분기는 2026Q2(`20262`)입니다.
+  - 개폐업: 2023Q3~2026Q2, 12분기
+  - 유동인구: 2025Q2~2026Q2, 5분기
+- 2023Q4(`20234`) 자료는 **백테스트 전용**입니다.
+  - 2023Q4가 최신 분기인 묶음을 별도 자료 DB(예: `.chaeum/market_data_20234.sqlite3`)에 둡니다.
+  - 그 시점 자료로 채점한 뒤, 그 주소에서 이후 실제로 영업을 이어 간 업종이 몇 위였는지 봅니다.
+  - `backtest/history.py`는 서비스 자료 DB를 넣으면 거절합니다.
+- 서비스가 2024~2026년 자료를 쓰지 않는 것이 아닙니다. 과거 시점 자료는 백테스트만 씁니다.
 
 ## 자료 갱신
 
@@ -162,5 +175,7 @@ python scripts/verify_rubric_reproduction.py
 ```
 
 자동 시험은 임시 DB와 API·모델 대역만 씁니다. 실제 API·모델 품질은 별도로 승인한 실행에서만 확인하고, 모델 호출은 `create_app(recording_dir=...)` 서버 설정으로 녹화해 같은 실행을 네트워크 없이 재생(`scripts/replay_agentic.py`)할 수 있습니다.
+
+C1 업종별 방향 변경(2026-10-19)으로 C1 등급이 의도적으로 바뀌어 `scripts/verify_rubric_reproduction.py`의 저장 기준(`dryrun-results.json`의 408/408 일치, 배지 9/1/377/21)은 더 이상 맞지 않습니다. `backend/cache/rubric_samples`를 가진 사람이 `dryrun-results.json`과 배지 합계를 다시 만들기 전에는 이 검증이 실패하는 것이 정상입니다.
 
 이전 설계 기록은 [docs/archive](../docs/archive/README.md)에 있고 당시 구현의 기록입니다.

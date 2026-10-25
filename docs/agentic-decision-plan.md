@@ -197,7 +197,7 @@ fact_id는 f_UUID·불변 규칙을 유지한다. CSV의 행 번호만 키로 �
 ## 3. 도구 계약
 
 현재 역할 권한·예산은 4·6절과 전체 L 구현 계획이 우선한다. 평가자는
-get_scorecard·get_facts·query_raw 합계 세 번과 submit_review 한 번만 쓴다.
+get_scorecard·get_facts·query_raw 합계 세 번과 submit_review 한 번만 쓴다. examiner는 query_raw를 받지 않는다.
 지도·규제는 decision만 조회하고 보조 모델에는 도구를 주지 않는다.
 get_facts의 공간 비교 묶음만 source=industry_profile·metrics=[space_fit]·limit≤51을 허용한다.
 
@@ -223,7 +223,7 @@ v0.4에서도 도구 아홉 개의 이름·한도와 ToolReply 계약은 유지�
 | --- | --- | --- | --- | --- | --- |
 | get_scorecard | 계산 점수 우선. {industry_codes?:[Code]≤51, mode:summary/detail, limit:int≤32(summary)/5(detail), cursor?:string} | summary는 코드·B/H/A·coverage·배지·누락 상태, detail은 Scorecard·fact_ids. 전체 51업종은 페이지 조회 | common + VERSION_MISMATCH | decision 6회, 평가자 각 2회. 응답≤2,000토큰 | decision·평가자 |
 | get_facts | {fact_ids:[FactId]≤32} **또는** {industry_code?:Code, source:Source, metrics:[Metric]≤8, limit≤32,cursor?}. 둘 중 하나 | {facts:[FactView],provenance_refs}. raw 행 참조·단위·기간 제공 | common + UNKNOWN_FACT/UNCITABLE | decision 8회, 평가자 각 3회, 보조 각 1회(받은 ID만) | decision·평가자·보조 |
-| query_raw | {sql:string≤4,000자, params:object/array, max_rows:int≤50}. 승인된 뷰 단일 SELECT만(1차) | {columns,rows[{raw_row_refs,values,fact_ids}],uncitable_columns}; 직접 필드는 원문 재대조 후 자동 fact 등록 | common + SQL_DENIED/SQL_TIMEOUT/LINEAGE_UNAVAILABLE | decision 4회, 평가자 각 2회, SQL≤2초·50행·응답≤2,000토큰 | decision·평가자 |
+| query_raw | {sql:string≤4,000자, params:object/array, max_rows:int≤50}. 승인된 뷰 단일 SELECT만(1차) | {columns,rows[{raw_row_refs,values,fact_ids}],uncitable_columns}; 직접 필드는 원문 재대조 후 자동 fact 등록 | common + SQL_DENIED/SQL_TIMEOUT/LINEAGE_UNAVAILABLE | decision 4회, examiner 외 평가자 각 3회, SQL≤2초·50행·응답≤2,000토큰 | decision·examiner 외 평가자 |
 | map_search | {industry_code:Code **또는** facility_code:KakaoEnum, radius_m:int 50~500, limit≤20}. 좌표는 현재 Site 고정 | {observation_id,places[{place_id,name,kakao_category,distance_fact_id,match_status:category_match/name_match/unknown,match_rule_id,fact_ids}],coverage,has_more}. 이름·카테고리·거리도 fact_id로 등록 | common + MAP_UNAVAILABLE | 요청 전체 서로 다른 검색 6개·지도 HTTP 20회·각 검색 15초 | decision·평가자 |
 | check_regulation | {}. 현재 좌표·저장된 구역 snapshot 사용 | {status,queried_at,contains_verified,zones,fact_ids,industry_restrictions,limitations}. 건축물대장은 현재 unavailable | common + REGULATION_UNAVAILABLE | 실제 구역 조회 요청당 1회, actor 호출 각 1회·캐시 공유 | decision·평가자 |
 | ask_advisor | {question:string≤800자,fact_ids:[FactId]≤12,industry_codes?:[Code]≤3} | {consult_id,status,interpretations[{claim,fact_ids,conditions,confidence}],missing_facts,limitations}. 점수 없음 | common + ADVISOR_UNAVAILABLE | 요청당 최대 2회·각 45초·출력≤1,000토큰 | decision만 |
@@ -332,17 +332,17 @@ ADVISOR 역할의 별도 endpoint/key가 없어 공통 ELICE 연결로 확인했
 
 | 역할 | 중점 | 도구 |
 | --- | --- | --- |
-| examiner | 사실·기간·범위·L 중복·계보 | get_scorecard / get_facts / query_raw / submit_review |
-| founder | 공간·설비·운영 제약, 초안 요건의 과신 | 동일 |
+| examiner | 보고서 문장과 근거의 대조(근거 슬롯·출처·기간 범위·중복), [전용 평가표](examiner-evaluator-rubric.md) | get_scorecard / get_facts / submit_review |
+| founder | 공간·설비·운영 제약, 초안 요건의 과신 | get_scorecard / get_facts / query_raw / submit_review |
 | customer | 손님·동선·수요·확인 조건 | 동일 |
 | landlord_advocate | 임대 지속성·답변 조건·불확실성 | 동일 |
 
 각 역할은 읽기 최대 세 번과 제출 한 번이며 지도·규제·자문·질문 도구는 받지 않는다.
 필요한 지도·규제의 기존 fact를 읽고 재조회가 필요하면 suggested_check로 남긴다.
 초안·전체 L의 요인/근거·확인 조건을 짧게 전달하고 반복 스냅샷 메타데이터는 뺀다.
-역할별 입력40k·출력5.5k·4호출을 다른 역할이 쓰지 못한다. 실패해도 정확히 네 슬롯을 유지한다.
+역할별 입력40k·출력5.5k·4호출을 다른 역할이 쓰지 못한다. 읽기 세 번을 마쳤거나 제출이 한 번 거절되면 submit_review만 받으며, 이 제출 전용 호출은 역할 몫 대신 요청 전체 한도까지 쓴다. 실패해도 정확히 네 슬롯을 유지한다.
 
-ReviewIssue는 issue_id·industry_code·target·kind·comment·fact_ids≤3·suggested_check이다.
+ReviewIssue는 issue_id·industry_code·target·kind·comment·fact_ids≤5·suggested_check이다.
 decision은 지적마다 accepted/partial/rejected와 이유·근거를 한 번 제출한다.
 고정된 코드 점수를 모델이 고치지 못하며 L의 최초 채택 기록도 중복 제출로 덮지 않는다.
 최종 report validator가 인용·규제·배지·순위를 다시 검사한다. 평가 실패를 동의로 간주하지 않는다.
@@ -405,7 +405,7 @@ GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 se
 | 계산/채점 | metrics/scorecard started·completed {rubric_version,industry_count} | 코드 채점 단계 표시 |
 | 판정 도구 | decision started/completed {phase:draft/final}; decision.tool completed {tool,status} | 원문·SQL·키·fact 값은 이벤트에서 제외 |
 | 자문 | advisor started/completed {status} | consult.*·briefing stages 삭제 |
-| 평가 | evaluate.examiner/founder/customer/landlord_advocate started/completed {status,issues_count} | 항상 4명 상태·평가 미완료 표시 |
+| 평가 | evaluation started {}; 도구마다 evaluation completed {actor,tool,status}; 평가자마다 evaluation completed/failed {actor,error_code,issues_count,reads,rejections,model_calls} | 항상 4명 상태·평가 미완료 표시 |
 | 질문/종료 | questions waiting, run completed/failed/draft_available | 새 QuestionSnapshot으로 대기/재개. 유효 초안과 final 구분 |
 
 기존 PR1 결과·질문 계약을 재사용하고 LD5에서 API_CONTRACT의 자료 기간·stage와 런타임·GET·이벤트를 연결한다. 프론트 담당은 LD6의 전환 완료 조건에 포함해 검증한다. retry는 같은 snapshot·저장 예산을 이어받는다. DB 버전 불일치는 시작 오류와 명시적 초기화 안내로 처리한다.
@@ -463,7 +463,7 @@ GET /api/v1/analyses/{id}의 URL과 status/site/result/error envelope·폴링 se
 
 - 적용 경로: `execute_agentic_analysis`의 기본 분석은 LocalAdapter, `resume_agentic_analysis`는 저장한 DB 경로/버전 목록을 재사용한다. 요청 시작(주소 변환 전)에 버전 묶음을 고정한다. 기존 주입형 테스트/옛 모드 경로와 공개 API의 최종 전환·삭제는 LD6다.
 - 기본자료는 readonly SQL로 반경 점포·2km 비교·구 사전 집계·개폐업·유동·상주/직장·영역을 조회한다. Store/인구 파서, 기존 포함/최근접 판정, 기존 formatter 계산과 채점기를 호출한다. 원문 hook/캐시 복사/상주·직장 CSV 재읽기를 새 기본 경로에서 호출하지 않는다. 브랜드는 사전 캐시만 읽고 없으면 unknown.
-- 요청 DB에는 local_snapshots(자료 DB 경로·버전 목록·설정 해시·공간조건), local_provenance(원천별 공유 조회 레시피/계산 버전), local_fact_lineage(셀 또는 집계 참조)를 추가한다. 집계의 지표·업종 조건은 facts.metric/industry_code와 결합한다. C1은 점포와 유동 버전을 함께 참조한다. 행 UUID/수천 행 링크는 생성하지 않는다.
+- 요청 DB에는 local_snapshots(자료 DB 경로·버전 목록·설정 해시·공간조건), local_provenance(원천별 공유 조회 레시피/계산 버전), local_fact_lineage(셀 또는 집계 참조)를 추가한다. 집계의 지표·업종 조건은 facts.metric/industry_code와 결합한다. 근처형 C1만 점포와 유동 버전을 함께 참조하고, 모임형 C1은 점포 버전만, 무관 C1은 업종 프로필(설정 해시)을 근거로 한다. 행 UUID/수천 행 링크는 생성하지 않는다.
 - 직접 셀은 버전·자연키·열을 원자료에서 읽어 값 검증 후 등록한다. 공간조건은 저장 때 공유하고 도구/자문/보고서 읽기 경계에서 펼친다. 정상 초안에도 로컬 limitation이 유지된다. 결측/n.a. 문항의 상태·이유는 scores/summary에 그대로 남기며 인용할 숫자 fact를 중복 생성하지 않는다.
 - LD4의 query_raw는 고정 버전·반경/상권/구 범위의 로컬 뷰를 읽는다. 기본자료의 요청 DB 원문 뷰로 우회할 수 없다. get_facts/get_scorecard는 저장된 로컬 계산을 읽는다.
 - 서울 경계는 선택 원천 `seoul_boundary`로 버전·해시를 기록한다. 반경 원이 경계를 넘을 때만 **서울 밖 점포 미반영**을 표시한다. 도형이 없으면 기존 두 한계 문구를 유지한다. LD4 최초 조회는 INCORRECT_KEY였으며 PR5 마무리에서 규제와 인증 방식을 통일한 뒤 성공·활성화했다.
@@ -582,6 +582,8 @@ LD4는 새 함수 내부 import와 다른 모듈의 비공개 함수 사용을 �
 당시 사용자 지시대로 프롬프트·예산 수치를 수정하지 않고 추가 실행을 멈췄으며, 전체 대화 복원과 호출당12k 사전 추정 상한의 충돌(특히 도구 정의의 토큰 추정)을 다음 검토 대상으로 남겼다. 이후 현행 결정에서 호출당 입력12k 상한과 요청 DB 용량 목표를 해제했다. 위 실행 결과는 변경 전 기록이며 현행 정책의 용량 목표 초과로 보고하지 않는다. 이번 실행으로 L/자문 품질이 나쁘다고 판정할 수는 없다. 요청 용량은 대화보다 사실·계보와 중복 저장되는 채점 자료 비중이 크며, 필요한 근거는 삭제하지 않는다.
 
 408건 기준은 `scripts/verify_rubric_reproduction.py`를 유지한다. 엔진 단독 검증뿐 아니라 **저장된 동일 원천 fixture → 로컬 SQL → 계산 입력 → 점수** 비교를 추가해야 한다. API와 새 분기 CSV의 원래 값 차이를 숨겨 등급을 맞추지 않는다. CSV의 1.014배 유사성은 408건 완전 일치 검증을 대체하지 않는다.
+
+2026-10-19 C1 업종별 방향 변경(모임형·근처형·무관)은 C1 등급을 의도적으로 바꾸므로 `dryrun-results.json`의 "408/408 일치, 배지 9/1/377/21" 기준도 달라진다. 이 PC에는 `backend/cache/rubric_samples`가 없어 재생성하지 못했다. 표본을 가진 사람이 `dryrun-results.json`과 배지 합계를 다시 만들어야 하며, 그 전에는 `verify_rubric_reproduction.py`가 실패하는 것이 정상이다.
 
 ### 명시적 측정 모드와 녹화·재생 (2026-10-14)
 

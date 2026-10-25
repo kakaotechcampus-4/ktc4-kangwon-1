@@ -5,6 +5,7 @@ from typing import Literal, Self, get_args
 from pydantic import Field, model_validator
 
 from app.agentic.contracts import (
+    ConditionExcludedCandidate,
     EvaluatorActor,
     EvaluatorReview,
     FactId,
@@ -46,6 +47,9 @@ class DecisionResult(Schema):
     summary_segments: list[FactSegment]
     top5: list[FinalCandidate] = Field(max_length=5)
     excluded_candidates: list[FinalCandidate] = Field(default_factory=list, max_length=5)
+    condition_excluded: list[ConditionExcludedCandidate] = Field(
+        default_factory=list, max_length=51
+    )
     facts: list[FactView]
     L_records: list[LRecord] = Field(min_length=51, max_length=51)
     evaluator_reviews: list[EvaluatorReview] = Field(min_length=4, max_length=4)
