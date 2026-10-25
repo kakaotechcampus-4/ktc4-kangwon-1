@@ -21,10 +21,9 @@ export default function AddressInput({
     <Card
       className="w-full gap-4"
       style={{
-        padding: '24px',
-        borderRadius: '12px',
-        borderWidth: '1px',
-        boxShadow: 'none',
+        padding: '32px',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <p className="text-xl font-bold" style={{ color: colors.brand.dark }}>

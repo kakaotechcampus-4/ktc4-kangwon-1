@@ -41,7 +41,7 @@ export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
                 }`}
                 style={{
                   backgroundColor: isEmphasized
-                    ? colors.brand.dark
+                    ? colors.brand.primary
                     : colors.neutral.border,
                   color: isEmphasized ? colors.neutral.white : undefined,
                 }}

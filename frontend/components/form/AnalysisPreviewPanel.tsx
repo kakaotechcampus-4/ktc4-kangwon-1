@@ -45,9 +45,8 @@ export default function AnalysisPreviewPanel({
     <Card
       className="analysis-preview-card shrink-0 gap-4"
       style={{
-        borderRadius: '12px',
-        borderWidth: '1px',
-        boxShadow: 'none',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <div className="flex w-full items-start justify-between gap-2">
