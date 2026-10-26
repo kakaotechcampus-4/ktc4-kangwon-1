@@ -6,6 +6,7 @@ import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import RevealBarChart from '@/components/charts/RevealBarChart';
 import PopulationBarChart from '@/components/charts/PopulationBarChart';
+import AreaTypeIllustration from '@/components/report/AreaTypeIllustration';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { colors } from '@/styles/tokens';
 import {
@@ -507,29 +508,32 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
   return (
     <div className="story">
       <header className="story-lead">
-        <h3>
-          이 주변은 <em>{data.type.label}</em> 상권이에요
-        </h3>
-        <p className="story-meta">
-          신뢰도 {RELIABILITY_LABEL[data.reliability.level]} ·{' '}
-          {data.reliability.trade_area_count}곳 중{' '}
-          {data.reliability.covered_trade_areas}곳 자료 확보
-        </p>
-        <ul className="story-insights">
-          {data.type.reasons.map((reason) => (
-            <li key={reason}>
-              {reason
-                .split(/(\d+(?:\.\d+)?(?:%|배))/g)
-                .map((part, i) =>
-                  /^(\d+(?:\.\d+)?(?:%|배))$/.test(part) ? (
-                    <strong key={i}>{part}</strong>
-                  ) : (
-                    part
-                  )
-                )}
-            </li>
-          ))}
-        </ul>
+        <div className="story-lead-text">
+          <h3>
+            이 주변은 <em>{data.type.label}</em> 상권이에요
+          </h3>
+          <p className="story-meta">
+            신뢰도 {RELIABILITY_LABEL[data.reliability.level]} ·{' '}
+            {data.reliability.trade_area_count}곳 중{' '}
+            {data.reliability.covered_trade_areas}곳 자료 확보
+          </p>
+          <ul className="story-insights">
+            {data.type.reasons.map((reason) => (
+              <li key={reason}>
+                {reason
+                  .split(/(\d+(?:\.\d+)?(?:%|배))/g)
+                  .map((part, i) =>
+                    /^(\d+(?:\.\d+)?(?:%|배))$/.test(part) ? (
+                      <strong key={i}>{part}</strong>
+                    ) : (
+                      part
+                    )
+                  )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AreaTypeIllustration label={data.type.label} />
       </header>
 
       <dl className="story-stats">

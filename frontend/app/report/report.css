@@ -3892,8 +3892,23 @@
 
 /* 결론·핵심 숫자 카드에 위계를 준다: 결론은 옅은 블루 워시, 첫 숫자(대표값)는 네이비. */
 .report-page .story-lead {
-  background: linear-gradient(135deg, #eaf0fc 0%, #f6f9fe 45%, #ffffff 100%);
-  border-color: #d9e3f7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: center;
+  gap: 24px;
+}
+.report-page .area-type-illustration {
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 900px) {
+  .report-page .story-lead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .report-page .area-type-illustration {
+    order: -1;
+    max-width: 220px;
+  }
 }
 .report-page .story-stats dt {
   display: flex;
@@ -3927,4 +3942,9 @@
 .report-page .story-stats > div:first-child .story-stat-icon {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+}
+@media (max-width: 600px) {
+  .report-page .area-type-illustration {
+    display: none;
+  }
 }
