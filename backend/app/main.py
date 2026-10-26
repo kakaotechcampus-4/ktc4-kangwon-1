@@ -16,6 +16,7 @@ from app.api.v1.jobs import health as api_health
 from app.config import load_environment
 from app.db import repository
 from app.db.connection import initialize
+from app.logging import protect_http_query_logs
 from app.services.jobs import AnalysisJobRegistry
 from app.services.settings import ExecutionSettings
 
@@ -52,6 +53,7 @@ def create_app(
     measurement: bool = False,
 ) -> FastAPI:
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
+    protect_http_query_logs()
     if load_env:
         load_environment()
     app = FastAPI(

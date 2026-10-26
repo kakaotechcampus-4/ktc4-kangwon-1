@@ -140,6 +140,14 @@ class DecisionLoop:
         }
         self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
         self.state.setdefault("allow_questions", allow_questions)
+        self.state.setdefault(
+            "confirmed_question_fields",
+            [
+                field
+                for field in (confirmed_space or {}).get("values", {})
+                if field in {"floor", "exclusive_area"}
+            ],
+        )
         self.state.setdefault("L_records", {})
         self.state.setdefault("L_closed", False)
         self.state.setdefault("phase", "L")
@@ -612,13 +620,25 @@ class DecisionLoop:
 
     def definitions(self):
         blocked = not self.state["allow_questions"] or self.state.get("phase") == "final"
-        return [
+        definitions = [
             d
             for d in self.tools.definitions()
             if not (blocked and d["function"]["name"] == "ask_user")
             and not (self.state["L_closed"] and d["function"]["name"] == "submit_l")
             and not (not self.state["L_closed"] and d["function"]["name"] == "submit_draft")
         ]
+        for definition in definitions:
+            function = definition["function"]
+            if function["name"] == "ask_user":
+                fields = function["parameters"]["properties"]["questions"]["items"]["properties"][
+                    "field"
+                ]
+                fields["enum"] = [
+                    field
+                    for field in fields["enum"]
+                    if field not in self.state["confirmed_question_fields"]
+                ]
+        return definitions
 
     async def compact_reply(self, reply, name, arguments):
         body = reply.model_dump(mode="json")

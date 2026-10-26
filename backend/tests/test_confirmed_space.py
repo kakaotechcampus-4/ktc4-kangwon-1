@@ -178,25 +178,72 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("confirmed_space", body)
         self.assertEqual(loop.state["known_fact_ids"], [])
 
-    async def test_later_answer_overrides_confirmed_floor(self):
+    async def test_confirmed_fields_rejected_without_consuming_question(self):
         from app.agentic.runtime import DecisionLoop
 
-        saved = save_confirmed_space(self.scope, {"floor": "1층"})
-
-        async def generate(*args):
-            return self.message(
-                "ask_user",
-                {"questions": [{"field": "floor", "question": "층?", "reason": "조건"}]},
+        saved = save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "85㎡"})
+        loop = await DecisionLoop.create(self.scope, self.site, confirmed_space=saved)
+        for field in ("floor", "exclusive_area"):
+            reply = await loop.tools.execute(
+                "ask_user", {"questions": [{"field": field, "question": "확인?", "reason": "조건"}]}
             )
-
-        loop = await DecisionLoop.create(
-            self.scope, self.site, generate=generate, confirmed_space=saved
+            self.assertEqual(reply.status, "error")
+            self.assertFalse(loop.state["asked"])
+            self.assertIsNone(loop.waiting)
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM agentic_questions").fetchone()[0], 0)
+        reply = await loop.tools.execute(
+            "ask_user",
+            {
+                "questions": [
+                    {"field": "existing_facilities", "question": "설비?", "reason": "조건"}
+                ]
+            },
         )
-        self.assertEqual(self.space_fit("G202")["floor"], "일치")
-        waiting = await loop.run()
-        self.assertEqual(waiting.status, "waiting_for_input")
-        await DecisionLoop.resume(self.scope, self.site, {"floor": "2층"}, generate=generate)
-        self.assertEqual(self.space_fit("G202")["floor"], "불일치")
+        self.assertEqual(reply.status, "ok", reply.error)
+        self.assertEqual(loop.waiting.questions[0].field, "existing_facilities")
+
+    async def test_question_candidates_exclude_only_confirmed_floor_and_area(self):
+        from app.agentic.runtime import DecisionLoop
+
+        saved = save_confirmed_space(
+            self.scope,
+            {
+                "floor": "1층",
+                "exclusive_area": "85㎡",
+                "existing_facilities": {"kitchen": "present"},
+            },
+        )
+        loop = await DecisionLoop.create(self.scope, self.site, confirmed_space=saved)
+        definition = next(
+            d["function"] for d in loop.definitions() if d["function"]["name"] == "ask_user"
+        )
+        fields = definition["parameters"]["properties"]["questions"]["items"]["properties"][
+            "field"
+        ]["enum"]
+        self.assertNotIn("floor", fields)
+        self.assertNotIn("exclusive_area", fields)
+        self.assertIn("existing_facilities", fields)
+        other = await DecisionLoop.create(self.scope, self.site)
+        definition = next(
+            d["function"] for d in other.definitions() if d["function"]["name"] == "ask_user"
+        )
+        fields = definition["parameters"]["properties"]["questions"]["items"]["properties"][
+            "field"
+        ]["enum"]
+        self.assertIn("floor", fields)
+
+    async def test_mock_asks_only_unconfirmed_field(self):
+        from app.agentic.runtime import DecisionLoop
+        from app.services.mock import generators
+
+        saved = save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "85㎡"})
+        loop = await DecisionLoop.create(
+            self.scope, self.site, confirmed_space=saved, **generators(ask=True)
+        )
+        outcome = await loop.run()
+        self.assertEqual(outcome.status, "waiting_for_input")
+        self.assertEqual([q.field for q in outcome.questions], ["existing_facilities"])
 
     def space_fit_fact(self, code):
         current = ensure_space_fits(self.scope)
@@ -223,24 +270,23 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         save_confirmed_space(self.scope, {"exclusive_area": "모르겠습니다."})
         self.assertEqual(self.space_fit("G202")["area"], "일치")
 
-    async def test_unreadable_answer_in_question_flow_keeps_confirmed_floor(self):
+    async def test_unconfirmed_area_can_be_answered_without_changing_floor(self):
         from app.agentic.runtime import DecisionLoop
+        from app.services.mock import generators
 
         saved = save_confirmed_space(self.scope, {"floor": "1층"})
-
-        async def generate(*args):
-            return self.message(
-                "ask_user",
-                {"questions": [{"field": "floor", "question": "층?", "reason": "조건"}]},
-            )
-
         loop = await DecisionLoop.create(
-            self.scope, self.site, generate=generate, confirmed_space=saved
+            self.scope, self.site, confirmed_space=saved, **generators(ask=True)
         )
         waiting = await loop.run()
         self.assertEqual(waiting.status, "waiting_for_input")
-        await DecisionLoop.resume(self.scope, self.site, {"floor": "3층 정도"}, generate=generate)
+        self.assertEqual([q.field for q in waiting.questions], ["exclusive_area"])
+        resumed = await DecisionLoop.resume(
+            self.scope, self.site, {"exclusive_area": "85㎡"}, **generators()
+        )
         self.assertEqual(self.space_fit("G202")["floor"], "일치")
+        self.assertEqual(self.space_fit("G202")["area"], "일치")
+        self.assertTrue(resumed.state["asked"])
 
     async def test_only_unreadable_floor_stays_unknown(self):
         persist_space_requirements(self.scope)
