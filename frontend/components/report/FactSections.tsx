@@ -30,11 +30,11 @@ function Card({
 }) {
   return (
     <section
-      className="w-full rounded-xl border bg-white"
+      className="fact-card w-full rounded-xl border bg-white"
       style={{ borderColor: reportPalette.line }}
     >
       <header
-        className="border-b px-6 py-4"
+        className="fact-card-head border-b px-6 py-4"
         style={{ borderColor: reportPalette.line }}
       >
         <h3 className="text-lg font-bold" style={{ color: reportPalette.ink }}>
@@ -49,7 +49,7 @@ function Card({
           </p>
         )}
       </header>
-      <div className="px-6 py-5">{children}</div>
+      <div className="fact-card-body px-6 py-5">{children}</div>
     </section>
   );
 }
@@ -67,7 +67,7 @@ function Stat({
 }) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-xl px-5 py-4"
+      className="fact-stat flex flex-col gap-1 rounded-xl px-5 py-4"
       style={{ backgroundColor: reportPalette.canvas }}
     >
       <span className="text-sm" style={{ color: colors.text.secondary }}>

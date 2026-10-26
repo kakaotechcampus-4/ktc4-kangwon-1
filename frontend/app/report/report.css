@@ -4191,3 +4191,120 @@
     padding-top: 0;
   }
 }
+
+/* ── 06 경쟁업체: 카드 대신 구분선으로 나눈 읽기형 배치 ────────────────── */
+.report-page #competition .ca-card {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.report-page #competition .ca-card-head {
+  padding: 0 0 14px !important;
+  border-bottom: 2px solid #10233a !important;
+}
+.report-page #competition .ca-card-body {
+  padding: 0 !important;
+}
+.report-page #competition .market-landscape {
+  background: transparent;
+  border-radius: 0;
+  padding: 40px 0 0;
+  border-top: 1px solid #d5dee7;
+}
+.report-page #competition .analysis-chart-pair {
+  column-gap: 48px;
+  row-gap: 40px;
+}
+
+/* 업종별 경쟁 지표: 업종 한 줄 = 이름·점포 수 | 반경 안 배수 | 자치구 대비 배수 */
+.report-page #competition .ca-industry-groups {
+  gap: 32px;
+}
+.report-page #competition .ca-industry-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+.report-page #competition .ca-industry-group .ca-industry-card {
+  display: grid !important;
+  grid-template-columns: 250px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 40px;
+  row-gap: 6px !important;
+  align-items: start;
+  padding: 22px 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid #d5dee7 !important;
+  border-radius: 0 !important;
+}
+.report-page #competition .ca-industry-head {
+  grid-column: 1;
+  grid-row: 1;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.report-page #competition .ca-industry-counts {
+  grid-column: 1;
+  grid-row: 2;
+  white-space: nowrap;
+}
+.report-page #competition .ca-industry-card .divbar {
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
+.report-page #competition .ca-industry-counts + .divbar {
+  grid-column: 2;
+}
+.report-page #competition .divbar + .divbar {
+  grid-column: 3;
+}
+.report-page #competition .ca-industry-card > .ca-empty-note {
+  grid-column: 2 / -1;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.report-page #competition .ca-industry-head > span:last-child {
+  font-size: calc(13px * var(--font-scale)) !important;
+}
+
+@media (max-width: 900px) {
+  .report-page #competition .ca-industry-group .ca-industry-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    row-gap: 12px !important;
+  }
+  .report-page #competition .ca-industry-head,
+  .report-page #competition .ca-industry-counts,
+  .report-page #competition .ca-industry-card .divbar,
+  .report-page #competition .ca-industry-card > .ca-empty-note {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+  .report-page #competition .analysis-chart-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.report-page #competition .ca-industry-groups {
+  padding-top: 16px;
+}
+/* 실데이터 경로(FactCompetitionSection)도 같은 방식으로 카드 테두리를 걷어 낸다. */
+.report-page #competition :is(.fact-card, .fact-stat) {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.report-page #competition .fact-card-head {
+  padding: 0 0 14px !important;
+  border-bottom: 2px solid #10233a !important;
+}
+.report-page #competition .fact-card-body {
+  padding: 16px 0 0 !important;
+}
+.report-page #competition .fact-stat {
+  padding: 16px 0 !important;
+  border-top: 1px solid #d5dee7 !important;
+  border-bottom: 1px solid #d5dee7 !important;
+}
