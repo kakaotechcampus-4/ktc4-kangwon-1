@@ -146,9 +146,9 @@ Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING
 MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성희프라자 고정 응답을 돌려줍니다.
 
 
-## 새 결과 형태(PR7 전환 후)
+## 현재 결과 형태
 
-현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
+공개 결과는 `backend/app/schemas.py`의 DecisionResult, 도구 계약은 `backend/app/agentic/contracts.py`를 따릅니다. 현재 `schema_version=2.0`, `rubric_version=v0.8`, `tool_contract_version=3`입니다. 과거 전환 계획의 계약 버전은 이력 문서에 남깁니다.
 
 전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
 
@@ -1083,7 +1083,7 @@ seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 
 
 ### 도구 function 정의의 내보내기
 
-도구 계약3은 열 개 function이다. 행별 L 근거를 제출하여 종료한 뒤
+도구 계약3은 decision용 9개와 평가자 제출용 `submit_review` 1개를 정의한다. 행별 L 근거를 제출하여 종료한 뒤
 보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
 
 도구 계약3: submit_l은 업종·factors(fact_id 별칭/direction/severe)·neutral/fact_ids·note만 받는다.
@@ -1099,6 +1099,6 @@ G·C4는 채점 전 코드가 관측한다. 외부 실패는 해당 항목만 un
 
 `tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
-get_facts/map_search의 배타 조건·상세 limit·L/평가 정합성은 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. 이번 PR에서는 API·LLM 호출을 하지 않습니다. SQL 내용/권한/시간·fact 소유/숫자 슬롯·점수 재계산·정렬의 실제 검증은 PR4~PR6 범위입니다.
+get_facts/map_search의 배타 조건·상세 limit는 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. SQL 권한·시간은 `sql_tool.py`, fact 소유·숫자 슬롯·L 정합성과 점수 재계산은 `report.py`에서 별도로 검증합니다.
 
 ReportProposal에는 review_resolutions를 두지 않습니다. 제출 입력 SubmitDraftInput에만 두며 서버가 채택한 반영 기록은 최종 DecisionResult.review_resolutions로 제공합니다.

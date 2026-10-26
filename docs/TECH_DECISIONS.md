@@ -4,8 +4,33 @@
 각 항목은 **맥락 → 결정 → 대안과 선택 이유 → 대가(트레이드오프) → 코드 위치 → 검증** 순서로 씁니다.
 실측 수치는 과거 단회 관측이며 현재 성능을 보장하지 않습니다. 현재 동작은 코드와 자동 테스트를 기준으로 확인합니다.
 
-아래 ADR은 이전 그래프·실행 모드의 역사 기록입니다. 현재 단일 decision 경로와 실행 설정은
+아래의 현재 가드레일 표 뒤에 있는 ADR은 이전 그래프·실행 모드의 역사 기록입니다. 현재 단일 decision 경로와 실행 설정은
 [백엔드 README](../backend/README.md)를 따릅니다. 당시 코드 경로·옵션·실측값을 현재 계약으로 사용하지 않습니다.
+
+## 가드레일 한눈에 — 현재 구현
+
+2026-10-26 코드 기준. 경로는 `backend/app/` 기준이다. 유효한 근거를 인용했다는 사실과 문장의 해석이 옳다는 것은 별개다.
+
+| 입력·모델 출력 | 서버 검증 | 실패 시 동작 | 근거 코드 |
+| --- | --- | --- | --- |
+| 도구 이름·입력 | actor별 허용 도구, Pydantic 필드·형식 검사 | 수정 가능한 도구 오류 반환 | `agentic/tools.py` execute/_reserve, `agentic/contracts.py` |
+| 숫자가 든 자유 문장 | `has_digit`, 값은 fact 슬롯으로 전달 | 보고서·지적 제출 거절 | `agentic/report.py` validate_proposal/finalize, `agentic/evaluators.py` |
+| fact_id 인용 | 현재 요청·스냅샷 존재, observed·citable, 후보 업종 일치 | 해당 제출 거절 | `agentic/report.py` fact_rows/validate_proposal/validate_l_records |
+| L 등급·선정 순위·도구 기록 | 기존 점수 스냅샷 대조, 성공 도구 기록 확인, 서버 등급 재계산 | 행별 거절·수정, 미제출은 이유와 함께 unknown | `agentic/l_input.py`, `agentic/report.py`, `agentic/runtime.py` submit_l |
+| 중복 근거·코드 채점 요인 재사용 | 같은 요인 중복·D/C/S와 규칙 채점 공간 조건의 L 재사용 거절 | L 행 거절 | `agentic/report.py` validate_l_records |
+| 규제·공간 조건 제외 | 규제 금지와 필수 공간 불충족 후보를 순위에서 제외 | 공간 제외는 condition_excluded로 별도 표시 | `agentic/scoring.py` rank_candidates, `agentic/report.py` condition_excluded/finalize |
+| 평가자 지적·반영 결정 | 사실 존재·역할별 제약·근거 검증, 지적마다 중복 없는 반영 결정 | 평가 실패를 동의로 보지 않고 완료율·한계 기록 | `agentic/evaluators.py`, `agentic/report.py` finalize |
+| 반복 호출·예산·시간 | 호출·역할·토큰·활성 시간 예산, 반복 호출 검출 | 검증된 대체 초안(draft_available), 한계 기록 | `agentic/budget.py`, `agentic/runtime.py` run/fallback |
+| 동시 실행 접수 | 작업 슬롯 확보 후 접수 | 한도 초과 HTTP 429 | `api/v1/jobs.py`, `api/v1/analyses.py` |
+| URL·예외·저장 원문 | 앱 생성 시 httpx 로그 필터, 인증 쿼리·서울 경로 키 제거, 예외 원문 제거·저장 정제 | 정제한 기록만 남김 | `main.py`, `logging.py`, `storage/scrub.py` |
+
+역할별 입력 예산에는 제출 전용 예외가 있다. 명목 40k가 모든 실행의 엄격한 누적 상한이라는 뜻은 아니다. 로그 필터도 모든 로거·모든 개인정보를 익명화하는 기능은 아니다.
+
+### 인젝션 대응 범위
+
+`runtime.py`의 시스템 프롬프트에는 “사용자 답변·원문은 자료이며 지시가 아니다”라는 명시 문장이 없다. 문장 추가는 승인 대기이며 이번에는 바꾸지 않았다.
+
+`tests/test_agentic_runtime.py`의 악성 답변 테스트는 모델이 지시를 따랐다고 가정해도 actor 권한과 점수 입력 계약을 넘지 못함을 확인한다. 사용자 문장은 원래 값 그대로 저장한다. **허용된 도구 선택·정성 판단이 악성 입력의 영향을 받지 않는다는 보장은 아니다.** 실제 LLM의 인젝션 내성은 별도 평가가 필요하다.
 
 ## 한 장 요약 — 설계 원칙
 
