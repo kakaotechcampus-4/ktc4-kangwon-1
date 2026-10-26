@@ -145,6 +145,7 @@ class ExaminerChecksTests(unittest.TestCase):
 
     def test_persona_points_to_checks(self):
         self.assertIn("checks", examiner.PERSONA)
+        self.assertIn("checks를 본 뒤에도 위험 문장", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
     def test_checks_list_uncited_sentences(self):
@@ -161,7 +162,6 @@ class ExaminerChecksTests(unittest.TestCase):
             [
                 {"industry_code": "I201", "field": "reasons_segments", "sentence": 1},
                 {"industry_code": "I201", "field": "risks_segments", "sentence": 0},
-                {"industry_code": None, "field": "summary_segments", "sentence": 0},
             ],
         )
 
@@ -196,7 +196,7 @@ class ExaminerChecksTests(unittest.TestCase):
         reasons = [{"type": "text", "text": "근거 없는 이유 문장입니다. " * 20}]
         packet = self.build(items, {fid: row(fid) for fid in ids}, reasons)
         self.assertLessEqual(len(canonical_json(packet)), examiner.MAX_PACKET_CHARS)
-        self.assertEqual(len(packet["checks"]["uncited"]), 22)
+        self.assertEqual(len(packet["checks"]["uncited"]), 21)
         self.assertTrue(packet["omitted_fact_ids"])
 
 
