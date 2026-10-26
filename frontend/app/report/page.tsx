@@ -449,9 +449,7 @@ export default function ReportPage() {
           aria-current={active === id ? 'location' : undefined}
           className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base"
           style={{
-            color: active === id ? colors.neutral.white : colors.text.secondary,
-            backgroundColor:
-              active === id ? reportPalette.brand : 'transparent',
+            color: active === id ? reportPalette.brand : colors.text.secondary,
             fontWeight: active === id ? 700 : 400,
           }}
         >
@@ -459,13 +457,6 @@ export default function ReportPage() {
             {String(index + 1).padStart(2, '0')}
           </span>
           <span>{label}</span>
-          {active === id && (
-            <ChevronRight
-              size={18}
-              className="ml-auto shrink-0"
-              aria-hidden="true"
-            />
-          )}
         </a>
       ))}
     </nav>
@@ -563,7 +554,7 @@ export default function ReportPage() {
           style={{ borderColor: reportPalette.navy }}
         >
           <aside className="report-toc sticky top-8 hidden pt-12 lg:block">
-            <div className="mb-5 flex items-center justify-between px-3">
+            <div className="report-toc-head flex items-center justify-between">
               <p className="text-base font-semibold">리포트 목차</p>
               <span className="text-sm text-gray-500">
                 {String(
