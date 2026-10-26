@@ -1,6 +1,7 @@
 'use client';
 
 import { pretendard } from '@/styles/fonts';
+import { Footprints, BarChart3, Users, Activity } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import RevealBarChart from '@/components/charts/RevealBarChart';
@@ -533,7 +534,12 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
 
       <dl className="story-stats">
         <div>
-          <dt>하루 평균 유동인구</dt>
+          <dt>
+            <span className="story-stat-icon" aria-hidden="true">
+              <Footprints size={18} strokeWidth={2} />
+            </span>
+            하루 평균 유동인구
+          </dt>
           <dd>
             {Math.round(data.population.daily_avg).toLocaleString('ko-KR')}
             <small>명/일</small>
@@ -543,7 +549,12 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
           </p>
         </div>
         <div>
-          <dt>서울 상권 규모</dt>
+          <dt>
+            <span className="story-stat-icon" aria-hidden="true">
+              <BarChart3 size={18} strokeWidth={2} />
+            </span>
+            서울 상권 규모
+          </dt>
           <dd>
             <small>상위</small>
             {100 - data.benchmark.scale_percentile}
@@ -553,7 +564,12 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
         </div>
         {topAge && (
           <div>
-            <dt>가장 많은 연령대</dt>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Users size={18} strokeWidth={2} />
+              </span>
+              가장 많은 연령대
+            </dt>
             <dd>
               {formatAgeLabel(topAge[0])}
               <small>
@@ -567,7 +583,12 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
         )}
         {data.trend && data.trend.qoq_change !== null && (
           <div>
-            <dt>전분기 대비</dt>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Activity size={18} strokeWidth={2} />
+              </span>
+              전분기 대비
+            </dt>
             <dd>
               {data.trend.qoq_change > 0 ? '+' : ''}
               {data.trend.qoq_change}

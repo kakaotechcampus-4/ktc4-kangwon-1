@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Footprints, CalendarDays, Activity, Users } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import type {
@@ -211,7 +212,12 @@ export function FactFloatingPopulationSection({
 
         <dl className="story-stats">
           <div>
-            <dt>상권 1곳 하루 평균</dt>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Footprints size={18} strokeWidth={2} />
+              </span>
+              상권 1곳 하루 평균
+            </dt>
             <dd>
               {data.dailyPerTradeArea === null ? (
                 '자료 없음'
@@ -227,7 +233,12 @@ export function FactFloatingPopulationSection({
             )}
           </div>
           <div>
-            <dt>주말 (서울 평균 대비)</dt>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <CalendarDays size={18} strokeWidth={2} />
+              </span>
+              주말 (서울 평균 대비)
+            </dt>
             <dd>
               {data.weekendIndex === null ? (
                 '자료 없음'
@@ -241,7 +252,12 @@ export function FactFloatingPopulationSection({
             <p>1.0배보다 높으면 주말에 더 붐벼요</p>
           </div>
           <div>
-            <dt>전년 같은 분기 대비</dt>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Activity size={18} strokeWidth={2} />
+              </span>
+              전년 같은 분기 대비
+            </dt>
             <dd>
               {data.yoyChange === null ? (
                 '자료 없음'
@@ -255,7 +271,12 @@ export function FactFloatingPopulationSection({
           </div>
           {largestAge && (
             <div>
-              <dt>가장 많은 연령대</dt>
+              <dt>
+                <span className="story-stat-icon" aria-hidden="true">
+                  <Users size={18} strokeWidth={2} />
+                </span>
+                가장 많은 연령대
+              </dt>
               <dd>
                 {largestAge.label}
                 <small>{percent(largestAge.share)}</small>
