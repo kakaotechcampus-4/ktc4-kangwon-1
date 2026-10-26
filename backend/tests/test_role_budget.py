@@ -325,6 +325,10 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
                 "app.agentic.examiner.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
+            patch(
+                "app.agentic.founder.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
         ):
             reviews = await asyncio.gather(
                 *(
