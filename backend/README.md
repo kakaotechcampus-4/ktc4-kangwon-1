@@ -20,7 +20,24 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
 채점 규칙은 [채점표](../docs/decision-prompt-rubric.md)가 기준이고, 코드에서는 `app/agentic/scoring.py`가 계산합니다.
 
-### decision이 쓰는 도구
+### 분기·예외·재개 코드 찾기
+
+행 번호는 2026-10-26 기준이며 함수명을 함께 표시했습니다. 내부 루프의 질문 기본값은 true지만 공개 API 기본값은 false이며 서비스가 명시적으로 전달합니다.
+
+| 상황 | 처리 | 코드 (`backend/` 기준) |
+| --- | --- | --- |
+| 도구 호출이 없거나 여러 개 | 모델 문장을 결과로 쓰지 않고 검증된 코드 점수로 대체 초안 생성 | `app/agentic/runtime.py:697` run, `:578` fallback |
+| 호출·시간·토큰 예산 소진 | 미제출 L은 unknown, 기존 판단 보존 후 대체 초안 | `app/agentic/budget.py` RuntimeBudget, `runtime.py` run/fallback |
+| 일시적 모델 오류 | 연결·시간 초과 및 지정 HTTP 오류만 상태에 기록하고 한 번 재시도 | `runtime.py` run의 model_retried 분기 |
+| 새 정보 없는 호출 | 중복 또는 오류가 연속 세 번이면 대체 초안(일반 모드) | `runtime.py` run의 no_progress 분기 |
+| 질문·재개 | 질문은 한 번, 확정 층·면적 재질문 차단. 같은 요청·자료 버전·예산으로 재개 | `app/agentic/questions.py:28` ask_user, `:67` validate_resume, `:92` resume |
+| 평가자 검토 | 네 평가자를 병렬 실행하고 지적을 한 번 반영. 실패 슬롯도 결과에 남김 | `runtime.py:250` review_and_finalize, `app/agentic/evaluators.py:156` review |
+| 최종 반영 실패 | 유효 초안과 완료된 평가를 보존하고 반영 미완료 한계 표시 | `runtime.py` review_and_finalize |
+| 상태 저장·종료 | 요청 DB에 진행·질문·결과 저장. 계약·저장 실패는 failed로 기록 | `runtime.py:99` _save, `app/services/analysis.py` execute_agentic_analysis/resume_agentic_analysis |
+
+대체 초안(`draft_available`)은 성공한 모델 판단과 다릅니다. 서비스는 이후 평가·최종 단계를 실행하며 결과 한계와 평가 완료율을 함께 봐야 합니다. 역할별 40k 입력 예산에는 제출 전용 예외가 있어 엄격한 누적 상한은 아닙니다([실측](../docs/founder-live-report.md)).
+
+### 도구 목록
 
 | 도구 | 하는 일 |
 | --- | --- |

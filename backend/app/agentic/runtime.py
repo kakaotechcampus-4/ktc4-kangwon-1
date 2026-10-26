@@ -129,6 +129,7 @@ class DecisionLoop:
         budget=None,
         measurement=False,
         recorder=None,
+        # 내부 루프 기본값이며 공개 API는 요청에서 허용한 경우에만 True를 전달합니다.
         allow_questions=True,
         confirmed_space=None,
     ):

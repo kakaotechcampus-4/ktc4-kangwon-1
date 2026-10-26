@@ -23,6 +23,7 @@ dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
   "mypy>=1.11,<2",
+  "coverage>=7,<8",
 ]
 
 [tool.setuptools.packages.find]
@@ -44,7 +45,43 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "ASYNC"]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "C901", "PLR0915"]
+
+[tool.ruff.lint.per-file-ignores]
+# 2026-10-26 실측 기존 위반. 함수 분해는 담당자 합의 후 별도로 진행합니다.
+"app/address.py" = ["C901"]
+"app/agentic/aliases.py" = ["C901"]
+"app/agentic/evaluators.py" = ["C901", "PLR0915"]
+"app/agentic/examiner.py" = ["C901"]
+"app/agentic/facts.py" = ["C901"]
+"app/agentic/founder.py" = ["C901"]
+"app/agentic/inputs.py" = ["C901", "PLR0915"]
+"app/agentic/landlord.py" = ["C901"]
+"app/agentic/recording.py" = ["C901"]
+"app/agentic/report.py" = ["C901", "PLR0915"]
+"app/agentic/runtime.py" = ["C901"]
+"app/agentic/scoring.py" = ["C901", "PLR0915"]
+"app/agentic/snapshot.py" = ["C901"]
+"app/agentic/space_rules.py" = ["C901"]
+"app/agentic/sql_tool.py" = ["C901", "PLR0915"]
+"app/agentic/tools.py" = ["C901"]
+"app/agents/business_lifecycle/preprocess.py" = ["C901", "PLR0915"]
+"app/agents/commercial_area/client.py" = ["C901"]
+"app/agents/map_analysis/client.py" = ["C901"]
+"app/education_zone.py" = ["C901"]
+"app/llm/client.py" = ["C901"]
+"app/local_data/adapter.py" = ["C901"]
+"app/local_data/database.py" = ["C901"]
+"app/local_data/refresh.py" = ["C901"]
+"app/seoul.py" = ["C901"]
+"app/services/analysis.py" = ["PLR0915"]
+"backtest/full.py" = ["C901", "PLR0915"]
+"scripts/audit_c1_density.py" = ["C901"]
+"scripts/build_density_baseline.py" = ["C901"]
+"scripts/build_industry_catalog.py" = ["C901"]
+"scripts/measure_backend_load.py" = ["C901", "PLR0915"]
+"scripts/refresh_local_data.py" = ["C901", "PLR0915"]
+"tests/test_local_adapter.py" = ["PLR0915"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
@@ -53,3 +90,10 @@ known-first-party = ["app"]
 python_version = "3.12"
 files = ["app"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["app"]
+data_file = "cache/.coverage"
+
+[tool.coverage.report]
+precision = 2
