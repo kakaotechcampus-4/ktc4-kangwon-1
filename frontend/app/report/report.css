@@ -3096,8 +3096,8 @@
 /* 머리 — 랜딩 히어로처럼 화면 폭 전체의 연한 하늘색 띠 */
 .report-page .report-intro {
   position: relative;
-  margin-bottom: 40px;
-  padding: 28px 0 56px;
+  margin-bottom: 8px;
+  padding: 28px 0 32px;
   background: #eaf2f7;
   box-shadow: 0 0 0 100vmax #eaf2f7;
   clip-path: inset(0 -100vmax);
