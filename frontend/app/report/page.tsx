@@ -1,19 +1,12 @@
 'use client';
 
-import {
-  createElement,
-  useEffect,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Menu,
   ChevronRight,
   ArrowUp,
   ArrowDownRight,
-  CheckCircle2,
   TriangleAlert,
   MapPin,
 } from 'lucide-react';
@@ -22,7 +15,6 @@ import PropertyMap from '@/components/report/PropertyMap';
 import IndustryReview, {
   candidateChecks,
   candidateScore,
-  industrySymbol,
 } from '@/components/report/IndustryReview';
 import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
 import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
@@ -265,6 +257,32 @@ function MissingData({
   );
 }
 
+/** 문장 속 추천 업종 이름을 파란 강조로 감싼다. */
+function highlightName(text: string, name?: string | null) {
+  if (!name || !text.includes(name)) return text;
+  return text.split(name).flatMap((part, i) =>
+    i === 0
+      ? [part]
+      : [
+          <em key={i} className="dcs-highlight">
+            {name}
+          </em>,
+          part,
+        ]
+  );
+}
+
+/** 근거 문장이 어느 분석에서 왔는지 한 줄로 알려 준다(근거 보기 링크 대상과 같은 기준). */
+function reasonDescription(reason: string, target: string) {
+  if (target === '#lifecycle') {
+    return /폐업|개업/.test(reason)
+      ? '최근 업종 운영 흐름을 검토했습니다.'
+      : '업종 점포 수의 장기 변화를 살펴봤습니다.';
+  }
+  if (target === '#customers') return '주변 유동인구 구성을 함께 살펴봤습니다.';
+  return '주변 경쟁 점포 수를 함께 고려했습니다.';
+}
+
 export default function ReportPage() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -409,7 +427,6 @@ export default function ReportPage() {
   const topName = analysisResult
     ? top?.industry_name
     : mockReportData.recommended[0]?.name;
-  const TopSymbol = industrySymbol(topName ?? '');
   const summaryText = analysisResult
     ? renderSegments(analysisResult.summary_segments, factIndex)
     : mockReportData.aiAnalysisSummary.recommendationReason;
@@ -653,106 +670,150 @@ export default function ReportPage() {
               </div>
             </Chapter>
             <Chapter id="conclusion" title="이 상가의 핵심 결론">
-              <div className="conclusion-lead">
-                <p className="conclusion-lead-label">검토 방향</p>
-                <p>
-                  {analysisResult
-                    ? summaryText
-                    : `${topName}를 우선 검토하되, 4층 접근성과 급·배수 조건을 확인하세요.`}
-                </p>
-              </div>
-              <div className="decision-cover">
-                <div className="recommended-focus">
-                  <p>가장 먼저 검토할 업종</p>
-                  <div className="industry-identity">
-                    <div className="cover-industry-icon">
-                      {createElement(TopSymbol, {
-                        size: 44,
-                        strokeWidth: 1.6,
-                        'aria-hidden': true,
-                      })}
-                    </div>
-                    <h3>{topName ?? '추천 결과 없음'}</h3>
-                  </div>
-                  <div className="recommendation-footer">
-                    <a href="#compare">
-                      업종 순위 보러가기 <ArrowDownRight size={20} />
-                    </a>
-                    {scoreLabel && (
-                      <p className="cover-score">
-                        <strong>{scoreLabel}점</strong>
-                        <span>업종 적합도{top ? ` · ${top.badge}` : ''}</span>
-                      </p>
+              {/* 카드 없이 위에서 아래로 읽는 구성: 검토 방향 → 추천 업종·점수 → 근거 → 확인 사항 */}
+              <div className="dcs">
+                <div className="dcs-lead">
+                  <p className="dcs-eyebrow">검토 방향</p>
+                  <p className="dcs-lead-text">
+                    {highlightName(
+                      analysisResult
+                        ? summaryText
+                        : `${topName}를 우선 검토하되, 4층 접근성과 급·배수 조건을 확인하세요.`,
+                      topName
                     )}
-                  </div>
+                  </p>
                 </div>
-                <div className="key-evidence">
-                  <h3>이 업종을 추천하는 이유</h3>
-                  <ul>
-                    {primaryReasons.map((reason, i) => (
-                      <li key={i}>
-                        <CheckCircle2 size={23} aria-hidden="true" />
-                        <span>{reason}</span>
-                        <a
-                          className="evidence-detail-link"
-                          href={
-                            /폐업|개업|증가|감소|추이/.test(reason)
-                              ? '#lifecycle'
-                              : /인구|연령|통행/.test(reason)
-                                ? '#customers'
-                                : '#competition'
-                          }
-                          aria-label={`${reason} 분석 근거 보기`}
-                        >
-                          근거 보기 <ChevronRight size={14} />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                  {primaryReasons.length === 0 && (
-                    <p>제공된 추천 근거가 없습니다.</p>
+
+                <div className="dcs-pick">
+                  <div className="dcs-pick-name">
+                    <p className="dcs-label">가장 먼저 검토할 업종</p>
+                    <h3>{topName ?? '추천 결과 없음'}</h3>
+                    <p className="dcs-sub">공간 조건과 주변 상권 분석 결과</p>
+                  </div>
+                  {scoreLabel && (
+                    <div className="dcs-pick-score">
+                      <p className="dcs-score">
+                        <strong>{scoreLabel}</strong>
+                        <span>/ 100점</span>
+                      </p>
+                      <p className="dcs-label">
+                        업종 적합도{top ? ` · ${top.badge}` : ''}
+                      </p>
+                      <div className="dcs-score-bar" aria-hidden="true">
+                        <span
+                          style={{
+                            width: `${Math.max(0, Math.min(100, Number(scoreLabel)))}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="dcs-sub">
+                        점수만으로 입점을 결정하지 마세요.
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
-              <div className="conclusion-checks">
-                <div className="entry-heading">
-                  <TriangleAlert size={22} aria-hidden="true" />
-                  <h3>입점 전 확인할 사항</h3>
-                </div>
-                {analysisResult ? (
-                  topChecks.length || resultChecks.length ? (
-                    <ul>
-                      {[...topChecks, ...resultChecks].map((text, i) => (
-                        <li key={i}>{text}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>
-                      분석 결과에 별도 조건이 기재되지 않았습니다. 현장에서 입점
-                      조건을 확인하세요.
-                    </p>
-                  )
-                ) : (
-                  <div className="conclusion-check-grid">
-                    <div>
-                      <h4>접근성과 노출</h4>
-                      <p>4층까지의 엘리베이터 동선과 간판 노출을 확인하세요.</p>
-                    </div>
-                    <div>
-                      <h4>설비와 공사 조건</h4>
-                      <p>급·배수, 전력 용량과 공사 허용 범위를 확인하세요.</p>
-                    </div>
-                    <div>
-                      <h4>입점 규제</h4>
-                      <p>
-                        학교 주변 보호구역과 대상 업종의 제한 여부를 확인하세요.
-                      </p>
-                      <a href="#space">
-                        규제 표시 보기 <ChevronRight size={14} />
-                      </a>
-                    </div>
+
+                <div className="dcs-block">
+                  <div className="dcs-block-head">
+                    <h3>추천 근거</h3>
+                    {primaryReasons.length > 0 && (
+                      <p>각 항목을 열어 판단 근거를 확인하세요.</p>
+                    )}
                   </div>
-                )}
+                  {primaryReasons.length === 0 ? (
+                    <p className="dcs-empty">제공된 추천 근거가 없습니다.</p>
+                  ) : (
+                    <ol className="dcs-reasons">
+                      {primaryReasons.map((reason, i) => {
+                        const target = /폐업|개업|증가|감소|추이/.test(reason)
+                          ? '#lifecycle'
+                          : /인구|연령|통행/.test(reason)
+                            ? '#customers'
+                            : '#competition';
+                        return (
+                          <li key={i}>
+                            <span className="dcs-num">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <div>
+                              <p className="dcs-reason-title">{reason}</p>
+                              <p className="dcs-reason-desc">
+                                {reasonDescription(reason, target)}
+                              </p>
+                            </div>
+                            <a
+                              className="dcs-link"
+                              href={target}
+                              aria-label={`${reason} 분석 근거 보기`}
+                            >
+                              근거 보기 <ChevronRight size={16} />
+                            </a>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </div>
+
+                <div className="dcs-block dcs-checks">
+                  <div className="dcs-block-head">
+                    <h3>
+                      <TriangleAlert size={22} aria-hidden="true" />
+                      입점 전 직접 확인
+                    </h3>
+                  </div>
+                  {analysisResult ? (
+                    topChecks.length || resultChecks.length ? (
+                      <div className="dcs-check-grid">
+                        {[...topChecks, ...resultChecks].map((text, i) => (
+                          <div key={i}>
+                            <p className="dcs-check-eyebrow">
+                              {String(i + 1).padStart(2, '0')}
+                            </p>
+                            <p className="dcs-check-desc">{text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="dcs-empty">
+                        분석 결과에 별도 조건이 기재되지 않았습니다. 현장에서
+                        입점 조건을 확인하세요.
+                      </p>
+                    )
+                  ) : (
+                    <div className="dcs-check-grid">
+                      <div>
+                        <p className="dcs-check-eyebrow">01 · 접근성</p>
+                        <h4>접근성과 노출</h4>
+                        <p className="dcs-check-desc">
+                          4층까지의 엘리베이터 동선과 간판 노출을 확인하세요.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="dcs-check-eyebrow">02 · 설비</p>
+                        <h4>설비와 공사 조건</h4>
+                        <p className="dcs-check-desc">
+                          급·배수, 전력 용량과 공사 허용 범위를 확인하세요.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="dcs-check-eyebrow">03 · 규제</p>
+                        <h4>입점 규제</h4>
+                        <p className="dcs-check-desc">
+                          학교 주변 보호구역과 대상 업종의 제한 여부를
+                          확인하세요.
+                        </p>
+                        <a className="dcs-link" href="#space">
+                          규제 표시 보기 <ChevronRight size={16} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <a className="dcs-compare" href="#compare">
+                  업종 순위 비교하기 <ArrowDownRight size={20} />
+                </a>
               </div>
             </Chapter>
             <Chapter

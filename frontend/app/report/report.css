@@ -3948,3 +3948,246 @@
     display: none;
   }
 }
+
+/* 02 핵심 결론 — 카드 없이 구분선으로 나눈 읽기형 배치. 글자 크기는 기존 디자인 값을 따른다. */
+.report-page .dcs {
+  width: 100%;
+  color: #10233a;
+}
+.report-page .dcs-eyebrow {
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 600;
+  color: #2049c4;
+}
+.report-page .dcs-lead {
+  padding-bottom: 28px;
+  border-bottom: 1px solid #d5dee7;
+}
+.report-page .dcs-lead-text {
+  margin-top: 6px;
+  font-size: calc(21px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1.5;
+}
+.report-page .dcs-highlight {
+  font-style: normal;
+  color: #2453d6;
+}
+.report-page .dcs-label {
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 600;
+  color: #5a6878;
+}
+.report-page .dcs-sub {
+  margin-top: 10px;
+  font-size: calc(13px * var(--font-scale));
+  color: #6b7a8a;
+}
+.report-page .dcs-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  padding: 32px 0;
+  border-bottom: 1px solid #d5dee7;
+}
+.report-page .dcs-pick-name h3 {
+  margin-top: 8px;
+  font-size: calc(32px * var(--font-scale));
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.3;
+}
+.report-page .dcs-pick-score {
+  padding-left: 40px;
+  border-left: 1px solid #d5dee7;
+}
+.report-page .dcs-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.report-page .dcs-score strong {
+  font-size: calc(32px * var(--font-scale));
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .dcs-score span {
+  font-size: calc(13px * var(--font-scale));
+  color: #6b7a8a;
+}
+.report-page .dcs-pick-score .dcs-label {
+  margin-top: 4px;
+}
+.report-page .dcs-score-bar {
+  margin-top: 14px;
+  height: 6px;
+  background: #e2e8ee;
+}
+.report-page .dcs-score-bar span {
+  display: block;
+  height: 100%;
+  background: #2453d6;
+}
+.report-page .dcs-block {
+  padding-top: 36px;
+}
+.report-page .dcs-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #d5dee7;
+}
+.report-page .dcs-block-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: calc(21px * var(--font-scale));
+  font-weight: 750;
+}
+.report-page .dcs-block-head p {
+  font-size: calc(13px * var(--font-scale));
+  color: #6b7a8a;
+}
+.report-page .dcs-reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-page .dcs-reasons li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid #d5dee7;
+}
+.report-page .dcs-num {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: #8a97a5;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .dcs-reason-title {
+  font-size: calc(18px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1.5;
+}
+.report-page .dcs-reason-desc {
+  margin-top: 4px;
+  font-size: calc(13px * var(--font-scale));
+  color: #6b7a8a;
+}
+.report-page .dcs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: #2049c4;
+  white-space: nowrap;
+}
+.report-page .dcs-checks {
+  padding-top: 48px;
+}
+.report-page .dcs-checks .dcs-block-head {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+.report-page .dcs-checks .dcs-block-head h3 {
+  font-size: calc(20px * var(--font-scale));
+  font-weight: 700;
+}
+.report-page .dcs-checks .dcs-block-head svg {
+  color: #a65b00;
+}
+.report-page .dcs-check-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 16px 0 32px;
+  border-bottom: 1px solid #d5dee7;
+}
+.report-page .dcs-check-grid > div {
+  padding: 0 28px;
+  border-left: 1px solid #d5dee7;
+}
+.report-page .dcs-check-grid > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.report-page .dcs-check-eyebrow {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #2453d6;
+}
+.report-page .dcs-check-grid h4 {
+  margin-top: 6px;
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 600;
+}
+.report-page .dcs-check-desc {
+  margin-top: 8px;
+  font-size: calc(15px * var(--font-scale));
+  line-height: 1.7;
+  color: #646b7a;
+}
+.report-page .dcs-check-grid .dcs-link {
+  margin-top: 10px;
+}
+.report-page .dcs-empty {
+  padding: 20px 0;
+  font-size: calc(15px * var(--font-scale));
+  color: #646b7a;
+}
+.report-page .dcs-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 32px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #10233a;
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 700;
+  color: #10233a;
+}
+.report-page .dcs-compare:hover {
+  color: #2453d6;
+  border-color: #2453d6;
+}
+
+@media (max-width: 760px) {
+  .report-page .dcs-pick {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .report-page .dcs-pick-score {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid #d5dee7;
+  }
+  .report-page .dcs-block-head {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .report-page .dcs-reasons li {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .report-page .dcs-reasons .dcs-link {
+    grid-column: 2;
+  }
+  .report-page .dcs-check-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .report-page .dcs-check-grid > div {
+    padding: 20px 0 0;
+    border-left: 0;
+    border-top: 1px solid #d5dee7;
+  }
+  .report-page .dcs-check-grid > div:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
