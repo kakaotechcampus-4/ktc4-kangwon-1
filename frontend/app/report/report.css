@@ -3512,3 +3512,8 @@
     padding: 32px 0;
   }
 }
+
+/* 05·06·07 장: 제목 아래 여백을 줄인다(각 섹션 루트의 위쪽 패딩 제거). */
+.report-page .original-report-content > :is(.fp-root, .ca-root, .oc-root) {
+  padding-top: 0 !important;
+}
