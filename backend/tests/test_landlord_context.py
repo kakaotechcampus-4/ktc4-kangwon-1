@@ -152,11 +152,13 @@ class ContextTests(unittest.IsolatedAsyncioTestCase):
             patch("app.agentic.evaluators.review_packet", return_value=packet) as common,
             patch("app.agentic.landlord.review_packet", return_value=packet) as landlord,
             patch("app.agentic.examiner.review_packet", return_value=packet) as examiner_packet,
+            patch("app.agentic.founder.review_packet", return_value=packet) as founder_packet,
             patch.object(loop, "_model", new=AsyncMock(return_value=(message, {}))),
         ):
             for actor in PERSONAS:
                 result = await review(loop, actor, loop.evaluator_executors()[actor], draft)
                 self.assertEqual(result.status, "completed")
-        self.assertEqual(common.call_count, 2)
+        self.assertEqual(common.call_count, 1)
         self.assertEqual(landlord.call_count, 1)
         self.assertEqual(examiner_packet.call_count, 1)
+        self.assertEqual(founder_packet.call_count, 1)

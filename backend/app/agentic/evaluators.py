@@ -17,7 +17,7 @@ from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 from app.text import has_digit
 
-from . import examiner, landlord
+from . import examiner, founder, landlord
 from .aliases import encode
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
@@ -25,23 +25,7 @@ from .sql_tool import error
 
 PERSONAS = {
     "examiner": examiner.PERSONA,
-    "founder": (
-        "임차인·창업자 편입니다. 우선 공간·운영 적합성과 설비·공사·초기 준비 조건을 보고, "
-        "다음으로 영업 지속성의 운영 위험과 경쟁 속 실행 전제를 확인하세요. "
-        "입점 전 현장 확인→임대인과 공사 허용·책임 확인→필요 시 견적·관할기관 확인 순서로 "
-        "직접 할 행동을 남기되 같은 원인은 묶고 필요한 조건만 제시하세요. "
-        "손님 수요·임대 지속성·원천 검증은 다른 평가자의 역할입니다. "
-        "패킷에는 초안 문장 본문이 없으므로 보이지 않는 단정·누락을 주장하지 말고 "
-        "target=condition, kind=action_condition만 쓰세요. "
-        "기존 fact를 먼저 쓰고 공간 요건이 더 필요하면 Top5 중 관련 업종의 industry_code와 "
-        "source=industry_profile, metrics=[space_requirements], limit=32 이하로 조회하세요. "
-        "fact_ids와 조건 필터는 섞지 말고 동일 오류를 반복하지 마세요. "
-        "요건표의 면적 추정을 확정 요건으로 보거나 미확인·해당 없음을 불리하게 쓰지 마세요. "
-        "소매업의 주방·조리 배기 부재만으로 불리하게 판단하거나 비용·손익을 추정하지 마세요. "
-        "관측되고 인용 가능한 근거만 쓰세요. 조회 실패·근거 부족에 빈 issues이면 conditional, "
-        "읽고도 중요한 모순·확인 과제가 없으면 agree입니다. "
-        "oppose는 면적 추정이나 결측이 아닌 관측 근거로 핵심 운영 불가가 명백할 때만 쓰세요."
-    ),
+    "founder": founder.PERSONA,
     "customer": (
         "손님 편입니다. 방문 동기·동선·확인된 고객층과 업종의 적합성을 검토하세요. "
         "결측 자료나 운영 가설을 확인된 수요로 단정하지 마세요."
@@ -187,6 +171,8 @@ async def review(loop, actor, executor, draft):
         rejected = []
         for issue in input.issues:
             try:
+                if actor == "founder":
+                    founder.validate_issue(issue, packet)
                 if not issue.fact_ids:
                     raise ReportInvalid("fact 근거를 붙이거나 이 지적을 제외하세요.")
                 if has_digit(issue.comment + issue.suggested_check):
@@ -217,21 +203,22 @@ async def review(loop, actor, executor, draft):
     settings = replace(LLMSettings.from_env("evaluator"), reasoning_effort="none", max_tokens=4000)
     code = "SOURCE_UNAVAILABLE"
     try:
+        packet = await run_in_thread(
+            examiner.review_packet
+            if actor == "examiner"
+            else landlord.review_packet
+            if actor == "landlord_advocate"
+            else founder.review_packet
+            if actor == "founder"
+            else review_packet,
+            loop.scope,
+            draft,
+        )
         messages = [
             {"role": "system", "content": PERSONAS[actor] + "\n" + COMMON},
             {
                 "role": "user",
-                "content": canonical_json(
-                    await run_in_thread(
-                        examiner.review_packet
-                        if actor == "examiner"
-                        else landlord.review_packet
-                        if actor == "landlord_advocate"
-                        else review_packet,
-                        loop.scope,
-                        draft,
-                    )
-                ),
+                "content": canonical_json(packet),
             },
         ]
         while submitted is None:
