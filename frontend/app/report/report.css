@@ -3517,3 +3517,85 @@
 .report-page .original-report-content > :is(.fp-root, .ca-root, .oc-root) {
   padding-top: 0 !important;
 }
+
+/* 반경별 인구·분기별 추세: 제목 → 핵심 요약 → 그래프 → 추정 안내 순으로 세로로 읽는다. */
+.report-page .story-row.story-row-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.report-page .story-row-head h4 {
+  margin: 6px 0 0;
+  font-size: calc(22px * var(--font-scale));
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.report-page .story-summary {
+  margin: 14px 0 28px;
+}
+.report-page .story-summary-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  font-size: calc(17px * var(--font-scale));
+  color: #3b4a5a;
+}
+.report-page .story-summary-main strong {
+  font-size: calc(30px * var(--font-scale));
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--rp-navy);
+  font-variant-numeric: tabular-nums;
+}
+.report-page .story-change {
+  margin-left: 10px;
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 700;
+  color: #4b5866;
+}
+.report-page .story-direction {
+  align-self: center;
+  margin-left: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eaf0fc;
+  color: #2453d6;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+}
+.report-page .story-summary-sub {
+  margin-top: 6px;
+  font-size: calc(14px * var(--font-scale));
+  line-height: 1.6;
+  color: #6b7a8a;
+}
+.report-page .story-notes {
+  margin: 20px 0 0;
+  padding: 14px 18px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #eef2f8;
+  border-radius: 12px;
+}
+.report-page .story-notes li {
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.6;
+  color: #4b5866;
+}
+.report-page .story-notes strong {
+  color: var(--rp-navy);
+  font-weight: 700;
+}
+.report-page .story-notes-mark {
+  color: #2453d6;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .report-page .story-change {
+    margin-left: 0;
+  }
+}

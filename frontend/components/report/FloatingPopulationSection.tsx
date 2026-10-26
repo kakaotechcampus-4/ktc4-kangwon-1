@@ -4,6 +4,7 @@ import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import RevealBarChart from '@/components/charts/RevealBarChart';
+import PopulationBarChart from '@/components/charts/PopulationBarChart';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { colors } from '@/styles/tokens';
 import {
@@ -591,52 +592,125 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
         </div>
       </section>
 
-      {data.radius_profile && (
-        <section className="story-row">
-          <div className="story-row-text">
-            <p className="story-question">어디까지 퍼져 있나요?</p>
-            <h4>반경별 인구</h4>
-            <p>
-              반경을 넓힐수록 하루 평균 유동인구가 어떻게 늘어나는지 봅니다.
-              50~100m 구간은 표본이 적어 추정 성격이 강해요.
-            </p>
-            <p className="story-method">{data.radius_profile.method}</p>
-          </div>
-          <div className="story-row-figure">
-            <RevealBarChart
-              data={data.radius_profile.points.map((point) => ({
-                label: `${point.radius_m}m`,
-                value: Math.round(point.daily_avg),
-              }))}
-              label="반경별 하루 평균 유동인구"
-            />
-          </div>
-        </section>
-      )}
-
-      {data.trend && (
-        <section className="story-row">
-          <div className="story-row-text">
-            <p className="story-question">늘고 있나요?</p>
-            <h4>분기별 추세</h4>
-            <p>
-              분기마다 하루 평균 유동인구가 어떻게 바뀌어 왔는지 봅니다.
-              {data.trend.qoq_change !== null &&
-                ` 직전 분기보다 ${data.trend.qoq_change > 0 ? '+' : ''}${data.trend.qoq_change}%, ${data.trend.direction}이에요.`}
-            </p>
-          </div>
-          <div className="story-row-figure">
-            <RevealBarChart
-              data={data.trend.quarters.map((quarter) => ({
-                label: quarter.period,
-                value: Math.round(quarter.daily_avg),
-              }))}
-              label="분기별 하루 평균 유동인구"
-            />
-          </div>
-        </section>
-      )}
+      {data.radius_profile && <RadiusStory data={data} />}
+      {data.trend && <TrendStory data={data} />}
     </div>
+  );
+}
+
+/** 50m·100m처럼 작은 반경은 걸친 상권이 적어 추정 성격이 강하다(각주 * 로 연결). */
+const SMALL_RADIUS_LIMIT_M = 100;
+
+/** 반경별 인구 — 값은 그 반경 안 전체(누적)다. backend metrics._radius_profile 참고. */
+function RadiusStory({ data }: { data: FloatingPopulationData }) {
+  const points = data.radius_profile?.points ?? [];
+  if (points.length === 0) return null;
+  const nearest = points[0];
+  const widest = points[points.length - 1];
+  const small = points
+    .filter((point) => point.radius_m <= SMALL_RADIUS_LIMIT_M)
+    .map((point) => `${point.radius_m}m`);
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">어디까지 퍼져 있나요?</p>
+        <h4>반경별 인구</h4>
+      </div>
+      <div className="story-summary">
+        <p className="story-summary-main">
+          반경 {widest.radius_m}m 안 하루 평균{' '}
+          <strong>
+            {Math.round(widest.daily_avg).toLocaleString('ko-KR')}
+          </strong>
+          명
+        </p>
+        <p className="story-summary-sub">
+          가장 가까운 반경 {nearest.radius_m}m 안에는{' '}
+          {Math.round(nearest.daily_avg).toLocaleString('ko-KR')}명이에요.
+        </p>
+      </div>
+      <PopulationBarChart
+        data={points.map((point) => ({
+          label: `${point.radius_m}m 이내`,
+          value: Math.round(point.daily_avg),
+          footnote: point.radius_m <= SMALL_RADIUS_LIMIT_M,
+        }))}
+        label="반경 안 하루 평균 유동인구(누적)"
+        unit="하루 평균 유동인구(명) · 반경 안 누적"
+      />
+      <ul className="story-notes">
+        <li>
+          각 막대는 그 반경 <strong>안 전체를 합친 값</strong>이에요. 거리
+          구간(예: 100~200m)별 인구가 아니에요.
+        </li>
+        {small.length > 0 && (
+          <li>
+            <span className="story-notes-mark">*</span> 반경 {small.join('·')}{' '}
+            안은 표본이 적어 추정 성격이 강해요.
+          </li>
+        )}
+        {data.radius_profile?.method && (
+          <li>산정 기준: {data.radius_profile.method}</li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+function formatChange(change: number) {
+  if (change === 0) return '0%';
+  return `${change > 0 ? '▲' : '▼'} ${Math.abs(change)}%`;
+}
+
+/** 분기별 추세 — 최신 분기만 강조하고, 직전 분기 대비 변화율을 최신 값 옆에 둔다. */
+function TrendStory({ data }: { data: FloatingPopulationData }) {
+  const trend = data.trend;
+  if (!trend || trend.quarters.length === 0) return null;
+  const latest = trend.quarters[trend.quarters.length - 1];
+  const change = trend.qoq_change;
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">늘고 있나요?</p>
+        <h4>분기별 추세</h4>
+      </div>
+      <div className="story-summary">
+        <p className="story-summary-main">
+          {latest.period} 하루 평균{' '}
+          <strong>
+            {Math.round(latest.daily_avg).toLocaleString('ko-KR')}
+          </strong>
+          명
+          {change !== null && (
+            <span className="story-change">
+              직전 분기 대비 {formatChange(change)}
+            </span>
+          )}
+          {trend.direction !== '판단 불가' && (
+            <span className="story-direction">{trend.direction}</span>
+          )}
+        </p>
+        {trend.direction === '보합' && (
+          <p className="story-summary-sub">
+            변화율이 ±5% 이내면 ‘보합’으로 봐요. 전년 같은 분기 자료가 있으면
+            그것과, 없으면 직전 분기와 비교해요.
+          </p>
+        )}
+      </div>
+      <PopulationBarChart
+        data={trend.quarters.map((quarter) => ({
+          label: quarter.period,
+          value: Math.round(quarter.daily_avg),
+        }))}
+        label="분기별 하루 평균 유동인구"
+        unit="하루 평균 유동인구(명)"
+        highlightIndex={trend.quarters.length - 1}
+        highlightTag="최신 분기"
+        annotation={change !== null ? formatChange(change) : undefined}
+      />
+    </section>
   );
 }
 
