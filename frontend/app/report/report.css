@@ -3605,3 +3605,250 @@
     margin-left: 0;
   }
 }
+
+/* 연령대 구성: 요약(두 지표 분리) → 표(구성비 | 서울 평균 대비) → 정의 */
+.report-page .story-scope {
+  margin-left: 10px;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #6b7a8a;
+  vertical-align: middle;
+}
+.report-page .age-summary {
+  margin: 14px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.report-page .age-summary p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: calc(17px * var(--font-scale));
+  color: #3b4a5a;
+}
+.report-page .age-summary strong {
+  color: var(--rp-navy);
+  font-weight: 800;
+}
+.report-page .age-summary b {
+  font-size: calc(24px * var(--font-scale));
+  font-weight: 800;
+  color: var(--rp-navy);
+  font-variant-numeric: tabular-nums;
+}
+.report-page .age-summary-tag {
+  align-self: center;
+  min-width: 96px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #e8edf5;
+  color: #10233a;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+  text-align: center;
+}
+.report-page .age-summary-tag-index {
+  background: #eaf0fc;
+  color: #2453d6;
+}
+
+.report-page .age-grid {
+  --age-cols: 72px minmax(0, 1fr) minmax(0, 1.2fr);
+  width: 100%;
+}
+.report-page .age-grid-head,
+.report-page .age-grid-axis,
+.report-page .age-grid-row {
+  display: grid;
+  grid-template-columns: var(--age-cols);
+  column-gap: 32px;
+  align-items: center;
+}
+.report-page .age-grid-head {
+  padding-bottom: 6px;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+  color: #3b4a5a;
+}
+.report-page .age-grid-head small {
+  display: block;
+  margin-top: 2px;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 500;
+  color: #7a8794;
+}
+.report-page .age-grid-axis {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #10233a;
+  font-size: calc(11px * var(--font-scale));
+  color: #8a97a5;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .age-grid-axis i {
+  font-style: normal;
+}
+.report-page .age-axis-share {
+  display: flex;
+  justify-content: space-between;
+  margin-right: 162px;
+}
+.report-page .age-axis-index {
+  position: relative;
+  height: 1.4em;
+  margin-right: 182px;
+}
+.report-page .age-axis-index i {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.report-page .age-axis-index i:first-child {
+  transform: none;
+}
+.report-page .age-axis-index i:last-child {
+  transform: translateX(-100%);
+}
+.report-page .age-grid-row {
+  padding: 14px 0;
+  border-bottom: 1px solid #e2e8ee;
+}
+.report-page .age-cell-label {
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 700;
+  color: var(--rp-navy);
+}
+.report-page .age-cell-caption {
+  display: none;
+}
+.report-page .age-cell-share,
+.report-page .age-cell-index {
+  position: relative;
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
+}
+.report-page .age-cell-share {
+  grid-template-columns: minmax(0, 1fr) 150px;
+}
+.report-page .age-cell-index {
+  grid-template-columns: minmax(0, 1fr) 170px;
+}
+.report-page .age-cell-share strong,
+.report-page .age-cell-index strong {
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 700;
+  color: var(--rp-navy);
+  font-variant-numeric: tabular-nums;
+}
+.report-page .age-share-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e8edf5;
+  overflow: hidden;
+}
+.report-page .age-share-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #8ea2cf;
+}
+.report-page .age-share-track span.is-top {
+  background: #10233a;
+}
+.report-page .age-index-scale {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: #f0f3f8;
+}
+.report-page .age-index-scale i {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  margin-left: -1px;
+  background: #10233a;
+}
+.report-page .age-index-scale span {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+.report-page .age-index-scale .is-above {
+  background: #2453d6;
+  border-radius: 0 999px 999px 0;
+}
+.report-page .age-index-scale .is-below {
+  background: #b7c2d2;
+  border-radius: 999px 0 0 999px;
+}
+.report-page .age-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-page .age-flag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eaf0fc;
+  color: #2453d6;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 700;
+  white-space: nowrap;
+}
+.report-page .age-flag-share {
+  background: #e8edf5;
+  color: #10233a;
+}
+.report-page .age-flag-inline {
+  display: none;
+}
+
+/* 좁은 화면: 행마다 연령대를 제목으로 두고, 두 지표를 이름표와 함께 두 줄로 */
+@media (max-width: 720px) {
+  .report-page .age-grid-head,
+  .report-page .age-grid-axis {
+    display: none;
+  }
+  .report-page .age-grid-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+    padding: 14px 0;
+  }
+  .report-page .age-cell-caption {
+    display: block;
+    font-style: normal;
+    font-size: calc(12px * var(--font-scale));
+    color: #6b7a8a;
+  }
+  .report-page .age-cell-share,
+  .report-page .age-cell-index {
+    grid-template-columns: 84px minmax(0, 1fr) 64px;
+  }
+  .report-page .age-value {
+    justify-content: flex-end;
+  }
+  .report-page .age-value .age-flag {
+    display: none;
+  }
+  .report-page .age-cell-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .report-page .age-flag-inline {
+    display: inline-block;
+  }
+  .report-page .age-summary p {
+    font-size: calc(15px * var(--font-scale));
+  }
+  .report-page .age-summary b {
+    font-size: calc(20px * var(--font-scale));
+  }
+  .report-page .age-summary-tag {
+    min-width: 0;
+  }
+}

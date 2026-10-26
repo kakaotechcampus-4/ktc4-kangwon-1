@@ -578,23 +578,199 @@ function PopulationStory({ data }: { data: FloatingPopulationData }) {
         )}
       </dl>
 
-      <section className="story-row">
-        <div className="story-row-text">
-          <p className="story-question">누가 오가나요?</p>
-          <h4>연령대 구성</h4>
-          <p>
-            이 반경을 오가는 사람의 연령대 비율과, 서울 평균보다 얼마나 많은지를
-            함께 봅니다. 1.0배보다 높으면 서울 평균보다 많은 연령대예요.
-          </p>
-        </div>
-        <div className="story-row-figure">
-          <AgeComparison data={data} />
-        </div>
-      </section>
+      <AgeStory data={data} />
 
       {data.radius_profile && <RadiusStory data={data} />}
       {data.trend && <TrendStory data={data} />}
     </div>
+  );
+}
+
+/** 눈금 끝값을 0.25배 단위로 맞춘 1.0배 중심 범위(예: 0.25 ~ 1.75배). */
+function indexRange(values: number[]) {
+  const spread = Math.max(0.25, ...values.map((v) => Math.abs(v - 1)));
+  const half = Math.ceil(spread / 0.25) * 0.25;
+  return { min: Math.max(0, 1 - half), max: 1 + half };
+}
+
+function formatIndex(value: number) {
+  return `${value.toFixed(2)}배`;
+}
+
+/**
+ * 연령대 구성 — 서로 기준이 다른 두 지표를 나란히 보여준다.
+ * - 구성비: 이 반경 유동인구 중 그 연령대 비율(합 100%)
+ * - 서울 평균 대비: 이 반경 구성비 ÷ 서울 전체 상권 평균 구성비
+ *   (backend floating_population/baseline.py index(), AGE_SHARE_AVG)
+ * 행 강조는 쓰지 않고, 각 지표의 1위에만 이유를 적은 태그를 붙인다.
+ */
+function AgeStory({ data }: { data: FloatingPopulationData }) {
+  const keys = Object.keys(data.population.age_share);
+  const total = keys.reduce(
+    (sum, key) => sum + data.population.age_share[key],
+    0
+  );
+  const rows = keys.map((key) => ({
+    key,
+    label: formatAgeLabel(key),
+    share: total > 0 ? (data.population.age_share[key] / total) * 100 : 0,
+    index: data.benchmark.age_index[key] ?? null,
+  }));
+  if (rows.length === 0) return null;
+
+  const topShare = rows.reduce((best, row) =>
+    row.share > best.share ? row : best
+  );
+  const indexed = rows.filter(
+    (row): row is typeof row & { index: number } => row.index !== null
+  );
+  const topIndex = indexed.reduce<(typeof indexed)[number] | null>(
+    (best, row) => (!best || row.index > best.index ? row : best),
+    null
+  );
+  const range = indexRange(indexed.map((row) => row.index));
+  const span = range.max - range.min;
+  const toPercent = (value: number) =>
+    ((Math.min(range.max, Math.max(range.min, value)) - range.min) / span) *
+    100;
+  const shareCeiling = Math.max(10, Math.ceil(topShare.share / 10) * 10);
+  const periods = [...new Set(data.sources.map((source) => source.period))];
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">누가 오가나요?</p>
+        <h4>
+          연령대 구성
+          <span className="story-scope">
+            반경 {data.radius_m}m
+            {periods.length > 0 && ` · ${periods.join(' · ')}`}
+          </span>
+        </h4>
+      </div>
+
+      <div className="age-summary">
+        <p>
+          <span className="age-summary-tag">구성비</span>
+          <strong>{topShare.label}</strong> 비중이 가장 높아요
+          <b>{topShare.share.toFixed(1)}%</b>
+        </p>
+        {topIndex && (
+          <p>
+            <span className="age-summary-tag age-summary-tag-index">
+              서울 평균 대비
+            </span>
+            <strong>{topIndex.label}</strong> 비중이 가장 두드러져요
+            <b>{formatIndex(topIndex.index)}</b>
+          </p>
+        )}
+      </div>
+
+      <div
+        className="age-grid"
+        role="table"
+        aria-label="연령대별 구성비와 서울 평균 대비 배수"
+      >
+        <div className="age-grid-head" role="row">
+          <span role="columnheader">연령대</span>
+          <span role="columnheader">
+            구성비
+            <small>유동인구 중 비율</small>
+          </span>
+          <span role="columnheader">
+            서울 평균 대비
+            <small>구성비 배수 · 1.0배 = 서울 평균</small>
+          </span>
+        </div>
+        <div className="age-grid-axis" aria-hidden="true">
+          <span />
+          <span className="age-axis-share">
+            <i>0%</i>
+            <i>{shareCeiling}%</i>
+          </span>
+          <span className="age-axis-index">
+            <i style={{ left: '0%' }}>{range.min.toFixed(2)}</i>
+            <i style={{ left: `${toPercent(1)}%` }}>1.0배</i>
+            <i style={{ left: '100%' }}>{range.max.toFixed(2)}</i>
+          </span>
+        </div>
+        {rows.map((row) => {
+          const isTopShare = row === topShare;
+          const isTopIndex = row === topIndex;
+          const center = toPercent(1);
+          const end = row.index === null ? center : toPercent(row.index);
+          return (
+            <div className="age-grid-row" role="row" key={row.key}>
+              <span className="age-cell-label" role="rowheader">
+                {row.label}
+                {/* 좁은 화면에서는 강조 이유를 연령대 옆에 모아 둔다(값 칸 폭을 고정). */}
+                {isTopShare && (
+                  <b className="age-flag age-flag-share age-flag-inline">
+                    구성비 1위
+                  </b>
+                )}
+                {isTopIndex && (
+                  <b className="age-flag age-flag-inline">평균 대비 최고</b>
+                )}
+              </span>
+              <div className="age-cell-share" role="cell">
+                <em className="age-cell-caption">구성비</em>
+                <div className="age-share-track" aria-hidden="true">
+                  <span
+                    className={isTopShare ? 'is-top' : ''}
+                    style={{ width: `${(row.share / shareCeiling) * 100}%` }}
+                  />
+                </div>
+                <span className="age-value">
+                  <strong>{row.share.toFixed(1)}%</strong>
+                  {isTopShare && (
+                    <b className="age-flag age-flag-share">구성비 1위</b>
+                  )}
+                </span>
+              </div>
+              <div className="age-cell-index" role="cell">
+                <em className="age-cell-caption">서울 평균 대비</em>
+                <div className="age-index-scale" aria-hidden="true">
+                  <i style={{ left: `${center}%` }} />
+                  {row.index !== null && (
+                    <span
+                      className={row.index >= 1 ? 'is-above' : 'is-below'}
+                      style={{
+                        left: `${Math.min(center, end)}%`,
+                        width: `${Math.abs(end - center)}%`,
+                      }}
+                    />
+                  )}
+                </div>
+                <span className="age-value">
+                  <strong>
+                    {row.index === null ? '자료 없음' : formatIndex(row.index)}
+                  </strong>
+                  {isTopIndex && <b className="age-flag">평균 대비 최고</b>}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <ul className="story-notes">
+        <li>
+          <strong>구성비</strong>: 이 반경 유동인구 중 그 연령대가 차지하는
+          비율이에요(합계 100%).
+        </li>
+        <li>
+          <strong>서울 평균 대비</strong>: 이 반경의 연령대 구성비 ÷ 서울 전체
+          상권의 평균 구성비예요. 사람 수가 아니라 <strong>비중</strong>을
+          비교한 값이에요.
+          {topIndex &&
+            ` 예를 들어 ${topIndex.label} ${formatIndex(topIndex.index)}는 “${topIndex.label}가 그만큼 많이 지나간다”가 아니라 “${topIndex.label} 비중이 서울 평균의 ${formatIndex(topIndex.index)}”라는 뜻이에요.`}
+        </li>
+        <li>
+          길을 지나는 유동인구(통행량) 기준이라 실제 매장 방문객 수와는 달라요.
+        </li>
+      </ul>
+    </section>
   );
 }
 
