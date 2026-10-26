@@ -2,7 +2,7 @@
 
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, MapPin } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 
 /**
@@ -107,8 +107,7 @@ export default function PropertyMap({ address }: { address: string }) {
         </>
       )}
       <figcaption className="property-map-caption">
-        <MapPin size={18} aria-hidden="true" color={colors.brand.primary} />
-        <span className="min-w-0 flex-1 truncate">{address}</span>
+        {/* 주소는 바로 위 제목에 있으니 지도에는 외부 링크만 둔다. */}
         <a href={kakaoLink} target="_blank" rel="noreferrer">
           카카오맵에서 보기 <ExternalLink size={14} aria-hidden="true" />
         </a>

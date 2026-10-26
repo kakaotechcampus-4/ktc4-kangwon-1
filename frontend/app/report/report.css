@@ -3055,6 +3055,12 @@
 .report-page .property-map {
   background: #eef2f7;
 }
+.report-page .property-map .property-map-caption {
+  left: auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(16, 35, 58, 0.12);
+}
 .report-page .property-map-caption {
   display: flex;
   align-items: center;
