@@ -148,6 +148,12 @@ class ExaminerChecksTests(unittest.TestCase):
         self.assertIn("checks를 본 뒤에도 위험 문장", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
+    def test_persona_names_hidden_digits_and_word_periods(self):
+        hidden = ("연도·분기", "업종 코드", "문항 이름", "fact_id 별칭")
+        for word in (*hidden, "최근 한 해", "가장 이른 해"):
+            self.assertIn(word, examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
     def test_checks_list_uncited_sentences(self):
         ids = [fact_id(0)]
         items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]
