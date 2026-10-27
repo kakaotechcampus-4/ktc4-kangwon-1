@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/lib/api/baseUrl';
+import { apiFetch } from '@/lib/api/http';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import { mockProperty } from '@/lib/mockData/property';
 import {
@@ -176,8 +176,8 @@ export async function fetchBuildingInfo(
   let registry: BuildingRegistryResponse | null = null;
   let note = LOOKUP_ERROR_NOTE;
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/api/v1/building-registry?address=${encodeURIComponent(address)}`,
+    const response = await apiFetch(
+      `/api/v1/building-registry?address=${encodeURIComponent(address)}`,
       { signal }
     );
     if (response.ok) {
