@@ -40,7 +40,7 @@ export default function Hero() {
         height={900}
         priority
         unoptimized
-        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[-10%] lg:left-[18%] h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[2%] lg:left-[10%] lg:bottom-[150px] lg:h-[calc(100%-210px)] h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
       />
 
       {/* 왼쪽 글 영역 뒤를 바탕색으로 살짝 덮어 그림과 글이 맞닿아 보이지 않게 한다. */}
@@ -52,7 +52,7 @@ export default function Hero() {
             'linear-gradient(90deg, rgba(234,242,247,0.92) 0%, rgba(234,242,247,0.75) 55%, rgba(234,242,247,0) 100%)',
         }}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:right-[-10%] lg:left-[18%]">
+      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:top-[38%] lg:right-[2%] lg:left-[10%]">
         {/*
           CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고.
           보이지 않는 CHUM.AI로 자리 폭을 먼저 잡고 그 왼쪽 끝에 글자를 붙여서,
@@ -145,10 +145,10 @@ export default function Hero() {
       {/* 결과 미리보기 카드 — 리포트에서 실제로 보여주는 항목(적합도·추천 업종·유동인구)의 예시 */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 hidden lg:block"
+        className="pointer-events-none absolute right-10 bottom-[88px] hidden items-end gap-3 lg:flex"
       >
         <div
-          className="hero-card top-[15%] right-[5%] w-[248px]"
+          className="hero-card hero-card-sm w-[184px]"
           style={{ animationDelay: '3.6s' }}
         >
           <p className="hero-card-label">
@@ -161,30 +161,11 @@ export default function Hero() {
           <div className="hero-card-bar">
             <span style={{ width: `${exampleTop[0].score}%` }} />
           </div>
-          <p className="hero-card-note">
-            {exampleTop[0].name} · 가장 먼저 검토
-          </p>
+          <p className="hero-card-note">{exampleTop[0].name}</p>
         </div>
         <div
-          className="hero-card right-[5%] bottom-[10%] w-[260px]"
-          style={{ animationDelay: '3.8s' }}
-        >
-          <p className="hero-card-label">
-            추천 업종 TOP 3 <span className="hero-card-tag">예시</span>
-          </p>
-          <ol className="hero-card-list">
-            {exampleTop.map((item) => (
-              <li key={item.name}>
-                <span>{item.rank}</span>
-                {item.name}
-                <b>{item.score}</b>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div
-          className="hero-card top-[52%] right-[2%] w-[220px]"
-          style={{ animationDelay: '4s' }}
+          className="hero-card hero-card-sm w-[184px]"
+          style={{ animationDelay: '3.75s' }}
         >
           <p className="hero-card-label">
             하루 평균 유동인구 <span className="hero-card-tag">예시</span>
@@ -198,6 +179,23 @@ export default function Hero() {
           <p className="hero-card-note">
             반경 {examplePopulation.radius_m}m · {examplePopulation.type.label}
           </p>
+        </div>
+        <div
+          className="hero-card hero-card-sm w-[196px]"
+          style={{ animationDelay: '3.9s' }}
+        >
+          <p className="hero-card-label">
+            추천 업종 TOP 3 <span className="hero-card-tag">예시</span>
+          </p>
+          <ol className="hero-card-list">
+            {exampleTop.map((item) => (
+              <li key={item.name}>
+                <span>{item.rank}</span>
+                {item.name}
+                <b>{item.score}</b>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
     </section>
