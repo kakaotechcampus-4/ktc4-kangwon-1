@@ -1,6 +1,7 @@
 """모델 경계에서만 짧은 요청별 별칭을 사용하고 저장 식별자는 보존합니다."""
 
 import json
+import re
 import sqlite3
 from hashlib import sha256
 
@@ -8,6 +9,29 @@ from app.db.connection import connect
 
 SINGLES = {"fact_id", "distance_fact_id"}
 LISTS = {"fact_ids", "reason_fact_ids", "selection_fact_ids"}
+QUARTER_RANGE = re.compile(r"\d{4}[1-4](~\d{4}[1-4])?")
+
+
+def period_label(period):
+    if not QUARTER_RANGE.fullmatch(period):
+        return period
+    start, _, end = period.partition("~")
+    label = f"{start[:4]}년 {start[4]}분기"
+    if not end:
+        return label
+    if end[:4] == start[:4]:
+        return f"{label}~{end[4]}분기"
+    return f"{label}~{end[:4]}년 {end[4]}분기"
+
+
+def _label_periods(value, key=None):
+    if key == "period" and isinstance(value, str):
+        return period_label(value)
+    if isinstance(value, dict):
+        return {name: _label_periods(item, name) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_label_periods(item) for item in value]
+    return value
 
 
 def _walk(value, translate, key=None):
@@ -75,7 +99,7 @@ def encode(scope, value):
 
         for fid in sorted(references):
             resolved[fid] = alias(fid)
-    return _walk(value, resolved.__getitem__)
+    return _label_periods(_walk(value, resolved.__getitem__))
 
 
 def encode_messages(scope, messages):

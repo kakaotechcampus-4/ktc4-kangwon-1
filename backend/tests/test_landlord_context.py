@@ -77,7 +77,7 @@ class ContextTests(unittest.IsolatedAsyncioTestCase):
         facts = {f["fact_id"]: f for f in packet["facts"]}
         self.assertEqual(facts[close]["value"], 0.12)
         self.assertEqual(facts[demand]["value"], 1.3)
-        self.assertEqual(facts[close]["period"], "20233~20262")
+        self.assertEqual(facts[close]["period"], "2023년 3분기~2026년 2분기")
         spatial = packet["spatial_scopes"][facts[close]["spatial_scope_ref"]]
         self.assertEqual(spatial["radius_m"], 500)
         self.assertEqual(packet["limitations_segments"][0]["text"], "서울 밖 점포 미반영")
