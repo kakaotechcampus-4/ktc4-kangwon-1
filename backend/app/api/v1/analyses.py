@@ -11,12 +11,11 @@ from fastapi.responses import JSONResponse
 from pydantic import Field
 
 from app.db.connection import connect
-from app.db.repository import create_request, owner_of
+from app.db.repository import create_request
 from app.schemas import DecisionResult, FactView, Schema, Text
 from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
 from app.services.mock import dependencies, generators
 
-from .deps import optional_user, require_origin, verified_user
 from .errors import run_or_http
 from .jobs import (
     WAIT_QUERY,
@@ -34,33 +33,11 @@ from .responses import AcceptedAnalysis, AnalysisEvents
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
-
-
-async def require_owner(
-    request_id: str,
-    request: Request,
-    user: Annotated[dict[str, Any] | None, Depends(optional_user)],
-) -> None:
-    """남의 요청은 404로 가립니다. 403이면 그 ID가 있다는 사실이 새 나갑니다."""
-    owner = await asyncio.to_thread(
-        owner_of, request_id, db_path=request.app.state.execution_settings.db_path
-    )
-    if owner is None:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-    # 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. 그 자료만 열어 둡니다.
-    if owner == "legacy":
-        return
-    if user is None or user["user_id"] != owner:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-
-
-# 진행 이벤트는 함수로 등록돼 있어 데코레이터 대신 dependencies 인자로 가드를 겁니다.
 router.add_api_route(
     "/analyses/{request_id}/events",
     list_analysis_events,
     methods=["GET"],
     response_model=AnalysisEvents,
-    dependencies=[Depends(require_owner)],
 )
 
 
@@ -120,14 +97,12 @@ def public_result(request_id, outcome):
     "/analyses",
     response_model=DecisionResult | Waiting,
     responses={202: {"model": AcceptedAnalysis}},
-    dependencies=[Depends(require_origin)],
 )
 async def create_analysis(
     body: AnalysisRequest,
     request: Request,
     response: Response,
     runner: Annotated[Any, Depends(analysis_runner)],
-    user: Annotated[dict[str, Any], Depends(verified_user)],
     mock: bool = False,
     wait: bool = WAIT_QUERY,
 ):
@@ -159,7 +134,6 @@ async def create_analysis(
             request_id,
             body.address,
             radius_m=body.radius_m,
-            user_id=user["user_id"],
             db_path=request.app.state.execution_settings.db_path,
         )
     except BaseException:
@@ -212,7 +186,7 @@ def detail(request_id, path):
         return output
 
 
-@router.get("/analyses/{request_id}", dependencies=[Depends(require_owner)])
+@router.get("/analyses/{request_id}")
 async def get_analysis(request_id: str, request: Request):
     result = await asyncio.to_thread(
         detail, request_id, request.app.state.execution_settings.db_path
@@ -283,11 +257,7 @@ def request_facts(request_id, path):
     return RequestFacts(request_id=request_id, snapshot_id=snapshot_id, facts=facts)
 
 
-@router.get(
-    "/analyses/{request_id}/facts",
-    response_model=RequestFacts,
-    dependencies=[Depends(require_owner)],
-)
+@router.get("/analyses/{request_id}/facts", response_model=RequestFacts)
 async def get_analysis_facts(request_id: str, request: Request):
     result = await asyncio.to_thread(
         request_facts, request_id, request.app.state.execution_settings.db_path
@@ -301,14 +271,12 @@ async def get_analysis_facts(request_id: str, request: Request):
     "/analyses/{request_id}/answers",
     response_model=DecisionResult | Waiting,
     responses={202: {"model": AcceptedAnalysis}},
-    dependencies=[Depends(require_origin), Depends(require_owner)],
 )
 async def answers(
     request_id: str,
     body: Answers,
     request: Request,
     runner: Annotated[Any, Depends(resume_runner)],
-    user: Annotated[dict[str, Any], Depends(verified_user)],
     mock: bool = False,
     wait: bool = WAIT_QUERY,
 ):

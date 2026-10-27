@@ -14,17 +14,17 @@ logger = logging.getLogger(__name__)
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 # ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
 _INITIALIZE_LOCK = Lock()
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 5
 SQLITE_BUSY_TIMEOUT_MS = 30000
 
 # 이 코드가 올려 줄 수 있는 옛 스키마 버전입니다.
 # schema.sql 이 전부 `IF NOT EXISTS` 라, 테이블·인덱스를 "추가만" 하는 변경이면
 # 스키마를 다시 실행하는 것만으로 올라갑니다. 기존 테이블의 칼럼이나 제약을
 # 바꾸는 변경을 하려면 여기 더하지 말고 따로 이전 절차를 만드세요.
-_UPGRADABLE_FROM: frozenset[int] = frozenset({5})
+_UPGRADABLE_FROM: frozenset[int] = frozenset()
 
 # 스키마가 실제로 적용됐는지 확인할 때 보는 표입니다. 하나라도 없으면 중단합니다.
-_REQUIRED_TABLES = ("analysis_requests", "analysis_events", "snapshots", "facts", "users")
+_REQUIRED_TABLES = ("analysis_requests", "analysis_events", "snapshots", "facts")
 
 
 def resolve_path(db_path: str | Path | None = None) -> Path:

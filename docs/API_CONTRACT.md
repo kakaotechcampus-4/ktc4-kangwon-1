@@ -15,16 +15,6 @@
 | POST /api/v1/analyses/{id}/answers | question_session_id와 answers 객체. 저장된 질문 field와 정확히 같은 항목, 값은 비어 있지 않은 문자열·최대 500자 |
 | GET /api/v1/building-registry?address= | 상가 정보 확인 화면용 건축물대장 조회. 저장하지 않음. 아래 "건축물대장 조회" 참고 |
 
-**인증이 필요한 엔드포인트** (아래 "인증" 절):
-
-| 엔드포인트 | 요구 |
-| --- | --- |
-| POST /api/v1/analyses | 로그인 + 이메일 확인 |
-| POST /api/v1/analyses/{id}/answers | 로그인 + 이메일 확인 + 소유자 |
-| GET /api/v1/analyses/{id}, /events, /facts | 소유자 |
-| GET /api/v1/building-registry | 로그인 |
-| GET /health, /api/v1/health | 없음(공개) |
-
 질문 대기는 request_id, status=waiting_for_input, question_session_id, questions로 표현한다.
 
 floor·exclusive_area_m2는 상가 정보 확인 화면에서 확정한 층·전용면적이다. 보내면 분석 시작 때
@@ -59,65 +49,6 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 키 없이 확인할 때 MOCK_MODE=true 또는 ?mock=true를 쓴다. 실데이터·유료 호출은 발생하지 않는다.
 측정·녹화는 서버 실행 인자로만 켜며 공개 HTTP 입력으로 제어하지 않는다.
 
-
-## 인증 — 회원가입·로그인
-
-세션은 **백엔드가 발급하는 쿠키**다. 토큰은 불투명 난수이며 서버에는 sha256 해시만 둔다.
-프론트는 모든 호출에 `credentials: 'include'` 를 붙인다.
-
-```
-Set-Cookie: chaeum_session=<난수>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1209600
-```
-
-`SameSite=Lax` 라 **프론트와 백엔드가 같은 사이트여야 한다.** 다른 사이트면 Safari 가
-서드파티 쿠키로 보고 막아 로그인이 유지되지 않는다. 운영은 `app.`/`api.` 서브도메인으로 모은다.
-
-| 엔드포인트 | 입력·응답 |
-| --- | --- |
-| POST /api/v1/auth/signup | email·password(10자 이상)·display_name. 201 `{user_id, verification_sent}`. 세션 쿠키를 함께 내려준다 |
-| POST /api/v1/auth/login | email·password. 200 `{status}`. 실패 401, 시도 과다 429 |
-| POST /api/v1/auth/logout | 세션 폐기. 200 |
-| GET /api/v1/auth/me | `{user_id, email, display_name, profile_image_url, email_verified, needs_verification, created_at}`. 비로그인 401 |
-| DELETE /api/v1/auth/me | 탈퇴. 200 |
-| POST /api/v1/auth/verify-email | `{token}`. 만료·재사용 400 |
-| POST /api/v1/auth/verification/resend | 로그인 필요. `{verification_sent}` |
-| POST /api/v1/auth/password/forgot | `{email}`. **계정 유무와 무관하게 항상 200** |
-| POST /api/v1/auth/password/reset | `{token, new_password}`. 성공 시 그 사용자의 **모든 세션을 끊는다** |
-| GET /api/v1/auth/kakao/login?next= | 카카오 동의 화면으로 302 |
-| GET /api/v1/auth/kakao/callback | 세션 쿠키를 심고 `FRONTEND_BASE_URL + next` 로 302 |
-| GET /api/v1/me/analyses?limit&offset | 내 분석 기록. `{items, total, limit, offset}` |
-
-**메일 확인과 분석 실행.** 이메일로 가입한 계정은 확인 전까지 분석을 시작할 수 없다(403).
-로그인 자체는 되므로 화면은 "인증 메일 다시 보내기"를 띄운다.
-카카오로 들어온 계정은 비밀번호가 없어 확인을 요구하지 않는다.
-
-**카카오 콜백은 실패해도 JSON 을 돌려주지 않는다.** 브라우저 최상위 이동이라 전부 302다.
-
-| 상황 | 이동 |
-| --- | --- |
-| 사용자가 동의 취소 | `/login?error=cancelled` |
-| state 만료·재사용 | `/login?error=expired` |
-| 토큰 교환·프로필 거절 | `/login?error=failed` |
-| 카카오 장애·설정 누락 | `/login?error=unavailable` |
-
-`next` 는 `/` 로 시작하는 내부 경로만 받는다. 그 외에는 `/` 로 바꾼다(오픈 리다이렉트 차단).
-메일 토큰은 쿼리스트링이 아니라 **본문**으로 받는다. access 로그에 토큰이 남지 않게 하기 위함이다.
-
-| 인증 오류 | 의미 |
-| --- | --- |
-| 401 | 로그인 필요, 또는 세션 만료 |
-| 403 | 이메일 미확인, 또는 허용되지 않은 Origin |
-| 404 | 남의 요청 조회(존재 여부를 숨긴다. 403 이 아니다) |
-| 409 | 이미 가입된 이메일 |
-| 422 | 이메일 형식·비밀번호 길이 |
-| 429 | 로그인 시도 과다(최근 15분 실패 5회) |
-
-**쓰기 요청은 `Origin` 헤더를 본다.** 쿠키 인증이라 CORS 만으로는 모자란다
-(CORSMiddleware 는 브라우저에 알려줄 뿐 요청을 막지 않는다). 헤더가 없으면 거절이 기본이고,
-카카오 콜백만 예외다(최상위 이동이라 Origin 이 없고, state 1회용 소비가 대신 막는다).
-
-**배포 순서.** 보호가 걸리는 백엔드를 프론트보다 먼저 배포한다. 반대로 하면 화면이 로그인을
-보내지 못해 분석이 전부 401 이 된다.
 
 ## 건축물대장 조회 — `GET /api/v1/building-registry`
 

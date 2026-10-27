@@ -19,7 +19,6 @@ from app.building_registry import (
 )
 from app.config import AddressSettings
 from app.services.settings import ExecutionSettings
-from tests.auth_fixture import login
 
 KAKAO = {
     "meta": {"total_count": 1, "pageable_count": 1, "is_end": True},
@@ -315,13 +314,6 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.code, "CONFIG_ERROR")
 
 
-def _logged_in_client(path):
-    """대장 조회는 외부 할당량 보호 때문에 로그인을 요구합니다."""
-    app = main.create_app(settings=ExecutionSettings(db_path=path), load_env=False)
-    login(app, path)
-    return TestClient(app)
-
-
 class BuildingRegistryApiTests(unittest.TestCase):
     def get(self, error=None, **params):
         target = "app.api.v1.building.lookup_building"
@@ -329,7 +321,12 @@ class BuildingRegistryApiTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as folder,
             patch.dict(os.environ, {"MOCK_MODE": ""}),
             patch(target, new=AsyncMock(side_effect=error)),
-            _logged_in_client(Path(folder) / "test.sqlite3") as client,
+            TestClient(
+                main.create_app(
+                    settings=ExecutionSettings(db_path=Path(folder) / "test.sqlite3"),
+                    load_env=False,
+                )
+            ) as client,
         ):
             return client.get(
                 "/api/v1/building-registry", params={"address": "서울 어딘가", **params}

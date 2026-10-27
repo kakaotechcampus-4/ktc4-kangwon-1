@@ -15,17 +15,6 @@ from unittest.mock import patch
 from app.db import repository as repo
 from app.db.connection import SCHEMA_VERSION, connect, initialize
 
-# 인증 때문에 v6에서 늘어난 표입니다. 되돌릴 때 외래키 순서가 있어 역순으로 지웁니다.
-AUTH_TABLES = (
-    "analysis_owners",
-    "login_attempts",
-    "email_tokens",
-    "oauth_states",
-    "user_sessions",
-    "user_identities",
-    "users",
-)
-
 
 def _user_version(path: Path) -> int:
     with closing(sqlite3.connect(path)) as db:
@@ -108,42 +97,6 @@ class SchemaVersionTests(unittest.TestCase):
                 initialize(path)
 
         self.assertEqual(_user_version(path), 0)
-
-    def test_auth_tables_are_added_to_a_version_five_database(self):
-        """인증 표가 없던 v5 파일이 자료를 잃지 않고 올라가는지 봅니다.
-
-        운영 DB가 이 경로를 그대로 탑니다. 표를 지우고 버전을 되돌려
-        배포 직전의 파일 모양을 만든 뒤 다시 기동시킵니다.
-        """
-        path = self.directory / "v5.sqlite3"
-        initialize(path)
-        repo.create_request("before-auth", "주소", db_path=path)
-        with closing(sqlite3.connect(path)) as db:
-            for table in AUTH_TABLES:
-                db.execute(f"DROP TABLE IF EXISTS {table}")
-            db.execute("PRAGMA user_version = 5")
-            db.commit()
-
-        initialize(path)
-
-        self.assertEqual(_user_version(path), SCHEMA_VERSION)
-        with closing(sqlite3.connect(path)) as db:
-            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-            present = {
-                row[0]
-                for row in db.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                ).fetchall()
-            }
-        self.assertTrue(set(AUTH_TABLES) <= present)
-        with connect(path) as db:
-            self.assertEqual(
-                db.execute(
-                    "SELECT input_address FROM analysis_requests WHERE request_id=?",
-                    ("before-auth",),
-                ).fetchone()[0],
-                "주소",
-            )
 
     def test_concurrent_initialize_is_idempotent(self):
         path = self.directory / "concurrent.sqlite3"

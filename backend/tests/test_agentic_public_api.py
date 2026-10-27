@@ -18,7 +18,6 @@ from app.db.connection import initialize
 from app.main import create_app
 from app.schemas import DecisionResult
 from app.services.settings import ExecutionSettings
-from tests.auth_fixture import login
 
 
 class PublicApiTests(unittest.TestCase):
@@ -51,7 +50,6 @@ class PublicApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "accepted.sqlite3"
             app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
-            login(app, path)
             app.dependency_overrides[analysis_runner] = lambda: blocked
             with TestClient(app) as client:
                 app.state.job_registry.max_concurrency = 1
@@ -74,9 +72,7 @@ class PublicApiTests(unittest.TestCase):
     def test_public_mock_question_resume_final_events(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = ExecutionSettings(db_path=Path(directory) / "new.sqlite3")
-            app = create_app(settings=settings, load_env=False)
-            login(app, settings.db_path)
-            with TestClient(app) as client:
+            with TestClient(create_app(settings=settings, load_env=False)) as client:
                 response = client.post(
                     "/api/v1/analyses?mock=true", json={"address": "시험", "allow_questions": True}
                 )
@@ -124,9 +120,7 @@ class PublicApiTests(unittest.TestCase):
     def test_input_and_answer_boundaries(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = ExecutionSettings(db_path=Path(directory) / "input.sqlite3")
-            app = create_app(settings=settings, load_env=False)
-            login(app, settings.db_path)
-            with TestClient(app) as client:
+            with TestClient(create_app(settings=settings, load_env=False)) as client:
                 self.assertEqual(client.get("/api/v1/health").json(), {"status": "ok"})
                 for body, expected in (
                     ({"address": " "}, 400),
@@ -171,7 +165,6 @@ class PublicApiTests(unittest.TestCase):
                 async def fail(*args, error=error, **kwargs):
                     raise error
 
-                login(app, Path(directory) / "errors.sqlite3")
                 app.dependency_overrides[analysis_runner] = lambda: fail
                 with self.subTest(error=error), TestClient(app) as client:
                     response = client.post("/api/v1/analyses?mock=true", json={"address": "시험"})
@@ -183,9 +176,8 @@ class PublicApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "facts.sqlite3"
             app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
-            user = login(app, path)
             with TestClient(app) as client:
-                repository.create_request("before", "시험", user_id=user["user_id"], db_path=path)
+                repository.create_request("before", "시험", db_path=path)
                 empty = client.get("/api/v1/analyses/before/facts")
                 self.assertEqual(empty.status_code, 200, empty.text)
                 self.assertEqual(empty.json()["facts"], [])
@@ -216,9 +208,8 @@ class PublicApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.sqlite3"
             app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
-            user = login(app, path)
             with TestClient(app) as client:
-                repository.create_request("events", "시험", user_id=user["user_id"], db_path=path)
+                repository.create_request("events", "시험", db_path=path)
                 url = "/api/v1/analyses/events/events"
                 pending = client.get(url).json()
                 self.assertEqual(
@@ -242,10 +233,9 @@ class PublicApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "interrupted.sqlite3"
             initialize(path)
-            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
-            user = login(app, path)
-            repository.create_request("interrupted", "시험", user_id=user["user_id"], db_path=path)
+            repository.create_request("interrupted", "시험", db_path=path)
             repository.mark_running("interrupted", db_path=path)
+            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
             with TestClient(app) as client:
                 response = client.get("/api/v1/analyses/interrupted")
                 self.assertEqual(response.status_code, 200)

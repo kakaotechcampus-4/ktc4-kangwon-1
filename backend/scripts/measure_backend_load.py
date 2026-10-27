@@ -8,7 +8,6 @@ import ctypes
 import inspect
 import json
 import os
-import resource
 import socket
 import sqlite3
 import statistics
@@ -24,14 +23,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.api.v1.deps import (  # noqa: E402
-    current_user,
-    optional_user,
-    require_origin,
-    verified_user,
-)
 from app.db import repository  # noqa: E402
-from app.db.repository import users as user_repo  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.services.mock import dependencies as mock_dependencies  # noqa: E402
 from app.services.settings import ExecutionSettings  # noqa: E402
@@ -57,16 +49,8 @@ def rss_bytes() -> int:
             raise ctypes.WinError()
         return counters.rss
     # Linux 측정은 현재 RSS를 사용하며 최고 RSS와 혼용하지 않습니다.
-    statm = Path("/proc/self/statm")
-    if statm.exists():
-        pages = int(statm.read_text().split()[1])
-        return pages * os.sysconf("SC_PAGE_SIZE")
-    # macOS 등 /proc 이 없는 곳에서도 측정을 돌릴 수 있게 둡니다. 여기서 얻는 값은
-    # 현재 RSS가 아니라 최고 RSS라 Linux 수치와 직접 비교하면 안 됩니다. 운영 기준
-    # 측정은 CI(Linux)에서 나온 값을 씁니다. 이 분기는 개발 기기에서 부하 시험을
-    # 돌려 회귀를 잡기 위한 것입니다.
-    usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return usage if sys.platform == "darwin" else usage * 1024
+    pages = int(Path("/proc/self/statm").read_text().split()[1])
+    return pages * os.sysconf("SC_PAGE_SIZE")
 
 
 def distribution(values: list[float]) -> dict[str, float]:
@@ -162,22 +146,10 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
     ):
         app = create_app(settings=settings, load_env=False)
         async with app.router.lifespan_context(app):
-            # 분석 API는 로그인한 사용자만 부를 수 있습니다. 측정하려는 것은
-            # 인증이 아니라 처리량이므로, 실제 계정을 하나 만들고 의존성만 끕니다.
-            owner = await asyncio.to_thread(_measurement_user, db_path)
-            app.dependency_overrides[optional_user] = lambda: owner
-            app.dependency_overrides[current_user] = lambda: owner
-            app.dependency_overrides[verified_user] = lambda: owner
-            app.dependency_overrides[require_origin] = lambda: None
-
             if scenario == "events":
                 for state in ("running", "completed"):
                     await asyncio.to_thread(
-                        repository.create_request,
-                        state,
-                        "fixture",
-                        user_id=owner["user_id"],
-                        db_path=db_path,
+                        repository.create_request, state, "fixture", db_path=db_path
                     )
                     await asyncio.to_thread(repository.mark_running, state, db_path=db_path)
                     await asyncio.to_thread(
@@ -272,17 +244,6 @@ def main():
             asyncio.run(measure(args.scenario, args.concurrency, args.db_path)), ensure_ascii=False
         )
     )
-
-
-def _measurement_user(db_path):
-    """측정용 계정 하나. analysis_owners가 users를 참조해 실제 행이 있어야 합니다."""
-    user_id = user_repo.create_email_user(
-        "load@measure.invalid", "scrypt$1$1$1$AA==$AA==", "측정", db_path=db_path
-    )
-    user_repo.mark_email_verified(user_id, db_path=db_path)
-    user = user_repo.get_user(user_id, db_path=db_path)
-    assert user is not None
-    return user
 
 
 if __name__ == "__main__":
