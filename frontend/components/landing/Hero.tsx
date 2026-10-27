@@ -1,10 +1,12 @@
+import Image from 'next/image';
 import Link from 'next/link';
-import HeroIllustration from '@/components/landing/HeroIllustration';
 import { colors } from '@/styles/tokens';
 
 /**
  * 랜딩 첫 화면 — 서비스 이름 CHAIUM(채움)을 크게 놓고, 그 안의 AI만 채워
- * "AI로 빈 자리를 채운다"는 뜻을 보여준다. 뒤에는 빈 상가가 있는 건물 블록 그림.
+ * "AI로 빈 자리를 채운다"는 뜻을 보여준다. 뒤에는 빈 상가가 있는 건물 블록 그림
+ * (public/images/hero-blocks.svg — 디자인 캔버스 A안 '소프트 아이소메트릭').
+ * 이전 그림(HeroIllustration.tsx)은 되돌릴 때를 위해 파일로 남겨 둔다.
  * 헤더는 이 섹션 위에 overlay로 겹쳐 놓는다(app/page.tsx).
  */
 export default function Hero() {
@@ -16,7 +18,15 @@ export default function Hero() {
         height: 'clamp(640px, 100svh, 940px)',
       }}
     >
-      <HeroIllustration className="absolute inset-x-0 bottom-[210px] h-[44%] w-full sm:bottom-10 sm:h-[calc(100%-120px)]" />
+      <Image
+        src="/images/hero-blocks.svg"
+        alt="흰 건물 블록 사이 왼쪽 1층에 파란 점선으로 표시된 빈 상가가 있는 아이소메트릭 그림"
+        width={1440}
+        height={900}
+        priority
+        unoptimized
+        className="pointer-events-none absolute inset-x-0 bottom-[260px] h-[36%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+      />
 
       <div className="pointer-events-none absolute inset-x-0 top-[30%] -translate-y-1/2 text-center sm:top-1/2 sm:-translate-y-[58%]">
         {/*
