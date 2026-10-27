@@ -621,7 +621,18 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             if "submit_l" in [d["function"]["name"] for d in definitions]:
                 return self.message("submit_l", {"finish": True})
             phase = "final" if "reviews" in messages[-1].get("content", "") else "draft"
-            return self.message("submit_draft", {"phase": phase, "report": {}})
+            resolutions = []
+            if phase == "final":
+                # 손님 평가자의 코드 지적도 모두 수용 처리해야 최종 제출이 한 번에 통과합니다.
+                reviews = json.loads(messages[-1]["content"])["reviews"]
+                resolutions = [
+                    {"issue_id": i["issue_id"], "disposition": "accepted", "reason": "반영"}
+                    for r in reviews
+                    for i in r["issues"]
+                ]
+            return self.message(
+                "submit_draft", {"phase": phase, "report": {}, "review_resolutions": resolutions}
+            )
 
         async def evaluator(messages, *args):
             draft_id = json.loads(messages[1]["content"])["draft_id"]
