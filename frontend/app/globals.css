@@ -590,3 +590,21 @@ body {
 .hero-card-sm.hero-card-pos {
   position: absolute;
 }
+
+/* 블록 그림: 큰 화면에서는 그림 오른쪽 끝이 결과 카드(오른쪽 3% + 250px) 바로 앞에 오게 붙인다.
+   그림 파일 오른쪽에 원래 여백(폭의 약 22%)이 있어 높이에 비례해 그만큼 더 민다. */
+@media (min-width: 1024px) {
+  .hero-blocks {
+    --hero-h: min(max(640px, 100svh), 940px);
+    left: auto !important;
+    right: calc(3% + 266px - 0.355 * (var(--hero-h) - 72px)) !important;
+    width: auto !important;
+  }
+  /* 워드마크는 그림과 같은 폭·위치의 상자 가운데에 둔다(그림 중심 = 상자 중심). */
+  .hero-blocks-wordmark {
+    --hero-h: min(max(640px, 100svh), 940px);
+    left: auto !important;
+    right: calc(3% + 266px - 0.355 * (var(--hero-h) - 72px)) !important;
+    width: calc(1.6 * (var(--hero-h) - 72px));
+  }
+}

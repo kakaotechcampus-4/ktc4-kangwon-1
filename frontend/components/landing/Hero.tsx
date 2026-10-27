@@ -40,7 +40,7 @@ export default function Hero() {
         height={900}
         priority
         unoptimized
-        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[2%] lg:left-[10%] h-[30%] w-full object-contain lg:w-auto object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+        className="pointer-events-none absolute inset-x-0 bottom-[340px] hero-blocks h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
       />
 
       {/* 왼쪽 글 영역 뒤를 바탕색으로 살짝 덮어 그림과 글이 맞닿아 보이지 않게 한다. */}
@@ -52,7 +52,7 @@ export default function Hero() {
             'linear-gradient(90deg, rgba(234,242,247,0.92) 0%, rgba(234,242,247,0.75) 55%, rgba(234,242,247,0) 100%)',
         }}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:top-[38%] lg:right-[2%] lg:left-[10%]">
+      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:top-[38%] hero-blocks-wordmark">
         {/*
           CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고.
           보이지 않는 CHUM.AI로 자리 폭을 먼저 잡고 그 왼쪽 끝에 글자를 붙여서,
