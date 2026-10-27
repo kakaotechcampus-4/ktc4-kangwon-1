@@ -540,6 +540,73 @@ function IndustryCompetitionGrid({
    KPI 4칸 → 차트 2칸(반경별 점포 수 · 상위 업종) → 표(업종별 경쟁 지표)와
    목록(자치구 대비 특화 업종) → 구성 차트 2칸. 스타일은 report.css .ca-dash. */
 
+/** 마지막 글자 받침 여부로 은/는을 고른다(한글이 아니면 '는'). */
+function topicParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '는';
+  return code % 28 === 0 ? '는' : '은';
+}
+
+/**
+ * 06장 맨 위 한 줄 결론. 추천 업종마다 반경 비교 배수(lq, 없으면 자치구 배수)가
+ * 1.0보다 작은지 큰지로 "같은 업종이 적은 곳 / 이미 몰린 곳"을 나눠 문장을 만든다.
+ */
+function CompetitionLead({
+  data,
+  recommended,
+}: {
+  data: CommercialAreaData;
+  recommended: CompetitionItem[];
+}) {
+  const radius = (
+    data.lqBaseline.appliedRadiusM ?? data.lqBaseline.requestedRadiusM
+  ).toLocaleString('ko-KR');
+  const rows = recommended
+    .map((item) => {
+      const middle = findMiddleCategory(item.name, data);
+      const value = middle ? (middle.lq ?? middle.lqDistrict) : null;
+      return { name: item.name, value };
+    })
+    .filter(
+      (row): row is { name: string; value: number } => row.value !== null
+    );
+  const sparse = rows.filter((row) => row.value < 1).map((row) => row.name);
+  const crowded = rows.filter((row) => row.value > 1).map((row) => row.name);
+  const join = (names: string[]) => names.join(', ');
+
+  return (
+    <header className="ca-lead">
+      <p className="ca-lead-eyebrow">추천 업종의 경쟁 상황</p>
+      {rows.length === 0 ? (
+        <h3>추천 업종의 경쟁 자료가 아직 없어요</h3>
+      ) : (
+        <h3>
+          {sparse.length > 0 && (
+            <>
+              <em className="is-sparse">{join(sparse)}</em>
+              {topicParticle(sparse[sparse.length - 1])} 주변에 같은 업종이 적고
+              {crowded.length > 0 ? ', ' : '요.'}
+            </>
+          )}
+          {crowded.length > 0 && (
+            <>
+              <em className="is-crowded">{join(crowded)}</em>
+              {topicParticle(crowded[crowded.length - 1])} 이미 몰려 있어요.
+            </>
+          )}
+          {sparse.length === 0 && crowded.length === 0 && (
+            <>추천 업종 모두 주변과 비슷한 수준으로 있어요.</>
+          )}
+        </h3>
+      )}
+      <p className="ca-lead-meta">
+        기준: 반경 {radius}m 안 같은 업종 비중 대비(자료가 없으면 자치구 대비) ·
+        1.0배보다 작으면 적고, 크면 몰려 있다는 뜻
+      </p>
+    </header>
+  );
+}
+
 function KpiCard({
   label,
   value,
@@ -750,29 +817,43 @@ export default function CompetitorAnalysisSection({
     <div className="ca-root flex w-full flex-col items-start">
       {reportLayout ? (
         <div className="ca-dash">
-          <CompetitionKpis data={data} />
-          <div className="ca-dash-row">
-            <RadiusGrowthChart data={data} height={340} />
-            <TopByCountBars data={data} />
-          </div>
-          <div className="ca-dash-row ca-dash-row-wide">
-            <CompetitionTable
-              data={data}
-              recommended={toCompetitionItems(
-                recommendations,
-                mockReportData.recommended
-              )}
-              notRecommended={toCompetitionItems(
-                notRecommended,
-                mockReportData.notRecommended
-              )}
-            />
-            <SpecializationList data={data} />
-          </div>
-          <div className="ca-dash-row">
-            <MajorCategoryDonut data={data} />
-            <FranchiseDonut data={data} />
-          </div>
+          <CompetitionLead
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+          />
+          <CompetitionTable
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+            notRecommended={toCompetitionItems(
+              notRecommended,
+              mockReportData.notRecommended
+            )}
+          />
+          {/* 판단에 직접 쓰지 않는 상권 전체 자료는 접어 둔다. */}
+          <details className="ca-more">
+            <summary>
+              상권 전체 구성 더 보기
+              <span>점포 수 · 업종 다양성 · 특화 업종 · 프랜차이즈 비율</span>
+            </summary>
+            <div className="ca-more-body">
+              <CompetitionKpis data={data} />
+              <div className="ca-dash-row">
+                <RadiusGrowthChart data={data} height={340} />
+                <TopByCountBars data={data} />
+              </div>
+              <div className="ca-dash-row">
+                <SpecializationList data={data} />
+                <MajorCategoryDonut data={data} />
+              </div>
+              <FranchiseDonut data={data} />
+            </div>
+          </details>
         </div>
       ) : (
         <>
