@@ -209,6 +209,31 @@ class LocalAdapterTests(unittest.TestCase):
                                 con.execute("SELECT COUNT(*) FROM local_provenance").fetchone()[0],
                                 10,
                             )
+                            lifecycle_periods = {
+                                metric: {
+                                    period
+                                    for (period,) in con.execute(
+                                        "SELECT DISTINCT period FROM facts "
+                                        "WHERE source='business_lifecycle' AND metric=?",
+                                        (metric,),
+                                    )
+                                }
+                                for metric in (
+                                    "recent_year_close_rate",
+                                    "oldest_year_close_rate",
+                                    "avg_store_count",
+                                    "turnover_rate",
+                                )
+                            }
+                            self.assertEqual(
+                                lifecycle_periods,
+                                {
+                                    "recent_year_close_rate": {"20253~20262"},
+                                    "oldest_year_close_rate": {"20233~20242"},
+                                    "avg_store_count": {"20233~20262"},
+                                    "turnover_rate": {"20233~20262"},
+                                },
+                            )
                             floating = {
                                 v["version_id"]
                                 for v in adapter.versions

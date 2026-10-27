@@ -14,6 +14,22 @@ from app.db.connection import connect
 from app.local_data.adapter import SOURCE_NAMES
 from app.local_data.provenance import save_snapshot, validate_snapshot
 
+YEAR_QUARTERS = 4
+
+
+def metric_periods(quarters):
+    lifecycle = sorted(quarters.get("business_lifecycle", []))
+    if len(lifecycle) < YEAR_QUARTERS:
+        return {}
+    recent = f"{lifecycle[-YEAR_QUARTERS]}~{lifecycle[-1]}"
+    return {
+        "business_lifecycle": {
+            "recent_year_close_rate": recent,
+            "close_rate_ratio": recent,
+            "oldest_year_close_rate": f"{lifecycle[0]}~{lifecycle[YEAR_QUARTERS - 1]}",
+        }
+    }
+
 
 def persist_local(task, scope, adapter, data=None, observations=None):
     persist_space_requirements(scope)
@@ -35,6 +51,7 @@ def persist_local(task, scope, adapter, data=None, observations=None):
             key: "~".join(sorted(values)[:: max(1, len(values) - 1)])
             for key, values in periods.items()
         },
+        "metric_periods": metric_periods(periods),
     }
     persist_input_facts(scope, data, {}, [], metadata)
     report = evaluate(data, profile_rows=profiles)
