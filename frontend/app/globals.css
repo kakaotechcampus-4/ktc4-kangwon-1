@@ -587,3 +587,6 @@ body {
   height: 18px;
   font-size: 10px;
 }
+.hero-card-sm.hero-card-pos {
+  position: absolute;
+}

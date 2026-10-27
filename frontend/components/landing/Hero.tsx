@@ -145,10 +145,10 @@ export default function Hero() {
       {/* 결과 미리보기 카드 — 리포트에서 실제로 보여주는 항목(적합도·추천 업종·유동인구)의 예시 */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute right-10 bottom-[88px] hidden items-end gap-3 lg:flex"
+        className="pointer-events-none absolute top-[36%] right-[3%] bottom-[12%] hidden w-[250px] lg:block"
       >
         <div
-          className="hero-card hero-card-sm w-[184px]"
+          className="hero-card hero-card-sm hero-card-pos top-0 left-[4%] w-[200px]"
           style={{ animationDelay: '3.6s' }}
         >
           <p className="hero-card-label">
@@ -161,10 +161,12 @@ export default function Hero() {
           <div className="hero-card-bar">
             <span style={{ width: `${exampleTop[0].score}%` }} />
           </div>
-          <p className="hero-card-note">{exampleTop[0].name}</p>
+          <p className="hero-card-note">
+            {exampleTop[0].name} · 가장 먼저 검토
+          </p>
         </div>
         <div
-          className="hero-card hero-card-sm w-[184px]"
+          className="hero-card hero-card-sm hero-card-pos top-[37%] right-0 w-[184px]"
           style={{ animationDelay: '3.75s' }}
         >
           <p className="hero-card-label">
@@ -181,7 +183,7 @@ export default function Hero() {
           </p>
         </div>
         <div
-          className="hero-card hero-card-sm w-[196px]"
+          className="hero-card hero-card-sm hero-card-pos bottom-0 left-0 w-[210px]"
           style={{ animationDelay: '3.9s' }}
         >
           <p className="hero-card-label">
