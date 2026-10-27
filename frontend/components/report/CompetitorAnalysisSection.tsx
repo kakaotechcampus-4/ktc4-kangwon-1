@@ -705,7 +705,7 @@ function CompetitionTable({
   return (
     <SectionCard
       title="업종별 경쟁 지표"
-      description="배수는 좋고 나쁨이 아니라 기준 대비 밀집도예요. 1.0배보다 높으면 같은 업종이 기준보다 몰려 있어요."
+      description="배수는 기준 대비 밀집도예요. ▲ 주황은 같은 업종이 기준보다 몰려 있고, ▼ 파랑은 기준보다 적다는 뜻이에요."
     >
       <div className="ca-table-wrap">
         <table className="ca-table">

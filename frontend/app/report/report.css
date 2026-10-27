@@ -4713,3 +4713,25 @@
     font-size: calc(21px * var(--font-scale));
   }
 }
+
+/* 경쟁 지표 배수: 상승(몰림)·하락(적음)을 색 배지로 구분 — 결론 문장의 색과 같다 */
+.report-page .ca-index {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+.report-page .ca-index-up {
+  background: #fbefe9;
+  color: #c2410c;
+}
+.report-page .ca-index-down {
+  background: #eaf0fc;
+  color: #2453d6;
+}
+.report-page .ca-index-flat {
+  background: #f0f3f8;
+  color: #5a6878;
+}
