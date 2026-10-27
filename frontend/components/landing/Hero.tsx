@@ -40,10 +40,19 @@ export default function Hero() {
         height={900}
         priority
         unoptimized
-        className="pointer-events-none absolute inset-x-0 bottom-[340px] h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[-10%] lg:left-[18%] h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
       />
 
-      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%]">
+      {/* 왼쪽 글 영역 뒤를 바탕색으로 살짝 덮어 그림과 글이 맞닿아 보이지 않게 한다. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 hidden w-[44%] lg:block"
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(234,242,247,0.92) 0%, rgba(234,242,247,0.75) 55%, rgba(234,242,247,0) 100%)',
+        }}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:right-[-10%] lg:left-[18%]">
         {/*
           CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고.
           보이지 않는 CHUM.AI로 자리 폭을 먼저 잡고 그 왼쪽 끝에 글자를 붙여서,
@@ -139,7 +148,7 @@ export default function Hero() {
         className="pointer-events-none absolute inset-0 hidden lg:block"
       >
         <div
-          className="hero-card top-[17%] right-[9%] w-[248px]"
+          className="hero-card top-[15%] right-[5%] w-[248px]"
           style={{ animationDelay: '3.6s' }}
         >
           <p className="hero-card-label">
@@ -157,7 +166,7 @@ export default function Hero() {
           </p>
         </div>
         <div
-          className="hero-card right-[6%] bottom-[18%] w-[260px]"
+          className="hero-card right-[5%] bottom-[10%] w-[260px]"
           style={{ animationDelay: '3.8s' }}
         >
           <p className="hero-card-label">
@@ -174,7 +183,7 @@ export default function Hero() {
           </ol>
         </div>
         <div
-          className="hero-card top-[22%] left-[8%] w-[220px]"
+          className="hero-card top-[52%] right-[2%] w-[220px]"
           style={{ animationDelay: '4s' }}
         >
           <p className="hero-card-label">
