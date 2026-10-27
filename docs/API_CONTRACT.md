@@ -100,7 +100,10 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 | `units` (호실) | `unit_name`, `floor`, `use`, `use_detail`, `area_m2`, `dong_name` | 전유 부분만 호수별로 더한 전용면적. 공용 면적은 뺍니다. 일반건축물은 호실이 없어 `[]`입니다 |
 | `sewage` (오수정화시설) | `method`, `method_name` | `method`는 화면 선택지(`하수종말처리장 연결`·`정화조`·`오수처리시설`)로 맞춘 값, 맞출 수 없으면 null. `method_name`은 대장 원문(예: 부패탱크방법, 접촉폭기방법) |
 
-- 목록이 `null`이면 그 항목 조회가 실패한 것이고, `[]`이면 대장에 등록된 행이 없는 것입니다. 네 항목이 모두 실패하면 502입니다.
+- 목록이 `null`이면 그 항목 조회가 실패한 것이고, `[]`이면 대장에 등록된 행이 없는 것입니다. 네 항목 모두 실패하면 502이며, 대표 오류가 호출 한도 초과이면 429입니다.
+- 각 항목은 페이지를 순차 조회합니다. 호실 조회가 30쪽으로 끝나지 않으면 부분 목록을 반환하지 않고 `units=null`로 처리하며, 정상 조회된 표제부·층별개요·오수정화시설은 유지합니다.
+- 주소의 지역·번지가 카카오 반환 주소와 일치하지 않으면 허브를 호출하지 않고 400을 반환합니다.
+- 확인 화면에서 확정한 층·전용면적은 분석 중 질문 후보에서 제외하며, 모델이 재질문을 시도해도 질문 세션을 만들지 않습니다. 미확인 설비 질문과 기존 공간 판정 규칙은 유지합니다.
 - 건축HUB 게이트웨이의 일시 오류(503·빈 응답·시간 초과)는 항목마다 두 번까지 다시 요청합니다. 보통 1초 안에 끝나고, 막히면 최대 30여 초 걸립니다.
 - 지하층은 건축HUB의 `지1층`을 화면 표기 `지하 1층`으로 바꿔 보냅니다. 지상층은 `4층`입니다.
 - 대장에 비어 있는 값(건물명 등)은 `null`입니다. 오수 형식이 비어 있는 행은 보내지 않습니다.
@@ -134,6 +137,8 @@ DecisionResult.facts는 보고서가 인용한 fact만 담는다. 유동인구·
 | 422 | `address`가 없거나 200자 초과 | FastAPI 기본 형식 |
 | 502 | 주소 조회 실패 | `{"detail": "주소 조회 서비스에 실패했습니다."}` |
 | 502 | 네 항목 모두 실패, 건축HUB 키 미설정 | `{"detail": "건축물대장 조회에 실패했습니다."}` |
+| 502 | 건축HUB 인증·권한 오류로 전체 실패 | `{"detail": "건축물대장 인증키 또는 사용 권한을 확인해 주세요."}` |
+| 429 | 건축HUB 호출 한도 오류로 전체 실패 | `{"detail": "건축물대장 조회 한도를 초과했습니다."}` |
 
 실제 조회에는 `.env`의 `BUILDING_REGISTRY_API_KEY`(공공데이터포털 「국토교통부_건축HUB_건축물대장정보 서비스」 활용신청 후 받은 일반 인증키,
 Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING_API_KEY`가 필요합니다.
@@ -141,9 +146,9 @@ Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING
 MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성희프라자 고정 응답을 돌려줍니다.
 
 
-## 새 결과 형태(PR7 전환 후)
+## 현재 결과 형태
 
-현재 문서의 기존 결과·질문·stage 계약은 **PR7 전환 전까지 유효**합니다. PR1은 실행 경로를 연결하지 않습니다. PR1~PR6에는 새 계약을 `backend/app/agentic/contracts.py`에 두고, PR7에서 DecisionRequest·DecisionResult·Evidence·QuestionSnapshot을 `schemas.py`로 옮겨 교체합니다. V2 접미사는 쓰지 않습니다.
+공개 결과는 `backend/app/schemas.py`의 DecisionResult, 도구 계약은 `backend/app/agentic/contracts.py`를 따릅니다. 현재 `schema_version=2.0`, `rubric_version=v0.8`, `tool_contract_version=3`입니다. 과거 전환 계획의 계약 버전은 이력 문서에 남깁니다.
 
 전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
 
@@ -1078,7 +1083,7 @@ seq 폴링을 유지합니다. 프론트 리포트·진행 화면은 이 단일 
 
 ### 도구 function 정의의 내보내기
 
-도구 계약3은 열 개 function이다. 행별 L 근거를 제출하여 종료한 뒤
+도구 계약3은 decision용 9개와 평가자 제출용 `submit_review` 1개를 정의한다. 행별 L 근거를 제출하여 종료한 뒤
 보고서 후보 최대5개를 별도 submit_draft로 낸다. 평가자는 세 읽기 도구+submit_review만 받는다.
 
 도구 계약3: submit_l은 업종·factors(fact_id 별칭/direction/severe)·neutral/fact_ids·note만 받는다.
@@ -1094,6 +1099,6 @@ G·C4는 채점 전 코드가 관측한다. 외부 실패는 해당 항목만 un
 
 `tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
-get_facts/map_search의 배타 조건·상세 limit·L/평가 정합성은 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. 이번 PR에서는 API·LLM 호출을 하지 않습니다. SQL 내용/권한/시간·fact 소유/숫자 슬롯·점수 재계산·정렬의 실제 검증은 PR4~PR6 범위입니다.
+get_facts/map_search의 배타 조건·상세 limit는 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. SQL 권한·시간은 `sql_tool.py`, fact 소유·숫자 슬롯·L 정합성과 점수 재계산은 `report.py`에서 별도로 검증합니다.
 
 ReportProposal에는 review_resolutions를 두지 않습니다. 제출 입력 SubmitDraftInput에만 두며 서버가 채택한 반영 기록은 최종 DecisionResult.review_resolutions로 제공합니다.

@@ -119,12 +119,12 @@ def sequence(*responses):
 
 
 class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
-    async def lookup(self, responses):
+    async def lookup(self, responses, *, key="fake"):
         mock, seen = transport(responses)
         async with httpx.AsyncClient(transport=mock) as client:
             result = await lookup_building(
                 "서울 송파구 위례광장로 199 4층",
-                BuildingRegistrySettings(api_key="fake", retry_delay=0),
+                BuildingRegistrySettings(api_key=key, retry_delay=0),
                 AddressSettings(api_key="fake"),
                 client=client,
             )
@@ -306,7 +306,7 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
         error = httpx.Response(200, json={"response": {"header": {"resultCode": "30"}}})
         with self.assertRaises(BuildingRegistryError) as caught:
             await self.lookup({name: error for name in answers()})
-        self.assertEqual(caught.exception.code, "UPSTREAM_ERROR")
+        self.assertEqual(caught.exception.code, "AUTH")
 
     async def test_missing_key_stops_before_calls(self):
         with self.assertRaises(BuildingRegistryError) as caught:
@@ -343,6 +343,15 @@ class BuildingRegistryApiTests(unittest.TestCase):
     def test_registry_failure_is_502(self):
         response = self.get(BuildingRegistryError("AUTH", "x"))
         self.assertEqual(response.status_code, 502)
+
+    def test_rate_limit_is_distinct_from_auth_failure(self):
+        response = self.get(BuildingRegistryError("RATE_LIMIT", "외부 원문"))
+        self.assertEqual(response.status_code, 429)
+        self.assertNotIn("외부 원문", response.text)
+
+    def test_mismatched_address_is_400(self):
+        response = self.get(GeocodeError("ADDRESS_MISMATCH", "외부 원문"))
+        self.assertEqual(response.status_code, 400)
 
     def test_mock_needs_no_lookup(self):
         response = self.get(AssertionError("외부 조회 금지"), mock="true")
