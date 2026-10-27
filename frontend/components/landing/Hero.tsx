@@ -25,7 +25,7 @@ export default function Hero() {
       />
       <span
         aria-hidden="true"
-        className="hero-orb hero-orb-late pointer-events-none absolute top-[14%] right-[-140px] hidden size-[420px] sm:block lg:right-[-60px]"
+        className="hero-orb hero-orb-late pointer-events-none absolute top-[4%] right-[-360px] hidden size-[720px] sm:block lg:right-[-380px] lg:size-[780px]"
       />
       <Image
         src="/images/hero-blocks.svg"
