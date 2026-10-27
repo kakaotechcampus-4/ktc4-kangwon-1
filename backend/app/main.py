@@ -11,9 +11,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
-from app.config import load_environment
+from app.config import AuthSettings, KakaoOAuthSettings, MailSettings, load_environment
 from app.db import repository
 from app.db.connection import initialize
 from app.logging import protect_http_query_logs
@@ -66,9 +67,14 @@ def create_app(
     app.state.recording_dir = recording_dir
     app.state.measurement = measurement
     app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
+    app.state.auth_settings = AuthSettings.from_env()
+    app.state.kakao_settings = KakaoOAuthSettings.from_env()
+    app.state.mail_settings = MailSettings.from_env()
+    # 쿠키 인증이라 쓰기 요청의 Origin 검사에도 같은 목록을 씁니다(api/v1/deps.py).
+    app.state.allowed_origins = allowed_origins()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins(),
+        allow_origins=app.state.allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -76,6 +82,7 @@ def create_app(
     )
     app.include_router(v1_router)
     app.include_router(building_router)
+    app.include_router(auth_router)
 
     @app.get("/health", summary="상태 확인")
     async def health() -> dict[str, str]:
