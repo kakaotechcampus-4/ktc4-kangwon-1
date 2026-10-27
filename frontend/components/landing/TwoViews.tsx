@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useRef, type CSSProperties } from 'react';
+import { ChevronDown } from 'lucide-react';
 import Eyebrow from '@/components/landing/Eyebrow';
 import { colors } from '@/styles/tokens';
 
@@ -27,12 +31,47 @@ const views = [
 ];
 
 export default function TwoViews() {
+  const listRef = useRef<HTMLOListElement>(null);
+
+  // 카드 묶음이 화면에 들어오면 한 장씩 차례로 떠오르게 한다(globals.css .view-card).
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (!('IntersectionObserver' in window)) {
+      list.dataset.visible = 'true';
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          list.dataset.visible = 'true';
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.25 }
+    );
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section
       id="services"
-      className="relative -mt-10 w-full rounded-t-[40px] bg-white px-4 pt-24 pb-28 sm:px-8"
+      className="relative -mt-14 w-full rounded-t-[56px] bg-white px-4 pt-10 pb-28 sm:rounded-t-[72px] sm:px-8"
     >
-      <div className="mx-auto max-w-[1120px]">
+      {/* 아래로 스크롤을 유도하는 이중 화살표 */}
+      <a
+        href="#how-we-read"
+        className="scroll-cue mx-auto flex w-fit flex-col items-center"
+        aria-label="아래로 내려 채움이 공간을 보는 방법 보기"
+      >
+        <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
+        <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
+      </a>
+      <div
+        id="how-we-read"
+        className="mx-auto mt-14 max-w-[1120px] scroll-mt-24"
+      >
         <div className="text-center">
           <Eyebrow>HOW WE READ SPACE</Eyebrow>
           <h2 className="mt-3.5 text-4xl font-extrabold tracking-[-0.02em] text-[#111827]">
@@ -44,12 +83,21 @@ export default function TwoViews() {
           </p>
         </div>
 
-        <ol className="mt-14 grid gap-5 md:grid-cols-3">
-          {views.map(({ number, tag, title, description }) => (
+        <ol
+          ref={listRef}
+          data-visible="false"
+          className="view-cards mt-14 grid gap-5 md:grid-cols-3"
+        >
+          {views.map(({ number, tag, title, description }, index) => (
             <li
               key={tag}
-              className="flex flex-col rounded-[22px] p-8"
-              style={{ backgroundColor: colors.brand.wash }}
+              className="view-card flex flex-col rounded-[22px] p-8"
+              style={
+                {
+                  backgroundColor: colors.brand.wash,
+                  '--i': index,
+                } as CSSProperties
+              }
             >
               <div className="flex items-center justify-between">
                 <span
@@ -58,7 +106,7 @@ export default function TwoViews() {
                 >
                   {tag}
                 </span>
-                <span className="text-sm font-bold text-[#8A97A5]">
+                <span className="view-card-number text-sm font-bold text-[#8A97A5]">
                   {number}
                 </span>
               </div>

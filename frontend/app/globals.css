@@ -304,3 +304,72 @@ body {
     display: none;
   }
 }
+
+/* ── 랜딩 HOW WE READ SPACE: 스크롤 유도 화살표 + 카드 등장 ───────────── */
+.scroll-cue {
+  color: #2453d6;
+  padding: 8px 16px;
+}
+.scroll-cue svg {
+  margin-top: -16px;
+  animation: scroll-cue-drop 1.6s ease-in-out infinite;
+}
+.scroll-cue svg:first-child {
+  margin-top: 0;
+}
+.scroll-cue svg:last-child {
+  animation-delay: 0.18s;
+}
+.scroll-cue:hover svg {
+  color: #10233a;
+}
+@keyframes scroll-cue-drop {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(-4px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(6px);
+  }
+}
+
+.view-card {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s ease,
+    background-color 0.3s ease;
+  transition-delay: calc(var(--i, 0) * 140ms);
+}
+.view-cards[data-visible='true'] .view-card {
+  opacity: 1;
+  transform: translateY(0);
+}
+.view-cards[data-visible='true'] .view-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 22px 44px rgba(16, 35, 58, 0.12);
+  transition-delay: 0s;
+}
+.view-card .view-card-number {
+  transition: color 0.3s ease;
+}
+.view-card:hover .view-card-number {
+  color: #2453d6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue svg {
+    animation: none;
+    opacity: 1;
+  }
+  .view-card,
+  .view-cards[data-visible='true'] .view-card:hover {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
