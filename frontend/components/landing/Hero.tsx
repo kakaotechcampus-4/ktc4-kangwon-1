@@ -40,7 +40,7 @@ export default function Hero() {
         height={900}
         priority
         unoptimized
-        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[2%] lg:left-[10%] lg:bottom-[150px] lg:h-[calc(100%-210px)] h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+        className="pointer-events-none absolute inset-x-0 bottom-[340px] lg:right-[2%] lg:left-[10%] h-[30%] w-full object-contain lg:w-auto object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
       />
 
       {/* 왼쪽 글 영역 뒤를 바탕색으로 살짝 덮어 그림과 글이 맞닿아 보이지 않게 한다. */}
@@ -145,7 +145,7 @@ export default function Hero() {
       {/* 결과 미리보기 카드 — 리포트에서 실제로 보여주는 항목(적합도·추천 업종·유동인구)의 예시 */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-[36%] right-[3%] bottom-[12%] hidden w-[250px] lg:block"
+        className="pointer-events-none absolute top-[34%] right-[3%] bottom-[max(14%,120px)] hidden w-[250px] lg:block"
       >
         <div
           className="hero-card hero-card-sm hero-card-pos top-0 left-[4%] w-[200px]"
