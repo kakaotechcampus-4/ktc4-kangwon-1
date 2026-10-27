@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import HeaderUserMenu from '@/components/layout/HeaderUserMenu';
 import { colors } from '@/styles/tokens';
 
 const navLinks = [
@@ -97,7 +98,7 @@ export default function Header() {
           })}
         </nav>
 
-        <div />
+        <HeaderUserMenu />
       </div>
     </header>
   );
