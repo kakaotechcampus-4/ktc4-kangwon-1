@@ -7,6 +7,7 @@ import AuthShell from '@/components/auth/AuthShell';
 import FormField from '@/components/auth/FormField';
 import FormMessage from '@/components/auth/FormMessage';
 import KakaoButton from '@/components/auth/KakaoButton';
+import PasswordField from '@/components/auth/PasswordField';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Button from '@/components/ui/Button';
 import { KAKAO_ERRORS, login, safeNext } from '@/lib/api/auth';
@@ -96,10 +97,9 @@ function LoginForm() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
-        <FormField
+        <PasswordField
           label="비밀번호"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           value={password}

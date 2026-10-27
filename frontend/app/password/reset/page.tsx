@@ -4,8 +4,8 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthShell from '@/components/auth/AuthShell';
-import FormField from '@/components/auth/FormField';
 import FormMessage from '@/components/auth/FormMessage';
+import PasswordField from '@/components/auth/PasswordField';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Button from '@/components/ui/Button';
 import { resetPassword } from '@/lib/api/auth';
@@ -77,10 +77,9 @@ function ResetPassword() {
       description="바꾸고 나면 다른 기기의 로그인도 모두 해제됩니다."
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-        <FormField
+        <PasswordField
           label="새 비밀번호"
           name="new_password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={MIN_PASSWORD_LENGTH}
