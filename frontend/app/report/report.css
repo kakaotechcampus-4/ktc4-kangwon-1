@@ -4645,7 +4645,7 @@
   overflow: visible;
 }
 
-/* 06 한 줄 결론 + 접는 참고 자료 */
+/* 06 한 줄 결론 + 상권 전체 구성 */
 .report-page .ca-lead {
   padding: 28px 32px;
   background: #ffffff;
@@ -4684,43 +4684,20 @@
   width: 100%;
   border-top: 1px solid #d5dee7;
 }
-.report-page .ca-more > summary {
+.report-page .ca-more-title {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 12px;
-  padding: 20px 0;
-  cursor: pointer;
-  list-style: none;
-  font-size: calc(17px * var(--font-scale));
-  font-weight: 700;
+  padding: 28px 0 20px;
+  font-size: calc(21px * var(--font-scale));
+  font-weight: 750;
   color: #10233a;
 }
-.report-page .ca-more > summary::-webkit-details-marker {
-  display: none;
-}
-.report-page .ca-more > summary::before {
-  content: '+';
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #eaf0fc;
-  color: #2453d6;
-  font-weight: 700;
-}
-.report-page .ca-more[open] > summary::before {
-  content: '−';
-}
-.report-page .ca-more > summary span {
+.report-page .ca-more-title span {
   font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   color: #6b7a8a;
-}
-.report-page .ca-more > summary:hover {
-  color: #2453d6;
 }
 .report-page .ca-more-body {
   display: flex;

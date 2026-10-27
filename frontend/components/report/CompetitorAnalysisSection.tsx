@@ -835,12 +835,12 @@ export default function CompetitorAnalysisSection({
               mockReportData.notRecommended
             )}
           />
-          {/* 판단에 직접 쓰지 않는 상권 전체 자료는 접어 둔다. */}
-          <details className="ca-more">
-            <summary>
-              상권 전체 구성 더 보기
+          {/* 상권 전체 자료는 접지 않고 이어서 보여준다(롱스크롤로 정보를 충분히 전달). */}
+          <section className="ca-more">
+            <h3 className="ca-more-title">
+              상권 전체 구성
               <span>점포 수 · 업종 다양성 · 특화 업종 · 프랜차이즈 비율</span>
-            </summary>
+            </h3>
             <div className="ca-more-body">
               <CompetitionKpis data={data} />
               <div className="ca-dash-row">
@@ -853,7 +853,7 @@ export default function CompetitorAnalysisSection({
               </div>
               <FranchiseDonut data={data} />
             </div>
-          </details>
+          </section>
         </div>
       ) : (
         <>
