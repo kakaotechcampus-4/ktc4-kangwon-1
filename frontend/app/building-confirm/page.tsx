@@ -42,6 +42,7 @@ import {
 import {
   clearAnalysisResult,
   clearRequestId,
+  ANALYSIS_RADIUS_M,
   loadVacancyInput,
   saveConfirmedBuilding,
   saveRequestId,
@@ -58,13 +59,6 @@ const CONFIRM_DELAY_MS = 500;
 const FACILITY_OPTIONS = (
   Object.keys(FACILITY_SHORT_LABELS) as NeighborhoodFacility[]
 ).map((value) => ({ value, label: FACILITY_SHORT_LABELS[value] }));
-
-// 반경 입력칸 값 — 비어 있거나 양의 정수가 아니면 보내지 않는다(서버 기본 반경).
-function parseRadius(text: string): number | undefined {
-  const trimmed = text.trim();
-  const value = Number(trimmed);
-  return trimmed && Number.isInteger(value) && value > 0 ? value : undefined;
-}
 
 // 화면 확인용: ?mockFail=floor,sewage 처럼 넘기면 그 조회를 일부러 실패시킨다.
 function mockFailLookups(search: string): LookupId[] {
@@ -97,7 +91,6 @@ export default function BuildingConfirmPage() {
       setInput({
         roadAddress: mockProperty.address,
         floorUnit: mockProperty.floorUnit,
-        radius: String(mockProperty.radiusM),
       });
       setStatuses({
         title: 'done',
@@ -187,7 +180,7 @@ export default function BuildingConfirmPage() {
       // 질문·결과는 진행 화면이 요청 ID로 받아 온다.
       const { request_id: requestId, facilitiesDropped } = await startAnalysis({
         address: fullAddress,
-        radiusM: parseRadius(input.radius),
+        radiusM: ANALYSIS_RADIUS_M,
         allowQuestions: true,
         floor: normalizeFloor(input.floorUnit) ?? undefined,
         exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,

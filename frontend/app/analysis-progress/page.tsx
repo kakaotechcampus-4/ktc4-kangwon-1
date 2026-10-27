@@ -27,6 +27,7 @@ import {
 import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
 import {
   loadConfirmedBuilding,
+  ANALYSIS_RADIUS_M,
   loadVacancyInput,
   saveAnalysisResult,
   saveRequestId,
@@ -134,7 +135,6 @@ function useKnownSite(): KnownSite {
     }
     const building = loadConfirmedBuilding();
     const area = building?.exclusiveAreaM2.value ?? null;
-    const radius = Number(input.radius.trim());
     // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setKnown((prev) => ({
@@ -142,10 +142,7 @@ function useKnownSite(): KnownSite {
         ...prev.summary,
         address: input.roadAddress,
         floorAndUnit: input.floorUnit.trim() || '—',
-        radiusM:
-          input.radius.trim() && Number.isInteger(radius) && radius > 0
-            ? radius
-            : prev.summary.radiusM,
+        radiusM: ANALYSIS_RADIUS_M,
         exclusiveAreaText:
           area === null
             ? '확인 안 됨'
