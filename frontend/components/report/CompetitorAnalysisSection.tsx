@@ -94,7 +94,13 @@ function SectionCard({
 }
 
 /** A-1. 반경별 점포 수 증가 곡선 */
-function RadiusGrowthChart({ data }: { data: CommercialAreaData }) {
+function RadiusGrowthChart({
+  data,
+  height = 200,
+}: {
+  data: CommercialAreaData;
+  height?: number;
+}) {
   const points = data.byRadius.map((slice) => ({
     label: `${slice.radiusM}m`,
     value: slice.storeTotal,
@@ -108,7 +114,7 @@ function RadiusGrowthChart({ data }: { data: CommercialAreaData }) {
       <div className="ca-chart-wrap">
         <AreaChart
           data={points}
-          height={200}
+          height={height}
           valueSuffix="개"
           showPointLabels
         />
@@ -530,6 +536,190 @@ function IndustryCompetitionGrid({
   );
 }
 
+/* ── 리포트용 대시보드 배치 ─────────────────────────────────────────
+   KPI 4칸 → 차트 2칸(반경별 점포 수 · 상위 업종) → 표(업종별 경쟁 지표)와
+   목록(자치구 대비 특화 업종) → 구성 차트 2칸. 스타일은 report.css .ca-dash. */
+
+function KpiCard({
+  label,
+  value,
+  unit,
+  note,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  note?: string;
+}) {
+  return (
+    <div className="ca-kpi">
+      <p className="ca-kpi-label">{label}</p>
+      <p className="ca-kpi-value">
+        {value}
+        {unit && <small>{unit}</small>}
+      </p>
+      {note && <p className="ca-kpi-note">{note}</p>}
+    </div>
+  );
+}
+
+function CompetitionKpis({ data }: { data: CommercialAreaData }) {
+  const currentSlice = data.byRadius.find((r) => r.radiusM === data.radiusM);
+  const topSpecial = data.districtSpecialization[0];
+  return (
+    <div className="ca-dash-kpis">
+      <KpiCard
+        label="반경 안 점포 수"
+        value={data.storeTotal.toLocaleString('ko-KR')}
+        unit="개"
+        note={`반경 ${data.radiusM.toLocaleString('ko-KR')}m`}
+      />
+      <KpiCard
+        label="업종 다양성"
+        value={String(data.diversity.effectiveCategories)}
+        unit="종"
+        note={
+          currentSlice
+            ? `관측된 ${currentSlice.categoryCount}종 중 실질 다양성`
+            : '실질적으로 고르게 있는 업종 수'
+        }
+      />
+      <KpiCard
+        label="프랜차이즈 비율"
+        value={
+          data.franchise ? (data.franchise.ratio * 100).toFixed(1) : '자료 없음'
+        }
+        unit={data.franchise ? '%' : undefined}
+        note={
+          data.franchise
+            ? `${data.franchise.count.toLocaleString('ko-KR')}개 · 상호명 대조 추정`
+            : undefined
+        }
+      />
+      <KpiCard
+        label={`${data.districtBaseline?.signguName ?? '자치구'} 대비 최고 특화`}
+        value={
+          topSpecial ? topSpecial.timesVsSurroundings.toFixed(1) : '자료 없음'
+        }
+        unit={topSpecial ? '배' : undefined}
+        note={topSpecial?.name}
+      />
+    </div>
+  );
+}
+
+function IndexCell({ value }: { value: number | null }) {
+  if (value === null) return <span className="ca-index-na">비교 불가</span>;
+  const dir = value > 1 ? 'up' : value < 1 ? 'down' : 'flat';
+  return (
+    <span className={`ca-index ca-index-${dir}`}>
+      {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '–'} {value.toFixed(2)}배
+    </span>
+  );
+}
+
+function CompetitionTable({
+  data,
+  recommended,
+  notRecommended,
+}: {
+  data: CommercialAreaData;
+  recommended: CompetitionItem[];
+  notRecommended: CompetitionItem[];
+}) {
+  const radius = (
+    data.lqBaseline.appliedRadiusM ?? data.lqBaseline.requestedRadiusM
+  ).toLocaleString('ko-KR');
+  const district = data.districtBaseline?.signguName ?? '자치구';
+  const rows = [
+    ...recommended.map((item) => ({ item, recommended: true })),
+    ...notRecommended.map((item) => ({ item, recommended: false })),
+  ];
+  return (
+    <SectionCard
+      title="업종별 경쟁 지표"
+      description="배수는 좋고 나쁨이 아니라 기준 대비 밀집도예요. 1.0배보다 높으면 같은 업종이 기준보다 몰려 있어요."
+    >
+      <div className="ca-table-wrap">
+        <table className="ca-table">
+          <thead>
+            <tr>
+              <th>업종</th>
+              <th>동종 점포</th>
+              <th>반경 {radius}m 대비</th>
+              <th>{district} 대비</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, recommended: isRec }) => {
+              const middle = findMiddleCategory(item.name, data);
+              return (
+                <tr key={item.key}>
+                  <td>
+                    <span className="ca-table-name">{item.name}</span>
+                    <span
+                      className={`ca-table-tag ${isRec ? 'is-rec' : 'is-not'}`}
+                    >
+                      {isRec ? '추천' : '비추천'}
+                    </span>
+                  </td>
+                  {middle ? (
+                    <>
+                      <td className="ca-num">{middle.sameTypeCount}개</td>
+                      <td className="ca-num">
+                        <IndexCell value={middle.lq} />
+                      </td>
+                      <td className="ca-num">
+                        <IndexCell
+                          value={
+                            data.districtBaseline ? middle.lqDistrict : null
+                          }
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <td colSpan={3} className="ca-index-na">
+                      경쟁 데이터 매칭 안 됨
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  );
+}
+
+function SpecializationList({ data }: { data: CommercialAreaData }) {
+  const district = data.districtBaseline?.signguName ?? '자치구';
+  return (
+    <SectionCard
+      title="자치구 대비 특화 업종"
+      description={`${district} 전체보다 이 반경에 유난히 많은 업종이에요.`}
+    >
+      {data.districtSpecialization.length === 0 ? (
+        <p className="ca-empty-note">자치구 비교 자료 없음</p>
+      ) : (
+        <ol className="ca-spec-list">
+          {data.districtSpecialization.map((item) => (
+            <li key={item.code}>
+              <span className="ca-spec-rank">
+                {String(item.rank).padStart(2, '0')}
+              </span>
+              <span className="ca-spec-name">{item.name}</span>
+              <span className="ca-spec-times">
+                {item.timesVsSurroundings.toFixed(1)}배
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </SectionCard>
+  );
+}
+
 export default function CompetitorAnalysisSection({
   data = mockReportData.commercialArea as CommercialAreaData,
   recommendations,
@@ -559,43 +749,31 @@ export default function CompetitorAnalysisSection({
   return (
     <div className="ca-root flex w-full flex-col items-start">
       {reportLayout ? (
-        <>
-          <IndustryCompetitionGrid
-            data={data}
-            recommended={toCompetitionItems(
-              recommendations,
-              mockReportData.recommended
-            )}
-            notRecommended={toCompetitionItems(
-              notRecommended,
-              mockReportData.notRecommended
-            )}
-          />
-
-          <div className="market-landscape">
-            <h3 className="analysis-subheading">상권 전체의 구성</h3>
-            <p className="analysis-subcopy">
-              추천 업종의 경쟁 지표와 함께, 주변 상권이 어떤 업종으로
-              이루어졌는지 살펴보세요.
-            </p>
-            <div className="ca-major-diversity-row">
-              <div className="ca-major-category-col">
-                <MajorCategoryDonut data={data} />
-              </div>
-              <div className="ca-diversity-col">
-                <DiversityStat data={data} />
-              </div>
-            </div>
-            <div className="analysis-chart-pair">
-              <RadiusGrowthChart data={data} />
-              <FranchiseDonut data={data} />
-            </div>
-          </div>
-          <div className="analysis-chart-pair">
+        <div className="ca-dash">
+          <CompetitionKpis data={data} />
+          <div className="ca-dash-row">
+            <RadiusGrowthChart data={data} height={340} />
             <TopByCountBars data={data} />
-            <DistrictSpecializationBars data={data} />
           </div>
-        </>
+          <div className="ca-dash-row ca-dash-row-wide">
+            <CompetitionTable
+              data={data}
+              recommended={toCompetitionItems(
+                recommendations,
+                mockReportData.recommended
+              )}
+              notRecommended={toCompetitionItems(
+                notRecommended,
+                mockReportData.notRecommended
+              )}
+            />
+            <SpecializationList data={data} />
+          </div>
+          <div className="ca-dash-row">
+            <MajorCategoryDonut data={data} />
+            <FranchiseDonut data={data} />
+          </div>
+        </div>
       ) : (
         <>
           {' '}

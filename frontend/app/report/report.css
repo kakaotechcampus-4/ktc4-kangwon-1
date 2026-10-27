@@ -3346,6 +3346,207 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* 리포트 마지막 장: 분석 결과를 임차인 매칭으로 연결 */
+.report-page #actions {
+  background: transparent;
+  color: var(--rp-ink);
+  padding: 36px 0 48px;
+  border-radius: 0;
+}
+.report-page #actions > h2 {
+  color: var(--rp-navy);
+}
+.report-page .tenant-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  align-items: stretch;
+  gap: 34px;
+  padding: 30px 32px;
+  border: 1px solid var(--rp-line);
+  border-radius: 14px;
+  background: #fff;
+}
+.report-page .tenant-match-story {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.report-page .tenant-match-kicker,
+.report-page .tenant-match-action-label {
+  margin: 0 0 9px;
+  color: var(--rp-blue);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+}
+.report-page .tenant-match-message h3 {
+  max-width: 650px;
+  color: var(--rp-navy);
+  font-size: calc(29px * var(--font-scale));
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.42;
+  word-break: keep-all;
+}
+.report-page .tenant-match-description {
+  max-width: 600px;
+  margin: 10px 0 0;
+  color: #596579;
+  font-size: calc(16px * var(--font-scale));
+  line-height: 1.7;
+  word-break: keep-all;
+}
+.report-page .tenant-match-recommendations {
+  margin-top: 25px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rp-line);
+}
+.report-page .tenant-match-list-title {
+  margin: 0 0 11px;
+  color: #687488;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+}
+.report-page .tenant-match-recommendations ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-page .tenant-match-recommendations li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.report-page .tenant-match-rank {
+  color: #8993a3;
+  font-size: calc(12px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+}
+.report-page .tenant-match-industry {
+  overflow: hidden;
+  color: var(--rp-ink);
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-page .tenant-match-fit {
+  color: var(--rp-blue);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+  white-space: nowrap;
+}
+.report-page .tenant-match-score-note,
+.report-page .tenant-match-empty {
+  margin: 10px 0 0;
+  color: #788294;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+}
+.report-page .tenant-match-action {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 22px 0 22px 27px;
+  border-left: 1px solid var(--rp-line);
+}
+.report-page .tenant-match-action-label {
+  margin-bottom: 6px;
+}
+.report-page .tenant-match-action-copy {
+  margin: 0;
+  color: #596579;
+  font-size: calc(14px * var(--font-scale));
+  line-height: 1.65;
+  word-break: keep-all;
+}
+.report-page .tenant-match-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-top: 20px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--rp-blue);
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 700;
+  white-space: nowrap;
+}
+.report-page .tenant-match-button:hover {
+  background: var(--rp-navy);
+}
+.report-page .tenant-match-reassurance {
+  margin: 10px 0 0;
+  color: #788294;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.report-page .tenant-match-notice {
+  margin: 10px 0 0;
+  color: #596579;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+}
+.report-page .tenant-match-button:focus-visible {
+  outline: 3px solid var(--rp-amber);
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .report-page .tenant-match {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px;
+    padding: 26px 24px;
+  }
+  .report-page .tenant-match-recommendations ol {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+}
+@media (max-width: 640px) {
+  .report-page .tenant-match {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    padding: 24px 20px;
+    border-radius: 12px;
+  }
+  .report-page .tenant-match-message h3 {
+    font-size: calc(23px * var(--font-scale));
+  }
+  .report-page .tenant-match-description {
+    font-size: calc(15px * var(--font-scale));
+  }
+  .report-page .tenant-match-recommendations {
+    margin-top: 21px;
+  }
+  .report-page .tenant-match-recommendations ol {
+    grid-template-columns: 1fr;
+    gap: 11px;
+  }
+  .report-page .tenant-match-action {
+    padding: 19px 0 0;
+    border-top: 1px solid var(--rp-line);
+    border-left: 0;
+  }
+  .report-page .tenant-match-button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-page .tenant-match-button {
+    transition: none;
+  }
+}
+
 /* 05~08 장은 바깥 흰 컨테이너 없이 안쪽 카드만 보이게 둔다. */
 .report-page .action-plan {
   border: 0;
@@ -4192,119 +4393,254 @@
   }
 }
 
-/* ── 06 경쟁업체: 카드 대신 구분선으로 나눈 읽기형 배치 ────────────────── */
-.report-page #competition .ca-card {
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+/* ── 06 경쟁업체: 대시보드 배치(KPI → 차트 2칸 → 표·목록 → 구성 차트) ── */
+.report-page .ca-dash {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.report-page .ca-dash .ca-card {
+  height: 100%;
+  border: 1px solid #e2e8ee !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  box-shadow: 0 6px 18px rgba(16, 35, 58, 0.04) !important;
+}
+.report-page .ca-dash .ca-card-head {
+  padding: 0 0 16px !important;
+  border-bottom: 0 !important;
+}
+.report-page .ca-dash .ca-card-body {
   padding: 0 !important;
 }
-.report-page #competition .ca-card-head {
-  padding: 0 0 14px !important;
-  border-bottom: 2px solid #10233a !important;
+.report-page .ca-dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
 }
-.report-page #competition .ca-card-body {
-  padding: 0 !important;
+.report-page .ca-kpi {
+  padding: 22px 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8ee;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(16, 35, 58, 0.04);
 }
-.report-page #competition .market-landscape {
-  background: transparent;
-  border-radius: 0;
-  padding: 40px 0 0;
-  border-top: 1px solid #d5dee7;
+.report-page .ca-kpi-label {
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 600;
+  color: #5a6878;
 }
-.report-page #competition .analysis-chart-pair {
-  column-gap: 48px;
-  row-gap: 40px;
+.report-page .ca-kpi-value {
+  margin-top: 10px;
+  font-size: calc(32px * var(--font-scale));
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #10233a;
+  font-variant-numeric: tabular-nums;
 }
-
-/* 업종별 경쟁 지표: 업종 한 줄 = 이름·점포 수 | 반경 안 배수 | 자치구 대비 배수 */
-.report-page #competition .ca-industry-groups {
-  gap: 32px;
+.report-page .ca-kpi-value small {
+  margin-left: 3px;
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 600;
+  color: #5a6878;
 }
-.report-page #competition .ca-industry-grid {
-  grid-template-columns: minmax(0, 1fr) !important;
-  gap: 0 !important;
+.report-page .ca-kpi-note {
+  margin-top: 8px;
+  font-size: calc(13px * var(--font-scale));
+  color: #7a8794;
 }
-.report-page #competition .ca-industry-group .ca-industry-card {
-  display: grid !important;
-  grid-template-columns: 250px minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: 40px;
-  row-gap: 6px !important;
-  align-items: start;
-  padding: 22px 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-bottom: 1px solid #d5dee7 !important;
-  border-radius: 0 !important;
+.report-page .ca-dash-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
 }
-.report-page #competition .ca-industry-head {
-  grid-column: 1;
-  grid-row: 1;
-  justify-content: flex-start;
-  gap: 10px;
+.report-page .ca-dash-row-wide {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
 }
-.report-page #competition .ca-industry-counts {
-  grid-column: 1;
-  grid-row: 2;
-  white-space: nowrap;
-}
-.report-page #competition .ca-industry-card .divbar {
-  grid-row: 1 / span 2;
+.report-page .ca-dash-row > * {
   min-width: 0;
 }
-.report-page #competition .ca-industry-counts + .divbar {
-  grid-column: 2;
+
+/* 업종별 경쟁 지표 표 */
+.report-page .ca-table-wrap {
+  width: 100%;
+  overflow-x: auto;
 }
-.report-page #competition .divbar + .divbar {
-  grid-column: 3;
+.report-page .ca-table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: calc(14px * var(--font-scale));
+  color: #10233a;
 }
-.report-page #competition .ca-industry-card > .ca-empty-note {
-  grid-column: 2 / -1;
-  grid-row: 1 / span 2;
-  align-self: center;
+.report-page .ca-table th {
+  padding: 10px 12px;
+  background: #f5f8fb;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: #5a6878;
+  text-align: right;
+  white-space: nowrap;
 }
-.report-page #competition .ca-industry-head > span:last-child {
-  font-size: calc(13px * var(--font-scale)) !important;
+.report-page .ca-table th:first-child {
+  text-align: left;
+  border-radius: 8px 0 0 8px;
+}
+.report-page .ca-table th:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.report-page .ca-table td {
+  padding: 12px;
+  border-bottom: 1px solid #edf1f5;
+}
+.report-page .ca-table tr:last-child td {
+  border-bottom: 0;
+}
+.report-page .ca-table-name {
+  font-weight: 600;
+}
+.report-page .ca-table-tag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 700;
+}
+.report-page .ca-table-tag.is-rec {
+  background: #eaf0fc;
+  color: #2453d6;
+}
+.report-page .ca-table-tag.is-not {
+  background: #fbefe9;
+  color: #c2410c;
+}
+.report-page .ca-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .ca-index {
+  font-weight: 600;
+}
+.report-page .ca-index-up {
+  color: #10233a;
+}
+.report-page .ca-index-down {
+  color: #7a8794;
+}
+.report-page .ca-index-na,
+.report-page td.ca-index-na {
+  color: #8a97a5;
+  text-align: right;
+  font-size: calc(13px * var(--font-scale));
 }
 
-@media (max-width: 900px) {
-  .report-page #competition .ca-industry-group .ca-industry-card {
+/* 자치구 대비 특화 업종 목록 */
+.report-page .ca-spec-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-page .ca-spec-list li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 0;
+  border-bottom: 1px solid #edf1f5;
+  font-size: calc(14px * var(--font-scale));
+}
+.report-page .ca-spec-list li:last-child {
+  border-bottom: 0;
+}
+.report-page .ca-spec-rank {
+  color: #8a97a5;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.report-page .ca-spec-name {
+  color: #10233a;
+}
+.report-page .ca-spec-times {
+  font-weight: 700;
+  color: #2453d6;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+  .report-page .ca-dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-page .ca-dash-row,
+  .report-page .ca-dash-row-wide {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    row-gap: 12px !important;
-  }
-  .report-page #competition .ca-industry-head,
-  .report-page #competition .ca-industry-counts,
-  .report-page #competition .ca-industry-card .divbar,
-  .report-page #competition .ca-industry-card > .ca-empty-note {
-    grid-column: 1 !important;
-    grid-row: auto !important;
-  }
-  .report-page #competition .analysis-chart-pair {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
-.report-page #competition .ca-industry-groups {
-  padding-top: 16px;
+@media (max-width: 480px) {
+  .report-page .ca-dash-kpis {
+    gap: 10px;
+  }
+  .report-page .ca-kpi {
+    padding: 16px;
+  }
+  .report-page .ca-kpi-value {
+    font-size: calc(24px * var(--font-scale));
+  }
 }
-/* 실데이터 경로(FactCompetitionSection)도 같은 방식으로 카드 테두리를 걷어 낸다. */
-.report-page #competition :is(.fact-card, .fact-stat) {
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+
+/* 대시보드 카드 안: 제목·설명을 작게, 상위 업종 막대를 한 줄로 */
+.report-page .ca-dash .ca-card-title {
+  font-size: calc(18px * var(--font-scale)) !important;
+  font-weight: 700;
 }
-.report-page #competition .fact-card-head {
-  padding: 0 0 14px !important;
-  border-bottom: 2px solid #10233a !important;
+.report-page .ca-dash .ca-card-desc {
+  margin-top: 4px;
+  font-size: calc(13px * var(--font-scale)) !important;
+  line-height: 1.6;
+  color: #6b7a8a !important;
 }
-.report-page #competition .fact-card-body {
-  padding: 16px 0 0 !important;
+.report-page .ca-dash .ca-chart-wrap {
+  width: 100%;
+  padding: 8px 16px 0;
 }
-.report-page #competition .fact-stat {
-  padding: 16px 0 !important;
-  border-top: 1px solid #d5dee7 !important;
-  border-bottom: 1px solid #d5dee7 !important;
+.report-page .ca-dash .ca-bar-row {
+  grid-template-columns: 128px minmax(0, 1fr) 132px !important;
+  column-gap: 12px !important;
+  padding-block: 7px !important;
+}
+.report-page .ca-dash .ca-bar-label {
+  overflow: hidden !important;
+  font-size: calc(13px * var(--font-scale)) !important;
+  text-overflow: ellipsis;
+  white-space: nowrap !important;
+}
+.report-page .ca-dash .ca-bar-track {
+  grid-column: 2;
+  grid-row: 1;
+}
+.report-page .ca-dash .ca-bar-note {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: calc(12px * var(--font-scale)) !important;
+  text-align: right;
+  white-space: nowrap;
+  color: #6b7a8a;
+}
+@media (max-width: 480px) {
+  .report-page .ca-dash .ca-bar-row {
+    grid-template-columns: 96px minmax(0, 1fr) !important;
+    row-gap: 2px !important;
+  }
+  .report-page .ca-dash .ca-bar-note {
+    grid-column: 2;
+    grid-row: 2;
+    text-align: left;
+  }
+}
+.report-page .ca-dash .ca-chart-wrap svg {
+  overflow: visible;
 }
