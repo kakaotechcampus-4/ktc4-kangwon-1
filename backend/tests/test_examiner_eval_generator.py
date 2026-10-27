@@ -181,6 +181,14 @@ class GeneratorTest(unittest.TestCase):
         for phrase in PHRASES["oldest_year_close_rate"]:
             self.assertIn("가장 이른 해", phrase)
 
+    def test_clean_phrases_state_values_without_judgment(self):
+        judgments = ("위험", "주의", "부담", "수요", "형성된", "가늠", "해석")
+        for metric, phrases in PHRASES.items():
+            for phrase in phrases:
+                for word in judgments:
+                    with self.subTest(metric=metric, word=word):
+                        self.assertNotIn(word, phrase)
+
     def test_unique_assignment_always_places_three_seeds(self):
         spec = {
             "CSA": FULL,
