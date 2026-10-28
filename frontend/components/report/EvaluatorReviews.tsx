@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, CircleMinus, CircleHelp, X } from 'lucide-react';
+import Image from 'next/image';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import { industryName } from '@/lib/api/industries';
@@ -26,17 +27,25 @@ const ACTOR_LABELS: Record<
   EvaluatorActor,
   { name: string; view: string; avatar: string }
 > = {
-  examiner: { name: '심사위원', view: '근거와 점수의 정확성', avatar: '🧑‍⚖️' },
-  founder: { name: '창업자', view: '공간과 실제 운영 가능성', avatar: '🧑‍🍳' },
+  examiner: {
+    name: '심사위원',
+    view: '근거와 점수의 정확성',
+    avatar: '/images/review-avatars/examiner.svg',
+  },
+  founder: {
+    name: '창업자',
+    view: '공간과 실제 운영 가능성',
+    avatar: '/images/review-avatars/founder.svg',
+  },
   customer: {
     name: '고객',
     view: '방문 동기와 고객층의 적합성',
-    avatar: '🧑‍🦱',
+    avatar: '/images/review-avatars/customer.svg',
   },
   landlord_advocate: {
     name: '임대인 대변인',
     view: '공실 해소와 임대 지속성',
-    avatar: '🧑‍💼',
+    avatar: '/images/review-avatars/landlord-advocate.svg',
   },
 };
 
@@ -362,15 +371,19 @@ function ReviewerCard({
         <div className="flex items-start gap-3">
           <span
             aria-hidden
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl"
+            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full"
             style={{
-              backgroundColor: failed
-                ? reportPalette.canvas
-                : reportPalette.blueWash,
               filter: failed ? 'grayscale(1)' : undefined,
             }}
           >
-            {actor.avatar}
+            <Image
+              src={actor.avatar}
+              alt=""
+              width={48}
+              height={48}
+              unoptimized
+              className="h-12 w-12 object-cover"
+            />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
