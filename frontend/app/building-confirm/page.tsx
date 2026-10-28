@@ -77,6 +77,8 @@ export default function BuildingConfirmPage() {
   const [input, setInput] = useState<VacancyInput | null>(null);
   const [statuses, setStatuses] = useState(INITIAL_STATUSES);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   // 전용면적 입력 중인 문자열("275." 같은 중간 값)을 숫자 필드와 따로 든다.
   const [areaText, setAreaText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -113,6 +115,7 @@ export default function BuildingConfirmPage() {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     fetchBuildingInfo(saved.roadAddress, {
+      floorUnit: saved.floorUnit,
       signal: controller.signal,
       failLookups: mockFailLookups(window.location.search),
       onStepChange: (id, status) =>
@@ -129,13 +132,23 @@ export default function BuildingConfirmPage() {
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : '건축물대장 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+        );
+        setStatuses(
+          Object.fromEntries(
+            LOOKUP_ORDER.map((id) => [id, 'failed'])
+          ) as Record<LookupId, LookupStatus>
+        );
       });
 
     return () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [router]);
+  }, [retryCount, router]);
 
   function updateBuilding(patch: Partial<BuildingInfo>) {
     setBuilding((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -217,6 +230,12 @@ export default function BuildingConfirmPage() {
               statuses={statuses}
               floorLabel={floorLabel}
               address={input?.roadAddress}
+              errorMessage={loadError}
+              onRetry={() => {
+                setLoadError(null);
+                setStatuses(INITIAL_STATUSES);
+                setRetryCount((count) => count + 1);
+              }}
             />
           </>
         ) : (
