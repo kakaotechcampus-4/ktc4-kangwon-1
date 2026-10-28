@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import HeaderUserMenu from '@/components/layout/HeaderUserMenu';
 import { colors } from '@/styles/tokens';
 
 const navLinks = [
@@ -119,17 +120,7 @@ export default function Header({ overlay = false }: HeaderProps) {
         </nav>
 
         <div className="hidden justify-self-end sm:block">
-          {/* 로그인 기능 연결 전이라 준비 중 안내 화면(/login)으로 보낸다. */}
-          <Link
-            href="/login"
-            className="inline-flex h-11 items-center rounded-md border-[1.5px] px-5 text-15 font-bold transition-colors hover:bg-white/60"
-            style={{
-              borderColor: colors.brand.dark,
-              color: colors.brand.dark,
-            }}
-          >
-            로그인
-          </Link>
+          <HeaderUserMenu />
         </div>
       </div>
     </header>

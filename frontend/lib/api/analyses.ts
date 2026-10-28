@@ -9,7 +9,7 @@ import type {
   StoredAnalysis,
   WaitingForInput,
 } from '@/lib/api/types';
-import { API_BASE_URL } from '@/lib/api/baseUrl';
+import { apiFetch } from '@/lib/api/http';
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
@@ -78,7 +78,7 @@ export async function createAnalysis(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/v1/analyses?mock=${mock}`, {
+    response = await apiFetch(`/api/v1/analyses?mock=${mock}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // radius_m은 백엔드 요청 필드 제안이며, 서버의 수신·적용 연결이 필요하다.
@@ -114,7 +114,7 @@ export async function createAnalysis(
 
 export async function getAnalysis(requestId: string): Promise<StoredAnalysis> {
   return requestJson<StoredAnalysis>(
-    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}`
+    `/api/v1/analyses/${encodeURIComponent(requestId)}`
   );
 }
 
@@ -186,7 +186,7 @@ export function buildAnalysisRequestBody({
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  return readJson<T>(await fetch(url, init));
+  return readJson<T>(await apiFetch(url, init));
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -232,7 +232,7 @@ async function rejectsFacilities(response: Response): Promise<boolean> {
 export async function startAnalysis(
   input: AnalysisRequestInput
 ): Promise<AcceptedAnalysis & { facilitiesDropped?: boolean }> {
-  const url = `${API_BASE_URL}/api/v1/analyses?wait=false`;
+  const url = `/api/v1/analyses?wait=false`;
   const body = buildAnalysisRequestBody(input);
   const send = (payload: object) =>
     requestJson<AcceptedAnalysis>(url, {
@@ -243,7 +243,7 @@ export async function startAnalysis(
   if (!('facilities' in body)) {
     return send(body);
   }
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -262,7 +262,7 @@ export async function getAnalysisEvents(
   after: number
 ): Promise<AnalysisEvents> {
   return requestJson<AnalysisEvents>(
-    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/events?after=${after}`
+    `/api/v1/analyses/${encodeURIComponent(requestId)}/events?after=${after}`
   );
 }
 
@@ -272,7 +272,7 @@ export async function submitAnswers(
 ): Promise<AcceptedAnalysis> {
   const { request_id, question_session_id, answers } = submission;
   return requestJson<AcceptedAnalysis>(
-    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(request_id)}/answers?wait=false`,
+    `/api/v1/analyses/${encodeURIComponent(request_id)}/answers?wait=false`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -287,6 +287,6 @@ export async function getAnalysisFacts(
   requestId: string
 ): Promise<RequestFacts> {
   return requestJson<RequestFacts>(
-    `${API_BASE_URL}/api/v1/analyses/${encodeURIComponent(requestId)}/facts`
+    `/api/v1/analyses/${encodeURIComponent(requestId)}/facts`
   );
 }

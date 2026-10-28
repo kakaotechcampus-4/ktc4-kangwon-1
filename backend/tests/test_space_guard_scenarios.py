@@ -18,6 +18,7 @@ from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
 from app.main import create_app
 from app.schemas import DecisionResult
 from app.services.settings import ExecutionSettings
+from tests.auth_fixture import login
 
 
 def codes_with(level, key):
@@ -46,9 +47,9 @@ class ServicePathScenarioTests(unittest.TestCase):
         )
         self.directory = self.enterContext(tempfile.TemporaryDirectory())
         self.path = Path(self.directory) / "scenario.sqlite3"
-        self.client = self.enterContext(
-            TestClient(create_app(settings=ExecutionSettings(db_path=self.path), load_env=False))
-        )
+        app = create_app(settings=ExecutionSettings(db_path=self.path), load_env=False)
+        login(app, self.path)
+        self.client = self.enterContext(TestClient(app))
 
     def run_analysis(self, **fields):
         response = self.client.post(

@@ -8,7 +8,7 @@ from app.agentic.questions import save_confirmed_space
 from app.agentic.scoring import WEIGHTS, result, summarize
 from app.agentic.snapshot import persist_report, persist_space_requirements
 from app.agentic.space import ensure_space_fits
-from app.db.connection import connect, initialize
+from app.db.connection import SCHEMA_VERSION, connect, initialize
 from app.db.repository import create_request
 from app.industries.catalog import INDUSTRIES
 from app.schemas import Site
@@ -133,7 +133,7 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
     async def test_old_db_accepts_confirmed_facilities(self):
         with connect(self.path) as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 5)
+        self.assertEqual(version, SCHEMA_VERSION)
         saved = save_confirmed_space(
             self.scope, {"existing_facilities": {"water_supply": "present"}}
         )

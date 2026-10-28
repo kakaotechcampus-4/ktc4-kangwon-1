@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import StyledJsxRegistry from './StyledJsxRegistry';
 import { pretendard } from '@/styles/fonts';
+import AuthProvider from '@/components/auth/AuthProvider';
 
 export const metadata: Metadata = {
   title: '채움 · 공실에 맞는 업종을 찾아드립니다',
@@ -13,7 +14,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <StyledJsxRegistry>{children}</StyledJsxRegistry>
+        <StyledJsxRegistry>
+          <AuthProvider>{children}</AuthProvider>
+        </StyledJsxRegistry>
       </body>
     </html>
   );
