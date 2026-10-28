@@ -9,19 +9,20 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClassNames: Record<ButtonVariant, string> = {
-  primary: 'px-[28px] py-[14px] font-semibold',
-  outline: 'px-[20px] py-[14px] font-medium border',
+  primary: 'px-[28px] py-[14px] font-bold',
+  outline: 'px-[20px] py-[14px] font-semibold border-[1.5px]',
 };
 
 const variantStyles: Record<ButtonVariant, CSSProperties> = {
   primary: {
-    backgroundColor: colors.brand.dark,
+    backgroundColor: colors.brand.primary,
     color: colors.neutral.white,
-    boxShadow: `0px 4px 7px 0px ${colors.brand.dark}4D`,
+    boxShadow: `0px 8px 18px 0px ${colors.brand.primary}33`,
   },
   outline: {
     backgroundColor: colors.neutral.white,
-    borderColor: colors.neutral.border,
+    borderColor: colors.brand.dark,
+    color: colors.brand.dark,
   },
 };
 
@@ -34,7 +35,7 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex shrink-0 items-center justify-center rounded-lg text-sm transition-opacity hover:opacity-90 ${variantClassNames[variant]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-xl text-sm transition-opacity hover:opacity-90 ${variantClassNames[variant]} ${className}`}
       style={{ ...variantStyles[variant], ...style }}
       {...rest}
     >

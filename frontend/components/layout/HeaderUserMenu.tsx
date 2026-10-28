@@ -30,15 +30,18 @@ export default function HeaderUserMenu() {
 
   // 로그인 여부를 확인하는 동안 자리를 비워 둔다. 버튼이 깜빡이며 바뀌지 않게.
   if (status === 'loading') {
-    return <div className="justify-self-end" style={{ width: 84 }} />;
+    return <div className="h-11 justify-self-end" style={{ width: 84 }} />;
   }
 
   if (status === 'anonymous') {
     return (
       <Link
         href={`/login?next=${encodeURIComponent(pathname)}`}
-        className="justify-self-end rounded-lg px-4 py-2 text-15 font-semibold transition-opacity hover:opacity-80"
-        style={{ color: colors.brand.dark }}
+        className="inline-flex h-11 items-center justify-self-end rounded-md border-[1.5px] px-5 text-15 font-bold transition-colors hover:bg-white/60"
+        style={{
+          borderColor: colors.brand.dark,
+          color: colors.brand.dark,
+        }}
       >
         로그인
       </Link>
@@ -67,13 +70,16 @@ export default function HeaderUserMenu() {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex max-w-[180px] items-center gap-2 rounded-lg px-3 py-2 text-15 transition-colors hover:bg-gray-50"
-        style={{ color: colors.text.primary }}
+        className="inline-flex h-11 max-w-[200px] items-center gap-2 rounded-md border-[1.5px] px-3 text-15 font-bold transition-colors hover:bg-white/60"
+        style={{
+          borderColor: colors.brand.dark,
+          color: colors.brand.dark,
+        }}
       >
         <span
           className="flex size-7 shrink-0 items-center justify-center rounded-full text-13 font-semibold"
           style={{
-            backgroundColor: colors.brand.dark,
+            backgroundColor: colors.brand.primary,
             color: colors.neutral.white,
           }}
         >
@@ -85,7 +91,7 @@ export default function HeaderUserMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-44 flex-col overflow-hidden rounded-lg border shadow-[0px_4px_16px_0px_rgba(0,0,0,0.08)]"
+          className="absolute right-0 top-[calc(100%+8px)] z-20 flex w-48 flex-col overflow-hidden rounded-xl border shadow-[0px_18px_40px_0px_rgba(16,35,58,0.10)]"
           style={{
             backgroundColor: colors.neutral.white,
             borderColor: colors.neutral.border,
@@ -95,8 +101,8 @@ export default function HeaderUserMenu() {
             href="/my/reports"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="px-4 py-3 text-left text-15 transition-colors hover:bg-gray-50"
-            style={{ color: colors.text.primary }}
+            className="px-4 py-3 text-left text-15 font-medium transition-colors hover:bg-[#EAF2F7]"
+            style={{ color: colors.brand.dark }}
           >
             내 분석 기록
           </Link>
@@ -104,9 +110,9 @@ export default function HeaderUserMenu() {
             type="button"
             role="menuitem"
             onClick={handleLogout}
-            className="border-t px-4 py-3 text-left text-15 transition-colors hover:bg-gray-50"
+            className="border-t px-4 py-3 text-left text-15 font-medium transition-colors hover:bg-[#EAF2F7]"
             style={{
-              color: colors.text.secondary,
+              color: '#4B5866',
               borderColor: colors.neutral.border,
             }}
           >

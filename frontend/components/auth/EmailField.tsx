@@ -28,8 +28,7 @@ export default function EmailField({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor="email-local"
-        className="text-15 font-medium"
-        style={{ color: colors.text.primary }}
+        className="text-15 font-medium text-gray-500"
       >
         이메일
       </label>
@@ -60,11 +59,11 @@ export default function EmailField({
             // 직접 입력으로 바꾸면 칸을 비워 사용자가 바로 칠 수 있게 한다.
             onDomainChange(next === CUSTOM_DOMAIN ? '' : next);
           }}
-          className="w-[132px] shrink-0 rounded-lg border px-2.5 py-3 text-base"
+          className="w-[132px] shrink-0 rounded-xl border-[1.5px] px-3 py-3.5 text-base outline-none focus:border-[#2453D6]"
           style={{
             backgroundColor: colors.neutral.white,
-            borderColor: colors.neutral.border,
-            color: colors.neutral.black,
+            borderColor: '#D5DEE7',
+            color: colors.brand.dark,
           }}
         >
           {EMAIL_DOMAINS.map((item) => (

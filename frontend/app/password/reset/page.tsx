@@ -55,6 +55,7 @@ function ResetPassword() {
   if (!token) {
     return (
       <AuthShell
+        eyebrow="PASSWORD"
         title="링크가 올바르지 않습니다"
         description="메일에 담긴 링크를 다시 눌러 주세요."
         footer={
@@ -73,6 +74,7 @@ function ResetPassword() {
 
   return (
     <AuthShell
+      eyebrow="PASSWORD"
       title="새 비밀번호 설정"
       description="바꾸고 나면 다른 기기의 로그인도 모두 해제됩니다."
     >

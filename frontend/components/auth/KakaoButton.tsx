@@ -15,7 +15,7 @@ export default function KakaoButton({ next }: { next: string }) {
       onClick={() => {
         window.location.href = kakaoLoginUrl(next);
       }}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3.5 text-base font-semibold transition-opacity hover:opacity-90"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-[28px] py-[14px] text-sm font-bold transition-opacity hover:opacity-90"
       style={{
         backgroundColor: colors.kakao.yellow,
         color: colors.kakao.label,

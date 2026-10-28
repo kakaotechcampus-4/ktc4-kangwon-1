@@ -30,15 +30,21 @@ export default function VerificationNotice({
   }
 
   return (
-    <main className="flex flex-1 justify-center px-6 py-20">
-      <Card className="w-full max-w-lg gap-5">
+    <main className="flex flex-1 justify-center px-4 pt-16 pb-24">
+      <Card className="w-full max-w-[480px] gap-5">
+        <p
+          className="text-sm font-bold tracking-[0.08em]"
+          style={{ color: colors.brand.primary }}
+        >
+          EMAIL VERIFICATION
+        </p>
         <h1
-          className="text-22 font-bold"
-          style={{ color: colors.neutral.black }}
+          className="text-3xl font-extrabold tracking-[-0.03em] break-keep"
+          style={{ color: colors.brand.dark }}
         >
           이메일 확인을 끝내 주세요
         </h1>
-        <p className="text-15" style={{ color: colors.text.secondary }}>
+        <p className="text-base break-keep text-[#4B5866]">
           {email ? (
             <>
               <b style={{ color: colors.text.primary }}>{email}</b> 으로 보낸
