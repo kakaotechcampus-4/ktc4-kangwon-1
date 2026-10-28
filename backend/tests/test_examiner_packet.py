@@ -126,6 +126,14 @@ class ExaminerPacketLimitTests(unittest.TestCase):
         item = packet["candidates"][0]["score_items"][0]
         self.assertEqual(item[SCORE["fact_ids"]], [ids[2]])
 
+    def test_note_explains_seoul_ratios(self):
+        _, _, packet = self.build(1)
+        self.assertEqual(packet["note"], examiner.NOTE)
+        for word in ("close_rate_ratio", "turnover_ratio", "close_trend_ratio", "net_change_index"):
+            self.assertIn(word, examiner.NOTE)
+        self.assertIn("한 배보다 작으면 서울보다 낮고", examiner.NOTE)
+        self.assertFalse(has_digit(examiner.NOTE))
+
     def test_long_value_is_left_for_reading(self):
         ids = [fact_id(0)]
         rows = {ids[0]: row(ids[0], value_json=json.dumps(list(range(400))))}
