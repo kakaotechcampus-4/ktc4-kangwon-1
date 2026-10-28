@@ -154,6 +154,11 @@ class ExaminerChecksTests(unittest.TestCase):
         self.assertIn("나눠서", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
+    def test_persona_separates_wrong_metric_from_missing_evidence(self):
+        self.assertIn("슬롯이 있는데 엉뚱한 지표를 가리키면", examiner.PERSONA)
+        self.assertIn("missing_evidence로 쓰지 마세요", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
     def test_persona_keeps_less_detailed_period_as_condition(self):
         self.assertIn("실제로 다를 때만 scope_mismatch", examiner.PERSONA)
         self.assertIn("덜 자세히 썼을 뿐 어긋나지 않으면 kind=action_condition", examiner.PERSONA)

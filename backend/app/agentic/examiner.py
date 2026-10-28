@@ -22,6 +22,8 @@ PERSONA = (
     "근거 칸: 문장에 fact 슬롯이 없으면 그 후보 score_items에서 문장을 뒷받침할 fact_id를 골라 "
     "target=claim, kind=missing_evidence로 지적하세요. "
     "출처 칸: 인용 fact의 source·metric이 문장 내용과 다르면 scope_mismatch입니다. "
+    "슬롯이 있는데 엉뚱한 지표를 가리키면 근거가 없는 것이 아니라 출처가 틀린 것이니 "
+    "missing_evidence로 쓰지 마세요. "
     "기간 범위 칸: fact의 period·spatial_scopes가 문장이 말하는 시점·범위와 "
     "실제로 다를 때만 scope_mismatch입니다. 문장이 기간·범위를 근거보다 "
     "덜 자세히 썼을 뿐 어긋나지 않으면 kind=action_condition으로 남기세요. "
