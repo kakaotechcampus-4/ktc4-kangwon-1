@@ -23,7 +23,6 @@ export default function CTABanner() {
     saveVacancyInput({
       roadAddress: address.trim(),
       floorUnit: '',
-      radius: '',
     });
     router.push('/building-confirm');
   }
