@@ -126,14 +126,6 @@ class ExaminerPacketLimitTests(unittest.TestCase):
         item = packet["candidates"][0]["score_items"][0]
         self.assertEqual(item[SCORE["fact_ids"]], [ids[2]])
 
-    def test_note_explains_seoul_ratios(self):
-        _, _, packet = self.build(1)
-        self.assertEqual(packet["note"], examiner.NOTE)
-        for word in ("close_rate_ratio", "turnover_ratio", "close_trend_ratio", "net_change_index"):
-            self.assertIn(word, examiner.NOTE)
-        self.assertIn("한 배보다 작으면 서울보다 낮고", examiner.NOTE)
-        self.assertFalse(has_digit(examiner.NOTE))
-
     def test_long_value_is_left_for_reading(self):
         ids = [fact_id(0)]
         rows = {ids[0]: row(ids[0], value_json=json.dumps(list(range(400))))}
@@ -153,8 +145,7 @@ class ExaminerChecksTests(unittest.TestCase):
 
     def test_persona_points_to_checks(self):
         self.assertIn("checks", examiner.PERSONA)
-        self.assertIn("checks를 본 뒤에도 폐업률처럼 기간이 있는 문장", examiner.PERSONA)
-        self.assertIn("이유·위험 칸을 가리지 말고", examiner.PERSONA)
+        self.assertIn("checks를 본 뒤에도 위험 문장", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
     def test_persona_limits_fact_reads(self):

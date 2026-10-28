@@ -17,8 +17,7 @@ PERSONA = (
     "순번은 칸 안 문장을 영부터 센 값입니다. 그 후보 score_items에서 문장을 뒷받침할 "
     "fact_id를 골라 missing_evidence로 지적하세요. checks.shared_sources는 같은 원천 "
     "지표를 쓰는 점수 문항 묶음이니 중복 칸 판단에 참고하세요. "
-    "checks를 본 뒤에도 폐업률처럼 기간이 있는 문장은 이유·위험 칸을 가리지 말고 "
-    "인용 fact의 출처·기간 범위 칸을 확인하세요. "
+    "checks를 본 뒤에도 위험 문장마다 인용 fact의 출처·기간 범위 칸을 확인하세요. "
     "근거 칸: 문장에 fact 슬롯이 없으면 그 후보 score_items에서 문장을 뒷받침할 fact_id를 골라 "
     "target=claim, kind=missing_evidence로 지적하세요. "
     "출처 칸: 인용 fact의 source·metric이 문장 내용과 다르면 scope_mismatch입니다. "
@@ -62,13 +61,7 @@ FACT_COLUMNS = (
 )
 NOTE = (
     "score_items와 facts는 score_columns·fact_columns 순서의 행입니다. "
-    "facts의 value가 null이거나 omitted_fact_ids에 있으면 get_facts로 원문을 확인하세요. "
-    "business_lifecycle의 배수 지표는 서울 같은 업종과 견준 값입니다. "
-    "close_rate_ratio·turnover_ratio는 이 상권의 최근 한 해 폐업률·회전율을 "
-    "서울 값으로 나눈 것이라 한 배보다 작으면 서울보다 낮고 크면 높습니다. "
-    "close_trend_ratio는 가장 이른 해 대비 최근 한 해 폐업률 변화를 서울 변화와 견준 것이라 "
-    "한 배보다 작으면 서울보다 덜 오르거나 더 내렸습니다. "
-    "net_change_index는 한 배보다 크면 서울보다 점포 순증가가 큽니다."
+    "facts의 value가 null이거나 omitted_fact_ids에 있으면 get_facts로 원문을 확인하세요."
 )
 
 
