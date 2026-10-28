@@ -63,6 +63,37 @@ class StoreTests(unittest.IsolatedAsyncioTestCase):
         finally:
             db.close()
 
+    async def test_load_contexts_reads_close_rate_ratios(self):
+        await self.submit()
+        db = sqlite3.connect(self.path)
+        db.row_factory = sqlite3.Row
+        try:
+            rows = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT * FROM facts WHERE metric='close_rate_ratio' "
+                    "ORDER BY industry_code LIMIT 2"
+                )
+            ]
+            with db:
+                for index, (row, value) in enumerate(zip(rows, ("1.25", '"없음"'), strict=True)):
+                    row.update(
+                        fact_id=f"f_ratio-{index}",
+                        identity_hash=f"ratio-{index}",
+                        status="observed",
+                        citable=1,
+                        value_json=value,
+                    )
+                    db.execute(
+                        f"INSERT INTO facts({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                        list(row.values()),
+                    )
+        finally:
+            db.close()
+        ctx = store.load_contexts(self.path)[0]
+        codes = [row["industry_code"] for row in rows]
+        self.assertEqual(ctx.ratios, {codes[0]: 1.25, codes[1]: None})
+
     async def test_candidate_facts_keep_every_fact_of_an_industry(self):
         await self.submit()
         contexts = store.load_contexts(self.path)

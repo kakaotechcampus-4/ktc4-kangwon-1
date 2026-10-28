@@ -29,6 +29,19 @@ PHRASES: dict[str, tuple[str, ...]] = {
     ),
 }
 
+COMPARE_PHRASES: dict[str, tuple[str, ...]] = {
+    "high": (
+        "최근 한 해의 폐업률은 {fact}이고 서울 같은 업종 대비 배율은 {fact}로 서울보다 높습니다.",
+        "최근 한 해 기준 폐업률은 {fact}이며 서울과 견준 배율 {fact}로 보면 서울보다 높습니다.",
+        "이 업종의 최근 한 해 폐업률은 {fact}이고 서울 같은 업종 대비 {fact}로 서울보다 높습니다.",
+    ),
+    "low": (
+        "최근 한 해의 폐업률은 {fact}이고 서울 같은 업종 대비 배율은 {fact}로 서울보다 낮습니다.",
+        "최근 한 해 기준 폐업률은 {fact}이며 서울과 견준 배율 {fact}로 보면 서울보다 낮습니다.",
+        "이 업종의 최근 한 해 폐업률은 {fact}이고 서울 같은 업종 대비 {fact}로 서울보다 낮습니다.",
+    ),
+}
+
 BARE_PHRASES: dict[str, tuple[str, ...]] = {
     "store_count": (
         "같은 업종 점포가 주변에 꽤 모여 있어 찾는 손님이 있는 자리입니다.",
@@ -40,11 +53,6 @@ BARE_PHRASES: dict[str, tuple[str, ...]] = {
         "지나는 사람들의 시간대별 흐름이 업종 특성과 어울리는 편입니다.",
         "오가는 사람들의 패턴이 이 업종이 필요로 하는 손님 흐름과 비슷합니다.",
     ),
-    "recent_year_close_rate": (
-        "최근 한 해에는 문을 닫은 가게가 적지 않아 운영 부담을 함께 살펴야 합니다.",
-        "최근 한 해 동안 폐업이 이어진 편이라 위험 요인으로 볼 수 있습니다.",
-        "관측 기간 가운데 최근 한 해의 폐업이 눈에 띄어 주의가 필요합니다.",
-    ),
 }
 
 SOURCES = {
@@ -52,12 +60,12 @@ SOURCES = {
     "pattern_fit_index": "floating_population",
     "recent_year_close_rate": "business_lifecycle",
     "oldest_year_close_rate": "business_lifecycle",
+    "close_rate_ratio": "business_lifecycle",
 }
 
 PLAN = (
     ("reasons_segments", "store_count"),
     ("reasons_segments", "pattern_fit_index"),
-    ("risks_segments", "recent_year_close_rate"),
 )
 
 
@@ -65,15 +73,31 @@ def _fact_id(ctx, code, metric):
     return ctx.facts.get((code, SOURCES[metric], metric))
 
 
-def _sentence(phrase, fact_id, lead):
-    before, after = phrase.split("{fact}")
+def _sentence(phrase, fact_ids, lead):
+    parts = phrase.split("{fact}")
+    if len(parts) != len(fact_ids) + 1:
+        raise ValueError("문장 자리와 근거 수가 다릅니다.")
     segments = []
-    if lead or before:
-        segments.append({"type": "text", "text": (" " if lead else "") + before})
-    segments.append({"type": "fact", "fact_id": fact_id, "format": "text"})
-    if after:
-        segments.append({"type": "text", "text": after})
+    for index, part in enumerate(parts):
+        text = (" " if lead and index == 0 else "") + part
+        if text:
+            segments.append({"type": "text", "text": text})
+        if index < len(fact_ids):
+            segments.append({"type": "fact", "fact_id": fact_ids[index], "format": "text"})
     return segments
+
+
+def _close_rate(ctx, code, rng):
+    recent = _fact_id(ctx, code, "recent_year_close_rate")
+    if recent is None:
+        return None
+    ratio = _fact_id(ctx, code, "close_rate_ratio")
+    value = ctx.ratios.get(code)
+    if ratio is None or value is None:
+        return "reasons_segments", rng.choice(PHRASES["recent_year_close_rate"]), [recent]
+    if value > 1:
+        return "risks_segments", rng.choice(COMPARE_PHRASES["high"]), [recent, ratio]
+    return "reasons_segments", rng.choice(COMPARE_PHRASES["low"]), [recent, ratio]
 
 
 def _refresh_fact_ids(candidate):
@@ -101,8 +125,12 @@ def _build(ctx, rng, suffix):
                 continue
             phrase = rng.choice(PHRASES[metric])
             lead = bool(candidate[field])
-            candidate[field].extend(_sentence(phrase, fact_id, lead))
+            candidate[field].extend(_sentence(phrase, [fact_id], lead))
             metas[code].append((field, metric, fact_id))
+        close = _close_rate(ctx, code, rng)
+        if close is not None:
+            field, phrase, fact_ids = close
+            candidate[field].extend(_sentence(phrase, fact_ids, bool(candidate[field])))
         _refresh_fact_ids(candidate)
     return draft, metas
 
@@ -187,9 +215,14 @@ def seeded_draft(ctx: RequestContext, rng: random.Random) -> tuple[dict, tuple[S
     code = assignment["E3"]
     if code is not None:
         recent, oldest = _e3_target(ctx, code)
-        for index in _slot_positions(candidates[code], "risks_segments", recent):
-            candidates[code]["risks_segments"][index]["fact_id"] = oldest
-        seeds.append(Seed("E3", code, "risks_segments", "scope_mismatch", (recent,), oldest))
+        field = next(
+            f
+            for f in ("risks_segments", "reasons_segments")
+            if _slot_positions(candidates[code], f, recent)
+        )
+        for index in _slot_positions(candidates[code], field, recent):
+            candidates[code][field][index]["fact_id"] = oldest
+        seeds.append(Seed("E3", code, field, "scope_mismatch", (recent,), oldest))
 
     code = assignment["E2"]
     if code is not None:

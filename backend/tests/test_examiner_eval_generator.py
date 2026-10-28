@@ -6,7 +6,14 @@ import unittest
 
 from app.schemas import Site
 from app.text import has_digit
-from examiner_eval.generator import BARE_PHRASES, PHRASES, build_cases, clean_draft, seeded_draft
+from examiner_eval.generator import (
+    BARE_PHRASES,
+    COMPARE_PHRASES,
+    PHRASES,
+    build_cases,
+    clean_draft,
+    seeded_draft,
+)
 from examiner_eval.store import RequestContext
 
 CS = "commercial_area"
@@ -21,7 +28,7 @@ FULL = (
 )
 
 
-def make_ctx(request_id, spec, with_segments=False):
+def make_ctx(request_id, spec, with_segments=False, ratios=None):
     facts = {}
     top5 = []
     for index, (code, metrics) in enumerate(spec.items()):
@@ -61,6 +68,7 @@ def make_ctx(request_id, spec, with_segments=False):
             "limitations_segments": [],
         },
         facts=facts,
+        ratios=ratios or {},
     )
 
 
@@ -80,8 +88,8 @@ class GeneratorTest(unittest.TestCase):
         self.assertEqual(draft["score_snapshot_id"], "snap")
         for cand in draft["top5"]:
             self.assertEqual(cand["confirmation_conditions_segments"], [])
-            self.assertEqual(len(fact_slots(cand["reasons_segments"])), 2)
-            self.assertEqual(len(fact_slots(cand["risks_segments"])), 1)
+            self.assertEqual(len(fact_slots(cand["reasons_segments"])), 3)
+            self.assertEqual(cand["risks_segments"], [])
             for field in ("reasons_segments", "risks_segments"):
                 for seg in cand[field]:
                     if seg["type"] == "text":
@@ -95,6 +103,30 @@ class GeneratorTest(unittest.TestCase):
         self.assertEqual(len(fact_slots(draft["top5"][0]["reasons_segments"])), 1)
         self.assertEqual(draft["top5"][0]["risks_segments"], [])
         self.assertEqual(draft["top5"][1]["reasons_segments"], [])
+
+    def test_close_rate_sentence_follows_seoul_comparison(self):
+        with_ratio = (*FULL, (BL, "close_rate_ratio"))
+        spec = {"CS0": with_ratio, "CS1": with_ratio, "CS2": FULL}
+        ctx = make_ctx("r1", spec, ratios={"CS0": 1.4, "CS1": 0.6})
+        draft = clean_draft(ctx, random.Random(1))
+        high, low, missing = draft["top5"]
+
+        def text(segments):
+            return "".join(s.get("text", "") for s in segments)
+
+        self.assertEqual(
+            [s["fact_id"] for s in fact_slots(high["risks_segments"])],
+            ["r1-CS0-recent_year_close_rate", "r1-CS0-close_rate_ratio"],
+        )
+        self.assertIn("높습니다", text(high["risks_segments"]))
+        self.assertEqual(low["risks_segments"], [])
+        self.assertEqual(
+            [s["fact_id"] for s in fact_slots(low["reasons_segments"])][2:],
+            ["r1-CS1-recent_year_close_rate", "r1-CS1-close_rate_ratio"],
+        )
+        self.assertIn("낮습니다", text(low["reasons_segments"]))
+        self.assertEqual(missing["risks_segments"], [])
+        self.assertEqual(len(fact_slots(missing["reasons_segments"])), 3)
 
     def test_seeded_three_errors_on_distinct_candidates(self):
         ctx = make_ctx("r1", full_spec())
@@ -152,13 +184,15 @@ class GeneratorTest(unittest.TestCase):
         ctx = make_ctx("r1", full_spec())
         draft, seeds = seeded_draft(ctx, random.Random(4))
         seed = next(s for s in seeds if s.kind == "E3")
-        self.assertEqual(seed.field, "risks_segments")
+        self.assertEqual(seed.field, "reasons_segments")
         self.assertEqual(seed.expected_kind, "scope_mismatch")
         self.assertTrue(seed.wrong_fact_id.endswith("oldest_year_close_rate"))
         self.assertTrue(seed.support_fact_ids[0].endswith("recent_year_close_rate"))
         cand = next(c for c in draft["top5"] if c["industry_code"] == seed.industry_code)
-        self.assertEqual(fact_slots(cand["risks_segments"])[0]["fact_id"], seed.wrong_fact_id)
-        text = "".join(s.get("text", "") for s in cand["risks_segments"])
+        ids = [s["fact_id"] for s in fact_slots(cand[seed.field])]
+        self.assertIn(seed.wrong_fact_id, ids)
+        self.assertNotIn(seed.support_fact_ids[0], ids)
+        text = "".join(s.get("text", "") for s in cand[seed.field])
         self.assertIn("최근 한 해", text)
 
     def test_phrases_have_three_variants_without_digits(self):
@@ -180,10 +214,17 @@ class GeneratorTest(unittest.TestCase):
             self.assertIn("최근 한 해", phrase)
         for phrase in PHRASES["oldest_year_close_rate"]:
             self.assertIn("가장 이른 해", phrase)
+        self.assertEqual(set(COMPARE_PHRASES), {"high", "low"})
+        for key, word in (("high", "높습니다"), ("low", "낮습니다")):
+            for phrase in COMPARE_PHRASES[key]:
+                self.assertEqual(phrase.count("{fact}"), 2)
+                self.assertIn("최근 한 해", phrase)
+                self.assertIn(word, phrase)
+                self.assertFalse(has_digit(phrase))
 
     def test_clean_phrases_state_values_without_judgment(self):
         judgments = ("위험", "주의", "부담", "수요", "형성된", "가늠", "해석")
-        for metric, phrases in PHRASES.items():
+        for metric, phrases in (*PHRASES.items(), *COMPARE_PHRASES.items()):
             for phrase in phrases:
                 for word in judgments:
                     with self.subTest(metric=metric, word=word):
@@ -205,7 +246,7 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual(len({s.industry_code for s in seeds}), 3)
 
     def test_e1_replaces_sentence_with_bare_phrase(self):
-        metrics = ("store_count", "pattern_fit_index", "recent_year_close_rate")
+        metrics = ("store_count", "pattern_fit_index")
         for seed_value in range(10):
             ctx = make_ctx("r1", full_spec())
             draft, seeds = seeded_draft(ctx, random.Random(seed_value))
@@ -224,7 +265,7 @@ class GeneratorTest(unittest.TestCase):
     def test_bare_phrases_shape(self):
         self.assertEqual(
             set(BARE_PHRASES),
-            {"store_count", "pattern_fit_index", "recent_year_close_rate"},
+            {"store_count", "pattern_fit_index"},
         )
         for phrases in BARE_PHRASES.values():
             self.assertGreaterEqual(len(phrases), 3)

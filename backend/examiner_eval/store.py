@@ -4,7 +4,7 @@ import json
 import logging
 import sqlite3
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.schemas import Site
@@ -21,6 +21,7 @@ class RequestContext:
     site: Site
     stored_draft: dict
     facts: dict[tuple[str, str, str], str]
+    ratios: dict[str, float | None] = field(default_factory=dict)
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:
@@ -73,13 +74,19 @@ def load_contexts(db_path: Path) -> list[RequestContext]:
                 )
                 continue
             facts = {}
+            ratios = {}
             for fact in db.execute(
-                "SELECT fact_id, industry_code, source, metric FROM facts "
+                "SELECT fact_id, industry_code, source, metric, value_json FROM facts "
                 "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
                 "ORDER BY fact_id",
                 (request_id, snapshot_id),
             ):
                 key = (fact["industry_code"], fact["source"], fact["metric"])
+                if key not in facts and fact["metric"] == "close_rate_ratio":
+                    value = json.loads(fact["value_json"])
+                    ratios[fact["industry_code"]] = (
+                        float(value) if isinstance(value, (int, float)) else None
+                    )
                 facts.setdefault(key, fact["fact_id"])
             contexts.append(
                 RequestContext(
@@ -89,6 +96,7 @@ def load_contexts(db_path: Path) -> list[RequestContext]:
                     site=Site.model_validate_json(request["site_json"]),
                     stored_draft=json.loads(draft["result_json"]),
                     facts=facts,
+                    ratios=ratios,
                 )
             )
     return contexts
