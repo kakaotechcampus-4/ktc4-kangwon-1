@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check } from 'lucide-react';
 import Eyebrow from '@/components/landing/Eyebrow';
 import { colors } from '@/styles/tokens';
@@ -65,7 +65,29 @@ const examples = [
 
 export default function ReportPreview() {
   const [active, setActive] = useState(0);
+  const [hasEnteredView, setHasEnteredView] = useState(false);
+  const reasonsRef = useRef<HTMLOListElement>(null);
   const current = examples[active];
+
+  useEffect(() => {
+    const reasons = reasonsRef.current;
+    if (!reasons || hasEnteredView) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    );
+
+    observer.observe(reasons);
+    return () => observer.disconnect();
+  }, [hasEnteredView]);
 
   return (
     <section
@@ -127,13 +149,23 @@ export default function ReportPreview() {
               })}
             </div>
 
-            <ol role="tabpanel" aria-label={`${current.industry} 추천 이유`}>
+            <ol
+              ref={reasonsRef}
+              key={current.industry}
+              role="tabpanel"
+              aria-label={`${current.industry} 추천 이유`}
+            >
               {current.reasons.map(({ title, detail }, index) => (
                 <li
                   key={title}
-                  className={`flex items-center gap-5 py-5 ${
-                    index > 0 ? 'border-t border-[#E2E8EE]' : ''
-                  }`}
+                  className={`report-preview-reason flex items-center gap-5 py-5 ${
+                    hasEnteredView ? 'report-preview-reason--visible' : ''
+                  } ${index > 0 ? 'border-t border-[#E2E8EE]' : ''}`}
+                  style={
+                    {
+                      '--report-preview-delay': `${index * 220}ms`,
+                    } as CSSProperties
+                  }
                 >
                   <span className="w-6 text-sm font-bold text-[#8A97A5]">
                     {String(index + 1).padStart(2, '0')}

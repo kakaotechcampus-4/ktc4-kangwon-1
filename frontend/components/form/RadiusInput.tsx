@@ -20,7 +20,7 @@ export default function RadiusInput({ value, onChange }: RadiusInputProps) {
     <Card
       className="w-full gap-4"
       style={{
-        padding: '32px',
+        padding: 'clamp(18px, 5vw, 32px)',
         borderRadius: '24px',
         borderWidth: '0px',
       }}
