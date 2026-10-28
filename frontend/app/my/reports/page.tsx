@@ -93,15 +93,24 @@ function MyReports() {
       style={{ backgroundColor: colors.neutral.background }}
     >
       <Header />
-      <main className="mx-auto flex w-full max-w-[880px] flex-col gap-6 px-6 py-12">
-        <div className="flex flex-col gap-2">
+      <main className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 pt-14 pb-24 sm:px-8">
+        <div className="flex flex-col gap-3">
+          <p
+            className="text-sm font-bold tracking-[0.08em]"
+            style={{ color: colors.brand.primary }}
+          >
+            MY ANALYSES
+          </p>
           <h1
-            className="text-32 font-bold"
-            style={{ color: colors.neutral.black }}
+            className="font-extrabold tracking-[-0.04em]"
+            style={{
+              color: colors.brand.dark,
+              fontSize: 'clamp(30px, 3vw, 42px)',
+            }}
           >
             내 분석 기록
           </h1>
-          <p className="text-base" style={{ color: colors.text.secondary }}>
+          <p className="text-base text-[#4B5866]">
             {total > 0
               ? `지금까지 분석한 공실 ${total}곳입니다.`
               : '분석한 공실이 여기에 쌓입니다.'}
@@ -110,7 +119,7 @@ function MyReports() {
 
         {failed ? (
           <Card className="items-start gap-4">
-            <p className="text-15" style={{ color: colors.text.secondary }}>
+            <p className="text-15 text-[#4B5866]">
               기록을 불러오지 못했습니다.
             </p>
             <Button type="button" variant="outline" onClick={() => loadMore(0)}>
@@ -158,21 +167,19 @@ function AnalysisRow({ item }: { item: MyAnalysis }) {
 
   return (
     <li>
-      <Card className="flex-row items-center justify-between gap-4 p-5">
-        <div className="flex min-w-0 flex-col gap-1">
+      <Card className="flex-row items-center justify-between gap-4 rounded-[22px] p-6">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <p
-            className="truncate text-17 font-semibold"
-            style={{ color: colors.text.primary }}
+            className="truncate text-xl font-extrabold tracking-[-0.02em]"
+            style={{ color: colors.brand.dark }}
           >
             {item.input_address}
           </p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13">
-            <span style={{ color: TONE_COLOR[status.tone], fontWeight: 500 }}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span style={{ color: TONE_COLOR[status.tone], fontWeight: 700 }}>
               {status.text}
             </span>
-            <span style={{ color: colors.text.tertiary }}>
-              {formatDay(item.created_at)}
-            </span>
+            <span className="text-[#6B7886]">{formatDay(item.created_at)}</span>
           </div>
         </div>
         {openable ? (
@@ -194,12 +201,12 @@ function EmptyState() {
   return (
     <Card className="items-start gap-4">
       <p
-        className="text-17 font-semibold"
-        style={{ color: colors.text.primary }}
+        className="text-xl font-extrabold tracking-[-0.02em]"
+        style={{ color: colors.brand.dark }}
       >
         아직 분석한 공실이 없습니다
       </p>
-      <p className="text-15" style={{ color: colors.text.secondary }}>
+      <p className="text-15 text-[#4B5866]">
         주소 하나만 넣으면 어떤 업종이 맞는지 근거와 함께 알려드립니다.
       </p>
       <Link href="/vacancy-input">

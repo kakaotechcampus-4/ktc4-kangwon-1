@@ -56,6 +56,7 @@ function LoginForm() {
 
   return (
     <AuthShell
+      eyebrow="LOGIN"
       title="로그인"
       description="공실 분석을 시작하려면 로그인해 주세요."
       footer={
@@ -63,8 +64,7 @@ function LoginForm() {
           아직 계정이 없으신가요?{' '}
           <Link
             href={`/signup?next=${encodeURIComponent(next)}`}
-            className="font-semibold underline underline-offset-2"
-            style={{ color: colors.brand.dark }}
+            className="underline underline-offset-2"
           >
             회원가입
           </Link>

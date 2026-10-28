@@ -87,6 +87,7 @@ function SignupForm() {
 
   return (
     <AuthShell
+      eyebrow="SIGN UP"
       title="회원가입"
       description="분석한 리포트를 계정에 저장해 다시 열어볼 수 있습니다."
       footer={
@@ -94,8 +95,7 @@ function SignupForm() {
           이미 계정이 있으신가요?{' '}
           <Link
             href={`/login?next=${encodeURIComponent(next)}`}
-            className="font-semibold underline underline-offset-2"
-            style={{ color: colors.brand.dark }}
+            className="underline underline-offset-2"
           >
             로그인
           </Link>
@@ -141,8 +141,8 @@ function SignupForm() {
               이미 가입된 이메일입니다 ·{' '}
               <Link
                 href={`/login?next=${encodeURIComponent(next)}`}
-                className="underline underline-offset-2"
-                style={{ color: colors.brand.dark }}
+                className="font-bold underline underline-offset-2"
+                style={{ color: colors.brand.primary }}
               >
                 로그인하기
               </Link>

@@ -54,6 +54,7 @@ function VerifyEmail() {
   if (state === 'working') {
     return (
       <AuthShell
+        eyebrow="EMAIL VERIFICATION"
         title="이메일을 확인하는 중입니다"
         description="잠시만 기다려 주세요."
       >
@@ -65,6 +66,7 @@ function VerifyEmail() {
   if (state === 'done') {
     return (
       <AuthShell
+        eyebrow="EMAIL VERIFICATION"
         title="확인이 끝났습니다"
         description="이제 공실 분석을 시작할 수 있습니다."
       >
@@ -79,6 +81,7 @@ function VerifyEmail() {
 
   return (
     <AuthShell
+      eyebrow="EMAIL VERIFICATION"
       title="확인하지 못했습니다"
       description="링크가 만료되었거나 이미 사용되었을 수 있습니다."
       footer={

@@ -29,6 +29,7 @@ export default function ForgotPasswordPage() {
   if (sent) {
     return (
       <AuthShell
+        eyebrow="PASSWORD"
         title="메일을 보냈습니다"
         description="가입된 주소라면 비밀번호 재설정 링크가 도착합니다. 메일이 보이지 않으면 스팸함도 확인해 주세요."
         footer={
@@ -44,6 +45,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthShell
+      eyebrow="PASSWORD"
       title="비밀번호 찾기"
       description="가입한 이메일 주소를 입력하면 재설정 링크를 보내 드립니다."
       footer={

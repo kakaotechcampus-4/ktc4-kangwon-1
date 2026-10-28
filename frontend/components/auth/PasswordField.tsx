@@ -28,11 +28,7 @@ export default function PasswordField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={fieldId}
-        className="text-15 font-medium"
-        style={{ color: colors.text.primary }}
-      >
+      <label htmlFor={fieldId} className="text-15 font-medium text-gray-500">
         {label}
       </label>
 
@@ -49,7 +45,7 @@ export default function PasswordField({
           onClick={() => setVisible((value) => !value)}
           aria-label={visible ? '비밀번호 숨기기' : '비밀번호 보기'}
           aria-pressed={visible}
-          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl"
           style={{ color: colors.text.tertiary }}
         >
           {visible ? <EyeOff size={18} /> : <Eye size={18} />}

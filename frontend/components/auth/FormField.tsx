@@ -15,11 +15,7 @@ export default function FormField({ label, hint, id, ...rest }: Props) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={fieldId}
-        className="text-15 font-medium"
-        style={{ color: colors.text.primary }}
-      >
+      <label htmlFor={fieldId} className="text-15 font-medium text-gray-500">
         {label}
       </label>
       <Input id={fieldId} aria-describedby={hintId} {...rest} />
