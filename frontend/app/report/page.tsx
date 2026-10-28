@@ -5,16 +5,15 @@ import Link from 'next/link';
 import {
   Menu,
   ChevronRight,
-  ArrowUp,
   ArrowDownRight,
   TriangleAlert,
   MapPin,
+  Building2,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PropertyMap from '@/components/report/PropertyMap';
 import IndustryReview, {
   candidateChecks,
-  candidateScore,
 } from '@/components/report/IndustryReview';
 import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
 import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
@@ -25,6 +24,7 @@ import {
   FactLifecycleSection,
 } from '@/components/report/FactSections';
 import EvaluatorReviews from '@/components/report/EvaluatorReviews';
+import TenantMatchingProposal from '@/components/report/TenantMatchingProposal';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import './report.css';
@@ -63,7 +63,7 @@ const chapterEyebrows: Record<string, string> = {
   customers: 'FOOT TRAFFIC',
   competition: 'COMPETITION',
   lifecycle: 'OPEN · CLOSE',
-  actions: 'NEXT STEPS',
+  listing: 'NEXT STEP',
 };
 
 const chapters = [
@@ -74,25 +74,27 @@ const chapters = [
   ['customers', '유동인구'],
   ['competition', '경쟁업체'],
   ['lifecycle', '개폐업 추이'],
-  ['actions', '다음 할 일'],
+  ['listing', '임차인 찾기'],
 ] as const;
 
 function Chapter({
   id,
   title,
   aside,
+  screenOnly = false,
   children,
 }: {
   id: string;
   title: string;
   // 설명 문장과 같은 줄 오른쪽에 붙는 보조 정보
   aside?: ReactNode;
+  screenOnly?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       id={id}
-      className="report-chapter scroll-mt-24 pb-16 pt-12"
+      className={`report-chapter scroll-mt-24 pb-16 pt-12${screenOnly ? ' report-screen-only' : ''}`}
       style={{ borderColor: colors.neutral.border }}
     >
       <header className="chapter-heading">
@@ -113,109 +115,19 @@ function Chapter({
               ? '분석 대상 상가의 기본 정보를 확인하세요.'
               : id === 'conclusion'
                 ? '추천 업종과 주요 판단 근거를 확인하세요.'
-                : title}
+                : id === 'listing'
+                  ? '추천 업종을 바탕으로 실제 임차인을 찾아보세요.'
+                  : title}
           </p>
           {aside && <span className="chapter-aside">{aside}</span>}
         </div>
       </header>
-      <div className="original-report-content">{children}</div>
-    </section>
-  );
-}
-
-const followUpSteps = [
-  {
-    title: '입점 가능한 업종인지 확인',
-    detail:
-      '건축물 용도와 학교 주변 규제 내용을 확인하고, 해당 업종의 인허가 조건을 관할 기관에 문의하세요.',
-    target: '#space',
-    link: '상가 정보 보기',
-    stage: '먼저 확인',
-  },
-  {
-    title: '설비와 고객 접근 동선 점검',
-    detail:
-      '급·배수와 전력 용량, 환기·배기 시설을 확인하세요. 엘리베이터, 간판 노출, 주차와 출입 동선도 현장에서 살펴보세요.',
-    target: '#space',
-    link: '상가 정보 보기',
-    stage: '현장 점검',
-  },
-  {
-    title: '실제 수요와 경쟁 점포 확인',
-    detail:
-      '평일·주말의 주요 시간대에 방문해 통행량과 주변 점포의 가격·고객층을 살펴보고, 리포트의 분석 결과와 비교하세요.',
-    target: '#customers',
-    link: '상권 분석 보기',
-    stage: '현장 점검',
-  },
-  {
-    title: '비용을 계산하고 최종 업종 결정',
-    detail:
-      '보증금·임대료·관리비와 공사·설비 견적을 정리하세요. 예상 운영비와 필요한 매출을 계산한 뒤 후보 업종을 좁히세요.',
-    target: '#compare',
-    link: '업종 순위 보기',
-    stage: '최종 검토',
-  },
-];
-
-function ActionChecklist() {
-  const [checked, setChecked] = useState<boolean[]>(
-    followUpSteps.map(() => false)
-  );
-  const completed = checked.filter(Boolean).length;
-  return (
-    <div className="action-plan">
-      <div className="action-plan-summary">
-        <div>
-          <h3>결정 전, 네 가지를 확인하세요</h3>
-          <p>리포트의 추천을 현장 조건과 비용까지 연결해 보세요.</p>
-        </div>
-        <div className="action-plan-progress">
-          <span aria-live="polite">
-            <strong>{completed}</strong> / {followUpSteps.length} 완료
-          </span>
-          <progress
-            aria-label="확인 항목 완료 현황"
-            max={followUpSteps.length}
-            value={completed}
-          />
-        </div>
+      <div
+        className={`original-report-content${id === 'space' ? ' space-info-content' : ''}`}
+      >
+        {children}
       </div>
-      <ol className="action-plan-list">
-        {followUpSteps.map((step, index) => (
-          <li key={step.title} className={checked[index] ? 'is-complete' : ''}>
-            <span className="action-step-number" aria-hidden="true">
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <div className="action-step-content">
-              <span className="action-step-stage">{step.stage}</span>
-              <h4>{step.title}</h4>
-              <p>{step.detail}</p>
-              <a href={step.target}>
-                {step.link}
-                <ChevronRight size={16} aria-hidden="true" />
-              </a>
-            </div>
-            <label className="action-step-check">
-              <input
-                type="checkbox"
-                checked={checked[index]}
-                aria-label={`${step.title} 완료`}
-                onChange={() =>
-                  setChecked((previous) =>
-                    previous.map((value, i) => (i === index ? !value : value))
-                  )
-                }
-              />
-              <span>{checked[index] ? '완료' : '확인 완료'}</span>
-            </label>
-          </li>
-        ))}
-      </ol>
-      <p className="action-plan-note">
-        체크 표시는 현재 화면에서만 유지됩니다.
-      </p>
-    </div>
+    </section>
   );
 }
 
@@ -390,8 +302,20 @@ export default function ReportPage() {
   const displayAddress = address.replace(/\s+\d+층(?:\s+\d+호)?$/, '');
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
-  const facilityValue = building?.facility.value;
   const isPropertyPreview = !vacancyInput && !analysisResult && !building;
+  const matchingPropertyInfo = {
+    address: displayAddress,
+    floor:
+      vacancyInput?.floorUnit.trim() ||
+      (isPropertyPreview ? mockReportData.floor : '층 정보 확인 필요'),
+    area:
+      areaValue !== null && areaValue !== undefined
+        ? formatArea(areaValue)
+        : isPropertyPreview
+          ? mockReportData.area
+          : '면적 확인 필요',
+  };
+  const facilityValue = building?.facility.value;
   const facilityLabel = facilityValue
     ? FACILITY_LABELS[facilityValue]
     : isPropertyPreview
@@ -438,11 +362,13 @@ export default function ReportPage() {
       ? [topReason]
       : []
     : (mockReportData.recommended[0]?.tags ?? []);
-  const topScore = top ? candidateScore(top) : null;
-  // 확인된 자료 기준 점수(하한)를 보인다.
-  const scoreLabel = analysisResult
-    ? topScore?.low.toString()
-    : mockReportData.recommended[0]?.score.toString();
+  const matchingRecommendations = analysisResult
+    ? analysisResult.top5.slice(0, 3).map((candidate) => ({
+        name: candidate.industry_name,
+      }))
+    : mockReportData.recommended.slice(0, 3).map((candidate) => ({
+        name: candidate.name,
+      }));
   const topChecks = top ? candidateChecks(top, factIndex) : [];
   // 결과 전체에 걸린 확인 조건과 한계(평가 미완료 등)
   const resultChecks = analysisResult
@@ -464,7 +390,7 @@ export default function ReportPage() {
           href={`#${id}`}
           onClick={() => setMenuOpen(false)}
           aria-current={active === id ? 'location' : undefined}
-          className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base"
+          className={`flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base${id === 'listing' ? ' report-screen-only' : ''}`}
           style={{
             color: active === id ? reportPalette.brand : colors.text.secondary,
             fontWeight: active === id ? 700 : 400,
@@ -494,7 +420,7 @@ export default function ReportPage() {
     >
       <Header />
       <div
-        className="report-page mx-auto max-w-[1360px] px-5 pb-20 pt-0 sm:px-8"
+        className="report-page mx-auto max-w-[1360px] px-5 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-0 sm:px-8"
         // 기본은 사이트 글씨 배율을 그대로 쓰고, "글씨 크게 보기"는 그 위에 1.2배를 곱한다.
         style={
           {
@@ -541,7 +467,7 @@ export default function ReportPage() {
           </header>
         </div>
         <div
-          className="sticky top-0 z-20 mb-4 border-y bg-white lg:hidden"
+          className="report-mobile-toc sticky z-20 mb-4 border-y bg-white lg:hidden"
           style={{ borderColor: colors.neutral.border }}
         >
           <button
@@ -560,7 +486,7 @@ export default function ReportPage() {
           {menuOpen && (
             <div
               id="mobile-report-menu"
-              className="max-h-[60vh] overflow-auto p-2"
+              className="report-mobile-toc-menu overflow-auto p-2"
             >
               {navigation}
             </div>
@@ -588,171 +514,165 @@ export default function ReportPage() {
 
               title="분석할 상가 정보"
             >
-              <header className="property-card-address">
-                <p className="property-address-label">분석 대상 주소</p>
-                <h3 className="property-address">{displayAddress}</h3>
-                {regulatedNames.length > 0 && (
-                  <p className="property-regulation-note">
-                    <TriangleAlert size={16} aria-hidden="true" />
-                    <span>
-                      입점 규제 확인 필요 · {regulatedNames.join(', ')}
-                      {regulatedCount > regulatedNames.length &&
-                        ` 외 ${regulatedCount - regulatedNames.length}개`}{' '}
-                      업종은 이 자리에서 금지·조건부 대상이에요.
-                    </span>
-                  </p>
-                )}
-              </header>
-              <div className="property-photo-layout">
-                <PropertyMap address={displayAddress} />
-                <div className="property-preview-info">
-                  <dl className="property-facts property-main-facts">
-                    <div>
-                      <dt>전용면적</dt>
-                      <dd>
-                        {/* 실제 흐름에서 값이 없으면 목업 대신 "조회 필요"로 둔다.
-                            목업 값은 입력·결과가 전혀 없는 미리보기에서만 쓴다. */}
-                        {areaValue !== null && areaValue !== undefined
-                          ? formatArea(areaValue)
-                          : isPropertyPreview
-                            ? mockReportData.area.replace(/^전용\s*/, '')
-                            : '조회 필요'}
-                        {(isPropertyPreview ||
-                          (areaValue !== null && areaValue !== undefined)) && (
-                          <span className="property-fact-note">
-                            (약{' '}
-                            {areaValue !== null && areaValue !== undefined
-                              ? (Number(areaValue) / 3.305785).toFixed(1)
-                              : '83.3'}
-                            평)
-                          </span>
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>층 / 호수</dt>
-                      <dd>
-                        {vacancyInput?.floorUnit.trim() ||
-                          (isPropertyPreview ? mockReportData.floor : '미입력')}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="property-facilities">
-                    <dl className="property-facts">
+              <div className="space-info">
+                <header className="property-card-address space-address-heading">
+                  <p className="property-address-label">분석 대상 주소</p>
+                  <h3 className="property-address">{displayAddress}</h3>
+                  {regulatedNames.length > 0 && (
+                    <p className="property-regulation-note">
+                      <TriangleAlert size={16} aria-hidden="true" />
+                      <span>
+                        입점 규제 확인 필요 · {regulatedNames.join(', ')}
+                        {regulatedCount > regulatedNames.length &&
+                          ` 외 ${regulatedCount - regulatedNames.length}개`}{' '}
+                        업종은 이 자리에서 금지·조건부 대상이에요.
+                      </span>
+                    </p>
+                  )}
+                </header>
+                <div className="property-photo-layout space-report-layout">
+                  <PropertyMap address={displayAddress} />
+                  <div className="property-preview-info space-report-info">
+                    <dl className="property-facts property-main-facts">
                       <div>
-                        <dt>근린생활시설</dt>
-                        <dd>{facilityLabel}</dd>
+                        <dt>전용면적</dt>
+                        <dd>
+                          {/* 실제 흐름에서 값이 없으면 목업 대신 "조회 필요"로 둔다.
+                            목업 값은 입력·결과가 전혀 없는 미리보기에서만 쓴다. */}
+                          {areaValue !== null && areaValue !== undefined
+                            ? formatArea(areaValue)
+                            : isPropertyPreview
+                              ? mockReportData.area.replace(/^전용\s*/, '')
+                              : '조회 필요'}
+                          {(isPropertyPreview ||
+                            (areaValue !== null &&
+                              areaValue !== undefined)) && (
+                            <span className="property-fact-note">
+                              (약{' '}
+                              {areaValue !== null && areaValue !== undefined
+                                ? (Number(areaValue) / 3.305785).toFixed(1)
+                                : '83.3'}
+                              평)
+                            </span>
+                          )}
+                        </dd>
                       </div>
                       <div>
-                        <dt>오수정화시설</dt>
-                        <dd>{sewageLabel}</dd>
+                        <dt>층 / 호수</dt>
+                        <dd>
+                          {vacancyInput?.floorUnit.trim() ||
+                            (isPropertyPreview
+                              ? mockReportData.floor
+                              : '미입력')}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="property-facilities">
+                      <dl className="property-facts">
+                        <div>
+                          <dt>근린생활시설</dt>
+                          <dd>{facilityLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>오수정화시설</dt>
+                          <dd>{sewageLabel}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                    <dl className="property-facts property-radius-row">
+                      <div>
+                        <dt>주차 가능 여부</dt>
+                        <dd>
+                          {parkingValue ? PARKING_LABELS[parkingValue] : '모름'}
+                        </dd>
+                      </div>
+                      <div className="property-analysis-range">
+                        <dt>분석 범위</dt>
+                        <dd>
+                          <strong>{radiusLabel}</strong>
+                          <span className="property-fact-note">
+                            (상가 중심 반경)
+                          </span>
+                        </dd>
                       </div>
                     </dl>
                   </div>
-                  <dl className="property-facts property-radius-row">
-                    <div>
-                      <dt>주차 가능 여부</dt>
-                      <dd>
-                        {parkingValue ? PARKING_LABELS[parkingValue] : '모름'}
-                      </dd>
-                    </div>
-                    <div className="property-analysis-range">
-                      <dt>분석 범위</dt>
-                      <dd>
-                        <strong>{radiusLabel}</strong>
-                        <span className="property-fact-note">
-                          (상가 중심 반경)
-                        </span>
-                      </dd>
-                    </div>
-                  </dl>
                 </div>
               </div>
             </Chapter>
             <Chapter id="conclusion" title="이 상가의 핵심 결론">
-              {/* 카드 없이 위에서 아래로 읽는 구성: 검토 방향 → 추천 업종·점수 → 근거 → 확인 사항 */}
               <div className="dcs">
-                <div className="dcs-lead">
-                  <p className="dcs-eyebrow">검토 방향</p>
-                  <p className="dcs-lead-text">
-                    {highlightName(
-                      analysisResult
-                        ? summaryText
-                        : `${topName}를 우선 검토하되, 4층 접근성과 급·배수 조건을 확인하세요.`,
-                      topName
-                    )}
-                  </p>
-                </div>
-
-                <div className="dcs-pick">
-                  <div className="dcs-pick-name">
-                    <p className="dcs-label">가장 먼저 검토할 업종</p>
-                    <h3>{topName ?? '추천 결과 없음'}</h3>
-                    <p className="dcs-sub">공간 조건과 주변 상권 분석 결과</p>
-                  </div>
-                  {scoreLabel && (
-                    <div className="dcs-pick-score">
-                      <p className="dcs-score">
-                        <strong>{scoreLabel}</strong>
-                        <span>/ 100점</span>
-                      </p>
-                      <p className="dcs-label">
-                        업종 적합도{top ? ` · ${top.badge}` : ''}
-                      </p>
-                      <div className="dcs-score-bar" aria-hidden="true">
-                        <span
-                          style={{
-                            width: `${Math.max(0, Math.min(100, Number(scoreLabel)))}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="dcs-sub">
-                        점수만으로 입점을 결정하지 마세요.
+                <div className="dcs-main">
+                  <section className="dcs-feature" aria-label="추천 업종 요약">
+                    <div className="dcs-feature-top">
+                      <span className="dcs-feature-icon" aria-hidden="true">
+                        <Building2 size={23} strokeWidth={1.8} />
+                      </span>
+                      <p className="dcs-label">가장 먼저 검토할 업종</p>
+                    </div>
+                    <h3 className="dcs-feature-name">
+                      {topName ?? '추천 결과 없음'}
+                    </h3>
+                    <p className="dcs-feature-sub">
+                      공간 조건과 주변 상권 분석 결과
+                    </p>
+                    <div className="dcs-direction">
+                      <p className="dcs-direction-label">검토 방향</p>
+                      <p className="dcs-direction-text">
+                        {highlightName(
+                          analysisResult
+                            ? summaryText
+                            : `${topName}를 우선 검토하되, 4층 접근성과 급·배수 조건을 확인하세요.`,
+                          topName
+                        )}
                       </p>
                     </div>
-                  )}
-                </div>
+                  </section>
 
-                <div className="dcs-block">
-                  <div className="dcs-block-head">
-                    <h3>추천 근거</h3>
-                    {primaryReasons.length > 0 && (
-                      <p>각 항목을 열어 판단 근거를 확인하세요.</p>
+                  <div className="dcs-evidence">
+                    <div className="dcs-block-head">
+                      <div>
+                        <p className="dcs-eyebrow">WHY THIS INDUSTRY</p>
+                        <h3>추천 근거</h3>
+                      </div>
+                      {primaryReasons.length > 0 && (
+                        <p>주요 판단 기준 {primaryReasons.length}개</p>
+                      )}
+                    </div>
+                    {primaryReasons.length === 0 ? (
+                      <p className="dcs-empty">제공된 추천 근거가 없습니다.</p>
+                    ) : (
+                      <ol className="dcs-reasons">
+                        {primaryReasons.map((reason, i) => {
+                          const target = /폐업|개업|증가|감소|추이/.test(reason)
+                            ? '#lifecycle'
+                            : /인구|연령|통행/.test(reason)
+                              ? '#customers'
+                              : '#competition';
+                          return (
+                            <li key={i}>
+                              <span className="dcs-num">
+                                {String(i + 1).padStart(2, '0')}
+                              </span>
+                              <div>
+                                <p className="dcs-reason-title">{reason}</p>
+                                <p className="dcs-reason-desc">
+                                  {reasonDescription(reason, target)}
+                                </p>
+                              </div>
+                              <a
+                                className="dcs-link"
+                                href={target}
+                                aria-label={`${reason} 분석 근거 보기`}
+                              >
+                                근거 보기 <ChevronRight size={16} />
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ol>
                     )}
                   </div>
-                  {primaryReasons.length === 0 ? (
-                    <p className="dcs-empty">제공된 추천 근거가 없습니다.</p>
-                  ) : (
-                    <ol className="dcs-reasons">
-                      {primaryReasons.map((reason, i) => {
-                        const target = /폐업|개업|증가|감소|추이/.test(reason)
-                          ? '#lifecycle'
-                          : /인구|연령|통행/.test(reason)
-                            ? '#customers'
-                            : '#competition';
-                        return (
-                          <li key={i}>
-                            <span className="dcs-num">
-                              {String(i + 1).padStart(2, '0')}
-                            </span>
-                            <div>
-                              <p className="dcs-reason-title">{reason}</p>
-                              <p className="dcs-reason-desc">
-                                {reasonDescription(reason, target)}
-                              </p>
-                            </div>
-                            <a
-                              className="dcs-link"
-                              href={target}
-                              aria-label={`${reason} 분석 근거 보기`}
-                            >
-                              근거 보기 <ChevronRight size={16} />
-                            </a>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  )}
                 </div>
 
                 <div className="dcs-block dcs-checks">
@@ -816,16 +736,8 @@ export default function ReportPage() {
                 </a>
               </div>
             </Chapter>
-            <Chapter
-              id="compare"
-
-              title="이 상가에 맞는 업종 순위"
-            >
-              <IndustryReview
-                top5={analysisResult?.top5}
-                excluded={analysisResult?.excluded_candidates}
-                facts={factIndex}
-              />
+            <Chapter id="compare" title="업종별 검토 순위">
+              <IndustryReview records={analysisResult?.L_records} />
             </Chapter>
             <Chapter
               id="reviews"
@@ -907,28 +819,11 @@ export default function ReportPage() {
                 <OpenCloseTrendSection reportLayout compactReference />
               )}
             </Chapter>
-            <Chapter id="actions" title="리포트를 읽은 뒤 확인할 일">
-              <ActionChecklist />
-              {topChecks.length ? (
-                <div className="mt-6 rounded-xl bg-white p-6">
-                  <h3 className="mb-3 text-xl font-semibold">
-                    우선 검토 업종의 주의사항
-                  </h3>
-                  <ul className="list-disc space-y-3 pl-5 text-lg">
-                    {topChecks.map((risk, i) => (
-                      <li key={i}>{risk}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              <a
-                href="#conclusion"
-                className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl border bg-white px-5 text-base font-semibold"
-                style={{ borderColor: colors.neutral.border }}
-              >
-                <ArrowUp size={17} />
-                핵심 결론 다시 보기
-              </a>
+            <Chapter id="listing" title="임차인 찾기" screenOnly>
+              <TenantMatchingProposal
+                recommendations={matchingRecommendations}
+                propertyInfo={matchingPropertyInfo}
+              />
             </Chapter>
           </main>
         </div>
