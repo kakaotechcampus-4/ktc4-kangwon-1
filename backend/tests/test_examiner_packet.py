@@ -145,7 +145,8 @@ class ExaminerChecksTests(unittest.TestCase):
 
     def test_persona_points_to_checks(self):
         self.assertIn("checks", examiner.PERSONA)
-        self.assertIn("checks를 본 뒤에도 위험 문장", examiner.PERSONA)
+        self.assertIn("checks를 본 뒤에도 폐업률처럼 기간이 있는 문장", examiner.PERSONA)
+        self.assertIn("이유·위험 칸을 가리지 말고", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
     def test_persona_limits_fact_reads(self):
