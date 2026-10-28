@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { MapPin, Pencil } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 import type { AnalysisSummary } from '@/lib/mockData/analysisProgress';
@@ -37,18 +38,25 @@ export default function AnalysisSummaryPanel({
         >
           분석 대상
         </p>
-        <button
-          type="button"
-          // mock 핸들러 — 실제로는 공실 입력 화면으로 돌아가 값을 고치는
-          // 동작을 붙일 자리다. 지금은 콘솔 로그로만 남긴다.
-          onClick={
-            onEdit ?? (() => console.log('[AnalysisSummaryPanel] 수정(mock)'))
-          }
-          className="flex items-center gap-1 text-13"
-          style={{ color: colors.text.tertiary }}
-        >
-          <Pencil size={12} /> 수정
-        </button>
+        {/* onEdit가 없으면 공실 입력 화면으로 돌아간다(입력값은 세션에 남아 있다). */}
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex items-center gap-1 text-13"
+            style={{ color: colors.text.tertiary }}
+          >
+            <Pencil size={12} /> 수정
+          </button>
+        ) : (
+          <Link
+            href="/vacancy-input"
+            className="flex items-center gap-1 text-13"
+            style={{ color: colors.text.tertiary }}
+          >
+            <Pencil size={12} /> 수정
+          </Link>
+        )}
       </div>
 
       <MiniMap radiusM={summary.radiusM} />

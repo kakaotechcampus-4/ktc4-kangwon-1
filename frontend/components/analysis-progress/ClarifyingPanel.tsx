@@ -107,11 +107,6 @@ export default function ClarifyingPanel({
         };
       }
     }
-    // mock 처리 — 실제 API 연동 없이 콘솔에만 기록한다.
-    console.log('[ClarifyingPanel] 답변 제출(mock):', {
-      answers: submittedAnswers,
-      note,
-    });
     onSubmit(submittedAnswers, note);
   }
 
