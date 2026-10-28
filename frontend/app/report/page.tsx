@@ -45,6 +45,7 @@ import {
   loadRequestId,
   saveAnalysisFacts,
   loadConfirmedBuilding,
+  ANALYSIS_RADIUS_M,
   loadVacancyInput,
   type VacancyInput,
 } from '@/lib/api/resultStore';
@@ -364,17 +365,7 @@ export default function ReportPage() {
   const sewageLabel =
     building?.sewage.value ??
     (isPropertyPreview ? mockProperty.sewage : '조회 필요');
-  const radiusText = vacancyInput?.radius.trim();
-  const radiusValue = radiusText ? Number(radiusText) : undefined;
-  // 미리보기는 디자인 기준인 100m를 쓰고, 실제 보고서의 누락된 입력은 명시합니다.
-  const radiusLabel =
-    radiusValue !== undefined &&
-    Number.isInteger(radiusValue) &&
-    radiusValue > 0
-      ? `${radiusValue.toLocaleString('ko-KR')}m`
-      : !vacancyInput && !analysisResult
-        ? '100m'
-        : '미입력';
+  const radiusLabel = `${ANALYSIS_RADIUS_M}m`;
 
   const top = analysisResult?.top5[0];
   const topName = analysisResult
