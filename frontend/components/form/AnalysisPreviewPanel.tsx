@@ -2,6 +2,7 @@
 
 import Card from '@/components/ui/Card';
 import { colors } from '@/styles/tokens';
+import { ANALYSIS_RADIUS_M } from '@/lib/api/resultStore';
 
 type PreviewItem = {
   id: string;
@@ -10,22 +11,13 @@ type PreviewItem = {
   description: string;
 };
 
-type AnalysisPreviewPanelProps = {
-  radius?: string;
-};
-
-export default function AnalysisPreviewPanel({
-  radius,
-}: AnalysisPreviewPanelProps) {
-  // 반경 입력이 비어 있으면 기존 문구 그대로 500m를 예시로 보여준다.
-  const displayRadius = radius?.trim() ? radius : '500';
-
+export default function AnalysisPreviewPanel() {
   const previewItems: PreviewItem[] = [
     {
       id: 'competitors',
       dotColor: colors.status.recommend,
       title: '경쟁업체 개수',
-      description: `반경 ${displayRadius}m 내 동일 업종 수 자동 계산`,
+      description: `반경 ${ANALYSIS_RADIUS_M}m 내 동일 업종 수 자동 계산`,
     },
     {
       id: 'foot-traffic',
