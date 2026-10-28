@@ -83,6 +83,53 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replies[0]["data"]["accepted"], ["valid"])
         self.assertEqual(replies[0]["data"]["rejected"][0]["issue_id"], "invalid")
 
+    async def run_truncated_review(self, truncations):
+        from app.agentic.evaluators import review
+        from app.agentic.runtime import DecisionLoop
+        from app.llm.client import LLMResponseError
+
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(
+                (
+                    [d["function"]["name"] for d in definitions],
+                    messages[-1]["content"] if messages[-1]["role"] == "user" else "",
+                )
+            )
+            if len(seen) <= truncations:
+                raise LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")
+            payload = json.loads(messages[1]["content"])
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        with patch(
+            "app.agentic.examiner.review_packet",
+            return_value={"draft_id": loop.done.report_id, "facts": []},
+        ):
+            result = await review(
+                loop, "examiner", loop.evaluator_executors()["examiner"], loop.done
+            )
+        return result, seen
+
+    async def test_truncated_answer_gets_a_shorter_resubmit_chance(self):
+        result, seen = await self.run_truncated_review(truncations=1)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(seen[1][0], ["submit_review"])
+        self.assertIn("잘렸", seen[1][1])
+
+    async def test_three_truncations_end_as_failure(self):
+        result, seen = await self.run_truncated_review(truncations=3)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "REPORT_INVALID")
+        self.assertEqual(len(seen), 3)
+
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
         from app.agentic.runtime import DecisionLoop
 
