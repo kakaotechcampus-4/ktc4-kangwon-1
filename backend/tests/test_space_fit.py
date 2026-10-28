@@ -21,6 +21,75 @@ from app.storage.raw import capture_scope
 
 
 class CompareSpaceTests(unittest.TestCase):
+    def test_basement_spellings_do_not_become_ground_floors(self):
+        for answer in (
+            "지하1층",
+            "지하 01 층",
+            "지1층",
+            "지 01층",
+            "B1",
+            "B01",
+            "b01",
+            " B 01 ",
+            "B1층",
+            "B01F",
+            "지하1층 101호",
+            "지1층101호",
+            "B01 101호",
+        ):
+            with self.subTest(answer=answer):
+                self.assertEqual(
+                    compare_space({"floor_preference": "지하1층"}, {"floor": answer})["floor"],
+                    "일치",
+                )
+                self.assertEqual(
+                    compare_space({"floor_preference": "1층"}, {"floor": answer})["floor"],
+                    "불일치",
+                )
+
+    def test_ground_floor_spellings_and_room_numbers_are_supported(self):
+        for answer in ("1층", "지상 1층", "01층", "1F", "01f", "1층 101호", "1층101호"):
+            with self.subTest(answer=answer):
+                self.assertEqual(
+                    compare_space({"floor_preference": "1층 접근 우선 가정"}, {"floor": answer})[
+                        "floor"
+                    ],
+                    "일치",
+                )
+        for answer in ("지하2층", "지2층", "B02", "b2f"):
+            with self.subTest(answer=answer):
+                self.assertEqual(
+                    compare_space({"floor_preference": "지하1층"}, {"floor": answer})["floor"],
+                    "불일치",
+                )
+
+    def test_uncertain_multiple_and_missing_floor_numbers_remain_unknown(self):
+        for answer in (
+            None,
+            1,
+            True,
+            "",
+            "1",
+            "101호",
+            "지하",
+            "반지하",
+            "모름",
+            "아마 1층",
+            "1층 또는 2층",
+            "지하1층~지상1층",
+            "B1/B2",
+            "B00",
+            "0층",
+            "-1층",
+            "1.5층",
+            "1층 접근 우선 가정",
+        ):
+            with self.subTest(answer=answer):
+                self.assertEqual(
+                    compare_space({"floor_preference": "1층"}, {"floor": answer})["floor"],
+                    "미확인",
+                )
+
     def test_combined_facility_absence_and_explicit_approximate_area(self):
         for answer in ("이전 일반 소매, 주방·배기 없음", "주방·배기 설비 없음"):
             with self.subTest(answer=answer):
@@ -156,7 +225,7 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertEqual(len(profiles), 51)
             self.assertEqual(profiles["G204"]["water_supply_needed"], "false")
-            self.assertEqual(profiles["I212"]["water_supply_needed"], "true")
+            self.assertEqual(profiles["I212"]["water_supply_needed"], "required")
             rows = db.execute(
                 "SELECT status,citable,value_json FROM facts WHERE metric='space_fit'"
             ).fetchall()
@@ -173,6 +242,28 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
                 ).fetchone()[0]
             )
             self.assertEqual(retail["kitchen"], "해당 없음")
+
+    async def test_basement_alias_is_compared_without_rewriting_the_user_fact(self):
+        parent = await asyncio.to_thread(self.user_fact, "floor", "B01")
+        current = await asyncio.to_thread(ensure_space_fits, self.scope)
+        with connect(self.path) as db:
+            original = db.execute(
+                "SELECT value_json FROM facts WHERE fact_id=?", (parent,)
+            ).fetchone()
+            fit = db.execute(
+                "SELECT status,citable,value_json FROM facts WHERE fact_id=?", (current["G204"],)
+            ).fetchone()
+            self.assertEqual(json.loads(original[0]), "B01")
+            self.assertEqual(
+                (fit[0], fit[1], json.loads(fit[2])["floor"]), ("observed", 1, "불일치")
+            )
+            self.assertTrue(json.loads(fit[2])["reviewed"])
+            self.assertIsNotNone(
+                db.execute(
+                    "SELECT 1 FROM fact_parents WHERE fact_id=? AND parent_fact_id=?",
+                    (current["G204"], parent),
+                ).fetchone()
+            )
 
     async def test_changed_answer_creates_new_fact_and_updates_only_the_pointer(self):
         await asyncio.to_thread(self.user_fact, "floor", "1층")

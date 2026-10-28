@@ -9,7 +9,7 @@ from app.clock import utc_now_iso
 from app.db.connection import connect
 from app.local_data.provenance import pin_provenance
 
-CALC_VERSION = "rubric-v0.8-pr3-1"
+CALC_VERSION = "rubric-v0.8-pr3-2"
 
 
 def register_fact(
@@ -149,7 +149,9 @@ def register_fact(
             ),
         )
         if local:
-            ref = pin_provenance(db, scope, source, metric, industry_code, CALC_VERSION, local_cell)
+            ref = pin_provenance(
+                db, scope, source, metric, industry_code, CALC_VERSION, local_cell, unit
+            )
             db.execute(
                 "INSERT INTO local_fact_lineage VALUES(?,?,?,?)",
                 (

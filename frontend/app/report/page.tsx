@@ -736,8 +736,13 @@ export default function ReportPage() {
                 </a>
               </div>
             </Chapter>
-            <Chapter id="compare" title="업종별 검토 순위">
-              <IndustryReview records={analysisResult?.L_records} />
+            <Chapter id="compare" title="이 상가에 맞는 업종 순위">
+              <IndustryReview
+                top5={analysisResult?.top5}
+                excluded={analysisResult?.excluded_candidates}
+                conditionExcluded={analysisResult?.condition_excluded}
+                facts={factIndex}
+              />
             </Chapter>
             <Chapter
               id="reviews"

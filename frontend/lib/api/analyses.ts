@@ -3,11 +3,13 @@ import type {
   AnalysisEvents,
   AnswerSubmission,
   DecisionResult,
+  FacilityKey,
+  FacilityState,
   RequestFacts,
   StoredAnalysis,
   WaitingForInput,
 } from '@/lib/api/types';
-import { API_BASE_URL } from '@/lib/api/config';
+import { API_BASE_URL } from '@/lib/api/baseUrl';
 
 // docs/API_CONTRACT.md: 실제 호출은 공공데이터 API를 100회 넘게 부르고
 // 모델도 부른다. 수십 초가 걸릴 수 있다고 명시돼 있어 넉넉히 잡는다.
@@ -126,7 +128,30 @@ export type AnalysisRequestInput = {
   address: string;
   radiusM?: number;
   allowQuestions?: boolean;
+  floor?: string;
+  exclusiveAreaM2?: number;
+  facilities?: Partial<Record<FacilityKey, FacilityState>>;
 };
+
+const FLOOR_PATTERN = /^(지하 )?[1-9]\d{0,2}층$/;
+
+function knownFacilities(
+  facilities: AnalysisRequestInput['facilities']
+): Partial<Record<FacilityKey, FacilityState>> | null {
+  const known = Object.fromEntries(
+    Object.entries(facilities ?? {}).filter(([, state]) => state !== 'unknown')
+  );
+  return Object.keys(known).length > 0 ? known : null;
+}
+
+function validArea(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isFinite(value) &&
+    value >= 0.01 &&
+    value <= 100000
+  );
+}
 
 /**
  * 분석 요청 본문. 백엔드 AnalysisRequest는 정의되지 않은 필드를 422로
@@ -137,6 +162,9 @@ export function buildAnalysisRequestBody({
   address,
   radiusM,
   allowQuestions = false,
+  floor,
+  exclusiveAreaM2,
+  facilities,
 }: AnalysisRequestInput): Record<string, unknown> {
   if (
     radiusM !== undefined &&
@@ -144,15 +172,24 @@ export function buildAnalysisRequestBody({
   ) {
     throw new Error('분석 반경은 미터 단위의 양의 정수로 입력해 주세요.');
   }
+  const known = knownFacilities(facilities);
   return {
     address,
     ...(radiusM !== undefined ? { radius_m: radiusM } : {}),
     ...(allowQuestions ? { allow_questions: true } : {}),
+    ...(floor !== undefined && FLOOR_PATTERN.test(floor) ? { floor } : {}),
+    ...(validArea(exclusiveAreaM2)
+      ? { exclusive_area_m2: exclusiveAreaM2 }
+      : {}),
+    ...(known ? { facilities: known } : {}),
   };
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  return readJson<T>(await fetch(url, init));
+}
+
+async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new AnalysisApiError(
       response.status,
@@ -165,17 +202,58 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 /** 분석을 백그라운드로 시작하고 request_id를 바로 받는다(202). */
+async function rejectsFacilities(response: Response): Promise<boolean> {
+  if (response.status !== 422) {
+    return false;
+  }
+  try {
+    const body: unknown = await response.clone().json();
+    const detail =
+      body && typeof body === 'object' && 'detail' in body
+        ? (body as { detail: unknown }).detail
+        : null;
+    return (
+      Array.isArray(detail) &&
+      detail.some((item: unknown) => {
+        const loc =
+          item && typeof item === 'object' && 'loc' in item
+            ? (item as { loc: unknown }).loc
+            : null;
+        return (
+          Array.isArray(loc) && loc[0] === 'body' && loc[1] === 'facilities'
+        );
+      })
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function startAnalysis(
   input: AnalysisRequestInput
-): Promise<AcceptedAnalysis> {
-  return requestJson<AcceptedAnalysis>(
-    `${API_BASE_URL}/api/v1/analyses?wait=false`,
-    {
+): Promise<AcceptedAnalysis & { facilitiesDropped?: boolean }> {
+  const url = `${API_BASE_URL}/api/v1/analyses?wait=false`;
+  const body = buildAnalysisRequestBody(input);
+  const send = (payload: object) =>
+    requestJson<AcceptedAnalysis>(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildAnalysisRequestBody(input)),
-    }
-  );
+      body: JSON.stringify(payload),
+    });
+  if (!('facilities' in body)) {
+    return send(body);
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (await rejectsFacilities(response)) {
+    const withoutFacilities: Record<string, unknown> = { ...body };
+    delete withoutFacilities.facilities;
+    return { ...(await send(withoutFacilities)), facilitiesDropped: true };
+  }
+  return readJson<AcceptedAnalysis>(response);
 }
 
 /** after 이후의 진행 이벤트. 다음 호출에는 응답의 next_after를 넘긴다. */

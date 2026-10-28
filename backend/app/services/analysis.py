@@ -10,6 +10,7 @@ from time import monotonic
 from app.address import resolve_site
 from app.agentic.budget import RuntimeBudget
 from app.agentic.preflight import collect_preflight
+from app.agentic.questions import save_confirmed_space
 from app.agentic.recording import CallRecording
 from app.agentic.runtime import DecisionLoop
 from app.agentic.snapshot import persist_snapshot_scores
@@ -130,6 +131,7 @@ async def execute_agentic_analysis(
     recording_path=None,
     allow_questions=False,
     request_prepared=False,
+    confirmed_space=None,
 ):
     request_id = request_id or uuid.uuid4().hex
     path = await run_in_thread(initialize, db_path)
@@ -167,6 +169,11 @@ async def execute_agentic_analysis(
                 else:
                     await persist_snapshot_scores(task)
                     data = {}
+                confirmed = (
+                    await run_in_thread(save_confirmed_space, scope, confirmed_space)
+                    if confirmed_space
+                    else None
+                )
                 await scope.finish()
                 timings[stage] = monotonic() - started
             stage, started = "루프", monotonic()
@@ -180,6 +187,7 @@ async def execute_agentic_analysis(
                 budget=budget,
                 recorder=recorder,
                 allow_questions=allow_questions,
+                confirmed_space=confirmed,
             )
             if shared is not None:
                 loop.tools.shared.map_cache = shared.map_cache

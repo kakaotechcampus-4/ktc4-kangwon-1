@@ -17,6 +17,7 @@ import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
 import { colors } from '@/styles/tokens';
 import { formatArea } from '@/components/building-confirm/labels';
+import { normalizeFloor } from '@/lib/api/building';
 import {
   mockAnalysisProgress,
   type AnalysisStage,
@@ -151,8 +152,8 @@ function useKnownSite(): KnownSite {
             ? '확인 안 됨'
             : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
       },
-      floor: input.floorUnit.trim() || undefined,
-      exclusiveArea: area === null ? undefined : formatArea(area),
+      floor: normalizeFloor(input.floorUnit) ?? undefined,
+      exclusiveArea: area === null ? undefined : `${area}㎡`,
       parking: building?.parking.value ?? null,
     }));
   }, []);

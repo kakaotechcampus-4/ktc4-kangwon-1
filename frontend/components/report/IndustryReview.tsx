@@ -1,9 +1,54 @@
-import { INDUSTRIES } from '@/lib/api/industries';
-import type { FinalCandidate, LRecord } from '@/lib/api/types';
-import { renderSegments, type FactIndex } from '@/lib/api/segments';
-import { mockIndustryRecords } from '@/lib/mockData/industryRanking';
+'use client';
 
-/** 기존 리포트 목록 화면에서 쓰는 점수 하한 계산. 순위 목록 UI에는 노출하지 않는다. */
+import {
+  Camera,
+  Coffee,
+  Croissant,
+  Dumbbell,
+  Flame,
+  Mic2,
+  PawPrint,
+  Scissors,
+  Store,
+  WashingMachine,
+  type LucideIcon,
+} from 'lucide-react';
+import { mockReportData } from '@/lib/mockData/report';
+import type {
+  ConditionExcludedCandidate,
+  FinalCandidate,
+} from '@/lib/api/types';
+import { conditionExcludedLines } from './conditionExcluded';
+import { renderSegments, type FactIndex } from '@/lib/api/segments';
+
+export function industrySymbol(name: string): LucideIcon {
+  if (/반려|동물/.test(name)) return PawPrint;
+  const rules: [RegExp, LucideIcon][] = [
+    [/네일|뷰티|미용|이용/, Scissors],
+    [/스튜디오|사진|촬영/, Camera],
+    [/세탁/, WashingMachine],
+    [/카페|커피|음료/, Coffee],
+    [/베이커리|빵|제과/, Croissant],
+    [/노래/, Mic2],
+    [/헬스|체력/, Dumbbell],
+    [/고깃|고기|음식점/, Flame],
+  ];
+  return rules.find(([pattern]) => pattern.test(name))?.[1] ?? Store;
+}
+
+type ReviewItem = {
+  name: string;
+  // 실제 결과는 이유가 긴 문장이라 오른쪽 좁은 칸 대신 아래 줄 전체에 놓는다.
+  wide?: boolean;
+  // 100점 환산 점수. 하한·상한이 다르면 구간으로 표시한다.
+  score: number;
+  scoreHigh?: number;
+  badge?: string;
+  reasons: string[];
+  risks: string[];
+};
+
+/** 100점 환산 점수 구간. 적용 배점(A)이 0이면 점수를 매길 수 없다. */
 export function candidateScore(candidate: FinalCandidate): {
   low: number;
   high: number;
@@ -30,88 +75,173 @@ export function candidateChecks(
   return [...new Set(sentences.filter(Boolean))];
 }
 
-type IndustryRank = {
-  code: string;
-  name: string;
-  rank: number;
-};
-
-function getRanks(records?: LRecord[]): IndustryRank[] {
-  if (records?.length) {
-    return records
-      .map((record) => ({
-        code: record.industry_code,
-        name: INDUSTRIES[record.industry_code]?.name ?? record.industry_code,
-        rank: record.selection.code_lower_rank,
-      }))
-      .sort((a, b) => a.rank - b.rank);
-  }
-
-  return mockIndustryRecords
-    .map((record) => ({
-      code: record.industry_code,
-      name: INDUSTRIES[record.industry_code]?.name ?? record.industry_code,
-      rank: record.selection.code_lower_rank,
-    }))
-    .sort((a, b) => a.rank - b.rank);
+function toItem(candidate: FinalCandidate, facts: FactIndex): ReviewItem {
+  const score = candidateScore(candidate);
+  const reason = renderSegments(candidate.reasons_segments, facts).trim();
+  return {
+    name: candidate.industry_name,
+    wide: true,
+    score: score?.low ?? 0,
+    scoreHigh: score && score.high !== score.low ? score.high : undefined,
+    badge: candidate.badge,
+    reasons: reason ? [reason] : [],
+    risks: candidateChecks(candidate, facts),
+  };
 }
 
-export default function IndustryReview({ records }: { records?: LRecord[] }) {
-  const industries = getRanks(records);
-  const hasCompleteRanks = industries.length === Object.keys(INDUSTRIES).length;
-  const isMock = !records?.length;
-  const rankGroups = Array.from(
-    { length: Math.ceil(industries.length / 10) },
-    (_, index) => industries.slice(index * 10, (index + 1) * 10)
-  );
-
+export default function IndustryReview({
+  top5,
+  excluded,
+  conditionExcluded,
+  facts,
+}: {
+  top5?: FinalCandidate[];
+  excluded?: FinalCandidate[];
+  conditionExcluded?: ConditionExcludedCandidate[];
+  facts?: FactIndex;
+}) {
+  const index = facts ?? new Map();
+  const conditionLines = conditionExcludedLines(conditionExcluded);
+  const groups: {
+    title: string;
+    description: string;
+    positive: boolean;
+    items: ReviewItem[];
+  }[] = [
+    {
+      title: '검토 후보 업종',
+      description: '추천 순서입니다. 배지와 확인 조건을 함께 보세요',
+      positive: true,
+      items:
+        top5?.map((item) => toItem(item, index)) ??
+        mockReportData.recommended.map((item) => ({
+          name: item.name,
+          score: item.score,
+          reasons: item.tags,
+          risks: [] as string[],
+        })),
+    },
+    {
+      title: '제외한 업종',
+      description: '위험 요인과 입점 조건을 먼저 확인하세요',
+      positive: false,
+      items:
+        excluded?.map((item) => toItem(item, index)) ??
+        mockReportData.notRecommended.map((item) => ({
+          name: item.name,
+          score: item.score,
+          reasons: item.tags,
+          risks: [] as string[],
+        })),
+    },
+  ];
   return (
-    <section className="industry-ranking" aria-label="업종 검토 순위">
-      <header className="industry-ranking-header">
-        <p>
-          {isMock
-            ? '화면 예시 순위입니다. 실제 분석 결과에서는 순위가 달라질 수 있으며, 업종을 살펴볼 때 참고하는 정보예요.'
-            : '이 순위는 업종을 검토할 때 참고하는 순서예요. 순위가 높다고 입점이 확정되거나 상위 업종만 적합하다는 뜻은 아닙니다. 순위 차이가 크지 않을 수 있으니 관심 업종의 분석 근거와 조건도 함께 확인해 보세요.'}
-        </p>
-        <span>
-          {hasCompleteRanks ? '전체 51개 업종' : `${industries.length}개 업종`}
-        </span>
-      </header>
-
-      <div className="industry-ranking-groups">
-        {rankGroups.map((group) => {
-          const firstRank = group[0]?.rank ?? 0;
-          const lastRank = group[group.length - 1]?.rank ?? firstRank;
-
-          return (
-            <section
-              className="industry-ranking-group"
-              key={`${firstRank}-${lastRank}`}
-              aria-label={`${firstRank}위부터 ${lastRank}위`}
-            >
-              <h3 className="industry-ranking-range">
-                {String(firstRank).padStart(2, '0')}–
-                {String(lastRank).padStart(2, '0')}
-              </h3>
-              <ol className="industry-ranking-list" start={firstRank}>
-                {group.map((industry) => (
-                  <li key={industry.code}>
-                    <span
-                      className="industry-ranking-number"
-                      aria-label={`${industry.rank}위`}
+    <div className="industry-review">
+      <div className="industry-columns">
+        {groups.map((group) => (
+          <div
+            key={group.title}
+            className={`industry-group ${group.positive ? 'positive' : 'negative'}`}
+          >
+            <header className="industry-group-header">
+              <div className="industry-group-title">
+                <h3>{group.title}</h3>
+                <span>{group.items.length}개 업종</span>
+              </div>
+              <p>{group.description}</p>
+            </header>
+            {group.items.length === 0 && (
+              <p className="p-6">해당하는 업종이 없습니다.</p>
+            )}
+            {group.items.map((item, index) => {
+              const Icon = industrySymbol(item.name);
+              const key = `${group.positive}-${index}`;
+              return (
+                <article
+                  key={key}
+                  className={`industry-item ${item.wide ? 'industry-item-wide' : ''}`}
+                >
+                  <div className="industry-row-summary">
+                    <div className="industry-heading">
+                      <span className="industry-rank">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className="industry-icon">
+                        <Icon size={25} strokeWidth={1.8} aria-hidden="true" />
+                      </span>
+                      <div className="industry-name">
+                        <h4>{item.name}</h4>
+                        {item.badge && (
+                          <span className="industry-badge">{item.badge}</span>
+                        )}
+                      </div>
+                      <div className="industry-score">
+                        {item.score}
+                        <small>점</small>
+                        <span>적합도</span>
+                      </div>
+                    </div>
+                    <div
+                      className="industry-score-track"
+                      role="meter"
+                      aria-label={`${item.name} 업종 적합도`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={item.score}
                     >
-                      {String(industry.rank).padStart(2, '0')}
-                    </span>
-                    <span className="industry-ranking-name">
-                      {industry.name}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          );
-        })}
+                      <div
+                        style={{
+                          width: `${Math.max(0, Math.min(100, item.score))}%`,
+                        }}
+                      />
+                      {item.scoreHigh !== undefined && (
+                        // 확인 못 한 항목이 모두 좋게 나오면 오를 수 있는 구간
+                        <div
+                          className="industry-score-potential"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, item.scoreHigh - item.score))}%`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <ul className="industry-reasons industry-reason-labels">
+                    {item.reasons.map((reason, i) => (
+                      <li key={i}>
+                        {/감소|하락/.test(reason)
+                          ? `${reason} ↓`
+                          : /증가|상승/.test(reason)
+                            ? `${reason} ↑`
+                            : reason}
+                      </li>
+                    ))}
+                  </ul>
+                  {item.risks.length > 0 && (
+                    <div className="industry-risks">
+                      <strong>입점 전 확인</strong>
+                      <ul>
+                        {item.risks.map((risk, i) => (
+                          <li key={i}>{risk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ))}
       </div>
-    </section>
+      {conditionLines && (
+        <div className="industry-risks">
+          <strong>조건 때문에 뺀 업종</strong>
+          <ul>
+            {conditionLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

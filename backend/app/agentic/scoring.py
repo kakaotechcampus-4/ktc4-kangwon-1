@@ -26,6 +26,8 @@ from app.agents.floating_population.population import (
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 
+from .space_rules import judge, load_requirements
+
 WEIGHTS = {
     "D1": 10,
     "D2": 10,
@@ -47,15 +49,24 @@ def valid(value) -> TypeGuard[int | float]:
 
 
 def result(
-    item: str, grade: int | None = None, *, status="unknown", reason="자료 부족", value=None
+    item: str,
+    grade: int | None = None,
+    *,
+    status="unknown",
+    reason="자료 부족",
+    value=None,
+    agglomeration: str | None = None,
 ):
-    return {
+    out = {
         "status": "observed" if grade is not None else status,
         "grade": grade,
         "points": WEIGHTS[item] * grade / 4 if grade is not None else None,
         "value": value,
         "reason": reason,
     }
+    if agglomeration is not None:
+        out["agglomeration"] = agglomeration
+    return out
 
 
 @cache
@@ -77,8 +88,12 @@ def score_item(
     bench = fp.get("benchmark", {})
     pop = fp.get("population", {})
 
+    kind = profile.get("agglomeration", "근처형") if item == "C1" else None
+    if item == "C1" and kind not in AGGLOMERATION_TYPES:
+        raise ValueError(f"집적 유형 오류: {code}")
+
     def unknown(reason):
-        return result(item, reason=reason)
+        return result(item, reason=reason, agglomeration=kind)
 
     def na():
         return result(item, status="n.a.", reason="사용자 승인 미적용")
@@ -103,9 +118,21 @@ def score_item(
         or (item == "D3" and profile.get("target_population") in (None, "", "—"))
         or (item == "C4" and not profile.get("required_facilities"))
     )
+    if kind == "무관":
+        return result(
+            item,
+            2,
+            reason="집적과 무관한 업종이라 중간 등급 고정(관측값 아님)",
+            value=None,
+            agglomeration=kind,
+        )
     if (
         source in data.get("runtime_partial_sources", [])
-        or (item == "C1" and "floating_population" in data.get("runtime_partial_sources", []))
+        or (
+            item == "C1"
+            and kind != "모임형"
+            and "floating_population" in data.get("runtime_partial_sources", [])
+        )
     ) and not na_item:
         return unknown("원문 수집 부분 실패·행/페이지 누락")
 
@@ -220,6 +247,17 @@ def score_item(
         density = row.get("density_per_km2")
         if median < 0.01 or not valid(density):
             return unknown("희소 기준선·밀도 결측")
+        if kind == "모임형":
+            q = density / median
+            grade = bisect_right([0.5, 0.8, 1.2, 1.5], q)
+            reason = (
+                "모임형: 서울 중앙값 대비 같은 업종 밀도; "
+                "현재 API/2026Q2 밀도 기준선 시점 차이 있음"
+            )
+            if density > SEOUL_INDUSTRY_DENSITY_PERCENTILES[code][95]:
+                grade = max(grade - 1, 0)
+                reason += " · 서울 상위 5% 초과로 한 단계 감점"
+            return result(item, grade, value=q, reason=reason, agglomeration=kind)
         q = density / median
         if c1_alpha:
             daily = bench.get("mean_daily_per_trade_area")
@@ -230,7 +268,8 @@ def score_item(
             item,
             4 - bisect_right([0.5, 0.8, 1.2, 1.5], q),
             value=q,
-            reason=f"C1 α={c1_alpha}; 현재 API/2026Q2 밀도 기준선 시점 차이 있음",
+            reason=f"근처형: C1 α={c1_alpha}; 현재 API/2026Q2 밀도 기준선 시점 차이 있음",
+            agglomeration=kind,
         )
     if item == "C4":
         facilities = profile.get("required_facilities", "")
@@ -335,7 +374,7 @@ def regulation(code: str, scan: dict) -> str:
     relative = any("상대" in n for n in names)
     if not absolute and not relative:
         return "unknown"
-    if absolute and code in {"I101", "I102"}:
+    if absolute:
         return "금지"
     return "조건부"
 
@@ -414,35 +453,81 @@ def summarize(
     }
 
 
+AGGLOMERATION_TYPES = ("모임형", "근처형", "무관")
+
+
 def profiles() -> dict:
     with (DATA_DIR / "industry_profile.csv").open(encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f))
     if any(r["reviewed_v2"] != "true" for r in rows):
         raise ValueError("미승인 프로필")
+    for r in rows:
+        if r["agglomeration"] not in AGGLOMERATION_TYPES:
+            raise ValueError(f"집적 유형 오류: {r['industry_code']}")
+        if r["agglomeration_confidence"] not in ("high", "low"):
+            raise ValueError(f"집적 유형 확신 오류: {r['industry_code']}")
+        if not r["agglomeration_rationale"].strip():
+            raise ValueError(f"집적 유형 근거 없음: {r['industry_code']}")
     return {r["industry_code"]: r for r in rows}
+
+
+def adjusted_lower(row):
+    return row["lower"] + row.get("space", {}).get("adjustment", 0)
+
+
+def rank_key(row):
+    return (-adjusted_lower(row), -(row["coverage"] or 0), row["code"])
 
 
 def rank_candidates(rows, limit=5):
     return sorted(
-        [r for r in rows if r["regulation"] != "금지"],
-        key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]),
+        [
+            r
+            for r in rows
+            if r["regulation"] != "금지" and not r.get("space", {}).get("excluded", False)
+        ],
+        key=rank_key,
     )[:limit]
 
 
+def apply_space(row, judgement):
+    applied = {
+        **row,
+        "space": {
+            "excluded": judgement.excluded,
+            "exclusion_reasons": list(judgement.exclusion_reasons),
+            "adjustment": judgement.adjustment,
+            "notes": list(judgement.notes),
+        },
+    }
+    added = [*judgement.notes, *(f"추천 제외: {r}" for r in judgement.exclusion_reasons)]
+    if added:
+        applied["confirmation_conditions"] = [*row["confirmation_conditions"], *added]
+    if judgement.notes and row["badge"] == "추천":
+        applied["badge"] = "조건부"
+    return applied
+
+
 def evaluate(
-    sample: dict, *, exposure_min=40, c1_alpha=0.5, profile_rows=None, **thresholds
+    sample: dict,
+    *,
+    exposure_min=40,
+    c1_alpha=0.5,
+    profile_rows=None,
+    space_answers: dict | None = None,
+    **thresholds,
 ) -> dict:
     rows = []
+    requirements = load_requirements()
     for code, profile in (profiles() if profile_rows is None else profile_rows).items():
         items = {
             item: score_item(item, profile, code, sample, exposure_min, c1_alpha)
             for item in WEIGHTS
         }
-        rows.append(
-            summarize(
-                code, items, regulation(code, sample.get("education_zones", {})), **thresholds
-            )
+        scored = summarize(
+            code, items, regulation(code, sample.get("education_zones", {})), **thresholds
         )
+        rows.append(apply_space(scored, judge(requirements.get(code, {}), space_answers or {})))
     top = rank_candidates(rows)
     return {
         "address": sample["address"],

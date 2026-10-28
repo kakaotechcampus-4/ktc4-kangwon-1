@@ -71,9 +71,15 @@ submit_draft는 보고서만 제출하며 추천·제외 후보는 각각 최대
 L을 다시 제출하지 마세요.
 get_facts는 업종·source·metrics를 지정하거나 받은 fact_ids로 좁혀 읽으세요.
 공간 비교는 source=industry_profile, metrics=[space_fit], limit=51로 한 번 묶어 조회하세요.
-reviewed=false 공간 요건은 운영 가설 초안이며 법규·필수 시설·확정 사실이 아닙니다.
-space_fit을 L 요인에 인용하면 space_fit_component를 지정하세요. 지정한 항목의 확인된 일치·불일치만
-판단 근거입니다. 해당 없음·미확인은 요인으로 쓰지 말고 초안과 미확인 조건을 함께 설명하세요.
+공간 요건의 면적은 운영 추정입니다.
+층과 필수·선호 설비는 규칙이 추천 제외·순위에 반영하므로 L에 중복 사용하지 마세요.
+공간 L 근거는 확인된 면적 비교를 사용하세요.
+조건부 설비 비교는 현재 미확인이므로 확인 조건에 남기세요.
+space_fit의 fact_id와 방향만 제출하면 코드가 L에 허용된 비교 항목을 선택합니다.
+해당 없음·미확인은 요인으로 쓰지 말고 요건과 미확인 조건을 함께 설명하세요.
+confirmed_space의 층·전용면적은 source=user의 확인 화면 확정 사실이며 다시 묻지 마세요.
+설비 상태 present는 있음, installable은 설치 가능, unavailable은 설치 불가입니다.
+설치 가능을 설치 완료로, 단순한 설비 부재를 설치 불가로 바꾸지 마세요.
 소매업은 주방·조리 배기가 없다는 이유로 불리하게 판단하지 마세요.
 기업 간 거래·예약 중심 업종도 보행 통행이나 층 조건만으로 일괄 탈락시키지 마세요.
 임대인이 아직 확인하지 않은 핵심 공간 조건만 처음에 최대 세 항목을 한 번 묶어 ask_user로
@@ -123,7 +129,9 @@ class DecisionLoop:
         budget=None,
         measurement=False,
         recorder=None,
+        # 내부 루프 기본값이며 공개 API는 요청에서 허용한 경우에만 True를 전달합니다.
         allow_questions=True,
+        confirmed_space=None,
     ):
         self.scope, self.site, self.base_id, self.base_rows = scope, site, base_id, base_rows
         self.generate, self.advisor_generate = generate, advisor_generate
@@ -134,10 +142,18 @@ class DecisionLoop:
             "asked": False,
             "limitations": [],
             "tool_sequence": [],
-            "known_fact_ids": [],
+            "known_fact_ids": list(confirmed_space["fact_ids"].values()) if confirmed_space else [],
         }
         self.budget = budget or RuntimeBudget(self.state.get("budget"), measurement=measurement)
         self.state.setdefault("allow_questions", allow_questions)
+        self.state.setdefault(
+            "confirmed_question_fields",
+            [
+                field
+                for field in (confirmed_space or {}).get("values", {})
+                if field in {"floor", "exclusive_area"}
+            ],
+        )
         self.state.setdefault("L_records", {})
         self.state.setdefault("L_closed", False)
         self.state.setdefault("phase", "L")
@@ -197,6 +213,7 @@ class DecisionLoop:
                             },
                             "L_industry_codes": list(INDUSTRIES),
                             "industry_names": INDUSTRIES,
+                            **({"confirmed_space": confirmed_space} if confirmed_space else {}),
                         }
                     ),
                 },
@@ -609,13 +626,25 @@ class DecisionLoop:
 
     def definitions(self):
         blocked = not self.state["allow_questions"] or self.state.get("phase") == "final"
-        return [
+        definitions = [
             d
             for d in self.tools.definitions()
             if not (blocked and d["function"]["name"] == "ask_user")
             and not (self.state["L_closed"] and d["function"]["name"] == "submit_l")
             and not (not self.state["L_closed"] and d["function"]["name"] == "submit_draft")
         ]
+        for definition in definitions:
+            function = definition["function"]
+            if function["name"] == "ask_user":
+                fields = function["parameters"]["properties"]["questions"]["items"]["properties"][
+                    "field"
+                ]
+                fields["enum"] = [
+                    field
+                    for field in fields["enum"]
+                    if field not in self.state["confirmed_question_fields"]
+                ]
+        return definitions
 
     async def compact_reply(self, reply, name, arguments):
         body = reply.model_dump(mode="json")

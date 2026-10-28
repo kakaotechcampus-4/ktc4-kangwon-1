@@ -17,6 +17,17 @@ function fixed(value: number, digits: number): string {
 }
 
 // 파이썬 f"{value:,.0f}"처럼 천 단위 쉼표를 넣는다.
+const FACILITY_TEXT: [string, string][] = [
+  ['kitchen', '주방'],
+  ['ventilation', '배기(덕트)'],
+  ['water_supply', '급배수'],
+];
+const FACILITY_STATE_TEXT: Record<string, string> = {
+  present: '있음',
+  installable: '설치 가능',
+  unavailable: '설치 불가',
+};
+
 function grouped(value: number): string {
   return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -31,6 +42,18 @@ export function formatFact(
     return null;
   }
   if (format === 'text') {
+    if (
+      fact.metric === 'existing_facilities' &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      return FACILITY_TEXT.flatMap(([key, name]) => {
+        const state = value[key];
+        return typeof state === 'string' && state in FACILITY_STATE_TEXT
+          ? [`${name} ${FACILITY_STATE_TEXT[state]}`]
+          : [];
+      }).join(' · ');
+    }
     return typeof value === 'string' ? value : JSON.stringify(value);
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {

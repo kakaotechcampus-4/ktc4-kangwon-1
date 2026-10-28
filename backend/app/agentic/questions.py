@@ -12,7 +12,7 @@ from app.errors import AnalysisConflictError
 
 from .contracts import QuestionSessionRef, ToolReply
 from .facts import register_fact
-from .space import ensure_space_fits
+from .space import CONFIRMED_UNIT, ensure_space_fits
 from .sql_tool import error
 
 
@@ -30,6 +30,8 @@ async def ask_user(loop, input):
         return error("QUESTION_NOT_ALLOWED", "현재 요청·단계에서 질문할 수 없습니다.")
     if loop.state["asked"]:
         return error("ALREADY_ANSWERED", "질문 세션을 반복할 수 없습니다.")
+    if any(q.field in loop.state.get("confirmed_question_fields", []) for q in input.questions):
+        return error("ALREADY_ANSWERED", "확인 화면에서 확정한 층·전용면적은 다시 묻지 마세요.")
     loop.state["asked"] = True
     session_id = "question_" + str(uuid.uuid4())
     await run_in_thread(save_question, loop, session_id, input)
@@ -91,6 +93,39 @@ async def resume(loop_type, scope, site, answers, *, resume_state=None, **kwargs
     saved, question_id = resume_state or await loop_type.validate_resume(scope, answers)
     saved = await run_in_thread(save_user_facts, scope, answers, question_id, saved)
     return await loop_type.create(scope, site, saved=saved, **kwargs)
+
+
+def save_confirmed_space(scope, values):
+    with connect(scope.path) as db:
+        db.execute("BEGIN IMMEDIATE")
+        response = scope.record_sync(
+            source="user",
+            source_type="api",
+            args={},
+            page="1",
+            status=200,
+            payload={"rows": [values]},
+            connection=db,
+        )
+        ref = db.execute(
+            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
+        ).fetchone()[0]
+        ids = {
+            field: register_fact(
+                scope,
+                industry_code=None,
+                source="user",
+                metric=field,
+                value=value,
+                unit=CONFIRMED_UNIT,
+                status="observed",
+                row_ids=[ref],
+                field_pointer="/" + field,
+                connection=db,
+            )
+            for field, value in values.items()
+        }
+    return {"values": dict(values), "fact_ids": ids}
 
 
 def save_user_facts(scope, answers, question_id, saved):

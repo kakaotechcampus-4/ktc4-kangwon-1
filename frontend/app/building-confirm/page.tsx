@@ -16,6 +16,7 @@ import BuildingFieldRow from '@/components/building-confirm/BuildingFieldRow';
 import ParkingSelector from '@/components/building-confirm/ParkingSelector';
 import SegmentedSelector from '@/components/building-confirm/SegmentedSelector';
 import ConfirmSidePanel from '@/components/building-confirm/ConfirmSidePanel';
+import FacilityRows from '@/components/building-confirm/FacilityRows';
 import {
   FACILITY_LABELS,
   FACILITY_SHORT_LABELS,
@@ -23,6 +24,7 @@ import {
   floorFromUnit,
   formatArea,
 } from '@/components/building-confirm/labels';
+import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
 import { startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
@@ -31,6 +33,7 @@ import {
   SEWAGE_OPTIONS,
   editField,
   fetchBuildingInfo,
+  normalizeFloor,
   type BuildingInfo,
   type LookupId,
   type LookupStatus,
@@ -83,6 +86,9 @@ export default function BuildingConfirmPage() {
   const [areaText, setAreaText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [facilities, setFacilities] = useState<
+    Record<FacilityKey, FacilityState>
+  >({ ventilation: 'unknown', kitchen: 'unknown', water_supply: 'unknown' });
 
   useEffect(() => {
     // 개발 환경에서 조회 중 화면을 고정해 디자인을 확인한다.
@@ -173,7 +179,7 @@ export default function BuildingConfirmPage() {
     if (!input || !building || building.parking.value === null) {
       return;
     }
-    // 확인한 건축물 정보는 화면 표시용으로만 남기고 분석 요청에는 싣지 않는다.
+    // 확인한 건축물 정보는 화면 표시용으로 남기고, 층·전용면적·시설만 분석 요청에 싣는다.
     saveConfirmedBuilding(building);
 
     if (MOCK_MODE) {
@@ -192,11 +198,19 @@ export default function BuildingConfirmPage() {
         : input.roadAddress;
       // 분석을 백그라운드로 시작하고(202) 바로 진행 화면으로 간다. 진행 상황과
       // 질문·결과는 진행 화면이 요청 ID로 받아 온다.
-      const { request_id: requestId } = await startAnalysis({
+      const { request_id: requestId, facilitiesDropped } = await startAnalysis({
         address: fullAddress,
         radiusM: parseRadius(input.radius),
         allowQuestions: true,
+        floor: normalizeFloor(input.floorUnit) ?? undefined,
+        exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,
+        facilities,
       });
+      if (facilitiesDropped) {
+        alert(
+          '서버가 아직 배기·주방·급배수 입력을 받지 못해 이번 분석에는 시설 정보가 빠졌어요.'
+        );
+      }
       // 이전 분석 결과가 리포트에 섞이지 않게 지우고 새 요청 ID만 남긴다.
       clearAnalysisResult();
       saveRequestId(requestId);
@@ -374,6 +388,11 @@ export default function BuildingConfirmPage() {
                       ))}
                     </select>
                   }
+                />
+
+                <FacilityRows
+                  facilities={facilities}
+                  onChange={setFacilities}
                 />
 
                 <div

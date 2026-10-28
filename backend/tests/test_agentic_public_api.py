@@ -91,6 +91,9 @@ class PublicApiTests(unittest.TestCase):
                 result = DecisionResult.model_validate(response.json())
                 self.assertEqual(result.review_completeness, 1)
                 raw = result.model_dump(mode="json")
+                self.assertEqual(raw["condition_excluded"], [])
+                legacy = {k: v for k, v in raw.items() if k != "condition_excluded"}
+                self.assertEqual(DecisionResult.model_validate(legacy).condition_excluded, [])
                 for update in (
                     {"evaluator_reviews": raw["evaluator_reviews"][:3]},
                     {"evaluator_reviews": [raw["evaluator_reviews"][0]] * 4},

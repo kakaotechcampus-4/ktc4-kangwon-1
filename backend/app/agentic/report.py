@@ -11,10 +11,20 @@ from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 from app.schemas import DecisionResult
 from app.text import has_digit
 
-from .contracts import FactView, FinalCandidate, LRecord, LSelection
+from .contracts import (
+    ConditionExcludedCandidate,
+    FactView,
+    FinalCandidate,
+    LRecord,
+    LSelection,
+)
 from .read_tools import score_summary
-from .scoring import WEIGHTS, rank_candidates, result, summarize
+from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
+from .space import rule_answers
+from .space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
 
+RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
+RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
 NEW_METRICS = {
     "place_name",
     "kakao_category",
@@ -58,6 +68,35 @@ def load_base(scope):
     rows = json.loads(row[1])
     rows.sort(key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]))
     return row[0], rows
+
+
+def rule_scored_space(fact, component, industry_code):
+    metric = fact.get("metric")
+    if metric == "space_fit":
+        if component == "floor":
+            return True
+        level = load_requirements().get(industry_code, {}).get(f"{component}_needed")
+        return component in FACILITY_NAMES and level in RULE_FACILITY_LEVELS
+    if fact.get("source") != "user":
+        return False
+    if metric == "floor":
+        return True
+    raw = fact.get("value_json")
+    return metric == "existing_facilities" and raw is not None and isinstance(json.loads(raw), dict)
+
+
+def condition_excluded(rows):
+    ranked = sorted((r for r in rows if r["regulation"] != "금지"), key=rank_key)
+    return [
+        ConditionExcludedCandidate(
+            industry_code=r["code"],
+            industry_name=r["name"],
+            reasons=r["space"]["exclusion_reasons"],
+            score_rank=rank,
+        )
+        for rank, r in enumerate(ranked, 1)
+        if r.get("space", {}).get("excluded", False)
+    ]
 
 
 def fact_rows(scope, ids):
@@ -189,6 +228,11 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
                     for f in factor.fact_ids
                 ):
                     raise ReportInvalid("L 근거의 업종이 검토 업종과 다릅니다.")
+                if any(
+                    rule_scored_space(facts[f], factor.space_fit_component, record.industry_code)
+                    for f in factor.fact_ids
+                ):
+                    raise ReportInvalid(RULE_SPACE_MESSAGE)
                 if factor.major_constraint and factor.direction != "adverse":
                     raise ReportInvalid("큰 운영 제약은 불리 요인으로 기록해야 합니다.")
                 if any(
@@ -273,16 +317,17 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         else {}
     )
     indexed = {r.industry_code: r for r in records}
+    answers = rule_answers(scope)
+    requirements = load_requirements()
     rows = []
     for original in base_rows:
         record = indexed[original["code"]]
         items = deepcopy(original["items"])
         items["L"] = result("L", record.grade if record.status == "observed" else None)
-        rows.append(
-            summarize(
-                original["code"], items, restrictions.get(original["code"], original["regulation"])
-            )
+        scored = summarize(
+            original["code"], items, restrictions.get(original["code"], original["regulation"])
         )
+        rows.append(apply_space(scored, judge(requirements.get(original["code"], {}), answers)))
     score_id = "ss_" + str(uuid.uuid4())
     with connect(scope.path) as db:
         db.execute(
@@ -335,6 +380,12 @@ def render_segment(segment, facts):
     fact = facts[segment.fact_id]
     value = json.loads(fact["value_json"])
     if segment.format == "text":
+        if fact["metric"] == "existing_facilities" and isinstance(value, dict):
+            return " · ".join(
+                f"{name} {FACILITY_STATE_TEXT[value[key]]}"
+                for key, name in FACILITY_NAMES.items()
+                if value.get(key) in FACILITY_STATE_TEXT
+            )
         return str(value)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
@@ -438,6 +489,7 @@ def finalize(
         summary_segments=proposal.summary_segments,
         top5=top,
         excluded_candidates=excluded,
+        condition_excluded=condition_excluded(rows),
         facts=views,
         L_records=all_records,
         evaluator_reviews=reviews
