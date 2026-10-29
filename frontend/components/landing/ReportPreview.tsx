@@ -266,7 +266,8 @@ function WhyScreen() {
           <div className="flex flex-col gap-4">
             <p className="text-lg leading-snug font-extrabold text-[#10233A]">
               <span className="text-[#2453D6]">네일·뷰티, 코인세탁실</span>은
-              주변에 같은 업종이 적고,{' '}
+              주변에 같은 업종이 적고,
+              <br />
               <span className="text-[#C2410C]">소형 스튜디오</span>는 이미 몰려
               있어요.
             </p>
