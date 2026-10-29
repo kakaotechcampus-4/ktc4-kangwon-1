@@ -193,55 +193,19 @@ class ExaminerChecksTests(unittest.TestCase):
             ],
         )
 
-    def test_checks_group_shared_sources(self):
-        ids = [fact_id(i) for i in range(3)]
-        rows = {
-            ids[0]: row(ids[0], source="floating_population", metric="by_time"),
-            ids[1]: row(ids[1], source="floating_population", metric="by_time"),
-            ids[2]: row(ids[2]),
-        }
-        items = [
-            {"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": [ids[0]]},
-            {"item": "D3", "status": "observed", "grade": 2, "points": 2.5, "fact_ids": [ids[1]]},
-            {"item": "C1", "status": "observed", "grade": 2, "points": 7.5, "fact_ids": [ids[2]]},
-        ]
-        packet = self.build(items, rows, [{"type": "text", "text": "이유 문장"}])
-        self.assertEqual(
-            packet["checks"]["shared_sources"],
-            [
-                {
-                    "industry_code": "I201",
-                    "source": "floating_population",
-                    "metric": "by_time",
-                    "items": ["D1", "D3"],
-                }
-            ],
-        )
-
-    def test_checks_group_items_sharing_an_input(self):
-        ids = [fact_id(i) for i in range(3)]
+    def test_checks_hold_only_uncited_sentences(self):
+        ids = [fact_id(i) for i in range(2)]
         rows = {
             ids[0]: row(ids[0], source="business_lifecycle", metric="close_rate_ratio"),
             ids[1]: row(ids[1], source="business_lifecycle", metric="close_trend_ratio"),
-            ids[2]: row(ids[2], source="business_lifecycle", metric="turnover_ratio"),
         }
         items = [
             {"item": "S1", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[0]]},
-            {"item": "S3", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[2]]},
             {"item": "S4", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[1]]},
         ]
         packet = self.build(items, rows, [{"type": "text", "text": "이유 문장"}])
-        self.assertEqual(
-            packet["checks"]["shared_sources"],
-            [
-                {
-                    "industry_code": "I201",
-                    "source": "business_lifecycle",
-                    "metric": "recent_year_close_rate",
-                    "items": ["S1", "S4"],
-                }
-            ],
-        )
+        self.assertEqual(set(packet["checks"]), {"uncited"})
+        self.assertNotIn("shared_sources", examiner.PERSONA)
 
     def test_sentences_keep_trailing_fact_and_punctuation_runs(self):
         fact = {"type": "fact", "fact_id": fact_id(0), "format": "count"}

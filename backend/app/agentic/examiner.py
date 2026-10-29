@@ -15,8 +15,7 @@ PERSONA = (
     "근거·출처·기간 범위·중복의 네 칸을 확인하세요. "
     "checks를 먼저 보세요. checks.uncited는 fact 슬롯이 없는 문장의 후보·칸·순번이고 "
     "순번은 칸 안 문장을 영부터 센 값입니다. 그 후보 score_items에서 문장을 뒷받침할 "
-    "fact_id를 골라 missing_evidence로 지적하세요. checks.shared_sources는 같은 원천 "
-    "지표를 쓰는 점수 문항 묶음이니 중복 칸 판단에 참고하세요. "
+    "fact_id를 골라 missing_evidence로 지적하세요. "
     "checks를 본 뒤에도 폐업률처럼 기간이 있는 문장은 이유·위험 칸을 가리지 말고 "
     "인용 fact의 출처·기간 범위 칸을 확인하세요. "
     "근거 칸: 문장에 fact 슬롯이 없으면 그 후보 score_items에서 문장을 뒷받침할 fact_id를 골라 "
@@ -52,12 +51,6 @@ ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 SEGMENTS = ("reasons_segments", "risks_segments", "confirmation_conditions_segments")
 SUMMARY = ("code_points", "B", "H", "coverage", "badge", "L_status")
 SCORE_COLUMNS = ("item", "status", "grade", "points", "fact_ids")
-INPUTS = {
-    "close_rate_ratio": ("recent_year_close_rate",),
-    "close_trend_ratio": ("recent_year_close_rate", "oldest_year_close_rate"),
-    "net_change_index": ("net_change_rate",),
-    "turnover_ratio": ("turnover_rate",),
-}
 FACT_COLUMNS = (
     "fact_id",
     "industry_code",
@@ -131,27 +124,6 @@ def _uncited(candidates):
     ]
 
 
-def _shared_sources(codes, items, rows, allowed):
-    found = []
-    for code in codes:
-        groups = {}
-        for entry in items[code]:
-            keys = {
-                (rows[f]["source"], metric)
-                for f in entry["fact_ids"]
-                if f in allowed
-                for metric in INPUTS.get(rows[f]["metric"], (rows[f]["metric"],))
-            }
-            for key in sorted(keys):
-                groups.setdefault(key, []).append(entry["item"])
-        found += [
-            {"industry_code": code, "source": source, "metric": metric, "items": names}
-            for (source, metric), names in sorted(groups.items())
-            if len(names) >= 2
-        ]
-    return found
-
-
 def review_packet(scope, draft):
     payload = draft.model_dump(mode="json")
     top5 = payload.get("top5", [])[:5]
@@ -208,7 +180,6 @@ def review_packet(scope, draft):
         "omitted_fact_ids": [],
         "checks": {
             "uncited": _uncited(top5),
-            "shared_sources": _shared_sources(codes, items, rows, allowed),
         },
     }
     packet = label_periods(encode(scope, packet))
