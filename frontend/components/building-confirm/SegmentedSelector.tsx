@@ -18,10 +18,11 @@ export default function SegmentedSelector<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-grid w-fit max-w-full grid-flow-col auto-cols-fr self-start overflow-hidden rounded-lg border"
+      className="grid w-full min-w-0 max-w-[460px] self-start overflow-hidden rounded-lg border"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
+        gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
       }}
     >
       {options.map((option, index) => {
@@ -33,7 +34,7 @@ export default function SegmentedSelector<T extends string>({
             role="radio"
             aria-checked={isSelected}
             onClick={() => onChange(option.value)}
-            className="min-h-[52px] min-w-[72px] px-4 text-base whitespace-nowrap sm:min-w-[88px] sm:px-5"
+            className="min-h-12 min-w-0 px-2 text-sm leading-tight break-keep sm:min-h-14 sm:px-3 sm:text-base"
             style={{
               borderLeft:
                 index === 0 ? 'none' : `1px solid ${colors.neutral.border}`,

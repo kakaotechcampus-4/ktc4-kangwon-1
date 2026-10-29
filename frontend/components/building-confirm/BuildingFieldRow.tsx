@@ -25,7 +25,7 @@ export default function BuildingFieldRow<T>({
 }: BuildingFieldRowProps<T>) {
   return (
     <div
-      className="flex min-h-[88px] items-center gap-6 px-10 py-5"
+      className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-2.5 px-4 py-4 sm:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] sm:gap-y-3 sm:px-8 sm:py-5 lg:px-10"
       style={{
         borderTop: `1px solid ${colors.neutral.border}`,
         backgroundColor:
@@ -34,15 +34,25 @@ export default function BuildingFieldRow<T>({
             : colors.neutral.white,
       }}
     >
-      <p
-        className="w-[220px] shrink-0 text-base"
-        style={{ color: colors.text.secondary }}
-      >
-        {label}
-      </p>
-      <div className="flex min-w-0 flex-1 items-center">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:pt-3">
+        <p
+          className="min-w-0 text-sm sm:text-base"
+          style={{ color: colors.text.secondary }}
+        >
+          {label}
+        </p>
+        {showSource && field.source !== 'missing' && (
+          <SourceBadge
+            source={field.source}
+            registryText={
+              field.registryValue === null ? null : format(field.registryValue)
+            }
+          />
+        )}
+      </div>
+      <div className="flex w-full min-w-0 items-center sm:col-start-2">
         {editable ? (
-          editor
+          <div className="w-full min-w-0">{editor}</div>
         ) : (
           <p
             className="text-xl font-bold"
@@ -52,13 +62,15 @@ export default function BuildingFieldRow<T>({
           </p>
         )}
       </div>
-      {showSource && (
-        <SourceBadge
-          source={field.source}
-          registryText={
-            field.registryValue === null ? null : format(field.registryValue)
-          }
-        />
+      {showSource && field.source === 'missing' && (
+        <div className="min-w-0 sm:col-start-2">
+          <SourceBadge
+            source={field.source}
+            registryText={
+              field.registryValue === null ? null : format(field.registryValue)
+            }
+          />
+        </div>
       )}
     </div>
   );
