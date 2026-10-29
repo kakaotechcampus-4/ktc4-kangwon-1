@@ -218,6 +218,57 @@ class ExaminerChecksTests(unittest.TestCase):
             ],
         )
 
+    def test_checks_group_items_sharing_an_input(self):
+        ids = [fact_id(i) for i in range(3)]
+        rows = {
+            ids[0]: row(ids[0], source="business_lifecycle", metric="close_rate_ratio"),
+            ids[1]: row(ids[1], source="business_lifecycle", metric="close_trend_ratio"),
+            ids[2]: row(ids[2], source="business_lifecycle", metric="turnover_ratio"),
+        }
+        items = [
+            {"item": "S1", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[0]]},
+            {"item": "S3", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[2]]},
+            {"item": "S4", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[1]]},
+        ]
+        packet = self.build(items, rows, [{"type": "text", "text": "이유 문장"}])
+        self.assertEqual(
+            packet["checks"]["shared_sources"],
+            [
+                {
+                    "industry_code": "I201",
+                    "source": "business_lifecycle",
+                    "metric": "recent_year_close_rate",
+                    "items": ["S1", "S4"],
+                }
+            ],
+        )
+
+    def test_sentences_keep_trailing_fact_and_punctuation_runs(self):
+        fact = {"type": "fact", "fact_id": fact_id(0), "format": "count"}
+        segments = [
+            {"type": "text", "text": "폐업률이 높습니다."},
+            fact,
+            {"type": "text", "text": " 점포가 많습니다... 정말요?! 네."},
+        ]
+        self.assertEqual(
+            examiner._sentences(segments),
+            [
+                ("폐업률이 높습니다.", True),
+                ("점포가 많습니다...", False),
+                ("정말요?!", False),
+                ("네.", False),
+            ],
+        )
+        leading = [
+            {"type": "text", "text": "첫 문장입니다. "},
+            fact,
+            {"type": "text", "text": "가 둘째 문장입니다."},
+        ]
+        self.assertEqual(
+            examiner._sentences(leading),
+            [("첫 문장입니다.", False), ("가 둘째 문장입니다.", True)],
+        )
+
     def test_packet_with_checks_stays_under_cap(self):
         ids = [fact_id(i) for i in range(100)]
         items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]

@@ -46,12 +46,18 @@ PERSONA = (
     "인용 근거가 문장과 반대 방향이면 oppose입니다."
 )
 MAX_PACKET_CHARS = 12000
-SENTENCE_END = re.compile(r"(?<=[.!?])")
+SENTENCE_END = re.compile(r"(?<=[.!?])(?![.!?])")
 MAX_VALUE_CHARS = 500
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 SEGMENTS = ("reasons_segments", "risks_segments", "confirmation_conditions_segments")
 SUMMARY = ("code_points", "B", "H", "coverage", "badge", "L_status")
 SCORE_COLUMNS = ("item", "status", "grade", "points", "fact_ids")
+INPUTS = {
+    "close_rate_ratio": ("recent_year_close_rate",),
+    "close_trend_ratio": ("recent_year_close_rate", "oldest_year_close_rate"),
+    "net_change_index": ("net_change_rate",),
+    "turnover_ratio": ("turnover_rate",),
+}
 FACT_COLUMNS = (
     "fact_id",
     "industry_code",
@@ -99,7 +105,10 @@ def _sentences(segments):
     found, text, cited = [], "", False
     for segment in segments:
         if segment.get("type") == "fact":
-            cited = True
+            if text == "" and found:
+                found[-1] = (found[-1][0], True)
+            else:
+                cited = True
             continue
         parts = SENTENCE_END.split(segment.get("text", ""))
         for part in parts[:-1]:
@@ -128,7 +137,10 @@ def _shared_sources(codes, items, rows, allowed):
         groups = {}
         for entry in items[code]:
             keys = {
-                (rows[f]["source"], rows[f]["metric"]) for f in entry["fact_ids"] if f in allowed
+                (rows[f]["source"], metric)
+                for f in entry["fact_ids"]
+                if f in allowed
+                for metric in INPUTS.get(rows[f]["metric"], (rows[f]["metric"],))
             }
             for key in sorted(keys):
                 groups.setdefault(key, []).append(entry["item"])
