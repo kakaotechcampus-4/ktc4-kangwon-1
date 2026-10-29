@@ -3,15 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  Building2,
-  FileText,
-  MapPin,
-  TriangleAlert,
-} from 'lucide-react';
+import { ArrowRight, Building2, FileText, TriangleAlert } from 'lucide-react';
 import { mockReportData } from '@/lib/mockData/report';
-import { mockProperty } from '@/lib/mockData/property';
 
 /**
  * 랜딩 "분석 리포트 미리보기" 섹션 (#report-preview).
@@ -21,7 +14,7 @@ import { mockProperty } from '@/lib/mockData/property';
  * 화면 축소판(채움 분석 리포트 · 예시)이 함께 보인다. 섹션이 화면에 보일 때만
  * 넘어가고, 마우스를 올리면 멈춘다. 마지막에 "내 상가로 분석해 보기"로 이어진다.
  *
- * 수치는 리포트 목업(mockReportData·mockProperty)을 그대로 쓴다. 면적·평가자 판정 등
+ * 수치는 리포트 목업과 같은 값을 쓴다. 주소는 넣지 않는다. 면적·평가자 판정 등
  * 일부 문구는 화면 구성을 보여주는 예시다.
  */
 
@@ -38,7 +31,7 @@ const STEPS = [
     key: 'why',
     label: '상권',
     title: '내 상가 주변을\n데이터로 읽어드려요',
-    desc: '내 상가 반경 안의 유동인구, 개폐업 흐름, 경쟁 점포를 업종별로 정리해요.',
+    desc: '내 상가 반경 안의 유동인구, 같은 업종 경쟁, 개폐업 흐름을 리포트 한 장씩으로 정리해요.',
   },
   {
     key: 'check',
@@ -58,7 +51,7 @@ function Frame({
 }) {
   return (
     <div className="overflow-hidden rounded-[20px] bg-white shadow-[0_30px_60px_rgba(0,0,0,0.28)]">
-      <div className="flex items-center justify-between gap-3 bg-[#F3F6FA] px-5 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] bg-[#F3F6FA] px-5 py-3">
         <span className="flex items-center gap-2">
           <FileText size={16} className="text-[#2453D6]" aria-hidden />
           <span className="text-13 font-extrabold text-[#10233A]">
@@ -70,11 +63,6 @@ function Frame({
         </span>
         <span className="text-xs font-bold text-[#2453D6]">{caption}</span>
       </div>
-      <p className="flex items-center gap-1.5 border-b border-[#EEF1F5] px-5 py-2 text-xs text-[#66758A]">
-        <MapPin size={12} aria-hidden />
-        {mockProperty.fullAddress} · 전용{' '}
-        {Math.round(mockProperty.exclusiveAreaM2)}㎡
-      </p>
       {children}
     </div>
   );
@@ -147,25 +135,45 @@ function AnswerScreen() {
   );
 }
 
-const fp = mockReportData.floatingPopulation;
-const TIME_BANDS: [string, string][] = [
-  ['00_06', '새벽'],
-  ['06_11', '오전'],
-  ['11_14', '점심'],
-  ['14_17', '오후'],
-  ['17_21', '저녁'],
-  ['21_24', '밤'],
+// 상권 탭 — 리포트 05·06·07장의 첫 화면(한 줄 결론 + 핵심 지표)을 그대로 줄인 것.
+// 값은 리포트 목업 화면과 같다.
+const TABS = ['유동인구', '경쟁 업체', '개폐업'] as const;
+
+const AGES: [string, number, number][] = [
+  // 연령대, 구성비(%), 서울 평균 대비(배)
+  ['20대', 15, 0.62],
+  ['30대', 17, 0.71],
+  ['40대', 24, 1.18],
+  ['50대', 22, 1.55],
+  ['60대+', 17, 1.42],
 ];
-const TABS = ['유동인구', '개폐업 추이', '경쟁 점포'] as const;
+
+const COMPETITION: [string, number | null, number | null, boolean][] = [
+  // 업종, 동종 점포 수, 반경 2,000m 대비(배), 추천 업종
+  ['네일·뷰티', 1, 0.82, true],
+  ['소형 스튜디오', 2, 1.35, true],
+  ['코인세탁실', 3, 0.65, true],
+  ['대형 카페', 12, 1.62, false],
+];
+
+function Ratio({ value }: { value: number }) {
+  const up = value > 1;
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+      style={
+        up
+          ? { color: '#C2410C', background: '#FFEDD5' }
+          : { color: '#2453D6', background: '#EAF0FC' }
+      }
+    >
+      {up ? '▲' : '▼'} {value.toFixed(2)}배
+    </span>
+  );
+}
 
 function WhyScreen() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('유동인구');
-  const share = fp.population.time_per_hour_share as Record<string, number>;
-  const maxShare = Math.max(...Object.values(share));
-  const oc = mockReportData.openClose;
-  const maxOc = Math.max(...oc.flatMap((q) => [q.opened, q.closed]));
-  const comp = mockReportData.competitors;
-  const maxComp = Math.max(...comp.map((c) => c.count));
   return (
     <Frame caption="05 · 06 · 07 상권 분석">
       <div className="flex flex-col gap-5 px-6 py-5">
@@ -198,124 +206,157 @@ function WhyScreen() {
 
         {tab === '유동인구' && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-13 text-[#66758A]">
-                  반경 {fp.radius_m}m 하루 평균
+            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+              이 주변은 <span className="text-[#2453D6]">주거생활형</span>{' '}
+              상권이에요
+            </p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-xl bg-[#10233A] px-4 py-3 text-white">
+                <p className="text-xs font-semibold text-[#9FB4D6]">
+                  하루 평균 유동인구
                 </p>
-                <p className="text-2xl font-extrabold text-[#10233A]">
-                  {fp.population.daily_avg.toLocaleString()}
-                  <span className="ml-0.5 text-base">명</span>
-                </p>
-              </div>
-              <p className="text-right text-13 leading-5 text-[#4B5866]">
-                <b className="text-[#2453D6]">저녁 17~21시</b>에 가장 많고
-                <br />
-                주말이 평일보다{' '}
-                {Math.round((fp.population.weekend_to_weekday_ratio - 1) * 100)}
-                % 많아요
-              </p>
-            </div>
-            <div className="flex h-28 items-end gap-2">
-              {TIME_BANDS.map(([k, label]) => (
-                <div
-                  key={k}
-                  className="flex flex-1 flex-col items-center gap-1.5"
-                >
-                  <span
-                    className="w-full rounded-t-md"
-                    style={{
-                      height: `${(share[k] / maxShare) * 88}px`,
-                      background: k === '17_21' ? '#2453D6' : '#C9D7F7',
-                    }}
-                  />
-                  <span className="text-xs text-[#66758A]">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === '개폐업 추이' && (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-13 text-[#66758A]">최근 4분기 주변 점포</p>
-                <p className="text-2xl font-extrabold text-[#10233A]">
-                  개업 {oc.reduce((a, q) => a + q.opened, 0)}
-                  <span className="mx-1.5 text-[#C9D2DC]">/</span>
-                  <span className="text-[#9B3545]">
-                    폐업 {oc.reduce((a, q) => a + q.closed, 0)}
-                  </span>
+                <p className="mt-1 text-2xl font-extrabold">
+                  4,820<span className="ml-0.5 text-sm font-bold">명/일</span>
                 </p>
               </div>
-              <p className="text-right text-13 leading-5 text-[#4B5866]">
-                문 여는 가게가 닫는 가게보다
-                <br />
-                <b className="text-[#2453D6]">꾸준히 많아요</b>
-              </p>
+              <div className="rounded-xl border border-[#E3E9F0] px-4 py-3">
+                <p className="text-xs font-semibold text-[#66758A]">
+                  가장 많은 연령대
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-[#10233A]">
+                  40대<span className="ml-1 text-sm font-bold">24%</span>
+                </p>
+              </div>
             </div>
-            <div className="flex h-28 items-end gap-4">
-              {oc.map((q) => (
-                <div
-                  key={q.quarter}
-                  className="flex flex-1 flex-col items-center gap-1.5"
-                >
-                  <div className="flex w-full items-end justify-center gap-1">
-                    <span
-                      className="w-1/3 rounded-t bg-[#2453D6]"
-                      style={{ height: `${(q.opened / maxOc) * 84}px` }}
-                    />
-                    <span
-                      className="w-1/3 rounded-t bg-[#E8A2AE]"
-                      style={{ height: `${(q.closed / maxOc) * 84}px` }}
-                    />
-                  </div>
-                  <span className="text-xs text-[#66758A]">
-                    {q.quarter.slice(5)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === '경쟁 점포' && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-end justify-between">
-              <p className="text-13 text-[#66758A]">
-                반경 안 같은 업종 점포 수
-              </p>
-              <p className="text-13 text-[#4B5866]">
-                <b className="text-[#2453D6]">추천 업종</b>은 경쟁이 적어요
-              </p>
-            </div>
-            <ul className="flex flex-col gap-2">
-              {comp.map((c) => (
+            <ul className="flex flex-col gap-1.5">
+              {AGES.map(([age, pct, idx]) => (
                 <li
-                  key={c.industry}
-                  className="grid grid-cols-[88px_1fr_28px] items-center gap-3"
+                  key={age}
+                  className="grid grid-cols-[44px_1fr_44px_60px] items-center gap-2 text-xs"
                 >
-                  <span
-                    className={`truncate text-13 ${c.recommended ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
-                  >
-                    {c.industry}
-                  </span>
-                  <span className="h-2 rounded-full bg-[#EEF2F6]">
+                  <span className="font-bold text-[#10233A]">{age}</span>
+                  <span className="h-1.5 rounded-full bg-[#EEF2F6]">
                     <span
                       className="block h-full rounded-full"
                       style={{
-                        width: `${(c.count / maxComp) * 100}%`,
-                        background: c.recommended ? '#2453D6' : '#C9D2DC',
+                        width: `${(pct / 30) * 100}%`,
+                        background: age === '40대' ? '#10233A' : '#8DA2C4',
                       }}
                     />
                   </span>
-                  <span className="text-right text-13 font-bold tabular-nums text-[#4B5866]">
-                    {c.count}
+                  <span className="text-right font-semibold tabular-nums text-[#4B5866]">
+                    {pct}%
+                  </span>
+                  <span
+                    className="text-right font-bold tabular-nums"
+                    style={{ color: idx > 1 ? '#2453D6' : '#8A97A5' }}
+                  >
+                    {idx.toFixed(2)}배
                   </span>
                 </li>
               ))}
             </ul>
+            <p className="-mt-1 text-[11px] text-[#8A97A5]">
+              구성비 · 서울 평균 대비
+            </p>
+          </div>
+        )}
+
+        {tab === '경쟁 업체' && (
+          <div className="flex flex-col gap-4">
+            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+              <span className="text-[#2453D6]">네일·뷰티, 코인세탁실</span>은
+              주변에 같은 업종이 적고,{' '}
+              <span className="text-[#C2410C]">소형 스튜디오</span>는 이미 몰려
+              있어요.
+            </p>
+            <table className="w-full text-13">
+              <thead>
+                <tr className="text-xs text-[#8A97A5]">
+                  <th className="pb-2 text-left font-semibold">업종</th>
+                  <th className="pb-2 text-right font-semibold">동종 점포</th>
+                  <th className="pb-2 text-right font-semibold">
+                    반경 2km 대비
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPETITION.map(([name, count, ratio, rec]) => (
+                  <tr key={name} className="border-t border-[#EEF1F5]">
+                    <td
+                      className={`py-2 ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
+                    >
+                      {name}
+                      {!rec && (
+                        <span className="ml-1.5 text-[11px] text-[#8A97A5]">
+                          제외 후보
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-[#4B5866]">
+                      {count}개
+                    </td>
+                    <td className="py-2 text-right">
+                      {ratio !== null && <Ratio value={ratio} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === '개폐업' && (
+          <div className="flex flex-col gap-4">
+            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+              네일·뷰티는 개업이 활발하고 최근 폐업률도 낮아{' '}
+              <span className="text-[#2453D6]">안정적</span>이에요
+            </p>
+            <div className="flex items-center gap-5">
+              <div className="relative h-[72px] w-[124px] shrink-0">
+                <svg viewBox="0 0 124 72" className="h-full w-full" aria-hidden>
+                  <path
+                    d="M10 66 A52 52 0 0 1 114 66"
+                    fill="none"
+                    stroke="#E3E9F0"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M10 66 A52 52 0 0 1 114 66"
+                    fill="none"
+                    stroke="#2453D6"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    pathLength={100}
+                    strokeDasharray="78.4 100"
+                  />
+                </svg>
+                <p className="absolute inset-x-0 bottom-0 text-center text-2xl font-extrabold text-[#10233A]">
+                  78.4
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5 text-13 text-[#3D4A5C]">
+                <p className="font-bold text-[#10233A]">
+                  개폐업 안정성 78.4 / 100점
+                </p>
+                <p>최근 1년 폐업률 7.4% — 과거(15.8%)보다 하락</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] p-3 text-center">
+              <div>
+                <p className="text-xs text-[#66758A]">3년 개업</p>
+                <p className="text-lg font-extrabold text-[#2453D6]">20</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#66758A]">3년 폐업</p>
+                <p className="text-lg font-extrabold text-[#C2410C]">9</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#66758A]">순증감</p>
+                <p className="text-lg font-extrabold text-[#10233A]">▲ +11</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
