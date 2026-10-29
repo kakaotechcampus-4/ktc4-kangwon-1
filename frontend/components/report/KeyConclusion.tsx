@@ -1,20 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import {
-  ArrowRight,
-  Building2,
-  Check,
-  ClipboardCheck,
-  DoorOpen,
-  Fan,
-  FileSearch,
-  Ruler,
-  ShieldAlert,
-  TriangleAlert,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { ArrowRight, Building2, Check, TriangleAlert } from 'lucide-react';
 import { reportPalette as P } from '@/styles/reportPalette';
 import type { FactIndex } from '@/lib/api/segments';
 import type { FactView } from '@/lib/api/types';
@@ -37,41 +24,35 @@ type Topic =
 
 const TOPICS: Record<
   Exclude<Topic, 'other'>,
-  { title: string; Icon: LucideIcon; test: RegExp; how: string }
+  { title: string; test: RegExp; how: string }
 > = {
   area: {
     title: '실제로 쓸 수 있는 면적',
-    Icon: Ruler,
     test: /면적|구획|실측/,
     how: '도면과 현장 실측으로 기둥·복도를 뺀 사용 면적을 재고, 업종에 맞게 나눠 쓸 수 있는지 확인하세요.',
   },
   facility: {
     title: '주방·환기·급배수 설비',
-    Icon: Fan,
     test: /환기|배기|급수|급배수|주방|설비|전력/,
     how: '이 업종에 필요한 설비를 지금 쓸 수 있는지, 없다면 설치 위치와 비용을 설비 업체에 확인하세요.',
   },
   access: {
     title: '드나들기 쉬운지와 간판 노출',
-    Icon: DoorOpen,
     test: /엘리베이터|동선|간판|노출|접근/,
     how: '손님이 입구와 엘리베이터를 쉽게 찾을 수 있는지, 간판을 어디에 달 수 있는지 현장에서 확인하세요.',
   },
   use: {
     title: '건축물 용도와 인허가',
-    Icon: FileSearch,
     test: /용도|인허가|허가/,
     how: '건축물대장에서 용도를 확인하고, 이 업종으로 영업 신고·인허가가 되는지 관할 구청에 문의하세요.',
   },
   regulation: {
     title: '입점 규제',
-    Icon: ShieldAlert,
     test: /보호구역|규제|제한/,
     how: '학교 주변 보호구역 등으로 이 업종의 영업이 제한되지 않는지 관할 구청이나 교육지원청에 확인하세요.',
   },
   demand: {
     title: '이 업종을 찾을 손님',
-    Icon: Users,
     test: /수요|고객|매출|손님/,
     how: '주변에 이 업종을 이용할 사람이 실제로 있는지 현장을 둘러보고, 인근 중개사에게 비슷한 업종의 임차 문의가 있었는지 물어보세요.',
   },
@@ -186,7 +167,6 @@ export default function KeyConclusion({
     topic: Topic;
     title: string;
     how: string;
-    Icon: LucideIcon;
     sources: string[];
   }[] = [
     ...TOPIC_ORDER.map((topic) => ({
@@ -203,7 +183,6 @@ export default function KeyConclusion({
         topic: 'other' as const,
         title: '추가로 확인할 것',
         how: s,
-        Icon: ClipboardCheck,
         sources: [],
       })),
   ];
@@ -402,12 +381,21 @@ export default function KeyConclusion({
         </div>
 
         {items.length === 0 ? (
-          <p className="text-15 rounded-[24px] bg-[#EAF0F6] px-6 py-8 text-[#4B5866]">
+          <p className="text-15 rounded-[24px] border border-[#E3E9F0] bg-white px-6 py-8 text-[#4B5866]">
             분석 결과에 별도 조건이 기재되지 않았어요. 현장에서 입점 조건을
             확인하세요.
           </p>
         ) : (
-          <ol className="flex flex-col gap-1 rounded-[24px] bg-[#EAF0F6] px-4 py-3 sm:px-8 sm:py-4">
+          <ol
+            className="flex flex-col gap-1 rounded-[24px] border border-[#E3E9F0] px-4 py-3 shadow-[0_10px_30px_rgba(16,35,58,0.04)] sm:px-8 sm:py-4"
+            style={{
+              background: [
+                'radial-gradient(55% 70% at 95% 0%, rgba(110,150,255,0.16) 0%, rgba(110,150,255,0) 65%)',
+                'radial-gradient(45% 65% at 0% 100%, rgba(80,120,230,0.12) 0%, rgba(80,120,230,0) 65%)',
+                '#FFFFFF',
+              ].join(','),
+            }}
+          >
             {items.map((item, i) => {
               const isDone = checked.has(item.key);
               return (
@@ -431,15 +419,11 @@ export default function KeyConclusion({
                         : {
                             backgroundColor: '#fff',
                             borderColor: '#C9D2DC',
-                            color: '#8A97A5',
+                            color: '#D5DEE7',
                           }
                     }
                   >
-                    {isDone ? (
-                      <Check size={22} strokeWidth={3} aria-hidden />
-                    ) : (
-                      <item.Icon size={20} aria-hidden />
-                    )}
+                    <Check size={22} strokeWidth={3} aria-hidden />
                   </button>
 
                   <div className="flex min-w-0 flex-col gap-2">
