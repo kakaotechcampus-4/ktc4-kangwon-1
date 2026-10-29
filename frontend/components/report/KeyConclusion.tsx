@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Building2,
   Check,
-  ChevronRight,
   ClipboardCheck,
   DoorOpen,
   Fan,
@@ -24,7 +23,6 @@ import type { FactView } from '@/lib/api/types';
  * 02 핵심 결론.
  *
  * - 1행: 가장 먼저 검토할 업종 | 검토 방향 (카드·구분선 없이 같은 행)
- * - 추천 근거 한 줄
  * - 입점 전 직접 확인하세요: 이 장의 중심. 후보의 위험·확인 조건 문장을 쟁점별로
  *   묶고, fact로 읽히는 근거를 붙이고, 임대인이 체크하며 내려갈 수 있게 한다.
  *
@@ -113,13 +111,6 @@ function withObject(word: string) {
   return word + (code >= 0 && code % 28 !== 0 ? '을' : '를');
 }
 
-// 근거 보기 링크가 가리킬 분석 장
-function reasonTarget(reason: string) {
-  if (/폐업|개업|증가|감소|추이/.test(reason)) return '#lifecycle';
-  if (/인구|연령|통행/.test(reason)) return '#customers';
-  return '#competition';
-}
-
 function Chip({
   children,
   tone,
@@ -147,16 +138,12 @@ export default function KeyConclusion({
   name,
   industryCode,
   badge,
-  nextNames,
-  reason,
   checks,
   facts,
 }: {
   name: string | null | undefined;
   industryCode?: string;
   badge?: string;
-  nextNames: string[];
-  reason: string;
   // 후보의 위험·확인 조건과 결과 전체의 확인 조건 문장
   checks: string[];
   facts: FactIndex;
@@ -299,7 +286,6 @@ export default function KeyConclusion({
     });
   const done = items.filter((item) => checked.has(item.key)).length;
   const allDone = items.length > 0 && done === items.length;
-  const [reasonLead] = reason.split(/(?<=\.)\s+/);
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
   const mark =
     'linear-gradient(transparent 58%, #FFE1A6 58%, #FFE1A6 92%, transparent 92%)';
@@ -319,11 +305,6 @@ export default function KeyConclusion({
           {badgeText && (
             <p className="text-15 font-bold" style={{ color: badgeText.color }}>
               {badgeText.text}
-            </p>
-          )}
-          {nextNames.length > 0 && (
-            <p className="mt-2 text-sm text-[#8A97A5]">
-              다음 후보 · {nextNames.join(' · ')}
             </p>
           )}
         </div>
@@ -362,24 +343,8 @@ export default function KeyConclusion({
         )}
       </section>
 
-      {/* ② 추천 근거 — 한 줄 */}
-      {reason && (
-        <section className="mt-12 grid gap-3 sm:grid-cols-[160px_1fr_auto] sm:items-baseline sm:gap-8">
-          <p className="text-sm font-bold text-[#66758A]">추천 근거</p>
-          <p className="text-17 break-keep leading-[1.7] text-[#1F2D3D]">
-            {reasonLead}
-          </p>
-          <a
-            href={reasonTarget(reason)}
-            className="text-15 inline-flex items-center gap-1 font-semibold whitespace-nowrap text-[#2453D6]"
-          >
-            근거 보기 <ChevronRight size={16} aria-hidden />
-          </a>
-        </section>
-      )}
-
-      {/* ③ 입점 전 직접 확인하세요 — 이 장의 중심 */}
-      <section className="mt-20 flex flex-col gap-6">
+      {/* ② 입점 전 직접 확인하세요 — 이 장의 중심 */}
+      <section className="mt-14 flex flex-col gap-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h3 className="sm:text-27 flex items-center gap-2.5 text-2xl font-extrabold tracking-[-0.02em] text-[#10233A]">
