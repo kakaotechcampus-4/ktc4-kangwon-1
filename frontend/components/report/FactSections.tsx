@@ -349,119 +349,254 @@ export function FactFloatingPopulationSection({
 // 경쟁 점포
 // ---------------------------------------------------------------------------
 
-const DENSITY_NOTES: Record<DensityKind, string> = {
-  모임형: '몰릴수록 유리',
-  근처형: '낮을수록 유리',
-  무관: '밀도와 무관',
+const DENSITY_GUIDANCE: Record<DensityKind, string> = {
+  모임형:
+    '서울 평균보다 동종 업종 밀도가 높으면 긍정적으로 반영됩니다. 단, 상위 5%를 넘는 과밀은 감점될 수 있습니다.',
+  근처형:
+    '주변 비교권역보다 유동을 반영한 동종 업종 밀도가 낮을수록 긍정적으로 반영됩니다.',
+  무관: '동종 업종 밀집도를 입지 점수에 반영하지 않습니다.',
 };
 
-function CompetitionTable({ rows }: { rows: FactCompetitionRow[] }) {
+function densityKindClass(kind: DensityKind) {
+  if (kind === '모임형') return 'is-gathering';
+  if (kind === '근처형') return 'is-nearby';
+  return 'is-neutral';
+}
+
+function CompetitionTable({
+  rows,
+  groupTitle,
+  description,
+}: {
+  rows: FactCompetitionRow[];
+  groupTitle: string;
+  description: string;
+}) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[34rem] text-left text-sm">
-        <thead style={{ color: colors.text.secondary }}>
-          <tr>
-            <th className="py-2 pr-3 font-medium">업종</th>
-            <th className="py-2 pr-3 text-right font-medium">점포 수</th>
-            <th className="py-2 pr-3 text-right font-medium">밀도(개/km²)</th>
-            <th className="py-2 pr-3 text-right font-medium">서울 대비 밀도</th>
-            <th className="py-2 text-right font-medium">주변 대비 집중도</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.code}
-              className="border-t"
-              style={{ borderColor: reportPalette.line }}
-            >
-              <td className="py-3 pr-3 font-semibold">{row.name}</td>
-              <td className="py-3 pr-3 text-right tabular-nums">
-                {row.storeCount === null ? '자료 없음' : count(row.storeCount)}
-              </td>
-              <td className="py-3 pr-3 text-right tabular-nums">
-                {row.densityPerKm2 === null
-                  ? '자료 없음'
-                  : row.densityPerKm2.toFixed(1)}
-              </td>
-              <td className="py-3 pr-3 text-right tabular-nums">
-                {row.competitionIndex !== null
-                  ? times(row.competitionIndex)
-                  : row.densityKind === '무관'
-                    ? '—'
-                    : '자료 없음'}
-                {row.densityKind && (
-                  <span
-                    className="ml-2 text-xs"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {DENSITY_NOTES[row.densityKind]}
-                  </span>
-                )}
-              </td>
-              <td className="py-3 text-right tabular-nums">
-                {row.lq === null ? '비교 불가' : times(row.lq)}
-              </td>
+    <section
+      className={`competition-candidate-group${groupTitle === '제외 후보' ? ' is-excluded' : ''}`}
+    >
+      <header className="competition-candidate-group-head">
+        <div>
+          <h4>{groupTitle}</h4>
+          <p>{description}</p>
+        </div>
+        <span className="competition-candidate-count">
+          {rows.length}개 업종
+        </span>
+      </header>
+      <div className="competition-table-scroll">
+        <table className="competition-table">
+          <caption className="sr-only">{groupTitle} 경쟁 지표 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">업종</th>
+              <th scope="col" className="is-numeric">
+                점포 수
+              </th>
+              <th scope="col" className="is-numeric">
+                밀도 <small>개/km²</small>
+              </th>
+              <th scope="col" className="is-numeric">
+                서울 대비 <small>1.0배 = 서울 평균</small>
+              </th>
+              <th scope="col" className="is-numeric">
+                주변 대비 <small>1.0배 = 비교권역 평균</small>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.code} className="competition-table-row">
+                <td>
+                  <span className="competition-industry-cell">
+                    <span>{row.name}</span>
+                    {row.densityKind && (
+                      <span
+                        className={`competition-industry-kind ${densityKindClass(row.densityKind)}`}
+                      >
+                        {row.densityKind}
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td className="is-numeric">
+                  {row.storeCount === null
+                    ? '자료 없음'
+                    : count(row.storeCount)}
+                </td>
+                <td className="is-numeric">
+                  {row.densityPerKm2 === null
+                    ? '자료 없음'
+                    : row.densityPerKm2.toFixed(1)}
+                </td>
+                <td className="is-numeric">
+                  {row.competitionIndex !== null
+                    ? times(row.competitionIndex)
+                    : row.densityKind === '무관'
+                      ? '—'
+                      : '자료 없음'}
+                </td>
+                <td className="is-numeric">
+                  {row.lq === null ? '비교 불가' : times(row.lq)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
-export function FactCompetitionSection({ data }: { data: FactCompetition }) {
+export function FactCompetitionSection({
+  data,
+  recommendedCodes,
+}: {
+  data: FactCompetition;
+  recommendedCodes?: ReadonlySet<string>;
+}) {
   const selected = new Set(data.selected.map((row) => row.code));
+  const densityKinds = [
+    ...new Set(
+      data.selected
+        .map((row) => row.densityKind)
+        .filter((kind): kind is DensityKind => kind !== null)
+    ),
+  ];
+  const recommendedRows = recommendedCodes
+    ? data.selected.filter((row) => recommendedCodes.has(row.code))
+    : data.selected;
+  const excludedRows = recommendedCodes
+    ? data.selected.filter((row) => !recommendedCodes.has(row.code))
+    : [];
   return (
-    <div className="flex w-full flex-col gap-5">
-      {data.selected.length > 0 && (
-        <Card
-          title="검토 후보 업종의 경쟁 상황"
-          description="서울 대비 밀도는 유동인구 규모를 감안해 서울 같은 업종과 비교한 값입니다. 모임형 업종은 몰릴수록 손님이 모여 유리하고(서울 상위 5%를 넘으면 과밀), 근처형 업종은 적을수록 경쟁이 약해 유리합니다. 주변 대비 집중도는 넓은 주변 지역보다 이 반경에 그 업종이 얼마나 몰려 있는지입니다."
-        >
-          <CompetitionTable rows={data.selected} />
-        </Card>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Stat
-          label={`반경 안 점포 수 (51개 업종)`}
-          value={data.storeTotal.toLocaleString('ko-KR')}
-          unit="개"
-        />
-        <Stat
-          label="업종 다양성"
-          value={
-            data.effectiveCategories === null
-              ? null
-              : data.effectiveCategories.toFixed(1)
-          }
-          unit="개 업종 수준"
-          note="점포가 이만큼의 업종에 고르게 나뉜 것과 같습니다"
-        />
+    <div className="competition-story">
+      <div className="competition-overview">
+        <div className="competition-total">
+          <p>반경 안 전체 점포</p>
+          <strong>
+            {data.storeTotal.toLocaleString('ko-KR')}
+            <small>개</small>
+          </strong>
+          <span>
+            {data.radiusM === null
+              ? '분석 반경 자료 없음'
+              : `반경 ${data.radiusM}m`}
+            {' · '}51개 업종 기준
+          </span>
+        </div>
+        <div className="competition-diversity">
+          <p className="competition-kicker">업종 구성</p>
+          <strong>
+            {data.effectiveCategories === null
+              ? '자료 없음'
+              : data.effectiveCategories.toFixed(1)}
+            {data.effectiveCategories !== null && <small>개 업종 수준</small>}
+          </strong>
+          <span>점포가 여러 업종에 얼마나 고르게 나뉘는지 나타내요.</span>
+        </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="점포가 많은 업종 10개">
-          <Bars
-            rows={data.topByCount.map((row) => ({
-              key: row.code,
-              label: row.name,
-              value: row.storeCount,
-            }))}
-            format={count}
-            highlight={(code) => selected.has(code)}
-          />
-        </Card>
-        <Card title="대분류별 점포 수">
-          <Bars
-            rows={data.byMajor.map((row) => ({
-              label: row.major,
-              value: row.count,
-            }))}
-            format={count}
-          />
-        </Card>
+      {data.selected.length > 0 && (
+        <section className="competition-editorial-section">
+          <header className="competition-section-head">
+            <div>
+              <p className="competition-kicker">추천 업종을 중심으로</p>
+              <h3>검토 후보 업종의 경쟁 상황</h3>
+            </div>
+          </header>
+          {densityKinds.length > 0 && (
+            <aside className="competition-reading-guide competition-type-guide">
+              <ul>
+                {densityKinds.map((kind) => (
+                  <li key={kind}>
+                    <span
+                      className={`competition-industry-kind ${densityKindClass(kind)}`}
+                    >
+                      {kind}
+                    </span>
+                    <span>{DENSITY_GUIDANCE[kind]}</span>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+          {recommendedCodes ? (
+            <>
+              {recommendedRows.length > 0 ? (
+                <CompetitionTable
+                  rows={recommendedRows}
+                  groupTitle="상위 추천 업종"
+                  description="먼저 검토할 업종의 경쟁 지표입니다."
+                />
+              ) : (
+                <div className="competition-candidate-group">
+                  <header className="competition-candidate-group-head">
+                    <h4>상위 추천 업종</h4>
+                  </header>
+                  <p className="competition-candidate-empty">
+                    표시할 상위 추천 업종이 없습니다.
+                  </p>
+                </div>
+              )}
+              {excludedRows.length > 0 && (
+                <CompetitionTable
+                  rows={excludedRows}
+                  groupTitle="제외 후보"
+                  description="추천 기준에 포함되지 않은 업종도 참고할 수 있도록 따로 모았습니다."
+                />
+              )}
+            </>
+          ) : (
+            <CompetitionTable
+              rows={data.selected}
+              groupTitle="검토 후보 업종"
+              description="분석 대상 업종의 경쟁 지표입니다."
+            />
+          )}
+        </section>
+      )}
+
+      <div className="competition-chart-grid">
+        <section className="competition-editorial-section">
+          <header className="competition-section-head competition-section-head-stacked">
+            <div>
+              <p className="competition-kicker">어떤 업종이 많을까요?</p>
+              <h3>점포가 많은 업종 10개</h3>
+            </div>
+            <p>파란 막대는 검토 후보 업종입니다.</p>
+          </header>
+          <div className="competition-chart-bars">
+            <Bars
+              rows={data.topByCount.map((row) => ({
+                key: row.code,
+                label: row.name,
+                value: row.storeCount,
+              }))}
+              format={count}
+              highlight={(code) => selected.has(code)}
+            />
+          </div>
+        </section>
+        <section className="competition-editorial-section">
+          <header className="competition-section-head competition-section-head-stacked">
+            <div>
+              <p className="competition-kicker">큰 업종 묶음으로</p>
+              <h3>대분류별 점포 수</h3>
+            </div>
+            <p>주변 상권의 업종 구성을 넓게 살펴봅니다.</p>
+          </header>
+          <div className="competition-chart-bars">
+            <Bars
+              rows={data.byMajor.map((row) => ({
+                label: row.major,
+                value: row.count,
+              }))}
+              format={count}
+            />
+          </div>
+        </section>
       </div>
 
       <SourceNote>
@@ -478,84 +613,245 @@ export function FactCompetitionSection({ data }: { data: FactCompetition }) {
 // 개폐업
 // ---------------------------------------------------------------------------
 
-export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
-  return (
-    <div className="flex w-full flex-col gap-5">
-      <Card
-        title="최근 1년 폐업률"
-        description="최근 1년 동안 문을 닫은 점포의 비율입니다. 점포 수가 적으면 몇 건의 변화에도 비율이 크게 달라집니다."
-      >
-        <Bars
-          rows={data.rows.map((row) => ({
-            key: row.code,
-            label: row.name,
-            value: row.recentCloseRate,
-          }))}
-          format={rate}
-        />
-      </Card>
+type LifecycleChartRow = {
+  key: string;
+  label: string;
+  value: number | null;
+};
 
-      <Card
-        title="업종별 개폐업 흐름"
-        description="서울 대비 폐업률이 1.0배보다 높으면 서울 같은 업종보다 더 많이 문을 닫았습니다. 회전율은 개업과 폐업이 함께 잦은 정도입니다."
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-sm">
-            <thead style={{ color: colors.text.secondary }}>
-              <tr>
-                <th className="py-2 pr-3 font-medium">업종</th>
-                <th className="py-2 pr-3 text-right font-medium">
-                  평균 점포 수
-                </th>
-                <th className="py-2 pr-3 text-right font-medium">
-                  서울 대비 폐업률
-                </th>
-                <th className="py-2 pr-3 text-right font-medium">회전율</th>
-                <th className="py-2 text-right font-medium">순증감률</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row) => (
-                <tr
-                  key={row.code}
-                  className="border-t"
-                  style={{ borderColor: reportPalette.line }}
-                >
-                  <td className="py-3 pr-3 font-semibold">{row.name}</td>
-                  <td className="py-3 pr-3 text-right tabular-nums">
-                    {row.avgStoreCount === null
-                      ? '자료 없음'
-                      : row.avgStoreCount.toFixed(1)}
-                  </td>
-                  <td className="py-3 pr-3 text-right tabular-nums">
-                    {row.closeRateRatio === null
-                      ? '비교 불가'
-                      : times(row.closeRateRatio)}
-                  </td>
-                  <td className="py-3 pr-3 text-right tabular-nums">
-                    {row.turnoverRate === null
-                      ? '자료 없음'
-                      : rate(row.turnoverRate)}
-                  </td>
-                  <td
-                    className="py-3 text-right tabular-nums"
+function LifecycleMetricChart({
+  rows,
+  format,
+  diverging = false,
+}: {
+  rows: LifecycleChartRow[];
+  format: (value: number) => string;
+  diverging?: boolean;
+}) {
+  const max = Math.max(0, ...rows.map((row) => Math.abs(row.value ?? 0)));
+
+  return (
+    <div className="lifecycle-chart-wrap">
+      <ul className={`lifecycle-chart${diverging ? ' is-diverging' : ''}`}>
+        {rows.map((row) => {
+          const value = row.value;
+          const width =
+            value === null || max === 0
+              ? 0
+              : (Math.abs(value) / max) * (diverging ? 50 : 100);
+          const offset = diverging
+            ? value !== null && value < 0
+              ? 50 - width
+              : 50
+            : 0;
+
+          return (
+            <li key={row.key}>
+              <span className="lifecycle-chart-label" title={row.label}>
+                {row.label}
+              </span>
+              <span
+                className="lifecycle-chart-track"
+                title={value === null ? '자료 없음' : format(value)}
+                aria-hidden="true"
+              >
+                {diverging && <span className="lifecycle-chart-zero" />}
+                {value !== null && max > 0 && (
+                  <span
+                    className="lifecycle-chart-bar"
                     style={{
-                      color:
-                        row.netChangeRate !== null && row.netChangeRate < 0
-                          ? reportPalette.caution
-                          : undefined,
+                      left: `${offset}%`,
+                      width: `${width}%`,
+                      backgroundColor: reportPalette.navy,
                     }}
-                  >
-                    {row.netChangeRate === null
-                      ? '자료 없음'
-                      : `${signed(row.netChangeRate)}%`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  />
+                )}
+              </span>
+              <span className="lifecycle-chart-value sr-only">
+                {value === null ? '자료 없음' : format(value)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {diverging && (
+        <div className="lifecycle-chart-legend" aria-hidden="true">
+          <span>감소</span>
+          <span>0</span>
+          <span>증가</span>
         </div>
-      </Card>
+      )}
+    </div>
+  );
+}
+
+export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
+  const chartRows = (
+    pick: (row: FactLifecycle['rows'][number]) => number | null
+  ): LifecycleChartRow[] =>
+    data.rows
+      .map((row) => ({
+        key: row.code,
+        label: row.name,
+        value: pick(row),
+      }))
+      .sort((a, b) => {
+        if (a.value === null) return b.value === null ? 0 : 1;
+        if (b.value === null) return -1;
+        return b.value - a.value;
+      });
+  return (
+    <div className="story lifecycle-story">
+      <section className="story-row lifecycle-detail-row">
+        <div className="story-row-text">
+          <p className="story-question">업종별로 비교해요</p>
+          <h4>개폐업 지표</h4>
+          <p>
+            서울 대비 폐업률은 같은 업종의 서울 평균과 비교한 배수예요. 회전율은
+            개업과 폐업이 함께 잦은 정도를 보여줍니다.
+          </p>
+        </div>
+        <div className="story-row-figure">
+          <div className="overflow-x-auto">
+            <table className="lifecycle-table w-full min-w-[38rem] text-left text-sm">
+              <thead>
+                <tr>
+                  <th>업종</th>
+                  <th>평균 점포 수</th>
+                  <th>최근 1년 폐업률</th>
+                  <th>서울 대비</th>
+                  <th>회전율</th>
+                  <th>순증감률</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={row.code}>
+                    <td>{row.name}</td>
+                    <td>
+                      {row.avgStoreCount === null
+                        ? '자료 없음'
+                        : row.avgStoreCount.toFixed(1)}
+                    </td>
+                    <td>
+                      {row.recentCloseRate === null
+                        ? '자료 없음'
+                        : rate(row.recentCloseRate)}
+                    </td>
+                    <td>
+                      {row.closeRateRatio === null
+                        ? '비교 불가'
+                        : times(row.closeRateRatio)}
+                    </td>
+                    <td>
+                      {row.turnoverRate === null
+                        ? '자료 없음'
+                        : rate(row.turnoverRate)}
+                    </td>
+                    <td>
+                      {row.netChangeRate === null
+                        ? '자료 없음'
+                        : `${signed(row.netChangeRate)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <div className="lifecycle-metric-comparisons">
+        <header className="lifecycle-comparison-head">
+          <h4>지표별로 차이를 비교해요</h4>
+          <p>
+            막대는 업종 간 상대 크기를 보여주고, 정확한 수치는 위 표에서 확인할
+            수 있어요.
+          </p>
+        </header>
+        <p className="lifecycle-chart-note">
+          그래프는 지표별로 큰 값부터 정렬했습니다. 정확한 수치는 위 표에서
+          확인할 수 있어요.
+        </p>
+        <section className="story-row lifecycle-metric-row">
+          <div className="story-row-text">
+            <p className="story-question">점포 규모</p>
+            <h4>평균 점포 수</h4>
+            <p>
+              분석 기간 동안 업종별로 관측된 평균 점포 수예요. 주변 업종의
+              규모를 함께 비교해 보세요.
+            </p>
+          </div>
+          <div className="story-row-figure">
+            <LifecycleMetricChart
+              rows={chartRows((row) => row.avgStoreCount)}
+              format={(value) => value.toFixed(1)}
+            />
+          </div>
+        </section>
+
+        <section className="story-row lifecycle-metric-row">
+          <div className="story-row-text">
+            <p className="story-question">최근 1년</p>
+            <h4>폐업률과 서울 평균 비교</h4>
+            <p>
+              폐업률은 최근 1년 동안 문을 닫은 비율입니다. 서울 대비가 1.0배보다
+              높으면 같은 업종의 서울 평균보다 폐업률이 높은 편이에요.
+            </p>
+          </div>
+          <div className="story-row-figure lifecycle-close-charts">
+            <div>
+              <h5>최근 1년 폐업률</h5>
+              <LifecycleMetricChart
+                rows={chartRows((row) => row.recentCloseRate)}
+                format={rate}
+              />
+            </div>
+            <div>
+              <h5>서울 같은 업종 대비</h5>
+              <LifecycleMetricChart
+                rows={chartRows((row) => row.closeRateRatio)}
+                format={times}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="story-row lifecycle-metric-row">
+          <div className="story-row-text">
+            <p className="story-question">사업자 교체</p>
+            <h4>회전율</h4>
+            <p>
+              개업과 폐업이 함께 발생하는 정도예요. 값이 높을수록 점포 교체가
+              잦았다는 뜻입니다.
+            </p>
+          </div>
+          <div className="story-row-figure">
+            <LifecycleMetricChart
+              rows={chartRows((row) => row.turnoverRate)}
+              format={rate}
+            />
+          </div>
+        </section>
+
+        <section className="story-row lifecycle-metric-row">
+          <div className="story-row-text">
+            <p className="story-question">점포 수 변화</p>
+            <h4>순증감률</h4>
+            <p>
+              관측 기간의 개업과 폐업을 반영한 점포 수 변화예요. 가운데 0을
+              기준으로 왼쪽은 감소, 오른쪽은 증가입니다.
+            </p>
+          </div>
+          <div className="story-row-figure">
+            <LifecycleMetricChart
+              rows={chartRows((row) => row.netChangeRate)}
+              format={(value) => `${signed(value)}%`}
+              diverging
+            />
+          </div>
+        </section>
+      </div>
 
       <SourceNote>자료: 서울시 상권분석서비스 점포 · {data.period}</SourceNote>
     </div>

@@ -39,7 +39,7 @@ export default function PropertyMap({ address }: { address: string }) {
   const container = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
-  const kakaoLink = `https://map.kakao.com/?q=${encodeURIComponent(address)}`;
+  const kakaoLink = `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
 
   useEffect(() => {
     if (!ready || !container.current) return;

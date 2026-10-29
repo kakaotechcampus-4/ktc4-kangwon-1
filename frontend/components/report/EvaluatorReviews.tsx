@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { reportPalette as P } from '@/styles/reportPalette';
 import { industryName } from '@/lib/api/industries';
 import type { FactIndex } from '@/lib/api/segments';
@@ -22,7 +22,7 @@ import type {
  *  - 지적의 kind·industry_code + 핵심어 → 쟁점(면적·설비 / 공사 / 손님 수요 / 임대 조건)
  *  - resolution.disposition → 반영 여부
  *  - space_requirements·space_fit·exclusive_area·existing_facilities fact → 읽히는 근거
- * 원문은 맨 아래 "원문 보기"에 접어 둔다.
+ * 평가자 원문은 내부 검수 기록이므로 본문에 노출하지 않는다.
  *
  * 확인할 조건은 02 핵심결론의 '입점 전 직접 확인'에 이미 반영돼 있어(처리 기록의
  * applied가 confirmation_conditions) 여기서는 반복하지 않고 그쪽으로 연결만 한다.
@@ -152,6 +152,69 @@ function mainTheme(review: EvaluatorReview): Theme {
     );
   });
   return [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'other';
+}
+
+/** 내부 실행 상태는 숨기고, 입점 판단에 필요한 한계만 읽기 쉬운 문장으로 묶는다. */
+function readableLimitations(raw: string): string[] {
+  const sentences = raw
+    .split(/(?<=[.!?])(?=[^\s\d])/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const items = new Set<string>();
+  let reviewIncomplete = false;
+
+  for (const sentence of sentences) {
+    if (
+      /호출|시간|토큰|예산 상한|코드 점수로 마무리|미제출 L 판단|unknown으로 남기고|평가 미완료/.test(
+        sentence
+      )
+    ) {
+      reviewIncomplete = true;
+      continue;
+    }
+    if (/0건|동종 가게 없음|동종 점포 없음/.test(sentence)) {
+      items.add(
+        '자료에 점포 수가 0건으로 표시되어도 실제 동종 점포가 없다는 뜻은 아닙니다.'
+      );
+      continue;
+    }
+    if (/서울 밖|검색 표본|전수/.test(sentence)) {
+      items.add(
+        '경쟁 점포 정보는 수집된 검색 표본으로, 실제 점포 전체를 포함하지 않을 수 있습니다.'
+      );
+      continue;
+    }
+    if (/건축물 용도|인허가|법적 적합성/.test(sentence)) {
+      items.add(
+        '건축물 용도와 법적 입점 가능 여부는 이 분석에서 확정하지 않았으니 별도로 확인해야 합니다.'
+      );
+      continue;
+    }
+    if (
+      /면적 비교|공간 비교|장비 배치|업종별 조건|현장에|현장에서/.test(sentence)
+    ) {
+      items.add(
+        '면적·설비 조건은 추정치이므로 실제 공간과 장비 배치를 현장에서 확인해야 합니다.'
+      );
+      continue;
+    }
+    if (
+      /수익성|임차인의 지급 능력|임대료|공실 기간|공사비|재무/.test(sentence)
+    ) {
+      items.add(
+        '임대 조건과 공사비 등이 확인되지 않아 수익성이나 임차인의 지급 능력은 판단할 수 없습니다.'
+      );
+      continue;
+    }
+    items.add(sentence);
+  }
+
+  if (reviewIncomplete) {
+    items.add(
+      '일부 업종은 검토가 완료되지 않아 확인된 자료만으로 평가했습니다. 검토 미완료는 부적합 판정이 아닙니다.'
+    );
+  }
+  return [...items];
 }
 
 // ── 근거 fact → 읽히는 값 ──────────────────────────────────────
@@ -443,6 +506,9 @@ export default function EvaluatorReviews({
   }).filter((t) => t.count > 0);
   const facility = facilityLine(allFacts);
   const mark = VERDICT[tone].mark;
+  const readableLimitationItems = limitations
+    ? readableLimitations(limitations)
+    : [];
 
   return (
     <div className="flex w-full flex-col">
@@ -637,42 +703,36 @@ export default function EvaluatorReviews({
         </section>
       )}
 
-      {/* ④ 원문 — 투명성을 위해 남기되 글자 링크 수준으로 접어 둔다 */}
-      {issues.length > 0 && (
-        <details className="group mt-8">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-[#66758A] [&::-webkit-details-marker]:hidden">
-            AI 평가자가 남긴 원문 {issues.length}건 보기
-            <ChevronDown
-              size={16}
-              className="transition-transform group-open:rotate-180"
-              aria-hidden
-            />
-          </summary>
-          <ul className="mt-4 flex flex-col gap-4">
-            {issues.map(({ actor, issue }) => (
-              <li key={issue.issue_id} className="flex gap-3">
-                <Avatar actor={actor} size={24} />
-                <p className="min-w-0 flex-1 break-keep text-sm leading-6 text-[#4B5866]">
-                  <span className="text-[#8A97A5]">
-                    {ACTORS[actor].name} ·{' '}
-                    {issue.industry_code
-                      ? industryName(issue.industry_code)
-                      : '전체'}
-                    {' — '}
-                  </span>
-                  {issue.comment}
-                </p>
+      {readableLimitationItems.length > 0 && (
+        <section
+          aria-labelledby="review-limitations-title"
+          className="mt-12 rounded-[24px] border border-[#E1E8F0] bg-white px-6 py-7 sm:px-8 sm:py-8"
+        >
+          <div className="mb-6">
+            <h3
+              id="review-limitations-title"
+              className="text-22 font-extrabold tracking-[-0.025em] text-[#10233A]"
+            >
+              분석의 한계
+            </h3>
+            <p className="mt-2 text-base leading-7 text-[#66758A]">
+              이 결과만으로 확정할 수 없는 항목입니다.
+            </p>
+          </div>
+          <ul className="grid gap-x-8 gap-y-5 md:grid-cols-3">
+            {readableLimitationItems.map((item, index) => (
+              <li
+                key={item}
+                className="flex items-start gap-3 text-17 leading-[1.7] text-[#3D4A5C]"
+              >
+                <span className="shrink-0 pt-0.5 text-base font-bold tabular-nums text-[#2453D6]">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="break-keep">{item}</span>
               </li>
             ))}
           </ul>
-        </details>
-      )}
-
-      {limitations && (
-        <p className="mt-10 rounded-2xl bg-white px-6 py-5 text-sm leading-6 text-[#4B5866]">
-          <strong className="text-[#10233A]">분석의 한계 · </strong>
-          {limitations}
-        </p>
+        </section>
       )}
     </div>
   );

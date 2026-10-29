@@ -652,7 +652,9 @@ export default function OpenCloseTrendSection({
   }
 
   return (
-    <div className="oc-root flex w-full flex-col items-start">
+    <div
+      className={`oc-root flex w-full flex-col items-start${reportLayout ? ' oc-report-layout' : ''}`}
+    >
       <CoverageSummary data={data} compactReference={compactReference} />
 
       {matchedShortfall > 0 && (
