@@ -154,9 +154,8 @@ export interface BusinessLifecycleScoringMethod {
 
 /**
  * 추천/비추천 10개 업종으로 이미 필터링된 결과.
- * lib/api/adapters/businessLifecycle.ts의 adaptBusinessLifecycle()이
- * industries(공통 업종 코드 75개) 중 이름이 일치하는 것만 골라 이 형태로
- * 만든다 — coverage/scoring_method는 필터링 없이 원본 그대로다.
+ * 예전 개폐업 에이전트 응답(industries, 공통 업종 코드 75개) 중 이름이 일치하는
+ * 것만 골라 둔 목업이다 — coverage/scoring_method는 원본 그대로다.
  *
  * summary/metadata/taxonomy는 실제 응답에 있지만 화면이 아직 쓰지 않는다
  * (summary는 요약 카드 첫 줄로 보여주는 정도만 — CoverageSummary 참고).

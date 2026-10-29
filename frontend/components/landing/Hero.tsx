@@ -11,7 +11,6 @@ const examplePopulation = mockReportData.floatingPopulation;
  * 랜딩 첫 화면 — 서비스 이름 CHAIUM(채움)을 크게 놓고, 그 안의 AI만 채워
  * "AI로 빈 자리를 채운다"는 뜻을 보여준다. 뒤에는 빈 상가가 있는 건물 블록 그림
  * (public/images/hero-blocks.svg — 디자인 캔버스 A안 '소프트 아이소메트릭'), 왼쪽 위·오른쪽 위에 꾸밈용 파란 동심원.
- * 이전 그림(HeroIllustration.tsx)은 되돌릴 때를 위해 파일로 남겨 둔다.
  * 그림 주변에는 리포트 결과를 미리 보여주는 예시 카드 3장을 띄운다(lg 이상).
  * 헤더는 이 섹션 위에 overlay로 겹쳐 놓는다(app/page.tsx).
  */

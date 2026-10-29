@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Menu, MapPin, TriangleAlert } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PropertyMap from '@/components/report/PropertyMap';
-import { candidateChecks } from '@/components/report/IndustryReview';
+import { candidateChecks } from '@/lib/api/candidates';
 import IndustryRankingList from '@/components/report/IndustryRankingList';
 import { INDUSTRIES } from '@/lib/api/industries';
 import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';

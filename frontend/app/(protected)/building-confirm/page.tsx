@@ -114,7 +114,6 @@ export default function BuildingConfirmPage() {
       process.env.NODE_ENV === 'development' &&
       new URLSearchParams(window.location.search).get('previewLoading') === '1'
     ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInput({
         roadAddress: mockProperty.address,
         floorUnit: mockProperty.floorUnit,

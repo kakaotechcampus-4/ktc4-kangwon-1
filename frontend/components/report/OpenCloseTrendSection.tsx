@@ -22,7 +22,7 @@ const dmMono = pretendard;
  * Badge/ProgressBar처럼 자체 Tailwind 크기 클래스를 가진 공용 컴포넌트는
  * 아래 <style jsx global> 규칙과 specificity가 같아 순서에 따라 승자가
  * 갈리므로, 그쪽에는 이 헬퍼로 만든 값을 inline style로 넣어 단일 소스를
- * 유지한다(StatsRow.tsx에서 쓰는 방식과 동일). 이 파일이 직접 렌더링하는
+ * 유지한다. 이 파일이 직접 렌더링하는
  * 엘리먼트는 반대로 style jsx global 한 곳에서만 크기를 지정한다.
  */
 

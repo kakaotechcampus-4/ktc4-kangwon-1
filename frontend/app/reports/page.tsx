@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { MapIllustration } from '@/components/report/PropertyMap';
-import { candidateScore } from '@/components/report/IndustryReview';
+import { candidateScore } from '@/lib/api/candidates';
 import { loadAnalysisResult, loadVacancyInput } from '@/lib/api/resultStore';
 import { mockReports, type ReportSummary } from '@/lib/mockData/reports';
 import { colors } from '@/styles/tokens';
