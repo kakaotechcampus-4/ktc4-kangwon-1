@@ -84,7 +84,6 @@ const VERDICT: Record<
     mark: '#E2E8EE',
   },
 };
-const VERDICT_ORDER: Verdict[] = ['agree', 'conditional', 'oppose', 'failed'];
 const verdictOf = (r: EvaluatorReview): Verdict =>
   r.status === 'failed' || !r.verdict ? 'failed' : r.verdict;
 
@@ -93,7 +92,7 @@ type Theme = 'space' | 'buildout' | 'demand' | 'lease' | 'other';
 const THEME_ORDER: Theme[] = ['space', 'buildout', 'demand', 'lease', 'other'];
 const THEMES: Record<
   Theme,
-  { title: string; stance: string; meaning: string; short: string }
+  { title: string; stance: string; meaning: string }
 > = {
   space: {
     title: '면적·설비가 업종에 맞는지',
@@ -101,7 +100,6 @@ const THEMES: Record<
       '면적·설비 비교는 추정치라, 현장 확인 전에는 단정하기 어렵다고 봤어요.',
     meaning:
       '업종별 권장 면적과 필요한 설비는 일반적인 운영 규모를 추정한 값이에요. 맞지 않는다고 바로 안 되는 건 아니고, 현장에서 실제로 써 보는 확인이 필요해요.',
-    short: '면적·설비 근거가 약하다는',
   },
   buildout: {
     title: '설비 공사를 누가, 얼마에 할지',
@@ -109,7 +107,6 @@ const THEMES: Record<
       '설치할 수 있다는 것과 실제 공사는 다르니, 공사 범위와 비용부터 정해야 한다고 봤어요.',
     meaning:
       '"설치 가능"은 공사가 끝난 상태가 아니에요. 공사 범위와 비용을 누가 부담할지 먼저 정해야 해요.',
-    short: '공사 조건이 정해지지 않았다는',
   },
   demand: {
     title: '손님이 실제로 있을지',
@@ -117,7 +114,6 @@ const THEMES: Record<
       '후보 업종을 찾을 손님이 있는지 보여 주는 자료가 부족하다고 봤어요.',
     meaning:
       '이번 분석 자료로는 후보 업종의 손님 수요를 충분히 확인하지 못했어요. 점수가 높아도 수요는 따로 확인해야 해요.',
-    short: '손님 수요 자료가 부족하다는',
   },
   lease: {
     title: '임대 조건과 수익',
@@ -125,13 +121,11 @@ const THEMES: Record<
       '임대료·공실 기간·공사비 자료가 없어 임대 수익은 판단할 수 없다고 봤어요.',
     meaning:
       '이 리포트는 업종 적합도를 본 것이고, 임대 수익이나 임차인의 지급 능력은 판단하지 않았어요.',
-    short: '임대 조건을 알 수 없다는',
   },
   other: {
     title: '근거가 부족한 판단',
     stance: '일부 판단의 근거가 약하다고 봤어요.',
     meaning: '근거가 약한 문장은 리포트에서 단정하지 않도록 고쳤어요.',
-    short: '근거가 약하다는',
   },
 };
 
@@ -211,12 +205,6 @@ function facilityLine(all: FactView[]): string | null {
   return text || null;
 }
 
-// 받침에 따라 은/는
-function topic(name: string): string {
-  const code = name.charCodeAt(name.length - 1) - 0xac00;
-  return name + (code >= 0 && code % 28 !== 0 ? '은' : '는');
-}
-
 // 실패 이유는 임대인이 알아들을 수 있는 말로만 보여 준다.
 function failureReason(code: string | null): string {
   if (code === 'BUDGET_EXCEEDED') return '분석 시간·비용 한도에 걸렸어요.';
@@ -290,10 +278,6 @@ export default function EvaluatorReviews({
       theme: themeOf(issue),
     }))
   );
-  const reflected = issues.filter(
-    ({ issue }) => resolutionOf.get(issue.issue_id)?.disposition === 'accepted'
-  ).length;
-
   const counts = ordered.reduce(
     (acc, r) => ({ ...acc, [verdictOf(r)]: acc[verdictOf(r)] + 1 }),
     { agree: 0, conditional: 0, oppose: 0, failed: 0 } as Record<
@@ -337,30 +321,6 @@ export default function EvaluatorReviews({
     ];
     tone = 'conditional';
   }
-
-  const parts: string[] = [];
-  const supporters = counts.agree + counts.conditional;
-  if (supporters)
-    parts.push(
-      `${supporters}명은 ${counts.conditional ? '몇 가지 조건을 확인하는 전제로 ' : ''}추천에 동의했고`
-    );
-  ordered
-    .filter((r) => verdictOf(r) === 'oppose')
-    .forEach((r) =>
-      parts.push(
-        `${topic(ACTORS[r.actor].name)} ${THEMES[mainTheme(r)].short} 이유로 반대했고`
-      )
-    );
-  if (counts.failed)
-    parts.push(`${counts.failed}명은 검토를 마치지 못해 동의로 보지 않았고`);
-  const body = parts
-    .join(', ')
-    .replace(/했고$|았고$/, (m) => (m === '했고' ? '했어요' : '았어요'));
-  const reflectedText = issues.length
-    ? reflected === issues.length
-      ? ` 지적 ${issues.length}건은 모두 이 리포트에 반영했어요.`
-      : ` 지적 ${issues.length}건 중 ${reflected}건을 이 리포트에 반영했어요.`
-    : '';
 
   const themes = THEME_ORDER.map((theme) => {
     const items = issues.filter((x) => x.theme === theme);
@@ -412,13 +372,6 @@ export default function EvaluatorReviews({
               {headline[2]}
             </p>
           </div>
-          <p className="text-sm font-semibold text-[#8A97A5]">
-            네 평가자가 각자 입장에서 &ldquo;이 업종 추천을 따라도 되는지&rdquo;
-            다시 판단한 결과예요.
-          </p>
-          <p className="break-keep text-lg leading-8 text-[#4B5866]">
-            {body}.{reflectedText}
-          </p>
           {/* 확인할 것은 핵심결론 한 곳에서만 보여 준다 */}
           <a
             href="#conclusion"
@@ -463,12 +416,15 @@ export default function EvaluatorReviews({
                     ring={VERDICT[v].bar}
                     muted={v === 'failed'}
                   />
-                  <span className="mt-1 text-[13px] font-bold whitespace-nowrap text-[#10233A] sm:text-sm">
+                  <span
+                    className="mt-1 font-bold whitespace-nowrap text-[#10233A]"
+                    style={{ fontSize: 14 }}
+                  >
                     {ACTORS[r.actor].name}
                   </span>
                   <span
-                    className="text-xs font-semibold whitespace-nowrap sm:text-[13px]"
-                    style={{ color: VERDICT[v].color }}
+                    className="font-semibold whitespace-nowrap"
+                    style={{ color: VERDICT[v].color, fontSize: 13 }}
                   >
                     {VERDICT[v].label}
                   </span>
@@ -476,11 +432,6 @@ export default function EvaluatorReviews({
               );
             })}
           </ul>
-          <p className="text-center text-sm text-[#66758A]">
-            {VERDICT_ORDER.filter((v) => counts[v])
-              .map((v) => `${VERDICT[v].label} ${counts[v]}`)
-              .join(' · ')}
-          </p>
         </div>
       </section>
 
@@ -620,8 +571,7 @@ export default function EvaluatorReviews({
                       {t.industries.length
                         ? t.industries.map(industryName).join(' · ')
                         : '추천 결과 전체'}
-                      {' · '}
-                      {t.allReflected ? '리포트에 반영됨' : '일부 반영'}
+                      {!t.allReflected && ' · 일부만 반영'}
                     </p>
                   </div>
                 </li>
