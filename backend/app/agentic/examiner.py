@@ -6,7 +6,7 @@ import re
 from app.canonical import canonical_json
 from app.db.connection import connect
 
-from .aliases import encode
+from .aliases import encode, label_periods
 from .report import fact_rows
 
 PERSONA = (
@@ -199,7 +199,7 @@ def review_packet(scope, draft):
             "shared_sources": _shared_sources(codes, items, rows, allowed),
         },
     }
-    packet = encode(scope, packet)
+    packet = label_periods(encode(scope, packet))
     for candidate in packet["candidates"]:
         candidate["score_items"] = _table(candidate["score_items"], SCORE_COLUMNS)
     packet["facts"] = _table(packet["facts"], FACT_COLUMNS)

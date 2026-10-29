@@ -10,6 +10,7 @@ from app.db.connection import connect
 SINGLES = {"fact_id", "distance_fact_id"}
 LISTS = {"fact_ids", "reason_fact_ids", "selection_fact_ids"}
 QUARTER_RANGE = re.compile(r"\d{4}[1-4](~\d{4}[1-4])?")
+PERIOD_LABEL_ROLES = frozenset({"examiner"})
 
 
 def period_label(period):
@@ -24,13 +25,17 @@ def period_label(period):
     return f"{label}~{end[:4]}년 {end[4]}분기"
 
 
-def _label_periods(value, key=None):
+def labels_periods(role):
+    return role in PERIOD_LABEL_ROLES
+
+
+def label_periods(value, key=None):
     if key == "period" and isinstance(value, str):
         return period_label(value)
     if isinstance(value, dict):
-        return {name: _label_periods(item, name) for name, item in value.items()}
+        return {name: label_periods(item, name) for name, item in value.items()}
     if isinstance(value, list):
-        return [_label_periods(item) for item in value]
+        return [label_periods(item) for item in value]
     return value
 
 
@@ -99,10 +104,10 @@ def encode(scope, value):
 
         for fid in sorted(references):
             resolved[fid] = alias(fid)
-    return _label_periods(_walk(value, resolved.__getitem__))
+    return _walk(value, resolved.__getitem__)
 
 
-def encode_messages(scope, messages):
+def encode_messages(scope, messages, label=False):
     output = []
     for message in messages:
         item = dict(message)
@@ -112,7 +117,10 @@ def encode_messages(scope, messages):
             except ValueError:
                 pass
             else:
-                item["content"] = json.dumps(encode(scope, body), ensure_ascii=False)
+                body = encode(scope, body)
+                item["content"] = json.dumps(
+                    label_periods(body) if label else body, ensure_ascii=False
+                )
         output.append(item)
     return output
 

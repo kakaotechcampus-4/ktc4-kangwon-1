@@ -3,7 +3,7 @@
 from contextlib import ExitStack, contextmanager
 from unittest.mock import patch
 
-from app.agentic import evaluators, examiner, tools
+from app.agentic import aliases, evaluators, examiner, tools
 from examiner_eval import frozen_v1
 
 VARIANTS = ("V0", "V1", "V2")
@@ -30,6 +30,8 @@ def use_variant(name):
     if name not in VARIANTS:
         raise ValueError(f"알 수 없는 버전: {name}")
     with ExitStack() as stack:
+        if name in ("V0", "V1"):
+            stack.enter_context(patch.object(aliases, "PERIOD_LABEL_ROLES", frozenset()))
         if name == "V0":
             stack.enter_context(patch.dict(evaluators.PERSONAS, {"examiner": V0_PERSONA}))
             stack.enter_context(patch.object(examiner, "review_packet", evaluators.review_packet))

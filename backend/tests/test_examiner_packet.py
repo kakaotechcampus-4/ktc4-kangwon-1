@@ -126,6 +126,12 @@ class ExaminerPacketLimitTests(unittest.TestCase):
         item = packet["candidates"][0]["score_items"][0]
         self.assertEqual(item[SCORE["fact_ids"]], [ids[2]])
 
+    def test_packet_periods_are_spelled_out(self):
+        ids = [fact_id(0)]
+        rows = {ids[0]: row(ids[0], period="20231~20234")}
+        _, _, packet = self.build(1, rows)
+        self.assertEqual(packet["facts"][0][FACT["period"]], "2023년 1분기~4분기")
+
     def test_long_value_is_left_for_reading(self):
         ids = [fact_id(0)]
         rows = {ids[0]: row(ids[0], value_json=json.dumps(list(range(400))))}

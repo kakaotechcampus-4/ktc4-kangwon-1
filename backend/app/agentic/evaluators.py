@@ -18,7 +18,7 @@ from app.llm.config import LLMSettings
 from app.text import has_digit
 
 from . import examiner, landlord
-from .aliases import encode
+from .aliases import encode, label_periods, labels_periods
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
 from .sql_tool import error
@@ -284,12 +284,13 @@ async def review(loop, actor, executor, draft):
                 "completed",
                 {"actor": actor, "tool": call.function.name, "status": reply.status},
             )
+            body = await run_in_thread(encode, loop.scope, reply.model_dump(mode="json"))
             messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": canonical_json(
-                        await run_in_thread(encode, loop.scope, reply.model_dump(mode="json"))
+                        label_periods(body) if labels_periods(actor) else body
                     ),
                 }
             )

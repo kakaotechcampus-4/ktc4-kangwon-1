@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sqlite3
 import unittest
 from unittest.mock import patch
 
@@ -129,6 +130,71 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.error_code, "REPORT_INVALID")
         self.assertEqual(len(seen), 3)
+
+    async def periods_seen(self, actor):
+        from app.agentic.evaluators import review
+        from app.agentic.runtime import DecisionLoop
+
+        db = sqlite3.connect(self.path)
+        db.row_factory = sqlite3.Row
+        try:
+            with db:
+                row = dict(db.execute("SELECT * FROM facts LIMIT 1").fetchone())
+                row.update(
+                    fact_id="f_00000000-0000-4000-8000-0000000000aa",
+                    identity_hash="period-check",
+                    period="20231~20234",
+                    status="observed",
+                    citable=1,
+                    value_json="1.5",
+                )
+                db.execute(
+                    f"INSERT INTO facts({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                    list(row.values()),
+                )
+        finally:
+            db.close()
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(messages)
+            payload = json.loads(messages[1]["content"])
+            if len(seen) == 1:
+                return self.message("get_facts", {"fact_ids": [payload["facts"][0]["fact_id"]]})
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        packet = {
+            "draft_id": loop.done.report_id,
+            "facts": [
+                {"fact_id": "f_00000000-0000-4000-8000-0000000000aa", "period": "20231~20234"}
+            ],
+        }
+        target = {
+            "examiner": "app.agentic.examiner.review_packet",
+            "founder": "app.agentic.evaluators.review_packet",
+        }[actor]
+        with patch(target, return_value=packet):
+            await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
+        first = json.loads(seen[0][1]["content"])["facts"][0]["period"]
+        reply = next(m["content"] for m in reversed(seen[1]) if m["role"] == "tool")
+        return first, reply
+
+    async def test_examiner_sees_spelled_out_periods(self):
+        first, reply = await self.periods_seen("examiner")
+        self.assertEqual(first, "2023년 1분기~4분기")
+        self.assertIn("2023년 1분기~4분기", reply)
+
+    async def test_other_evaluators_keep_period_codes(self):
+        first, reply = await self.periods_seen("founder")
+        self.assertEqual(first, "20231~20234")
+        self.assertIn("20231~20234", reply)
+        self.assertNotIn("2023년", reply)
 
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
         from app.agentic.runtime import DecisionLoop

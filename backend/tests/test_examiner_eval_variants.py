@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic import evaluators, examiner
+from app.agentic import aliases, evaluators, examiner
 from app.agentic.tools import ToolExecutor
 from examiner_eval import frozen_v1
 from examiner_eval.variants import VARIANTS, use_variant
@@ -90,6 +90,14 @@ class VariantsTest(unittest.TestCase):
             self.assertIs(evaluators.PERSONAS["examiner"], persona)
             self.assertIs(examiner.review_packet, packet)
             self.assertIs(ToolExecutor.definitions, definitions)
+
+    def test_baselines_keep_period_codes(self):
+        for name in ("V0", "V1"):
+            with use_variant(name):
+                self.assertFalse(aliases.labels_periods("examiner"))
+        with use_variant("V2"):
+            self.assertTrue(aliases.labels_periods("examiner"))
+        self.assertTrue(aliases.labels_periods("examiner"))
 
     def test_unknown_variant_raises(self):
         with self.assertRaises(ValueError):
