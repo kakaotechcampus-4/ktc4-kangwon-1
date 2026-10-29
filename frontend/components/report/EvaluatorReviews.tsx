@@ -193,6 +193,106 @@ function areaRows(ids: string[], facts: FactIndex, all: FactView[]) {
     .filter((row) => row.code && row.band);
 }
 
+type AreaRow = ReturnType<typeof areaRows>[number];
+
+// "50~250㎡" → [50, 250], "275.49㎡" → 275.49
+const numbers = (text: string) =>
+  (text.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+
+/**
+ * 업종별 권장 면적을 가로 막대로 그리고, 이 상가 면적을 세로선 하나로 겹쳐 보인다.
+ * 표보다 "얼마나 벗어났는지"가 한눈에 보인다. 숫자를 읽지 못하면 그리지 않는다.
+ */
+function AreaRanges({ rows }: { rows: AreaRow[] }) {
+  const mine = numbers(rows[0]?.mine ?? '')[0];
+  const ranges = rows.map((row) => numbers(row.band));
+  if (!mine || ranges.some((r) => r.length < 2)) return null;
+  const top = Math.max(mine, ...ranges.map((r) => r[1])) * 1.15;
+  const pct = (n: number) => `${(n / top) * 100}%`;
+  const statusOf = (row: AreaRow) =>
+    row.fits === null
+      ? { text: '확인 필요', color: '#8A97A5', fill: '#C9D2DC' }
+      : row.fits
+        ? { text: '범위 안', color: P.brand, fill: '#9DB6F0' }
+        : { text: '범위 밖', color: P.amber, fill: '#F3C77E' };
+
+  return (
+    <figure className="flex flex-col gap-4 rounded-2xl bg-white px-5 pt-5 pb-4 sm:px-6">
+      <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="text-15 font-bold text-[#10233A]">
+          업종별 권장 면적과 이 상가
+        </span>
+        <span className="text-13 text-[#8A97A5]">
+          운영 규모 추정치예요. 법적 기준이 아니에요.
+        </span>
+      </figcaption>
+
+      <div className="relative">
+        {/* 이 상가 면적 — 모든 막대를 가로지르는 기준선 */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute top-0 bottom-0 hidden sm:block"
+          style={{
+            left: `calc(176px + (100% - 348px) * ${mine / top})`,
+          }}
+        >
+          <span className="absolute top-0 left-0 -translate-x-1/2 rounded-full bg-[#10233A] px-2.5 py-0.5 text-13 font-bold whitespace-nowrap text-white">
+            이 상가 {rows[0].mine}
+          </span>
+          <span className="absolute top-7 -bottom-1 left-0 w-0.5 -translate-x-1/2 bg-[#10233A]" />
+        </div>
+
+        <ul className="flex flex-col gap-3.5 sm:gap-3 sm:pt-9">
+          {rows.map((row, i) => {
+            const [low, high] = ranges[i];
+            const status = statusOf(row);
+            return (
+              <li
+                key={row.code}
+                className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 sm:grid-cols-[160px_1fr_156px]"
+              >
+                <span className="truncate text-15 font-medium text-[#1F2D3D]">
+                  {industryName(row.code)}
+                </span>
+                <span className="relative col-span-2 h-2.5 rounded-full bg-[#EEF2F6] sm:col-span-1 sm:col-start-2 sm:row-start-1">
+                  <span
+                    className="absolute top-0 bottom-0 rounded-full"
+                    style={{
+                      left: pct(low),
+                      width: pct(high - low),
+                      backgroundColor: status.fill,
+                    }}
+                  />
+                  {/* 모바일에서는 기준선 대신 막대마다 표시 */}
+                  <span
+                    aria-hidden
+                    className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 bg-[#10233A] sm:hidden"
+                    style={{ left: pct(mine) }}
+                  />
+                </span>
+                <span className="col-start-2 row-start-1 flex items-baseline justify-end gap-2 whitespace-nowrap sm:col-start-3">
+                  <span className="text-sm tabular-nums text-[#66758A]">
+                    {row.band}
+                  </span>
+                  <span
+                    className="text-13 font-bold"
+                    style={{ color: status.color }}
+                  >
+                    {status.text}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <p className="text-13 text-[#8A97A5] sm:hidden">
+        세로선이 이 상가 면적({rows[0].mine})이에요.
+      </p>
+    </figure>
+  );
+}
+
 function facilityLine(all: FactView[]): string | null {
   const value = all.find((f) => f.metric === 'existing_facilities')?.value;
   if (!isObj(value)) return null;
@@ -515,61 +615,20 @@ export default function EvaluatorReviews({
                     <p className="break-keep text-17 leading-[1.7] text-[#3D4A5C]">
                       {meta.meaning}
                     </p>
-                    {areas.length > 0 && (
-                      <table className="w-full max-w-[480px] text-15">
-                        <caption className="pb-1.5 text-left text-sm text-[#8A97A5]">
-                          업종별 권장 면적
-                          {areas[0].mine
-                            ? ` · 이 상가 ${areas[0].mine}`
-                            : ''}{' '}
-                          (추정치, 법적 기준 아님)
-                        </caption>
-                        <tbody>
-                          {areas.map((a) => (
-                            <tr
-                              key={a.code}
-                              className="border-t"
-                              style={{ borderColor: P.line }}
-                            >
-                              <td className="py-1.5 text-[#3D4A5C]">
-                                {industryName(a.code)}
-                              </td>
-                              <td className="py-1.5 text-right tabular-nums text-[#4B5866]">
-                                {a.band}
-                              </td>
-                              <td
-                                className="w-20 py-1.5 text-right text-13 font-bold"
-                                style={{
-                                  color:
-                                    a.fits === null
-                                      ? '#8A97A5'
-                                      : a.fits
-                                        ? P.brand
-                                        : P.amber,
-                                }}
-                              >
-                                {a.fits === null
-                                  ? '확인 필요'
-                                  : a.fits
-                                    ? '범위 안'
-                                    : '범위 밖'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    {areas.length > 0 && <AreaRanges rows={areas} />}
                     {t.theme === 'buildout' && facility && (
                       <p className="text-15 text-[#4B5866]">
                         입력하신 설비: {facility}
                       </p>
                     )}
-                    <p className="text-sm text-[#8A97A5]">
-                      {t.industries.length
-                        ? t.industries.map(industryName).join(' · ')
-                        : '추천 결과 전체'}
-                      {!t.allReflected && ' · 일부만 반영'}
-                    </p>
+                    {areas.length === 0 && (
+                      <p className="text-sm text-[#8A97A5]">
+                        {t.industries.length
+                          ? t.industries.map(industryName).join(' · ')
+                          : '추천 결과 전체'}
+                        {!t.allReflected && ' · 일부만 반영'}
+                      </p>
+                    )}
                   </div>
                 </li>
               );
