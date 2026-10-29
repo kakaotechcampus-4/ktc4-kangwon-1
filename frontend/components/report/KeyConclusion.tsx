@@ -304,21 +304,19 @@ export default function KeyConclusion({
   return (
     <div className="flex w-full flex-col">
       {/* ① 결론 패널 — 리포트에서 가장 먼저 읽혀야 하는 곳이라 유일하게 짙은 면으로 띄운다 */}
-      <section className="relative overflow-hidden rounded-[28px] bg-[#10233A] px-6 py-8 text-white sm:px-10 sm:py-10">
-        {/* 꾸밈용 동심원 — 랜딩 히어로와 같은 언어 */}
+      <section className="relative overflow-hidden rounded-[28px] bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
+        {/* 오로라 배경 — 모서리에만 빛이 은은하게 번진다 */}
         <span
           aria-hidden
-          className="pointer-events-none absolute -top-24 -right-24 size-[340px] rounded-full"
+          className="pointer-events-none absolute inset-0"
           style={{
-            background:
-              'radial-gradient(circle, rgba(36,83,214,0.55) 0%, rgba(36,83,214,0.18) 38%, transparent 70%)',
+            background: [
+              'radial-gradient(60% 90% at 90% 0%, rgba(46,82,190,0.42) 0%, rgba(46,82,190,0) 60%)',
+              'radial-gradient(50% 80% at 5% 110%, rgba(33,64,160,0.38) 0%, rgba(33,64,160,0) 60%)',
+              'linear-gradient(135deg, #0F1D45 0%, #0A1631 100%)',
+            ].join(','),
           }}
         />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -bottom-32 size-[260px] rounded-full border border-white/10"
-        />
-
         <div className="relative grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:gap-14">
           <div className="flex flex-col gap-3">
             <p className="flex items-center gap-2 text-sm font-bold text-[#9FB4D6]">
@@ -346,11 +344,9 @@ export default function KeyConclusion({
               <p className="text-sm font-bold text-[#9FB4D6]">검토 방향</p>
               <p className="break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
                 {withObject(name)} 먼저 검토하되,{' '}
-                <span className="text-[#FFCF7A]">
-                  {items.length > 0
-                    ? `아래 ${items.length}가지를 직접 확인한 뒤`
-                    : '현장을 직접 확인한 뒤'}
-                </span>{' '}
+                {items.length > 0
+                  ? `아래 ${items.length}가지를 직접 확인한 뒤`
+                  : '현장을 직접 확인한 뒤'}{' '}
                 결정하세요.
               </p>
               {items.length > 0 && (
