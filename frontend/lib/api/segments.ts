@@ -28,6 +28,16 @@ const FACILITY_STATE_TEXT: Record<string, string> = {
   unavailable: '설치 불가',
 };
 
+// 업종 공간 요건과 임대인 답변을 비교한 결과(backend space.compare_space).
+// '해당 없음'은 이 업종에 필요 없는 조건이라 문장에서 뺀다.
+const SPACE_FIT_TEXT: [string, string][] = [
+  ['area', '면적'],
+  ['floor', '층'],
+  ['kitchen', '주방'],
+  ['ventilation', '배기(덕트)'],
+  ['water_supply', '급배수'],
+];
+
 function grouped(value: number): string {
   return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -54,7 +64,20 @@ export function formatFact(
           : [];
       }).join(' · ');
     }
-    return typeof value === 'string' ? value : JSON.stringify(value);
+    if (
+      fact.metric === 'space_fit' &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      return SPACE_FIT_TEXT.flatMap(([key, name]) => {
+        const state = value[key];
+        return typeof state === 'string' && state !== '해당 없음'
+          ? [`${name} ${state}`]
+          : [];
+      }).join(' · ');
+    }
+    // 읽는 법을 모르는 객체·배열은 JSON을 그대로 보여주지 않고 문장에서 뺀다.
+    return typeof value === 'string' ? value : '';
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;
@@ -76,13 +99,14 @@ export function renderSegments(
   segments: readonly FactSegment[],
   facts: FactIndex
 ): string {
-  return segments
-    .map((segment) => {
-      if (segment.type === 'text') {
-        return segment.text;
-      }
-      const fact = facts.get(segment.fact_id);
-      return (fact && formatFact(fact, segment.format)) ?? '확인 불가';
-    })
-    .join('');
+  return segments.reduce((sentence, segment) => {
+    if (segment.type === 'text') {
+      return sentence + segment.text;
+    }
+    const fact = facts.get(segment.fact_id);
+    const text = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
+    // 문장이 끝난 바로 뒤에 붙는 값은 띄어서 이어 쓴다.
+    const gap = text && /[.!?]$/.test(sentence) ? ' ' : '';
+    return sentence + gap + text;
+  }, '');
 }
