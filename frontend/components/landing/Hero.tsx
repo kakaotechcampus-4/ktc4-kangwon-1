@@ -2,10 +2,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { colors } from '@/styles/tokens';
 import { mockReportData } from '@/lib/mockData/report';
+import { mockFloatingPopulationFacts } from '@/lib/mockData/reportPresentation';
 
 // 결과 카드에 보여줄 예시 값 — 리포트 미리보기와 같은 목업에서 가져온다(카드에 '예시' 표시).
 const exampleTop = mockReportData.recommended.slice(0, 3);
-const examplePopulation = mockReportData.floatingPopulation;
+const exampleDailyPopulation = mockFloatingPopulationFacts.dailyPerTradeArea;
 
 /**
  * 랜딩 첫 화면 — 서비스 이름 CHAIUM(채움)을 크게 놓고, 그 안의 AI만 채워
@@ -154,13 +155,14 @@ export default function Hero() {
             하루 평균 유동인구 <span className="hero-card-tag">예시</span>
           </p>
           <p className="hero-card-value">
-            {Math.round(examplePopulation.population.daily_avg).toLocaleString(
-              'ko-KR'
-            )}
+            {exampleDailyPopulation === null
+              ? '—'
+              : Math.round(exampleDailyPopulation).toLocaleString('ko-KR')}
             <small>명</small>
           </p>
           <p className="hero-card-note">
-            반경 {examplePopulation.radius_m}m · {examplePopulation.type.label}
+            반경 {mockFloatingPopulationFacts.radiusM}m · 주변 상권{' '}
+            {mockFloatingPopulationFacts.tradeAreaCount}곳 평균
           </p>
         </div>
         <div

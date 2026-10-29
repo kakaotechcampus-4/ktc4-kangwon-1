@@ -5,6 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Building2, FileText, TriangleAlert } from 'lucide-react';
 import { mockReportData } from '@/lib/mockData/report';
+import {
+  mockCompetitionFacts,
+  mockFloatingPopulationFacts,
+  mockLifecycleFacts,
+  mockRecommendedIndustryCodes,
+} from '@/lib/mockData/reportPresentation';
 
 /**
  * 랜딩 "분석 리포트 미리보기" 섹션 (#report-preview).
@@ -155,21 +161,46 @@ function AnswerScreen() {
 // 값은 리포트 목업 화면과 같다.
 const TABS = ['유동인구', '경쟁 업체', '개폐업'] as const;
 
-const AGES: [string, number, number][] = [
-  // 연령대, 구성비(%), 서울 평균 대비(배)
-  ['20대', 15, 0.62],
-  ['30대', 17, 0.71],
-  ['40대', 24, 1.18],
-  ['50대', 22, 1.55],
-  ['60대+', 17, 1.42],
-];
+const AGES = mockFloatingPopulationFacts.ageShares;
+const TOP_AGE = AGES.reduce((best, age) =>
+  age.share > best.share ? age : best
+);
 
-const COMPETITION: [string, number | null, number | null, boolean][] = [
-  // 업종, 동종 점포 수, 반경 2,000m 대비(배), 추천 업종
-  ['네일·뷰티', 1, 0.82, true],
-  ['소형 스튜디오', 2, 1.35, true],
-  ['코인세탁실', 3, 0.65, true],
-  ['대형 카페', 12, 1.62, false],
+const COMPETITION = [
+  ...mockCompetitionFacts.selected
+    .filter((row) => mockRecommendedIndustryCodes.has(row.code))
+    .slice(0, 2),
+  ...mockCompetitionFacts.selected
+    .filter((row) => !mockRecommendedIndustryCodes.has(row.code))
+    .slice(0, 2),
+];
+const LIFECYCLE_EXAMPLE = mockLifecycleFacts.rows[0];
+const LIFECYCLE_METRICS = [
+  {
+    label: '평균 점포 수',
+    value: LIFECYCLE_EXAMPLE.avgStoreCount?.toFixed(1),
+  },
+  {
+    label: '회전율',
+    value:
+      LIFECYCLE_EXAMPLE.turnoverRate === null
+        ? undefined
+        : `${LIFECYCLE_EXAMPLE.turnoverRate.toFixed(1)}%`,
+  },
+  {
+    label: '서울 대비 폐업률',
+    value:
+      LIFECYCLE_EXAMPLE.closeRateRatio === null
+        ? undefined
+        : `${LIFECYCLE_EXAMPLE.closeRateRatio.toFixed(2)}배`,
+  },
+  {
+    label: '순증감률',
+    value:
+      LIFECYCLE_EXAMPLE.netChangeRate === null
+        ? undefined
+        : `${LIFECYCLE_EXAMPLE.netChangeRate > 0 ? '+' : ''}${LIFECYCLE_EXAMPLE.netChangeRate.toFixed(1)}%`,
+  },
 ];
 
 function Ratio({ value }: { value: number }) {
@@ -243,7 +274,12 @@ function WhyScreen() {
                   하루 평균 유동인구
                 </p>
                 <p className="mt-1 text-xl font-extrabold sm:text-2xl">
-                  4,820<span className="ml-0.5 text-sm font-bold">명/일</span>
+                  {mockFloatingPopulationFacts.dailyPerTradeArea === null
+                    ? '—'
+                    : Math.round(
+                        mockFloatingPopulationFacts.dailyPerTradeArea
+                      ).toLocaleString('ko-KR')}
+                  <span className="ml-0.5 text-sm font-bold">명/일</span>
                 </p>
               </div>
               <div className="rounded-xl border border-[#E3E9F0] px-3 py-2.5 sm:px-4 sm:py-3">
@@ -251,40 +287,38 @@ function WhyScreen() {
                   가장 많은 연령대
                 </p>
                 <p className="mt-1 text-xl font-extrabold text-[#10233A] sm:text-2xl">
-                  40대<span className="ml-1 text-sm font-bold">24%</span>
+                  {TOP_AGE.label}
+                  <span className="ml-1 text-sm font-bold">
+                    {(TOP_AGE.share * 100).toFixed(1)}%
+                  </span>
                 </p>
               </div>
             </div>
             <ul className="flex flex-col gap-1.5">
-              {AGES.map(([age, pct, idx]) => (
+              {AGES.map((age) => (
                 <li
-                  key={age}
-                  className="grid grid-cols-[34px_minmax(0,1fr)_34px_48px] items-center gap-1 text-[11px] sm:grid-cols-[44px_1fr_44px_60px] sm:gap-2 sm:text-xs"
+                  key={age.label}
+                  className="grid grid-cols-[44px_minmax(0,1fr)_42px] items-center gap-1 text-[11px] sm:grid-cols-[56px_1fr_52px] sm:gap-2 sm:text-xs"
                 >
-                  <span className="font-bold text-[#10233A]">{age}</span>
+                  <span className="font-bold text-[#10233A]">{age.label}</span>
                   <span className="h-1.5 rounded-full bg-[#EEF2F6]">
                     <span
                       className="block h-full rounded-full"
                       style={{
-                        width: `${(pct / 30) * 100}%`,
-                        background: age === '40대' ? '#10233A' : '#8DA2C4',
+                        width: `${(age.share / TOP_AGE.share) * 100}%`,
+                        background:
+                          age.label === TOP_AGE.label ? '#2453D6' : '#8DA2C4',
                       }}
                     />
                   </span>
                   <span className="text-right font-semibold tabular-nums text-[#4B5866]">
-                    {pct}%
-                  </span>
-                  <span
-                    className="text-right font-bold tabular-nums"
-                    style={{ color: idx > 1 ? '#2453D6' : '#8A97A5' }}
-                  >
-                    {idx.toFixed(2)}배
+                    {(age.share * 100).toFixed(1)}%
                   </span>
                 </li>
               ))}
             </ul>
             <p className="-mt-1 text-[10px] text-[#8A97A5] sm:text-[11px]">
-              구성비 · 서울 평균 대비
+              구성비 · 주변 상권 유동인구
             </p>
           </div>
         )}
@@ -292,11 +326,16 @@ function WhyScreen() {
         {tab === '경쟁 업체' && (
           <div className="flex flex-col gap-3 sm:gap-5">
             <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
-              <span className="text-[#2453D6]">네일·뷰티, 코인세탁실</span>은
-              주변에 같은 업종이 적고,
-              <br />
-              <span className="text-[#C2410C]">소형 스튜디오</span>는 이미 몰려
-              있어요.
+              주변에는{' '}
+              <span className="text-[#2453D6]">{COMPETITION[0]?.name}</span>{' '}
+              {COMPETITION[0]?.storeCount == null
+                ? '자료 없음'
+                : `${COMPETITION[0]?.storeCount}곳`}
+              , <span className="text-[#C2410C]">{COMPETITION[1]?.name}</span>{' '}
+              {COMPETITION[1]?.storeCount == null
+                ? '자료 없음'
+                : `${COMPETITION[1]?.storeCount}곳`}
+              이 있어요.
             </p>
             <table className="w-full text-[11px] sm:text-13">
               <thead>
@@ -311,23 +350,25 @@ function WhyScreen() {
                 </tr>
               </thead>
               <tbody>
-                {COMPETITION.map(([name, count, ratio, rec]) => (
-                  <tr key={name} className="border-t border-[#EEF1F5]">
+                {COMPETITION.map((row) => (
+                  <tr key={row.code} className="border-t border-[#EEF1F5]">
                     <td
-                      className={`py-3 sm:py-[18px] ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
+                      className={`py-3 sm:py-[18px] ${mockRecommendedIndustryCodes.has(row.code) ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
                     >
-                      {name}
-                      {!rec && (
+                      {row.name}
+                      {!mockRecommendedIndustryCodes.has(row.code) && (
                         <span className="ml-1 text-[9px] text-[#8A97A5] sm:ml-1.5 sm:text-[11px]">
                           제외 후보
                         </span>
                       )}
                     </td>
                     <td className="py-3 text-right tabular-nums text-[#4B5866] sm:py-[18px]">
-                      {count}개
+                      {row.storeCount === null
+                        ? '자료 없음'
+                        : `${row.storeCount}개`}
                     </td>
                     <td className="py-3 text-right sm:py-[18px]">
-                      {ratio !== null && <Ratio value={ratio} />}
+                      {row.lq !== null && <Ratio value={row.lq} />}
                     </td>
                   </tr>
                 ))}
@@ -339,65 +380,24 @@ function WhyScreen() {
         {tab === '개폐업' && (
           <div className="flex flex-col gap-3 sm:gap-5">
             <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
-              네일·뷰티는 개업이 활발하고
-              <br />
-              폐업률도 낮아 <span className="text-[#2453D6]">안정적</span>이에요
+              {LIFECYCLE_EXAMPLE.name} 최근 1년 폐업률은{' '}
+              <span className="text-[#2453D6]">
+                {LIFECYCLE_EXAMPLE.recentCloseRate === null
+                  ? '자료 없음'
+                  : `${LIFECYCLE_EXAMPLE.recentCloseRate.toFixed(1)}%`}
+              </span>
+              이에요.
             </p>
-            <div className="flex items-center gap-3 sm:gap-5">
-              <div className="relative h-[84px] w-[144px] shrink-0 sm:h-[110px] sm:w-[188px]">
-                <svg viewBox="0 0 124 72" className="h-full w-full" aria-hidden>
-                  <path
-                    d="M10 66 A52 52 0 0 1 114 66"
-                    fill="none"
-                    stroke="#E3E9F0"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M10 66 A52 52 0 0 1 114 66"
-                    fill="none"
-                    stroke="#2453D6"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                    pathLength={100}
-                    strokeDasharray="78.4 100"
-                  />
-                </svg>
-                <p className="absolute inset-x-0 bottom-0 text-center text-2xl font-extrabold text-[#10233A] sm:text-3xl">
-                  78.4
-                </p>
-              </div>
-              <div className="flex flex-col gap-1.5 text-xs text-[#3D4A5C] sm:gap-2 sm:text-sm">
-                <p className="font-bold text-[#10233A]">
-                  개폐업 안정성 78.4 / 100점
-                </p>
-                <p>
-                  최근 1년 폐업률 7.4%
-                  <br />
-                  과거(15.8%)보다 하락
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] px-2 py-4 text-center sm:px-3 sm:py-6">
-              <div>
-                <p className="text-xs text-[#66758A]">3년 개업</p>
-                <p className="mt-1 text-xl font-extrabold text-[#2453D6] sm:text-2xl">
-                  20
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-[#66758A]">3년 폐업</p>
-                <p className="mt-1 text-xl font-extrabold text-[#C2410C] sm:text-2xl">
-                  9
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-[#66758A]">순증감</p>
-                <p className="mt-1 text-xl font-extrabold text-[#10233A] sm:text-2xl">
-                  ▲ +11
-                </p>
-              </div>
-            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {LIFECYCLE_METRICS.map(({ label, value }) => (
+                <div key={label} className="border-t border-[#EEF1F5] pt-2">
+                  <dt className="text-xs text-[#66758A]">{label}</dt>
+                  <dd className="mt-1 text-base font-extrabold tabular-nums text-[#10233A]">
+                    {value ?? '자료 없음'}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
         )}
       </div>
@@ -536,7 +536,7 @@ export default function ReportPreview() {
   return (
     <section
       id="report-preview"
-      className="relative w-full scroll-mt-16 px-4 py-12 sm:px-8 sm:py-24"
+      className="relative w-full scroll-mt-16 px-4 pt-16 pb-12 sm:px-8 sm:py-24"
       style={{ backgroundColor: '#10233A' }}
     >
       <div className="mx-auto max-w-[1120px]">
@@ -665,7 +665,7 @@ export default function ReportPreview() {
               내 상가로 분석해 보기 <ArrowRight size={18} aria-hidden />
             </Link>
             <Link
-              href="/report"
+              href="/report?demo=mock-hupyeong"
               className="inline-flex h-12 items-center rounded-full border border-white/30 px-5 text-sm font-bold text-white/90 hover:bg-white/10 sm:h-14 sm:px-6 sm:text-base"
             >
               예시 리포트 전체 보기
