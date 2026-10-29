@@ -29,8 +29,8 @@ import type { FactView } from '@/lib/api/types';
  *   묶고, fact로 읽히는 근거를 붙이고, 임대인이 체크하며 내려갈 수 있게 한다.
  *
  * 백엔드 문장(risks·confirmation_conditions)에는 "점수표·신뢰도·법규 적합성" 같은
- * 내부 표현이 섞여 있어, 화면 문장은 쟁점별 고정 문구로 만들고 원문은 항목마다
- * "분석 원문"에 접어 둔다. 쟁점 분류는 핵심어 기준이라, 백엔드가 조건별 카테고리를
+ * 내부 표현이 섞여 있어, 원문은 보여 주지 않고 화면 문장은 쟁점별 고정 문구로
+ * 만든다. 쟁점 분류는 핵심어 기준이라, 백엔드가 조건별 카테고리를
  * 주게 되면 그 값으로 바꾼다.
  */
 
@@ -102,8 +102,8 @@ const FIT_LABEL: Record<string, string> = {
 
 const BADGE_TEXT: Record<string, { text: string; color: string }> = {
   추천: { text: '추천', color: P.brand },
-  조건부: { text: '조건부 추천 · 확인 후 결정', color: P.amber },
-  보류: { text: '판단 보류 · 확인 후 결정', color: P.amber },
+  조건부: { text: '조건부 추천', color: P.amber },
+  보류: { text: '판단 보류', color: P.amber },
   비추천: { text: '비추천', color: P.caution },
 };
 
@@ -299,7 +299,7 @@ export default function KeyConclusion({
     });
   const done = items.filter((item) => checked.has(item.key)).length;
   const allDone = items.length > 0 && done === items.length;
-  const [reasonLead, ...reasonRest] = reason.split(/(?<=\.)\s+/);
+  const [reasonLead] = reason.split(/(?<=\.)\s+/);
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
   const mark =
     'linear-gradient(transparent 58%, #FFE1A6 58%, #FFE1A6 92%, transparent 92%)';
@@ -358,10 +358,6 @@ export default function KeyConclusion({
                 </span>
               )}
             </p>
-            <p className="text-15 break-keep leading-7 text-[#66758A]">
-              점수와 순위는 자료로 계산한 참고값이에요. 면적 비교는 업종의
-              일반적인 운영 규모와 견준 것이고, 법적 기준은 아니에요.
-            </p>
           </div>
         )}
       </section>
@@ -372,9 +368,6 @@ export default function KeyConclusion({
           <p className="text-sm font-bold text-[#66758A]">추천 근거</p>
           <p className="text-17 break-keep leading-[1.7] text-[#1F2D3D]">
             {reasonLead}
-            {reasonRest.length > 0 && (
-              <span className="text-[#8A97A5]"> {reasonRest.join(' ')}</span>
-            )}
           </p>
           <a
             href={reasonTarget(reason)}
@@ -394,8 +387,7 @@ export default function KeyConclusion({
               입점 전 직접 확인하세요.
             </h3>
             <p className="text-base text-[#5B6470]">
-              분석으로는 알 수 없는 것들이에요. 현장에서 확인한 항목은 체크해
-              두세요.
+              현장에서 확인한 항목은 체크해 두세요.
             </p>
           </div>
           {items.length > 0 && (
@@ -483,28 +475,6 @@ export default function KeyConclusion({
                     <p className="text-17 break-keep leading-[1.7] text-[#3D4A5C]">
                       {item.how}
                     </p>
-                    {item.sources.length > 0 && (
-                      <details className="group">
-                        <summary className="text-13 inline-flex cursor-pointer list-none items-center gap-1 font-semibold text-[#8A97A5] [&::-webkit-details-marker]:hidden">
-                          분석 원문
-                          <ChevronRight
-                            size={14}
-                            className="transition-transform group-open:rotate-90"
-                            aria-hidden
-                          />
-                        </summary>
-                        <ul className="mt-2 flex flex-col gap-1">
-                          {item.sources.map((s) => (
-                            <li
-                              key={s}
-                              className="text-sm break-keep leading-6 text-[#66758A]"
-                            >
-                              {s}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
                   </div>
 
                   <div className="col-start-2 flex items-start sm:col-start-3 sm:justify-end sm:pt-1.5">
@@ -516,12 +486,7 @@ export default function KeyConclusion({
           </ol>
         )}
 
-        <div className="report-screen-only flex flex-wrap items-center justify-between gap-3 px-2">
-          <p className="text-15 text-[#66758A]">
-            {allDone
-              ? '모두 확인했어요. 이제 임차인을 찾아볼 차례예요.'
-              : '확인이 끝나면 임차인 찾기로 넘어가세요.'}
-          </p>
+        <div className="report-screen-only flex justify-end px-2">
           <a
             href="#listing"
             className="text-15 inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-bold transition-colors"
