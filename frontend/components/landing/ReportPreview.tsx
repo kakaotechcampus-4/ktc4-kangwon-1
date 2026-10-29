@@ -206,10 +206,21 @@ function WhyScreen() {
 
         {tab === '유동인구' && (
           <div className="flex flex-col gap-4">
-            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
-              이 주변은 <span className="text-[#2453D6]">주거생활형</span>{' '}
-              상권이에요
-            </p>
+            {/* 리포트 05장과 같은 상권 유형 일러스트(주거생활형) */}
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+                이 주변은
+                <br />
+                <span className="text-[#2453D6]">주거생활형</span> 상권이에요
+              </p>
+              <Image
+                src="/images/area-types/residential.webp"
+                alt="주거생활형 상권 일러스트"
+                width={720}
+                height={427}
+                className="h-auto w-[150px] shrink-0 sm:w-[170px]"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="rounded-xl bg-[#10233A] px-4 py-3 text-white">
                 <p className="text-xs font-semibold text-[#9FB4D6]">
