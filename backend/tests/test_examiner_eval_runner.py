@@ -177,6 +177,22 @@ class RunCaseTests(unittest.IsolatedAsyncioTestCase):
                 self.assertGreaterEqual(outcome.elapsed_ms, 0)
         self.assertIs(examiner.review_packet, REVIEW_PACKET)
 
+    async def test_run_case_keeps_stored_run_state(self):
+        query = "SELECT status, state_json, result_json FROM agentic_runs WHERE request_id=?"
+        db = sqlite3.connect(self.db)
+        try:
+            before = db.execute(query, (self.ctx.request_id,)).fetchone()
+        finally:
+            db.close()
+        outcome = await self.execute(self.cases[0])
+        self.assertEqual(outcome.status, "completed", outcome.error_code)
+        db = sqlite3.connect(self.db)
+        try:
+            after = db.execute(query, (self.ctx.request_id,)).fetchone()
+        finally:
+            db.close()
+        self.assertEqual(after, before)
+
     async def test_case_calls_capped_per_case(self):
         sent = []
 
@@ -421,6 +437,7 @@ class CliTests(unittest.TestCase):
                 "model": runner.FAKE_MODEL,
                 "first_repeats": 1,
                 "first_max_calls": None,
+                "code": cli.code_version(),
             },
         )
         self.assertEqual({r["type"] for r in rows}, {"result"})
@@ -528,6 +545,28 @@ class CliTests(unittest.TestCase):
         test = self.folder / "test"
         self.assertEqual(self.call(*self.run_args(test, "--fake", "--split", "test"))[0], 0)
         self.assertEqual([r["case_id"] for r in self.rows(test)[1:]], [cases[1].case_id])
+
+    def test_build_marks_copy_and_run_refuses_unmarked_db(self):
+        self.assertTrue(cli.marker(self.db).exists())
+        other = self.folder / "unmarked.sqlite3"
+        store.copy_store(self.src, other)
+        out = self.folder / "unmarked"
+        code, _, err = self.call(
+            "--db", other, "--cases", self.cases, "--variant", "V2", "--out", out, "--fake"
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("build", err)
+        self.assertFalse((out / runner.RESULTS).exists())
+
+    def test_resume_refused_after_code_changes(self):
+        out = self.folder / "V2"
+        self.assertEqual(self.call(*self.run_args(out, "--fake"))[0], 0)
+        before = line_count(out / runner.RESULTS)
+        with patch.object(cli, "code_version", return_value="other"):
+            code, _, err = self.call(*self.run_args(out, "--fake", "--repeats", "2"))
+        self.assertEqual(code, 2)
+        self.assertIn("code", err)
+        self.assertEqual(line_count(out / runner.RESULTS), before)
 
     def test_refuses_db_inside_protected_folder(self):
         out = self.folder / "guard"

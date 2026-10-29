@@ -2,6 +2,8 @@
 
 import argparse
 import asyncio
+import json
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -26,8 +28,28 @@ from examiner_eval.variants import VARIANTS
 
 CASES = "cases.json"
 SPLITS = ("tune", "test", "all")
-HEADER_KEYS = ("variant", "split", "mode", "model")
+HEADER_KEYS = ("variant", "split", "mode", "model", "code")
 PROTECTED = Path.home() / ".chaeum"
+MARK = ".examiner_eval"
+BACKEND = Path(__file__).resolve().parents[1]
+
+
+def marker(db: Path) -> Path:
+    return Path(str(db) + MARK)
+
+
+def code_version() -> str:
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=BACKEND, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    try:
+        head = git("rev-parse", "--short", "HEAD")
+        dirty = git("status", "--porcelain", "--", "app", "examiner_eval")
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return head + ("+수정중" if dirty else "")
 
 
 def _refuse(message: str) -> int:
@@ -99,8 +121,13 @@ def build(args) -> int:
     try:
         cases = build_cases(load_contexts(args.db))
         dump_cases(cases, target)
+        marker(args.db).write_text(
+            json.dumps({"src": str(args.src), "cases": str(target)}, ensure_ascii=False),
+            encoding="utf-8",
+        )
     except BaseException:
         args.db.unlink(missing_ok=True)
+        marker(args.db).unlink(missing_ok=True)
         raise
     sources = Counter(c.source for c in cases)
     splits = Counter(c.split for c in cases)
@@ -127,6 +154,10 @@ def run(args) -> int:
         return _refuse(f"복사본 DB가 없습니다: {args.db}")
     if _protected(args.db):
         return _refuse(f"{PROTECTED} 안의 DB에는 실행하지 않습니다. build로 만든 복사본을 쓰세요.")
+    if not marker(args.db).exists():
+        return _refuse(
+            f"build로 만든 복사본이 아닙니다(표식 {marker(args.db).name} 없음): {args.db}"
+        )
     if not args.cases.exists():
         return _refuse(f"사례 파일이 없습니다: {args.cases}")
     cases = [c for c in load_cases(args.cases) if args.split in ("all", c.split)]
@@ -153,6 +184,7 @@ def run(args) -> int:
         "variant": args.variant,
         "split": args.split,
         "mode": "real" if args.real else "fake",
+        "code": code_version(),
     }
     if header is not None and (refused := _header_differs(header, current)):
         return refused

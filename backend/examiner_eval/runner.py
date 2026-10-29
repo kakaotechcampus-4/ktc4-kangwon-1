@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from openai.types.chat import ChatCompletionMessage
 
-from app.agentic import evaluators
+from app.agentic import evaluators, runtime
 from app.agentic.recording import CallRecording
 from app.agentic.runtime import DecisionLoop
 from app.llm.budget import BudgetExceeded
@@ -112,6 +112,10 @@ def _skip_save(scope, review):
     return None
 
 
+def _skip_run_save(scope, state, status, result_model=None):
+    return None
+
+
 def _watch(loop, seen, events):
     model_call, event = loop.model_call, loop.event
     calls = 0
@@ -170,7 +174,11 @@ async def run_case(
     loop = None
     review = None
     failure = None
-    with use_variant(variant), patch.object(evaluators, "save_review", _skip_save):
+    with (
+        use_variant(variant),
+        patch.object(evaluators, "save_review", _skip_save),
+        patch.object(runtime, "_save", _skip_run_save),
+    ):
         try:
             loop = await DecisionLoop.create(
                 make_scope(ctx, db_path),
