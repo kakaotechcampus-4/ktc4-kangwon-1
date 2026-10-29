@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ArrowRight, Building2, Check, TriangleAlert } from 'lucide-react';
+import { Building2, Check, TriangleAlert } from 'lucide-react';
 import { reportPalette as P } from '@/styles/reportPalette';
 import type { FactIndex } from '@/lib/api/segments';
 import type { FactView } from '@/lib/api/types';
@@ -10,7 +10,7 @@ import type { FactView } from '@/lib/api/types';
  * 02 핵심 결론.
  *
  * - 1행: 가장 먼저 검토할 업종 | 검토 방향 (카드·구분선 없이 같은 행)
- * - 입점 전 직접 확인하세요: 이 장의 중심. 후보의 위험·확인 조건 문장을 쟁점별로
+ * - 계약 전에 확인할 N가지: 이 장의 중심. 결론 패널의 "N가지"에서 점선으로 이어진다. 후보의 위험·확인 조건 문장을 쟁점별로
  *   묶고, fact로 읽히는 근거를 붙이고, 임대인이 체크하며 내려갈 수 있게 한다.
  *
  * 백엔드 문장(risks·confirmation_conditions)에는 "점수표·신뢰도·법규 적합성" 같은
@@ -329,42 +329,42 @@ export default function KeyConclusion({
                 </span>{' '}
                 결정하세요.
               </p>
-              {items.length > 0 && (
-                <a
-                  href="#key-checks"
-                  className="mt-1 inline-flex w-fit items-center gap-1.5 text-15 font-semibold text-white/80 transition-colors hover:text-white"
-                >
-                  확인할 것 보기
-                  <ArrowRight size={16} className="rotate-90" aria-hidden />
-                </a>
-              )}
             </div>
           )}
         </div>
+        {/* 검토 방향의 "N가지"에서 아래 확인 목록으로 이어지는 점선 */}
+        {items.length > 0 && (
+          <span
+            aria-hidden
+            className="absolute bottom-0 left-[calc(1.5rem+11px)] h-8 border-l-2 border-dashed border-[#FFCF7A]/70 sm:left-[calc(2.5rem+11px)]"
+          />
+        )}
       </section>
 
-      {/* ② 입점 전 직접 확인하세요 — 이 장의 중심 */}
+      {/* ② 입점 전 확인할 N가지 — 이 장의 중심 */}
       <section
         id="key-checks"
-        className="flex scroll-mt-28 flex-col gap-5 px-6 py-8 sm:px-10 sm:py-10"
-        style={{
-          // 흰 바탕에 회색빛 오로라 — 위 결론 패널과 한 덩어리로 이어진다
-          background: [
-            'radial-gradient(55% 60% at 100% 0%, rgba(140,155,180,0.22) 0%, rgba(140,155,180,0) 65%)',
-            'radial-gradient(50% 60% at 0% 100%, rgba(150,165,190,0.2) 0%, rgba(150,165,190,0) 65%)',
-            'radial-gradient(40% 50% at 45% 55%, rgba(200,210,225,0.18) 0%, rgba(200,210,225,0) 70%)',
-            '#FFFFFF',
-          ].join(','),
-        }}
+        className="flex scroll-mt-28 flex-col gap-5 bg-white px-6 pb-8 sm:px-10 sm:pb-10"
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
+            {items.length > 0 ? (
+              <span
+                aria-hidden
+                className="ml-[11px] h-6 border-l-2 border-dashed border-[#E2B45C]/70"
+              />
+            ) : (
+              <span aria-hidden className="h-8" />
+            )}
             <h3 className="flex items-center gap-2 text-xl font-extrabold tracking-[-0.02em] text-[#10233A] sm:text-2xl">
               <TriangleAlert size={22} color={P.amber} aria-hidden />
-              입점 전 직접 확인하세요.
+              {items.length > 0
+                ? `계약 전에 확인할 ${items.length}가지`
+                : '계약 전에 직접 확인하세요'}
             </h3>
             <p className="text-15 text-[#5B6470]">
-              현장에서 확인한 항목은 체크해 두세요.
+              분석 자료로는 알 수 없어 현장에서 봐야 하는 것들이에요. 확인한
+              항목은 체크해 두세요.
             </p>
           </div>
           {items.length > 0 && (
