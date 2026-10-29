@@ -281,7 +281,7 @@ export default function KeyConclusion({
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex w-full flex-col overflow-hidden border border-[#E3E9F0]">
       {/* ① 결론 패널 — 리포트에서 가장 먼저 읽혀야 하는 곳이라 유일하게 짙은 면으로 띄운다 */}
       <section className="relative overflow-hidden bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
         {/* 오로라 배경 — 모서리에만 빛이 은은하게 번진다 */}
@@ -347,7 +347,16 @@ export default function KeyConclusion({
       {/* ② 입점 전 직접 확인하세요 — 이 장의 중심 */}
       <section
         id="key-checks"
-        className="mt-12 flex scroll-mt-28 flex-col gap-5"
+        className="flex scroll-mt-28 flex-col gap-5 px-6 py-8 sm:px-10 sm:py-10"
+        style={{
+          // 흰 바탕에 회색빛 오로라 — 위 결론 패널과 한 덩어리로 이어진다
+          background: [
+            'radial-gradient(55% 60% at 100% 0%, rgba(140,155,180,0.22) 0%, rgba(140,155,180,0) 65%)',
+            'radial-gradient(50% 60% at 0% 100%, rgba(150,165,190,0.2) 0%, rgba(150,165,190,0) 65%)',
+            'radial-gradient(40% 50% at 45% 55%, rgba(200,210,225,0.18) 0%, rgba(200,210,225,0) 70%)',
+            '#FFFFFF',
+          ].join(','),
+        }}
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -381,21 +390,12 @@ export default function KeyConclusion({
         </div>
 
         {items.length === 0 ? (
-          <p className="text-15 rounded-[24px] border border-[#E3E9F0] bg-white px-6 py-8 text-[#4B5866]">
+          <p className="text-15 py-4 text-[#4B5866]">
             분석 결과에 별도 조건이 기재되지 않았어요. 현장에서 입점 조건을
             확인하세요.
           </p>
         ) : (
-          <ol
-            className="flex flex-col gap-1 rounded-[24px] border border-[#E3E9F0] px-4 py-3 shadow-[0_10px_30px_rgba(16,35,58,0.04)] sm:px-8 sm:py-4"
-            style={{
-              background: [
-                'radial-gradient(55% 70% at 95% 0%, rgba(110,150,255,0.16) 0%, rgba(110,150,255,0) 65%)',
-                'radial-gradient(45% 65% at 0% 100%, rgba(80,120,230,0.12) 0%, rgba(80,120,230,0) 65%)',
-                '#FFFFFF',
-              ].join(','),
-            }}
-          >
+          <ol className="-my-2 flex flex-col">
             {items.map((item, i) => {
               const isDone = checked.has(item.key);
               return (
@@ -460,7 +460,7 @@ export default function KeyConclusion({
           </ol>
         )}
 
-        <div className="report-screen-only flex justify-end px-2">
+        <div className="report-screen-only flex justify-end">
           <a
             href="#listing"
             className="text-15 inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-bold transition-colors"
