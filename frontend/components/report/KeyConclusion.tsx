@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { Building2, Check, TriangleAlert } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Building2, TriangleAlert } from 'lucide-react';
 import { reportPalette as P } from '@/styles/reportPalette';
 import type { FactIndex } from '@/lib/api/segments';
 import type { FactView } from '@/lib/api/types';
@@ -11,7 +11,7 @@ import type { FactView } from '@/lib/api/types';
  *
  * - 1행: 가장 먼저 검토할 업종 | 검토 방향 (카드·구분선 없이 같은 행)
  * - 계약 전에 확인할 N가지: 이 장의 중심. 결론 패널의 "N가지"에서 점선으로 이어진다. 후보의 위험·확인 조건 문장을 쟁점별로
- *   묶고, fact로 읽히는 근거를 붙이고, 임대인이 체크하며 내려갈 수 있게 한다.
+ *   묶고, fact로 읽히는 근거를 붙이고, 번호 순서대로 읽게 한다.
  *
  * 백엔드 문장(risks·confirmation_conditions)에는 "점수표·신뢰도·법규 적합성" 같은
  * 내부 표현이 섞여 있어, 원문은 보여 주지 않고 화면 문장은 쟁점별 고정 문구로
@@ -142,7 +142,6 @@ export default function KeyConclusion({
   checks: string[];
   facts: FactIndex;
 }) {
-  const [checked, setChecked] = useState<Set<string>>(new Set());
   const allFacts: FactView[] = [...facts.values()];
   const findFact = (metric: string, code?: string) =>
     allFacts.find(
@@ -269,14 +268,6 @@ export default function KeyConclusion({
     return null;
   }
 
-  const toggle = (key: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  const done = items.filter((item) => checked.has(item.key)).length;
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
 
   return (
@@ -363,29 +354,9 @@ export default function KeyConclusion({
                 : '계약 전에 직접 확인하세요'}
             </h3>
             <p className="text-15 text-[#5B6470]">
-              분석 자료로는 알 수 없어 현장에서 봐야 하는 것들이에요. 확인한
-              항목은 체크해 두세요.
+              분석 자료로는 알 수 없어 현장에서 봐야 하는 것들이에요.
             </p>
           </div>
-          {items.length > 0 && (
-            <div
-              className="report-screen-only flex min-w-[180px] flex-col gap-2"
-              aria-live="polite"
-            >
-              <p className="text-sm font-semibold text-[#4B5866]">
-                <span className="text-lg font-extrabold text-[#10233A]">
-                  {done}
-                </span>{' '}
-                / {items.length} 확인
-              </p>
-              <div className="h-1.5 overflow-hidden rounded-full bg-[#E3E9F0]">
-                <span
-                  className="block h-full rounded-full bg-[#2453D6] transition-[width] duration-300"
-                  style={{ width: `${(done / items.length) * 100}%` }}
-                />
-              </div>
-            </div>
-          )}
         </div>
 
         {items.length === 0 ? (
@@ -396,50 +367,21 @@ export default function KeyConclusion({
         ) : (
           <ol className="-my-2 flex flex-col">
             {items.map((item, i) => {
-              const isDone = checked.has(item.key);
               return (
                 <li
                   key={item.key}
                   className="grid grid-cols-[40px_1fr] gap-x-4 gap-y-3 py-6 sm:grid-cols-[44px_1fr_minmax(0,400px)] sm:gap-x-6"
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggle(item.key)}
-                    aria-pressed={isDone}
-                    aria-label={`${item.title} 확인 ${isDone ? '취소' : '완료'}`}
-                    className="flex size-10 items-center justify-center rounded-full border-2 transition-colors sm:size-11"
-                    style={
-                      isDone
-                        ? {
-                            backgroundColor: P.brand,
-                            borderColor: P.brand,
-                            color: '#fff',
-                          }
-                        : {
-                            backgroundColor: '#fff',
-                            borderColor: '#C9D2DC',
-                            color: '#D5DEE7',
-                          }
-                    }
-                  >
-                    <Check size={22} strokeWidth={3} aria-hidden />
-                  </button>
+                  <span className="text-2xl leading-none font-extrabold tabular-nums text-[#2453D6] sm:pt-0.5">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
 
                   <div className="flex min-w-0 flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-[#8A97A5] tabular-nums">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <p
-                        className={`text-lg font-extrabold tracking-[-0.01em] ${
-                          isDone
-                            ? 'text-[#8A97A5] line-through decoration-2'
-                            : 'text-[#10233A]'
-                        }`}
-                      >
+                      <p className="text-lg font-extrabold tracking-[-0.01em] text-[#10233A]">
                         {item.title}
                       </p>
-                      {i === 0 && !isDone && (
+                      {i === 0 && (
                         <span className="text-13 rounded-full bg-[#10233A] px-2.5 py-0.5 font-bold text-white">
                           가장 먼저
                         </span>
