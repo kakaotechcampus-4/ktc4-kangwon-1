@@ -18,7 +18,7 @@ YEAR_QUARTERS = 4
 
 
 def metric_periods(quarters):
-    lifecycle = sorted(quarters.get("business_lifecycle", []))
+    lifecycle = sorted(set(quarters.get("business_lifecycle", [])))
     if len(lifecycle) < YEAR_QUARTERS:
         return {}
     recent = f"{lifecycle[-YEAR_QUARTERS]}~{lifecycle[-1]}"

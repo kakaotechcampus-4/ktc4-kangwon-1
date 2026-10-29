@@ -14,7 +14,7 @@ from app.db.connection import connect, initialize
 from app.geo import to_epsg5181
 from app.local_data.adapter import LocalAdapter
 from app.local_data.database import LocalDataDB
-from app.local_data.persistence import persist_local, register_cell
+from app.local_data.persistence import metric_periods, persist_local, register_cell
 from app.schemas import AnalysisTask, Site
 from app.storage.raw import capture_scope
 from tests.local_data_fixture import complete_versions
@@ -307,6 +307,20 @@ class LocalAdapterTests(unittest.TestCase):
                         )
 
             asyncio.run(run())
+
+
+class MetricPeriodTests(unittest.TestCase):
+    def test_duplicate_quarters_do_not_shift_periods(self):
+        quarters = ["20221", "20222", "20223", "20224", "20231", "20232", "20233", "20234"]
+        found = metric_periods({"business_lifecycle": [*quarters, "20234", "20221"]})
+        self.assertEqual(
+            found["business_lifecycle"],
+            {
+                "recent_year_close_rate": "20231~20234",
+                "close_rate_ratio": "20231~20234",
+                "oldest_year_close_rate": "20221~20224",
+            },
+        )
 
 
 if __name__ == "__main__":
