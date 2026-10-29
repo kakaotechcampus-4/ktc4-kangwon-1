@@ -277,7 +277,6 @@ export default function KeyConclusion({
       return next;
     });
   const done = items.filter((item) => checked.has(item.key)).length;
-  const allDone = items.length > 0 && done === items.length;
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
 
   return (
@@ -459,25 +458,6 @@ export default function KeyConclusion({
             })}
           </ol>
         )}
-
-        <div className="report-screen-only flex justify-end">
-          <a
-            href="#listing"
-            className="text-15 inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-bold transition-colors"
-            style={
-              allDone
-                ? { backgroundColor: P.brand, color: '#fff' }
-                : {
-                    backgroundColor: '#fff',
-                    color: '#10233A',
-                    border: `1px solid ${P.line}`,
-                  }
-            }
-          >
-            임차인 찾기
-            <ArrowRight size={18} aria-hidden />
-          </a>
-        </div>
       </section>
     </div>
   );
