@@ -98,11 +98,14 @@ const FIT_LABEL: Record<string, string> = {
   water_supply: '급배수',
 };
 
-const BADGE_TEXT: Record<string, { text: string; color: string }> = {
-  추천: { text: '추천', color: P.brand },
-  조건부: { text: '조건부 추천', color: P.amber },
-  보류: { text: '판단 보류', color: P.amber },
-  비추천: { text: '비추천', color: P.caution },
+const BADGE_TEXT: Record<
+  string,
+  { text: string; color: string; wash: string }
+> = {
+  추천: { text: '추천', color: P.brand, wash: P.blueWash },
+  조건부: { text: '조건부 추천', color: P.amber, wash: P.amberWash },
+  보류: { text: '판단 보류', color: P.amber, wash: P.amberWash },
+  비추천: { text: '비추천', color: P.caution, wash: P.rose },
 };
 
 // 받침에 따라 을/를
@@ -303,9 +306,16 @@ export default function KeyConclusion({
             {name ?? '추천 결과 없음'}
           </h3>
           {badgeText && (
-            <p className="text-15 font-bold" style={{ color: badgeText.color }}>
+            <span
+              className="text-15 mt-1 inline-flex w-fit items-center rounded-full border px-3.5 py-1.5 font-bold"
+              style={{
+                color: badgeText.color,
+                backgroundColor: badgeText.wash,
+                borderColor: `${badgeText.color}33`,
+              }}
+            >
               {badgeText.text}
-            </p>
+            </span>
           )}
         </div>
 
