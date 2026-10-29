@@ -199,6 +199,17 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(self.row(rows, "clean_false_positives")["mean"], 0.5)
         self.assertFalse([r for r in rows if r["metric"] == "seeded_false_positives"])
 
+    def test_clean_false_positives_also_reported_without_failed_cases(self):
+        bad = result("k1", [issue("A", "factual_error", ["fa1"])])
+        scores = [
+            score_case(clean_case("k1"), bad, CANDIDATES),
+            score_case(clean_case("k2"), result("k2", status="failed", end_event={}), CANDIDATES),
+        ]
+        rows = summarize(scores)
+        self.assertEqual(self.row(rows, "clean_false_positives")["mean"], 0.5)
+        done = self.row(rows, "clean_false_positives_done")
+        self.assertEqual((done["mean"], done["n"]), (1.0, 1))
+
     def test_real_recall_caps_and_skips_zero_denominator(self):
         issues = [issue(f"U{i}", "missing_evidence", ["fa1"]) for i in range(5)]
         scores = [

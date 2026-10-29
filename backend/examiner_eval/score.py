@@ -151,6 +151,15 @@ def _only(source: str, attr: str) -> Callable[[CaseScore], float | None]:
     return lambda score: float(getattr(score, attr)) if score.source == source else None
 
 
+def _done(source: str, attr: str) -> Callable[[CaseScore], float | None]:
+    def value(score: CaseScore) -> float | None:
+        if score.source != source or score.failed:
+            return None
+        return float(getattr(score, attr))
+
+    return value
+
+
 def _all(attr: str) -> Callable[[CaseScore], float | None]:
     return lambda score: float(getattr(score, attr))
 
@@ -160,6 +169,7 @@ METRICS: dict[str, Callable[[CaseScore], float | None]] = {
     **{f"{k}_exact": _kind_value(k, "exact") for k in SEED_KINDS},
     "real_recall": _real_recall,
     "clean_false_positives": _only("clean", "false_positives"),
+    "clean_false_positives_done": _done("clean", "false_positives"),
     "seeded_false_positives": _only("seeded", "false_positives"),
     "other_issues": _all("other_issues"),
     "first_rejected": _all("first_rejected"),
@@ -266,6 +276,7 @@ EXPLAIN = {
     "E3_exact": "E3 정확히 찾은 비율: 지적 근거에 잘못 붙인 자료가 들어 있는 비율",
     "real_recall": "실제 초안 찾은 비율: 근거 없는 문장이 있는 후보 중 지적된 비율(최대 4개 기준)",
     "clean_false_positives": "깨끗한 초안 오지적: 오류 없는 초안에서 나온 근거·범위·사실 지적 평균",
+    "clean_false_positives_done": "깨끗한 초안 오지적(완료만): 실패한 사례를 빼고 낸 평균",
     "seeded_false_positives": "오류 심은 초안 오지적: 심은 오류가 아닌 곳을 지적한 평균 개수",
     "other_issues": "기타 지적: 행동 조건·점수 중복 지적의 사례당 평균 개수(오지적으로 세지 않음)",
     "first_rejected": "첫 제출 거절 비율: 첫 제출이 형식 검사에서 거절된 사례 비율",
