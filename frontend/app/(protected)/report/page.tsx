@@ -8,9 +8,6 @@ import PropertyMap from '@/components/report/PropertyMap';
 import { candidateChecks } from '@/lib/api/candidates';
 import IndustryRankingList from '@/components/report/IndustryRankingList';
 import { INDUSTRIES } from '@/lib/api/industries';
-import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
-import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
-import OpenCloseTrendSection from '@/components/report/OpenCloseTrendSection';
 import {
   FactCompetitionSection,
   FactFloatingPopulationSection,
@@ -18,11 +15,16 @@ import {
 } from '@/components/report/FactSections';
 import EvaluatorReviews from '@/components/report/EvaluatorReviews';
 import KeyConclusion from '@/components/report/KeyConclusion';
-import TenantMatchingProposal from '@/components/report/TenantMatchingProposal';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import './report.css';
 import { mockReportData } from '@/lib/mockData/report';
+import {
+  mockCompetitionFacts,
+  mockFloatingPopulationFacts,
+  mockLifecycleFacts,
+  mockRecommendedIndustryCodes,
+} from '@/lib/mockData/reportPresentation';
 import { mockReports, type ReportSummary } from '@/lib/mockData/reports';
 import { mockProperty } from '@/lib/mockData/property';
 import {
@@ -59,7 +61,6 @@ const chapterEyebrows: Record<string, string> = {
   customers: 'FOOT TRAFFIC',
   competition: 'COMPETITION',
   lifecycle: 'OPEN · CLOSE',
-  listing: 'NEXT STEP',
 };
 
 const chapters = [
@@ -70,28 +71,24 @@ const chapters = [
   ['customers', '유동인구'],
   ['competition', '경쟁업체'],
   ['lifecycle', '개폐업 추이'],
-  ['listing', '임차인 찾기'],
 ] as const;
 
 function Chapter({
   id,
   title,
   aside,
-  screenOnly = false,
   children,
 }: {
   id: string;
   title: string;
   // 설명 문장과 같은 줄 오른쪽에 붙는 보조 정보
   aside?: ReactNode;
-  // 화면에서만 보이고 인쇄에서는 빠지는 장(임차인 찾기)
-  screenOnly?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       id={id}
-      className={`report-chapter scroll-mt-24 pb-16 pt-12${screenOnly ? ' report-screen-only' : ''}`}
+      className="report-chapter scroll-mt-24 pb-16 pt-12"
       style={{ borderColor: colors.neutral.border }}
     >
       <header className="chapter-heading">
@@ -112,9 +109,7 @@ function Chapter({
             <p className="chapter-description">
               {id === 'space'
                 ? '분석 대상 상가의 기본 정보를 확인하세요.'
-                : id === 'listing'
-                  ? '추천 업종을 바탕으로 실제 임차인을 찾아보세요.'
-                  : title}
+                : title}
             </p>
             {aside && <span className="chapter-aside">{aside}</span>}
           </div>
@@ -269,13 +264,19 @@ export default function ReportPage() {
     : [];
   const floatingPopulationData = allFacts
     ? floatingPopulationFromFacts(allFacts)
-    : null;
+    : isDemoReport
+      ? mockFloatingPopulationFacts
+      : null;
   const competitorData = allFacts
     ? competitionFromFacts(allFacts, candidateCodes)
-    : null;
+    : isDemoReport
+      ? mockCompetitionFacts
+      : null;
   const businessLifecycleData = allFacts
     ? lifecycleFromFacts(allFacts, candidateCodes)
-    : null;
+    : isDemoReport
+      ? mockLifecycleFacts
+      : null;
 
   const analyzedDate =
     demoReport?.analyzedDate ??
@@ -294,18 +295,6 @@ export default function ReportPage() {
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
   const isPropertyPreview = !vacancyInput && !analysisResult && !building;
-  const matchingPropertyInfo = {
-    address: displayAddress,
-    floor:
-      vacancyInput?.floorUnit.trim() ||
-      (isPropertyPreview ? mockReportData.floor : '층 정보 확인 필요'),
-    area:
-      areaValue !== null && areaValue !== undefined
-        ? formatArea(areaValue)
-        : isPropertyPreview
-          ? mockReportData.area
-          : '면적 확인 필요',
-  };
   const facilityValue = building?.facility.value;
   const facilityLabel = facilityValue
     ? FACILITY_LABELS[facilityValue]
@@ -330,13 +319,6 @@ export default function ReportPage() {
   const topName = analysisResult
     ? top?.industry_name
     : mockReportData.recommended[0]?.name;
-  const matchingRecommendations = analysisResult
-    ? analysisResult.top5.slice(0, 3).map((candidate) => ({
-        name: candidate.industry_name,
-      }))
-    : mockReportData.recommended.slice(0, 3).map((candidate) => ({
-        name: candidate.name,
-      }));
   const topChecks = top ? candidateChecks(top, factIndex) : [];
   // 결과 전체에 걸린 확인 조건과 한계(평가 미완료 등)
   const resultChecks = analysisResult
@@ -358,7 +340,7 @@ export default function ReportPage() {
           href={`#${id}`}
           onClick={() => setMenuOpen(false)}
           aria-current={active === id ? 'location' : undefined}
-          className={`flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base${id === 'listing' ? ' report-screen-only' : ''}`}
+          className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base"
           style={{
             color: active === id ? reportPalette.brand : colors.text.secondary,
             fontWeight: active === id ? 700 : 400,
@@ -617,20 +599,14 @@ export default function ReportPage() {
 
               title="주변에는 어떤 사람들이 오갈까요?"
             >
-              {analysisResult ? (
-                floatingPopulationData ? (
-                  <FactFloatingPopulationSection
-                    data={floatingPopulationData}
-                  />
-                ) : (
-                  <MissingData
-                    label="유동인구"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {floatingPopulationData ? (
+                <FactFloatingPopulationSection data={floatingPopulationData} />
               ) : (
-                <FloatingPopulationSection reportLayout compactReference />
+                <MissingData
+                  label="유동인구"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
             </Chapter>
             <Chapter
@@ -638,25 +614,23 @@ export default function ReportPage() {
 
               title="같은 업종은 얼마나 있을까요?"
             >
-              {analysisResult ? (
-                competitorData ? (
-                  <FactCompetitionSection
-                    data={competitorData}
-                    recommendedCodes={
-                      new Set(
-                        analysisResult.top5.map((item) => item.industry_code)
-                      )
-                    }
-                  />
-                ) : (
-                  <MissingData
-                    label="경쟁업체"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {competitorData ? (
+                <FactCompetitionSection
+                  data={competitorData}
+                  recommendedCodes={
+                    analysisResult
+                      ? new Set(
+                          analysisResult.top5.map((item) => item.industry_code)
+                        )
+                      : mockRecommendedIndustryCodes
+                  }
+                />
               ) : (
-                <CompetitorAnalysisSection reportLayout />
+                <MissingData
+                  label="경쟁업체"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
             </Chapter>
             <Chapter
@@ -664,25 +638,15 @@ export default function ReportPage() {
 
               title="새로 열고, 문을 닫는 흐름은?"
             >
-              {analysisResult ? (
-                businessLifecycleData ? (
-                  <FactLifecycleSection data={businessLifecycleData} />
-                ) : (
-                  <MissingData
-                    label="개폐업"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {businessLifecycleData ? (
+                <FactLifecycleSection data={businessLifecycleData} />
               ) : (
-                <OpenCloseTrendSection reportLayout compactReference />
+                <MissingData
+                  label="개폐업"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
-            </Chapter>
-            <Chapter id="listing" title="임차인 찾기" screenOnly>
-              <TenantMatchingProposal
-                recommendations={matchingRecommendations}
-                propertyInfo={matchingPropertyInfo}
-              />
             </Chapter>
           </main>
         </div>

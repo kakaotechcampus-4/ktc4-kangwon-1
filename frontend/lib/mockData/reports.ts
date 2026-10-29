@@ -1,3 +1,5 @@
+import { mockProperty } from '@/lib/mockData/property';
+
 /**
  * 리포트 목록 목업 — 백엔드에 목록 API가 생기기 전까지 /reports 화면을 채운다.
  * 점수는 리포트의 업종 적합도(확인된 자료 기준 하한)와 같은 0~100 값이다.
@@ -15,7 +17,7 @@ export type ReportSummary = {
 export const mockReports: ReportSummary[] = [
   {
     id: 'mock-hupyeong',
-    address: '춘천시 후평동 234-5',
+    address: mockProperty.address,
     floor: '2층',
     areaPyeong: 26,
     analyzedDate: '2026.08.22',
@@ -24,7 +26,7 @@ export const mockReports: ReportSummary[] = [
   },
   {
     id: 'mock-hyoja',
-    address: '춘천시 효자동 181-3',
+    address: '서울 송파구 오금로 404',
     floor: '1층',
     areaPyeong: 18,
     analyzedDate: '2026.08.15',
@@ -33,7 +35,7 @@ export const mockReports: ReportSummary[] = [
   },
   {
     id: 'mock-soyang',
-    address: '춘천시 소양로 45-2',
+    address: '서울 송파구 문정로 12',
     floor: '1층',
     areaPyeong: 32,
     analyzedDate: '2026.08.08',

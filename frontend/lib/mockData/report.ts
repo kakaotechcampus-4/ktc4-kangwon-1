@@ -1435,17 +1435,9 @@ export const mockReportData = {
       qoq_change: -4.6,
     } as FloatingPopulationTrend,
 
-    radius_profile: {
-      points: [
-        { radius_m: 50, daily_avg: 210 },
-        { radius_m: 100, daily_avg: 780 },
-        { radius_m: 200, daily_avg: 1950 },
-        { radius_m: 300, daily_avg: 3120 },
-        { radius_m: 500, daily_avg: 4820 },
-      ],
-      method:
-        '반경 안과 겹치는 상권의 길단위인구를 면적 비례로 안분해 추정했습니다.',
-    } as FloatingPopulationRadiusProfile,
+    // 현재 보고서 화면은 전체 반경 대표값만 사용하며, 반경별 누적 추정치는
+    // fact 기반 실제 화면과 맞추기 위해 예시 데이터에서 제외한다.
+    radius_profile: null,
 
     selection: {
       applied: false,
