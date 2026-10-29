@@ -304,7 +304,7 @@ export default function KeyConclusion({
   return (
     <div className="flex w-full flex-col">
       {/* ① 결론 패널 — 리포트에서 가장 먼저 읽혀야 하는 곳이라 유일하게 짙은 면으로 띄운다 */}
-      <section className="relative overflow-hidden rounded-[28px] bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
+      <section className="relative overflow-hidden bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
         {/* 오로라 배경 — 모서리에만 빛이 은은하게 번진다 */}
         <span
           aria-hidden
@@ -344,9 +344,11 @@ export default function KeyConclusion({
               <p className="text-sm font-bold text-[#9FB4D6]">검토 방향</p>
               <p className="break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
                 {withObject(name)} 먼저 검토하되,{' '}
-                {items.length > 0
-                  ? `아래 ${items.length}가지를 직접 확인한 뒤`
-                  : '현장을 직접 확인한 뒤'}{' '}
+                <span className="text-[#FFCF7A]">
+                  {items.length > 0
+                    ? `아래 ${items.length}가지를 직접 확인한 뒤`
+                    : '현장을 직접 확인한 뒤'}
+                </span>{' '}
                 결정하세요.
               </p>
               {items.length > 0 && (
