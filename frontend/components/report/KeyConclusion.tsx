@@ -100,12 +100,22 @@ const FIT_LABEL: Record<string, string> = {
 
 const BADGE_TEXT: Record<
   string,
-  { text: string; color: string; wash: string }
+  { text: string; color: string; wash: string; onDark: string }
 > = {
-  추천: { text: '추천', color: P.brand, wash: P.blueWash },
-  조건부: { text: '조건부 추천', color: P.amber, wash: P.amberWash },
-  보류: { text: '판단 보류', color: P.amber, wash: P.amberWash },
-  비추천: { text: '비추천', color: P.caution, wash: P.rose },
+  추천: { text: '추천', color: P.brand, wash: P.blueWash, onDark: '#BFD2FF' },
+  조건부: {
+    text: '조건부 추천',
+    color: P.amber,
+    wash: P.amberWash,
+    onDark: '#FFCF7A',
+  },
+  보류: {
+    text: '판단 보류',
+    color: P.amber,
+    wash: P.amberWash,
+    onDark: '#FFCF7A',
+  },
+  비추천: { text: '비추천', color: P.caution, wash: P.rose, onDark: '#FFB3C0' },
 };
 
 // 받침에 따라 을/를
@@ -290,78 +300,85 @@ export default function KeyConclusion({
   const done = items.filter((item) => checked.has(item.key)).length;
   const allDone = items.length > 0 && done === items.length;
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
-  const mark =
-    'linear-gradient(transparent 58%, #FFE1A6 58%, #FFE1A6 92%, transparent 92%)';
 
   return (
     <div className="flex w-full flex-col">
-      {/* ① 같은 행: 가장 먼저 검토할 업종 | 검토 방향 */}
-      <section className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
-        <div className="flex flex-col gap-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-[#66758A]">
-            <Building2 size={18} aria-hidden />
-            가장 먼저 검토할 업종
-          </p>
-          <h3 className="text-34 sm:text-44 break-keep leading-[1.2] font-extrabold tracking-[-0.03em] text-[#10233A]">
-            {name ?? '추천 결과 없음'}
-          </h3>
-          {badgeText && (
-            <span
-              className="text-15 mt-1 inline-flex w-fit items-center rounded-full border px-3.5 py-1.5 font-bold"
-              style={{
-                color: badgeText.color,
-                backgroundColor: badgeText.wash,
-                borderColor: `${badgeText.color}33`,
-              }}
-            >
-              {badgeText.text}
-            </span>
+      {/* ① 결론 패널 — 리포트에서 가장 먼저 읽혀야 하는 곳이라 유일하게 짙은 면으로 띄운다 */}
+      <section className="relative overflow-hidden rounded-[28px] bg-[#10233A] px-6 py-8 text-white sm:px-10 sm:py-10">
+        {/* 꾸밈용 동심원 — 랜딩 히어로와 같은 언어 */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-24 size-[340px] rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(36,83,214,0.55) 0%, rgba(36,83,214,0.18) 38%, transparent 70%)',
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -bottom-32 size-[260px] rounded-full border border-white/10"
+        />
+
+        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:gap-14">
+          <div className="flex flex-col gap-3">
+            <p className="flex items-center gap-2 text-sm font-bold text-[#9FB4D6]">
+              <Building2 size={17} aria-hidden />
+              가장 먼저 검토할 업종
+            </p>
+            <h3 className="break-keep text-3xl leading-[1.2] font-extrabold tracking-[-0.03em] sm:text-32">
+              {name ?? '추천 결과 없음'}
+            </h3>
+            {badgeText && (
+              <span
+                className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold"
+                style={{
+                  color: '#10233A',
+                  backgroundColor: badgeText.onDark,
+                }}
+              >
+                {badgeText.text}
+              </span>
+            )}
+          </div>
+
+          {name && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-bold text-[#9FB4D6]">검토 방향</p>
+              <p className="break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
+                {withObject(name)} 먼저 검토하되,{' '}
+                <span className="text-[#FFCF7A]">
+                  {items.length > 0
+                    ? `아래 ${items.length}가지를 직접 확인한 뒤`
+                    : '현장을 직접 확인한 뒤'}
+                </span>{' '}
+                결정하세요.
+              </p>
+              {items.length > 0 && (
+                <a
+                  href="#key-checks"
+                  className="mt-1 inline-flex w-fit items-center gap-1.5 text-15 font-semibold text-white/80 transition-colors hover:text-white"
+                >
+                  확인할 것 보기
+                  <ArrowRight size={16} className="rotate-90" aria-hidden />
+                </a>
+              )}
+            </div>
           )}
         </div>
-
-        {name && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm font-bold text-[#66758A]">검토 방향</p>
-            <p className="sm:text-27 text-2xl break-keep leading-[1.5] font-bold tracking-[-0.02em] text-[#10233A]">
-              {withObject(name)} 먼저 검토하되,{' '}
-              {items.length > 0 ? (
-                <>
-                  <span
-                    style={{
-                      backgroundImage: mark,
-                      boxDecorationBreak: 'clone',
-                      WebkitBoxDecorationBreak: 'clone',
-                    }}
-                  >
-                    아래 {items.length}가지를 직접 확인한 뒤
-                  </span>{' '}
-                  결정하세요.
-                </>
-              ) : (
-                <span
-                  style={{
-                    backgroundImage: mark,
-                    boxDecorationBreak: 'clone',
-                    WebkitBoxDecorationBreak: 'clone',
-                  }}
-                >
-                  현장을 직접 확인한 뒤 결정하세요.
-                </span>
-              )}
-            </p>
-          </div>
-        )}
       </section>
 
       {/* ② 입점 전 직접 확인하세요 — 이 장의 중심 */}
-      <section className="mt-14 flex flex-col gap-6">
+      <section
+        id="key-checks"
+        className="mt-12 flex scroll-mt-28 flex-col gap-5"
+      >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <h3 className="sm:text-27 flex items-center gap-2.5 text-2xl font-extrabold tracking-[-0.02em] text-[#10233A]">
-              <TriangleAlert size={26} color={P.amber} aria-hidden />
+            <h3 className="flex items-center gap-2 text-xl font-extrabold tracking-[-0.02em] text-[#10233A] sm:text-2xl">
+              <TriangleAlert size={22} color={P.amber} aria-hidden />
               입점 전 직접 확인하세요.
             </h3>
-            <p className="text-base text-[#5B6470]">
+            <p className="text-15 text-[#5B6470]">
               현장에서 확인한 항목은 체크해 두세요.
             </p>
           </div>
@@ -398,14 +415,14 @@ export default function KeyConclusion({
               return (
                 <li
                   key={item.key}
-                  className="grid grid-cols-[44px_1fr] gap-x-4 gap-y-3 py-7 sm:grid-cols-[52px_1fr_minmax(0,420px)] sm:gap-x-6"
+                  className="grid grid-cols-[40px_1fr] gap-x-4 gap-y-3 py-6 sm:grid-cols-[44px_1fr_minmax(0,400px)] sm:gap-x-6"
                 >
                   <button
                     type="button"
                     onClick={() => toggle(item.key)}
                     aria-pressed={isDone}
                     aria-label={`${item.title} 확인 ${isDone ? '취소' : '완료'}`}
-                    className="flex size-11 items-center justify-center rounded-full border-2 transition-colors sm:size-12"
+                    className="flex size-10 items-center justify-center rounded-full border-2 transition-colors sm:size-11"
                     style={
                       isDone
                         ? {
@@ -433,7 +450,7 @@ export default function KeyConclusion({
                         {String(i + 1).padStart(2, '0')}
                       </span>
                       <p
-                        className={`text-xl font-extrabold tracking-[-0.01em] ${
+                        className={`text-lg font-extrabold tracking-[-0.01em] ${
                           isDone
                             ? 'text-[#8A97A5] line-through decoration-2'
                             : 'text-[#10233A]'
@@ -447,7 +464,7 @@ export default function KeyConclusion({
                         </span>
                       )}
                     </div>
-                    <p className="text-17 break-keep leading-[1.7] text-[#3D4A5C]">
+                    <p className="text-base break-keep leading-[1.7] text-[#3D4A5C]">
                       {item.how}
                     </p>
                   </div>
