@@ -47,7 +47,8 @@ body {
 
 /*
  * 글씨 크기 배율 — 이 값 하나만 바꾸면 전체 글씨 크기가 같이 바뀐다.
- * 타깃 사용자(50대 이상 임대인)의 가독성을 위해 1.125배로 시작한다.
+ * 타깃 사용자(50대 이상 임대인)의 가독성을 위해 데스크톱은 1.125배를 쓰고,
+ * 모바일은 화면 밀도를 고려해 기본 크기(1배)로 맞춘다.
  * 간격(padding·margin·gap)은 rem 기준이라 루트 글씨 크기는 건드리지 않고,
  * 아래 글씨 크기 토큰에만 배율을 곱한다.
  * 특정 영역만 배율에서 빼려면 그 요소에 [--font-scale:1]을 지정한다.
@@ -57,6 +58,38 @@ body {
 :root {
   --site-font-scale: 1.125;
   --font-scale: var(--site-font-scale);
+  --mobile-space-scale: 1;
+  --spacing: calc(0.25rem * var(--mobile-space-scale));
+}
+
+/* 모바일 전 화면에서 글자와 여백을 같은 기준으로 줄여 페이지별 밀도를 맞춘다. */
+@media (max-width: 640px) {
+  :root {
+    --site-font-scale: 1;
+    --mobile-space-scale: 0.9;
+  }
+
+  /* 모바일 히어로가 너무 짧아 보이지 않도록 첫 섹션 높이를 확보한다. */
+  .landing-hero {
+    height: 650px !important;
+  }
+
+  /* 네비게이션 아래의 빈 공간을 줄이도록 건물 그림과 워드마크를 함께 올린다. */
+  .hero-blocks {
+    bottom: 270px !important;
+  }
+
+  .hero-blocks-wordmark {
+    top: calc(39% - 50px) !important;
+  }
+
+  .hero-wordmark-text {
+    font-size: clamp(52px, 16.5vw, 150px) !important;
+  }
+
+  .slogan-fill {
+    -webkit-text-stroke-width: 0.75px;
+  }
 }
 
 /*

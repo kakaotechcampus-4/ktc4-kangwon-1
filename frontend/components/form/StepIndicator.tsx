@@ -25,7 +25,7 @@ type StepIndicatorProps = {
 
 export default function StepIndicator({ currentStep = 1 }: StepIndicatorProps) {
   return (
-    <div className="flex max-w-full items-center py-4">
+    <div className="flex max-w-full items-center py-3 sm:py-4">
       {steps.map((step, index) => {
         const stepNumber = index + 1;
         const isDone = stepNumber < currentStep;

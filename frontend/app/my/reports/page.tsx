@@ -105,7 +105,7 @@ function MyReports() {
             className="font-extrabold tracking-[-0.04em]"
             style={{
               color: colors.brand.dark,
-              fontSize: 'clamp(30px, 3vw, 42px)',
+              fontSize: 'clamp(26px, 3vw, 42px)',
             }}
           >
             내 분석 기록
