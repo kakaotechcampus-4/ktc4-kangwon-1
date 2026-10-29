@@ -23,7 +23,7 @@ from examiner_eval.runner import (
     run_pending,
 )
 from examiner_eval.score import REPORT_FILES, rejection_reasons, score_case, write_report
-from examiner_eval.store import candidate_facts, copy_store, load_contexts
+from examiner_eval.store import candidate_facts, copy_store, fact_sources, load_contexts
 from examiner_eval.variants import VARIANTS
 
 CASES = "cases.json"
@@ -269,7 +269,16 @@ def report(args) -> int:
     if missing:
         return _refuse("복사본 DB에 없는 요청입니다: " + ", ".join(missing))
     facts = candidate_facts(args.db, loaded)
-    scores = [score_case(cases[r.case_id], r, facts[cases[r.case_id].request_id]) for r in results]
+    sources = fact_sources(args.db, loaded)
+    scores = [
+        score_case(
+            cases[r.case_id],
+            r,
+            facts[cases[r.case_id].request_id],
+            sources[cases[r.case_id].request_id],
+        )
+        for r in results
+    ]
     splits = {case_id: case.split for case_id, case in cases.items()}
     rejections: dict = {}
     for run_dir, rows in per_run:

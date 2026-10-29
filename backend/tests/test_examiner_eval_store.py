@@ -116,6 +116,14 @@ class StoreTests(unittest.IsolatedAsyncioTestCase):
         found = store.candidate_facts(self.path, contexts)[ctx.request_id]
         self.assertTrue({kept, "f_second-same-key"} <= found[code])
 
+    async def test_fact_sources_map_every_fact_to_its_source(self):
+        await self.submit()
+        contexts = store.load_contexts(self.path)
+        ctx = contexts[0]
+        sources = store.fact_sources(self.path, contexts)[ctx.request_id]
+        for (_, source, _), fid in ctx.facts.items():
+            self.assertEqual(sources[fid], source)
+
     async def test_copy_refuses_existing(self):
         dest = Path(self.temp.name) / "copy.sqlite3"
         self.assertEqual(store.copy_store(self.path, dest), dest)

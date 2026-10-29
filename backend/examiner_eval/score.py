@@ -42,6 +42,7 @@ class CaseScore:
     packet_chars: int = 0
     omitted_fact_ids: int = 0
     model: str | None = field(default=None, compare=False)
+    related: dict[str, bool] = field(default_factory=dict)
 
 
 def _candidates(issue: dict, candidate_facts: dict[str, set[str]]) -> set[str]:
@@ -67,6 +68,23 @@ def _is_exact(seed: Seed, matched: list[dict]) -> bool:
     return False
 
 
+def _same_source(
+    seed: Seed,
+    matched: list[dict],
+    candidate_facts: dict[str, set[str]],
+    sources: dict[str, str] | None,
+) -> bool:
+    if not sources:
+        return False
+    wanted = {sources.get(f) for f in seed.support_fact_ids} - {None}
+    own = candidate_facts.get(seed.industry_code, set())
+    return any(
+        f in own and sources.get(f) in wanted
+        for issue in matched
+        for f in issue.get("fact_ids") or []
+    )
+
+
 def _unsupported_candidates(draft: dict) -> list[str]:
     codes = []
     for candidate in draft.get("top5") or []:
@@ -78,10 +96,16 @@ def _unsupported_candidates(draft: dict) -> list[str]:
     return codes
 
 
-def score_case(case: Case, result: CaseResult, candidate_facts: dict[str, set[str]]) -> CaseScore:
+def score_case(
+    case: Case,
+    result: CaseResult,
+    candidate_facts: dict[str, set[str]],
+    sources: dict[str, str] | None = None,
+) -> CaseScore:
     issues = result.issues
     found: dict[str, bool] = {}
     exact: dict[str, bool] = {}
+    related: dict[str, bool] = {}
     false_positives = 0
     denominator = 0
     scope_issues = [i for i in issues if i.get("kind") in SCOPE_KINDS]
@@ -91,6 +115,8 @@ def score_case(case: Case, result: CaseResult, candidate_facts: dict[str, set[st
             matched = [i for i in issues if _matches(seed, i, candidate_facts)]
             found[seed.kind] = bool(matched)
             exact[seed.kind] = _is_exact(seed, matched)
+            if seed.kind == "E1":
+                related["E1"] = exact["E1"] or _same_source(seed, matched, candidate_facts, sources)
         false_positives = sum(
             1
             for issue in scope_issues
@@ -129,6 +155,7 @@ def score_case(case: Case, result: CaseResult, candidate_facts: dict[str, set[st
         packet_chars=result.packet_chars,
         omitted_fact_ids=result.omitted_fact_ids,
         model=result.model,
+        related=related,
     )
 
 
@@ -167,6 +194,7 @@ def _all(attr: str) -> Callable[[CaseScore], float | None]:
 METRICS: dict[str, Callable[[CaseScore], float | None]] = {
     **{f"{k}_found": _kind_value(k, "found") for k in SEED_KINDS},
     **{f"{k}_exact": _kind_value(k, "exact") for k in SEED_KINDS},
+    "E1_source": _kind_value("E1", "related"),
     "real_recall": _real_recall,
     "clean_false_positives": _only("clean", "false_positives"),
     "clean_false_positives_done": _done("clean", "false_positives"),
@@ -188,6 +216,7 @@ RATES = {
     "E1_exact",
     "E2_exact",
     "E3_exact",
+    "E1_source",
     "real_recall",
     "first_rejected",
     "failed",
@@ -274,6 +303,7 @@ EXPLAIN = {
     "E1_exact": "E1 정확히 찾은 비율: 지적 근거에 원래 뒷받침하던 자료가 들어 있는 비율",
     "E2_exact": "E2 정확히 찾은 비율: 지적 근거에 잘못 붙인 자료가 들어 있는 비율",
     "E3_exact": "E3 정확히 찾은 비율: 지적 근거에 잘못 붙인 자료가 들어 있는 비율",
+    "E1_source": "E1 같은 원천: 원래 근거나 같은 원천의 그 후보 근거를 들어 지적한 비율",
     "real_recall": "실제 초안 찾은 비율: 근거 없는 문장이 있는 후보 중 지적된 비율(최대 4개 기준)",
     "clean_false_positives": "깨끗한 초안 오지적: 오류 없는 초안에서 나온 근거·범위·사실 지적 평균",
     "clean_false_positives_done": "깨끗한 초안 오지적(완료만): 실패한 사례를 빼고 낸 평균",
@@ -409,6 +439,7 @@ def write_report(
         "split",
         "source",
         *[f"{k}_{a}" for a in ("found", "exact") for k in SEED_KINDS],
+        "E1_source",
         "real_found",
         "denominator",
         "false_positives",
@@ -430,6 +461,7 @@ def write_report(
             for a in ("found", "exact")
             for k in SEED_KINDS
         ]
+        flags.append("" if "E1" not in s.related else int(s.related["E1"]))
         real = sum(s.found.values()) if s.source == "real" else ""
         rows.append(
             [s.case_id, s.variant, s.repeat, s.split, s.source, *flags, real, s.denominator]

@@ -90,6 +90,20 @@ class ScoreCaseTests(unittest.TestCase):
         self.assertEqual(score.false_positives, 0)
         self.assertEqual(score.denominator, 3)
 
+    def test_e1_same_source_citation_counts_as_related(self):
+        seed = Seed("E1", "A", "reasons_segments", "missing_evidence", ("fa1",), None)
+        sources = {"fa1": "commercial_area", "fa2": "floating_population", "fa3": "commercial_area"}
+
+        def judged(fact, known=sources):
+            issues = [issue("A", "missing_evidence", [fact])]
+            score = score_case(seeded([seed]), result(issues=issues), CANDIDATES, known)
+            return score.exact["E1"], score.related["E1"]
+
+        self.assertEqual(judged("fa1"), (True, True))
+        self.assertEqual(judged("fa3"), (False, True))
+        self.assertEqual(judged("fa2"), (False, False))
+        self.assertEqual(judged("fa3", None), (False, False))
+
     def test_issue_without_code_matched_by_fact(self):
         issues = [issue(None, "missing_evidence", ["fa1"]), issue(None, "scope_mismatch", ["fb2"])]
         score = score_case(seeded([E1, E2]), result(issues=issues), CANDIDATES)
@@ -209,6 +223,21 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(self.row(rows, "clean_false_positives")["mean"], 0.5)
         done = self.row(rows, "clean_false_positives_done")
         self.assertEqual((done["mean"], done["n"]), (1.0, 1))
+
+    def test_e1_source_rate_in_summary(self):
+        seed = Seed("E1", "A", "reasons_segments", "missing_evidence", ("fa1",), None)
+        sources = {"fa1": "commercial_area", "fa3": "commercial_area"}
+        scores = [
+            score_case(
+                seeded([seed], case_id=f"s{n}"),
+                result(f"s{n}", [issue("A", "missing_evidence", [fact])]),
+                CANDIDATES,
+                sources,
+            )
+            for n, fact in enumerate(["fa3", "fb1"])
+        ]
+        row = self.row(summarize(scores), "E1_source")
+        self.assertEqual((row["mean"], row["n"]), (0.5, 2))
 
     def test_real_recall_caps_and_skips_zero_denominator(self):
         issues = [issue(f"U{i}", "missing_evidence", ["fa1"]) for i in range(5)]
@@ -333,6 +362,8 @@ class CliReportTests(unittest.TestCase):
         self.assertEqual((code, err), (0, ""))
         for name in ("요약.md", "요약.csv", "사례별.csv"):
             self.assertTrue((out / name).exists())
+        header = (out / "사례별.csv").read_text(encoding="utf-8-sig").splitlines()[0]
+        self.assertIn("E1_source", header.split(","))
         self.assertIn("측정 숫자", (out / "요약.md").read_text(encoding="utf-8"))
         code, _, err = self.call(*self.report_args(out, self.run_dir))
         self.assertEqual(code, 2)

@@ -119,6 +119,20 @@ def candidate_facts(
     return found
 
 
+def fact_sources(db_path: Path, contexts: list[RequestContext]) -> dict[str, dict[str, str]]:
+    found: dict[str, dict[str, str]] = {}
+    with closing(open_readonly(db_path)) as db:
+        for ctx in contexts:
+            found[ctx.request_id] = {
+                fact["fact_id"]: fact["source"]
+                for fact in db.execute(
+                    "SELECT fact_id, source FROM facts WHERE request_id=? AND snapshot_id=?",
+                    (ctx.request_id, ctx.snapshot_id),
+                )
+            }
+    return found
+
+
 def make_scope(ctx: RequestContext, db_path: Path) -> CaptureScope:
     return CaptureScope(
         request_id=ctx.request_id,
