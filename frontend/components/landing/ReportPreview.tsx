@@ -310,8 +310,9 @@ function WhyScreen() {
         {tab === '개폐업' && (
           <div className="flex flex-col gap-4">
             <p className="text-lg leading-snug font-extrabold text-[#10233A]">
-              네일·뷰티는 개업이 활발하고 최근 폐업률도 낮아{' '}
-              <span className="text-[#2453D6]">안정적</span>이에요
+              네일·뷰티는 개업이 활발하고
+              <br />
+              폐업률도 낮아 <span className="text-[#2453D6]">안정적</span>이에요
             </p>
             <div className="flex items-center gap-5">
               <div className="relative h-[72px] w-[124px] shrink-0">
