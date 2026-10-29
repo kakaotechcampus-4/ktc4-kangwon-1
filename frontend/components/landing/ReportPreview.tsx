@@ -274,7 +274,7 @@ function WhyScreen() {
         )}
 
         {tab === '경쟁 업체' && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-8">
             <p className="text-lg leading-snug font-extrabold text-[#10233A]">
               <span className="text-[#2453D6]">네일·뷰티, 코인세탁실</span>은
               주변에 같은 업종이 적고,
@@ -285,9 +285,9 @@ function WhyScreen() {
             <table className="w-full text-13">
               <thead>
                 <tr className="text-xs text-[#8A97A5]">
-                  <th className="pb-2 text-left font-semibold">업종</th>
-                  <th className="pb-2 text-right font-semibold">동종 점포</th>
-                  <th className="pb-2 text-right font-semibold">
+                  <th className="pb-3 text-left font-semibold">업종</th>
+                  <th className="pb-3 text-right font-semibold">동종 점포</th>
+                  <th className="pb-3 text-right font-semibold">
                     반경 2km 대비
                   </th>
                 </tr>
@@ -296,7 +296,7 @@ function WhyScreen() {
                 {COMPETITION.map(([name, count, ratio, rec]) => (
                   <tr key={name} className="border-t border-[#EEF1F5]">
                     <td
-                      className={`py-2 ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
+                      className={`py-[18px] ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
                     >
                       {name}
                       {!rec && (
@@ -305,10 +305,10 @@ function WhyScreen() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 text-right tabular-nums text-[#4B5866]">
+                    <td className="py-[18px] text-right tabular-nums text-[#4B5866]">
                       {count}개
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="py-[18px] text-right">
                       {ratio !== null && <Ratio value={ratio} />}
                     </td>
                   </tr>
@@ -319,14 +319,14 @@ function WhyScreen() {
         )}
 
         {tab === '개폐업' && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-10">
             <p className="text-lg leading-snug font-extrabold text-[#10233A]">
               네일·뷰티는 개업이 활발하고
               <br />
               폐업률도 낮아 <span className="text-[#2453D6]">안정적</span>이에요
             </p>
             <div className="flex items-center gap-5">
-              <div className="relative h-[72px] w-[124px] shrink-0">
+              <div className="relative h-[110px] w-[188px] shrink-0">
                 <svg viewBox="0 0 124 72" className="h-full w-full" aria-hidden>
                   <path
                     d="M10 66 A52 52 0 0 1 114 66"
@@ -345,29 +345,37 @@ function WhyScreen() {
                     strokeDasharray="78.4 100"
                   />
                 </svg>
-                <p className="absolute inset-x-0 bottom-0 text-center text-2xl font-extrabold text-[#10233A]">
+                <p className="absolute inset-x-0 bottom-0 text-center text-3xl font-extrabold text-[#10233A]">
                   78.4
                 </p>
               </div>
-              <div className="flex flex-col gap-1.5 text-13 text-[#3D4A5C]">
+              <div className="flex flex-col gap-2 text-sm text-[#3D4A5C]">
                 <p className="font-bold text-[#10233A]">
                   개폐업 안정성 78.4 / 100점
                 </p>
-                <p>최근 1년 폐업률 7.4% — 과거(15.8%)보다 하락</p>
+                <p>
+                  최근 1년 폐업률 7.4%
+                  <br />
+                  과거(15.8%)보다 하락
+                </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] p-3 text-center">
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] px-3 py-6 text-center">
               <div>
                 <p className="text-xs text-[#66758A]">3년 개업</p>
-                <p className="text-lg font-extrabold text-[#2453D6]">20</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#2453D6]">
+                  20
+                </p>
               </div>
               <div>
                 <p className="text-xs text-[#66758A]">3년 폐업</p>
-                <p className="text-lg font-extrabold text-[#C2410C]">9</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#C2410C]">9</p>
               </div>
               <div>
                 <p className="text-xs text-[#66758A]">순증감</p>
-                <p className="text-lg font-extrabold text-[#10233A]">▲ +11</p>
+                <p className="mt-1 text-2xl font-extrabold text-[#10233A]">
+                  ▲ +11
+                </p>
               </div>
             </div>
           </div>
