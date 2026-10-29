@@ -18,17 +18,14 @@ const examplePopulation = mockReportData.floatingPopulation;
 export default function Hero() {
   return (
     <section
-      className="relative w-full overflow-hidden"
+      className="landing-hero relative w-full overflow-hidden"
       style={{
         backgroundColor: colors.brand.wash,
         height: 'clamp(640px, 100svh, 940px)',
       }}
     >
-      {/* 꾸밈용 파란 원 — 겹친 동심원 세 겹과 가운데 은은한 빛(globals.css .hero-orb) */}
-      <span
-        aria-hidden="true"
-        className="hero-orb pointer-events-none absolute -top-[120px] -left-[160px] size-[440px] sm:-top-[140px] sm:-left-[180px] sm:size-[560px]"
-      />
+      {/* 꾸밈용 파란 원 — 겹친 동심원 세 겹과 가운데 은은한 빛(globals.css .hero-orb).
+          왼쪽 위 원은 lg에서 글 영역 덮개에 가려지지 않도록 덮개 뒤(아래쪽)에 둔다. */}
       <span
         aria-hidden="true"
         className="hero-orb hero-orb-late pointer-events-none absolute top-[24%] right-[-360px] hidden size-[720px] sm:block lg:right-[-380px] lg:size-[780px]"
@@ -40,7 +37,7 @@ export default function Hero() {
         height={900}
         priority
         unoptimized
-        className="pointer-events-none absolute inset-x-0 bottom-[340px] hero-blocks h-[30%] w-full object-contain object-bottom select-none sm:bottom-12 sm:h-[calc(100%-72px)]"
+        className="pointer-events-none absolute inset-x-0 bottom-[220px] hero-blocks h-[50%] w-full object-contain object-bottom select-none sm:bottom-[300px] sm:h-[calc(100%-340px)] lg:bottom-12 lg:h-[calc(100%-72px)]"
       />
 
       {/* 왼쪽 글 영역 뒤를 바탕색으로 살짝 덮어 그림과 글이 맞닿아 보이지 않게 한다. */}
@@ -52,7 +49,11 @@ export default function Hero() {
             'linear-gradient(90deg, rgba(234,242,247,0.92) 0%, rgba(234,242,247,0.75) 55%, rgba(234,242,247,0) 100%)',
         }}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-[20%] -translate-y-1/2 text-center sm:top-[42%] lg:top-[38%] hero-blocks-wordmark">
+      <span
+        aria-hidden="true"
+        className="hero-orb pointer-events-none absolute -top-[120px] -left-[160px] size-[440px] sm:-top-[140px] sm:-left-[180px] sm:size-[560px]"
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-[39%] -translate-y-1/2 text-center sm:top-[36%] lg:top-[38%] hero-blocks-wordmark">
         {/*
           CHAIUM → CHUM.AI 애니메이션. 동작은 globals.css의 .wordmark 블록 참고.
           보이지 않는 CHUM.AI로 자리 폭을 먼저 잡고 그 왼쪽 끝에 글자를 붙여서,
@@ -60,7 +61,7 @@ export default function Hero() {
         */}
         <p
           aria-label="CHAIUM, chum.ai"
-          className="wordmark relative inline-block text-left leading-[0.88] font-black tracking-[-0.045em] whitespace-nowrap"
+          className="hero-wordmark-text wordmark relative inline-block text-left leading-[0.88] font-black tracking-[0.015em] whitespace-nowrap"
           style={{ fontSize: 'clamp(44px, 9.4vw, 150px)' }}
         >
           <span aria-hidden="true" className="invisible">
@@ -81,12 +82,12 @@ export default function Hero() {
         </p>
       </div>
 
-      <div className="absolute inset-x-4 bottom-[64px] flex flex-col items-start gap-5 sm:inset-x-10 sm:bottom-[88px]">
+      <div className="absolute inset-x-4 bottom-6 flex flex-col items-start gap-3 sm:inset-x-10 sm:bottom-14 sm:gap-5 lg:bottom-[88px]">
         <h1
-          className="font-extrabold tracking-[-0.05em]"
+          className="font-extrabold tracking-[-0.01em] sm:tracking-[-0.05em]"
           style={{
             color: colors.brand.dark,
-            fontSize: 'clamp(32px, 3.6vw, 54px)',
+            fontSize: 'clamp(28px, 3.6vw, 54px)',
             lineHeight: 1.22,
           }}
         >
@@ -95,7 +96,7 @@ export default function Hero() {
             <span className="slogan-rise">비어 있는 공간에</span>
           </span>
           <span className="slogan-line">
-            <span className="slogan-rise slogan-rise-late slogan-fill">
+            <span className="slogan-rise slogan-rise-late slogan-fill font-semibold tracking-[0em] sm:font-bold sm:tracking-[-0.015em]">
               새로운 가치를 채우다
             </span>
           </span>
@@ -104,38 +105,19 @@ export default function Hero() {
           주소와 임대 조건, 주변 상권 데이터로 내 공실에 맞는 업종을
           추천해드려요.
         </p>
-        <div className="hero-sub flex flex-wrap items-center gap-3">
-          {/* 파란 알약 버튼 — 오른쪽 흰 원 안의 화살표가 마우스를 올리면 살짝 앞으로 나간다. */}
+        <div className="hero-sub flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
+          {/* 모바일에서는 두 CTA를 한 줄에 배치해 첫 화면에서 함께 보이게 한다. */}
           <Link
             href="/vacancy-input"
-            className="group inline-flex h-14 items-center gap-4 rounded-full py-2 pr-2 pl-7 text-base font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(36,83,214,0.4)]"
+            className="inline-flex h-12 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(36,83,214,0.4)] sm:h-14 sm:flex-none sm:px-7 sm:text-base"
             style={{ backgroundColor: colors.brand.primary }}
           >
             분석 시작하기
-            <span className="inline-flex size-10 items-center justify-center rounded-full bg-white">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 14 14"
-                aria-hidden="true"
-                className="transition-transform duration-200 group-hover:translate-x-0.5"
-                style={{ color: colors.brand.primary }}
-              >
-                <path
-                  d="M2 7h10M8 3l4 4-4 4"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
           </Link>
-          {/* 보조 버튼 — 목업 리포트로 결과가 어떻게 나오는지 먼저 보여준다. */}
+          {/* 보조 버튼 — 아래 "분석 리포트 미리보기" 섹션으로 내려가 결과를 먼저 보여준다. */}
           <Link
-            href="/report"
-            className="inline-flex h-14 items-center rounded-full border-[1.5px] border-[#10233A] bg-white/70 px-7 text-base font-bold text-[#10233A] backdrop-blur transition-colors duration-200 hover:bg-white"
+            href="#report-preview"
+            className="inline-flex h-12 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-[#10233A] bg-white/70 px-2 text-sm font-bold text-[#10233A] backdrop-blur transition-colors duration-200 hover:bg-white sm:h-14 sm:flex-none sm:px-7 sm:text-base"
           >
             리포트 예시 보기
           </Link>

@@ -50,18 +50,24 @@ function Frame({
   caption: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-[20px] bg-white shadow-[0_30px_60px_rgba(0,0,0,0.28)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] bg-[#F3F6FA] px-5 py-3">
-        <span className="flex items-center gap-2">
-          <FileText size={16} className="text-[#2453D6]" aria-hidden />
-          <span className="text-13 font-extrabold text-[#10233A]">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_18px_38px_rgba(0,0,0,0.24)] sm:rounded-[20px] sm:shadow-[0_30px_60px_rgba(0,0,0,0.28)]">
+      <div className="flex items-center justify-between gap-2 border-b border-[#EEF1F5] bg-[#F3F6FA] px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
+        <span className="flex items-center gap-1.5 sm:gap-2">
+          <FileText
+            size={14}
+            className="text-[#2453D6] sm:size-4"
+            aria-hidden
+          />
+          <span className="text-xs font-extrabold text-[#10233A] sm:text-13">
             채움 분석 리포트
           </span>
-          <span className="rounded bg-[#10233A] px-1.5 py-0.5 text-[11px] font-bold text-white">
+          <span className="rounded bg-[#10233A] px-1.5 py-0.5 text-[10px] font-bold text-white sm:text-[11px]">
             예시
           </span>
         </span>
-        <span className="text-xs font-bold text-[#2453D6]">{caption}</span>
+        <span className="text-[10px] font-bold text-[#2453D6] sm:text-xs">
+          {caption}
+        </span>
       </div>
       {children}
     </div>
@@ -72,7 +78,7 @@ function AnswerScreen() {
   return (
     <Frame caption="02 핵심 결론">
       <div
-        className="relative px-6 py-6 text-white"
+        className="relative px-4 py-4 text-white sm:px-6 sm:py-6"
         style={{
           background: [
             'radial-gradient(60% 90% at 90% 0%, rgba(46,82,190,0.42) 0%, rgba(46,82,190,0) 60%)',
@@ -80,16 +86,17 @@ function AnswerScreen() {
           ].join(','),
         }}
       >
-        <p className="flex items-center gap-1.5 text-13 font-bold text-[#9FB4D6]">
-          <Building2 size={15} aria-hidden /> 가장 먼저 검토할 업종
+        <p className="flex items-center gap-1.5 text-xs font-bold text-[#9FB4D6] sm:text-13">
+          <Building2 size={14} className="sm:size-[15px]" aria-hidden /> 가장
+          먼저 검토할 업종
         </p>
-        <p className="mt-2 text-2xl font-extrabold tracking-[-0.03em]">
+        <p className="mt-1.5 text-xl font-extrabold tracking-[-0.03em] sm:mt-2 sm:text-2xl">
           {top3[0].name}
         </p>
-        <span className="mt-2 inline-flex rounded-full bg-[#FFCF7A] px-2.5 py-0.5 text-13 font-bold text-[#10233A]">
+        <span className="mt-1.5 inline-flex rounded-full bg-[#FFCF7A] px-2.5 py-0.5 text-xs font-bold text-[#10233A] sm:mt-2 sm:text-13">
           조건부 추천
         </span>
-        <p className="mt-4 text-base leading-[1.6] font-bold">
+        <p className="mt-3 text-sm leading-[1.55] font-bold sm:mt-4 sm:text-base sm:leading-[1.6]">
           {top3[0].name}를 먼저 검토하되,{' '}
           <span className="text-[#FFCF7A]">아래 2가지를 직접 확인한 뒤</span>{' '}
           결정하세요.
@@ -99,16 +106,21 @@ function AnswerScreen() {
           className="absolute bottom-0 left-[calc(1.5rem+9px)] h-6 border-l-2 border-dashed border-[#FFCF7A]/70"
         />
       </div>
-      <div className="px-6 pb-6">
+      <div className="px-4 pb-4 sm:px-6 sm:pb-6">
         <span
           aria-hidden
           className="ml-[9px] block h-4 border-l-2 border-dashed border-[#E2B45C]/70"
         />
-        <p className="flex items-center gap-1.5 text-base font-extrabold text-[#10233A]">
-          <TriangleAlert size={18} color="#A65B00" aria-hidden />
+        <p className="flex items-center gap-1.5 text-sm font-extrabold text-[#10233A] sm:text-base">
+          <TriangleAlert
+            size={16}
+            className="sm:size-[18px]"
+            color="#A65B00"
+            aria-hidden
+          />
           계약 전에 확인할 2가지
         </p>
-        <ol className="mt-3 flex flex-col gap-3">
+        <ol className="mt-2.5 flex flex-col gap-2 sm:mt-3 sm:gap-3">
           {[
             [
               '4층까지 드나들기 쉬운지와 간판 노출',
@@ -120,12 +132,16 @@ function AnswerScreen() {
             ],
           ].map(([t, d], i) => (
             <li key={t} className="grid grid-cols-[32px_1fr] gap-x-2">
-              <span className="text-lg leading-none font-extrabold text-[#2453D6]">
+              <span className="text-base leading-none font-extrabold text-[#2453D6] sm:text-lg">
                 0{i + 1}
               </span>
               <div>
-                <p className="text-15 font-bold text-[#10233A]">{t}</p>
-                <p className="text-13 leading-5 text-[#4B5866]">{d}</p>
+                <p className="text-sm font-bold text-[#10233A] sm:text-15">
+                  {t}
+                </p>
+                <p className="text-xs leading-4 text-[#4B5866] sm:text-13 sm:leading-5">
+                  {d}
+                </p>
               </div>
             </li>
           ))}
@@ -160,7 +176,7 @@ function Ratio({ value }: { value: number }) {
   const up = value > 1;
   return (
     <span
-      className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+      className="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums sm:px-2 sm:text-xs"
       style={
         up
           ? { color: '#C2410C', background: '#FFEDD5' }
@@ -176,7 +192,7 @@ function WhyScreen() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('유동인구');
   return (
     <Frame caption="05 · 06 · 07 상권 분석">
-      <div className="flex flex-col gap-5 px-6 py-5">
+      <div className="flex flex-col gap-3 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6">
         <div
           role="tablist"
           className="flex gap-1 rounded-full bg-[#F1F4F8] p-1"
@@ -188,7 +204,7 @@ function WhyScreen() {
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className="flex-1 rounded-full py-2 text-13 font-bold transition-colors"
+              className="flex-1 rounded-full py-1.5 text-xs font-bold transition-colors sm:py-2 sm:text-13"
               style={
                 tab === t
                   ? {
@@ -205,10 +221,10 @@ function WhyScreen() {
         </div>
 
         {tab === '유동인구' && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 sm:gap-5">
             {/* 리포트 05장과 같은 상권 유형 일러스트(주거생활형) */}
             <div className="flex items-center justify-between gap-4">
-              <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+              <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
                 이 주변은
                 <br />
                 <span className="text-[#2453D6]">주거생활형</span> 상권이에요
@@ -218,23 +234,23 @@ function WhyScreen() {
                 alt="주거생활형 상권 일러스트"
                 width={720}
                 height={427}
-                className="h-auto w-[150px] shrink-0 sm:w-[170px]"
+                className="h-auto w-[120px] shrink-0 sm:w-[170px]"
               />
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-xl bg-[#10233A] px-4 py-3 text-white">
+              <div className="rounded-xl bg-[#10233A] px-3 py-2.5 text-white sm:px-4 sm:py-3">
                 <p className="text-xs font-semibold text-[#9FB4D6]">
                   하루 평균 유동인구
                 </p>
-                <p className="mt-1 text-2xl font-extrabold">
+                <p className="mt-1 text-xl font-extrabold sm:text-2xl">
                   4,820<span className="ml-0.5 text-sm font-bold">명/일</span>
                 </p>
               </div>
-              <div className="rounded-xl border border-[#E3E9F0] px-4 py-3">
+              <div className="rounded-xl border border-[#E3E9F0] px-3 py-2.5 sm:px-4 sm:py-3">
                 <p className="text-xs font-semibold text-[#66758A]">
                   가장 많은 연령대
                 </p>
-                <p className="mt-1 text-2xl font-extrabold text-[#10233A]">
+                <p className="mt-1 text-xl font-extrabold text-[#10233A] sm:text-2xl">
                   40대<span className="ml-1 text-sm font-bold">24%</span>
                 </p>
               </div>
@@ -243,7 +259,7 @@ function WhyScreen() {
               {AGES.map(([age, pct, idx]) => (
                 <li
                   key={age}
-                  className="grid grid-cols-[44px_1fr_44px_60px] items-center gap-2 text-xs"
+                  className="grid grid-cols-[34px_minmax(0,1fr)_34px_48px] items-center gap-1 text-[11px] sm:grid-cols-[44px_1fr_44px_60px] sm:gap-2 sm:text-xs"
                 >
                   <span className="font-bold text-[#10233A]">{age}</span>
                   <span className="h-1.5 rounded-full bg-[#EEF2F6]">
@@ -267,27 +283,29 @@ function WhyScreen() {
                 </li>
               ))}
             </ul>
-            <p className="-mt-1 text-[11px] text-[#8A97A5]">
+            <p className="-mt-1 text-[10px] text-[#8A97A5] sm:text-[11px]">
               구성비 · 서울 평균 대비
             </p>
           </div>
         )}
 
         {tab === '경쟁 업체' && (
-          <div className="flex flex-col gap-8">
-            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+          <div className="flex flex-col gap-3 sm:gap-5">
+            <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
               <span className="text-[#2453D6]">네일·뷰티, 코인세탁실</span>은
               주변에 같은 업종이 적고,
               <br />
               <span className="text-[#C2410C]">소형 스튜디오</span>는 이미 몰려
               있어요.
             </p>
-            <table className="w-full text-13">
+            <table className="w-full text-[11px] sm:text-13">
               <thead>
                 <tr className="text-xs text-[#8A97A5]">
-                  <th className="pb-3 text-left font-semibold">업종</th>
-                  <th className="pb-3 text-right font-semibold">동종 점포</th>
-                  <th className="pb-3 text-right font-semibold">
+                  <th className="pb-2 text-left font-semibold sm:pb-3">업종</th>
+                  <th className="pb-2 text-right font-semibold sm:pb-3">
+                    동종 점포
+                  </th>
+                  <th className="pb-2 text-right font-semibold sm:pb-3">
                     반경 2km 대비
                   </th>
                 </tr>
@@ -296,19 +314,19 @@ function WhyScreen() {
                 {COMPETITION.map(([name, count, ratio, rec]) => (
                   <tr key={name} className="border-t border-[#EEF1F5]">
                     <td
-                      className={`py-[18px] ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
+                      className={`py-3 sm:py-[18px] ${rec ? 'font-bold text-[#10233A]' : 'text-[#66758A]'}`}
                     >
                       {name}
                       {!rec && (
-                        <span className="ml-1.5 text-[11px] text-[#8A97A5]">
+                        <span className="ml-1 text-[9px] text-[#8A97A5] sm:ml-1.5 sm:text-[11px]">
                           제외 후보
                         </span>
                       )}
                     </td>
-                    <td className="py-[18px] text-right tabular-nums text-[#4B5866]">
+                    <td className="py-3 text-right tabular-nums text-[#4B5866] sm:py-[18px]">
                       {count}개
                     </td>
-                    <td className="py-[18px] text-right">
+                    <td className="py-3 text-right sm:py-[18px]">
                       {ratio !== null && <Ratio value={ratio} />}
                     </td>
                   </tr>
@@ -319,14 +337,14 @@ function WhyScreen() {
         )}
 
         {tab === '개폐업' && (
-          <div className="flex flex-col gap-10">
-            <p className="text-lg leading-snug font-extrabold text-[#10233A]">
+          <div className="flex flex-col gap-3 sm:gap-5">
+            <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
               네일·뷰티는 개업이 활발하고
               <br />
               폐업률도 낮아 <span className="text-[#2453D6]">안정적</span>이에요
             </p>
-            <div className="flex items-center gap-5">
-              <div className="relative h-[110px] w-[188px] shrink-0">
+            <div className="flex items-center gap-3 sm:gap-5">
+              <div className="relative h-[84px] w-[144px] shrink-0 sm:h-[110px] sm:w-[188px]">
                 <svg viewBox="0 0 124 72" className="h-full w-full" aria-hidden>
                   <path
                     d="M10 66 A52 52 0 0 1 114 66"
@@ -345,11 +363,11 @@ function WhyScreen() {
                     strokeDasharray="78.4 100"
                   />
                 </svg>
-                <p className="absolute inset-x-0 bottom-0 text-center text-3xl font-extrabold text-[#10233A]">
+                <p className="absolute inset-x-0 bottom-0 text-center text-2xl font-extrabold text-[#10233A] sm:text-3xl">
                   78.4
                 </p>
               </div>
-              <div className="flex flex-col gap-2 text-sm text-[#3D4A5C]">
+              <div className="flex flex-col gap-1.5 text-xs text-[#3D4A5C] sm:gap-2 sm:text-sm">
                 <p className="font-bold text-[#10233A]">
                   개폐업 안정성 78.4 / 100점
                 </p>
@@ -360,20 +378,22 @@ function WhyScreen() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] px-3 py-6 text-center">
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F5F8FB] px-2 py-4 text-center sm:px-3 sm:py-6">
               <div>
                 <p className="text-xs text-[#66758A]">3년 개업</p>
-                <p className="mt-1 text-2xl font-extrabold text-[#2453D6]">
+                <p className="mt-1 text-xl font-extrabold text-[#2453D6] sm:text-2xl">
                   20
                 </p>
               </div>
               <div>
                 <p className="text-xs text-[#66758A]">3년 폐업</p>
-                <p className="mt-1 text-2xl font-extrabold text-[#C2410C]">9</p>
+                <p className="mt-1 text-xl font-extrabold text-[#C2410C] sm:text-2xl">
+                  9
+                </p>
               </div>
               <div>
                 <p className="text-xs text-[#66758A]">순증감</p>
-                <p className="mt-1 text-2xl font-extrabold text-[#10233A]">
+                <p className="mt-1 text-xl font-extrabold text-[#10233A] sm:text-2xl">
                   ▲ +11
                 </p>
               </div>
@@ -413,12 +433,12 @@ const REVIEWERS = [
 function CheckScreen() {
   return (
     <Frame caption="04 교차 검토">
-      <div className="flex flex-col gap-5 px-6 py-6">
+      <div className="flex flex-col gap-3 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6">
         <div>
-          <span className="block h-8 font-serif text-[56px] leading-none font-black text-[#F0A43A]">
+          <span className="block h-6 font-serif text-[42px] leading-none font-black text-[#F0A43A] sm:h-8 sm:text-[56px]">
             &ldquo;
           </span>
-          <p className="text-lg leading-[1.45] font-extrabold tracking-[-0.02em] text-[#10233A]">
+          <p className="text-base leading-[1.45] font-extrabold tracking-[-0.02em] text-[#10233A] sm:text-lg">
             추천 업종은 바로 정하기보다,{' '}
             <span
               style={{
@@ -448,7 +468,7 @@ function CheckScreen() {
                 className="flex flex-col items-center gap-1 text-center"
               >
                 <span
-                  className="inline-flex size-11 overflow-hidden rounded-full bg-white"
+                  className="inline-flex size-9 overflow-hidden rounded-full bg-white sm:size-11"
                   style={{ boxShadow: `0 0 0 2.5px ${r.c}` }}
                 >
                   <Image
@@ -459,11 +479,11 @@ function CheckScreen() {
                     unoptimized
                   />
                 </span>
-                <span className="mt-1 text-xs font-bold whitespace-nowrap text-[#10233A]">
+                <span className="mt-1 text-[10px] font-bold whitespace-nowrap text-[#10233A] sm:text-xs">
                   {r.name}
                 </span>
                 <span
-                  className="text-[11px] font-semibold whitespace-nowrap"
+                  className="text-[9px] font-semibold whitespace-nowrap sm:text-[11px]"
                   style={{ color: r.t }}
                 >
                   {r.v}
@@ -472,7 +492,7 @@ function CheckScreen() {
             ))}
           </ul>
         </div>
-        <p className="rounded-xl bg-[#EAF0F6] px-4 py-3 text-13 leading-5 text-[#3D4A5C]">
+        <p className="rounded-xl bg-[#EAF0F6] px-3 py-2.5 text-xs leading-4 text-[#3D4A5C] sm:px-4 sm:py-3 sm:text-13 sm:leading-5">
           <b className="text-[#10233A]">임대인 대변인</b> · 임대료와 공실 기간
           자료가 없어 수익은 따로 확인해야 한다고 봤어요.
         </p>
@@ -516,7 +536,7 @@ export default function ReportPreview() {
   return (
     <section
       id="report-preview"
-      className="relative w-full scroll-mt-16 px-5 py-24 sm:px-8"
+      className="relative w-full scroll-mt-16 px-4 py-12 sm:px-8 sm:py-24"
       style={{ backgroundColor: '#10233A' }}
     >
       <div className="mx-auto max-w-[1120px]">
@@ -524,9 +544,9 @@ export default function ReportPreview() {
           <p className="text-sm font-bold tracking-[0.08em] text-[#9DB5F2]">
             REPORT PREVIEW
           </p>
-          <h2 className="mt-3.5 flex flex-wrap items-center gap-3 text-3xl leading-[1.3] font-extrabold tracking-[-0.02em] text-white sm:text-4xl">
+          <h2 className="mt-2.5 flex flex-wrap items-center gap-2 text-2xl leading-[1.25] font-extrabold tracking-[-0.02em] text-white sm:mt-3.5 sm:gap-3 sm:text-4xl sm:leading-[1.3]">
             분석 리포트 미리보기
-            <span className="rounded-md bg-[#FFCF7A] px-2.5 py-1 text-sm font-extrabold tracking-normal text-[#10233A] sm:text-base">
+            <span className="rounded-md bg-[#FFCF7A] px-2 py-0.5 text-xs font-extrabold tracking-normal text-[#10233A] sm:px-2.5 sm:py-1 sm:text-base">
               예시 리포트
             </span>
           </h2>
@@ -535,14 +555,14 @@ export default function ReportPreview() {
         {/* 한 화면에 고정된 무대 — 3초마다 다음 단계가 아래에서 위로 올라온다 */}
         <div
           ref={stageRef}
-          className="mt-14 grid gap-10 lg:grid-cols-[56px_minmax(0,1fr)] lg:gap-8"
+          className="mt-8 grid gap-6 sm:mt-14 sm:gap-10 lg:grid-cols-[56px_minmax(0,1fr)] lg:gap-8"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           onFocus={() => setPaused(true)}
           onBlur={() => setPaused(false)}
         >
           {/* 단계 표시 — 진행 막대가 차오르고, 눌러서 바로 이동할 수도 있다 */}
-          <ol className="flex gap-3 lg:flex-col lg:gap-4 lg:pt-2">
+          <ol className="flex gap-2 sm:gap-3 lg:flex-col lg:gap-4 lg:pt-2">
             {STEPS.map((s, i) => {
               const on = i === active;
               return (
@@ -589,7 +609,7 @@ export default function ReportPreview() {
                 <div
                   key={STEPS[i].key}
                   aria-hidden={state !== 'now'}
-                  className="col-start-1 row-start-1 grid items-center gap-8 transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.2,0.7,0.2,1)] motion-reduce:transition-none lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16"
+                  className="col-start-1 row-start-1 grid items-center gap-5 transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.2,0.7,0.2,1)] motion-reduce:transition-none sm:gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16"
                   style={{
                     opacity: state === 'now' ? 1 : 0,
                     transform:
@@ -602,13 +622,13 @@ export default function ReportPreview() {
                   }}
                 >
                   <div>
-                    <span className="rounded-full bg-[#FFCF7A] px-3 py-1 text-sm font-bold text-[#10233A]">
+                    <span className="rounded-full bg-[#FFCF7A] px-2.5 py-0.5 text-xs font-bold text-[#10233A] sm:px-3 sm:py-1 sm:text-sm">
                       {i + 1} · {STEPS[i].label}
                     </span>
-                    <p className="mt-5 text-2xl leading-[1.4] font-extrabold whitespace-pre-line text-white sm:text-3xl">
+                    <p className="mt-3 text-xl leading-[1.35] font-extrabold whitespace-pre-line text-white sm:mt-5 sm:text-3xl sm:leading-[1.4]">
                       {STEPS[i].title}
                     </p>
-                    <p className="mt-3 max-w-[420px] text-base leading-7 text-[#C3CCD8]">
+                    <p className="mt-2 max-w-[420px] text-sm leading-6 text-[#C3CCD8] sm:mt-3 sm:text-base sm:leading-7">
                       {STEPS[i].desc}
                     </p>
                   </div>
@@ -628,31 +648,31 @@ export default function ReportPreview() {
           `}</style>
 
         {/* 마지막: 행동으로 */}
-        <div className="mt-24 flex flex-col items-start gap-6 border-t border-white/10 pt-12 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col items-start gap-4 border-t border-white/10 pt-8 sm:mt-24 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pt-12">
           <div>
-            <p className="text-2xl font-extrabold text-white">
+            <p className="text-xl font-extrabold text-white sm:text-2xl">
               내 상가는 어떤 답이 나올까요?
             </p>
-            <p className="mt-2 text-15 text-[#C3CCD8]">
+            <p className="mt-1.5 text-sm text-[#C3CCD8] sm:mt-2 sm:text-15">
               주소만 넣으면 같은 리포트를 받아볼 수 있어요.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
               href="/vacancy-input"
-              className="inline-flex h-14 items-center gap-2 rounded-full bg-[#2453D6] px-7 text-base font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.4)]"
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-[#2453D6] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.4)] sm:h-14 sm:px-7 sm:text-base"
             >
               내 상가로 분석해 보기 <ArrowRight size={18} aria-hidden />
             </Link>
             <Link
               href="/report"
-              className="inline-flex h-14 items-center rounded-full border border-white/30 px-6 text-base font-bold text-white/90 hover:bg-white/10"
+              className="inline-flex h-12 items-center rounded-full border border-white/30 px-5 text-sm font-bold text-white/90 hover:bg-white/10 sm:h-14 sm:px-6 sm:text-base"
             >
               예시 리포트 전체 보기
             </Link>
           </div>
         </div>
-        <p className="mt-6 text-xs text-[#8EA0BA]">
+        <p className="mt-4 text-[11px] text-[#8EA0BA] sm:mt-6 sm:text-xs">
           * 실제 분석 데이터가 아닌, 리포트 구성을 보여주는 예시예요.
         </p>
       </div>
