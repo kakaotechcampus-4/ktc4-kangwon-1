@@ -357,7 +357,7 @@ export default function EvaluatorReviews({
             >
               &ldquo;
             </span>
-            <p className="break-keep text-[28px] leading-[1.35] font-extrabold tracking-[-0.03em] text-[#10233A] sm:text-[34px]">
+            <p className="break-keep text-25 leading-[1.35] font-extrabold tracking-[-0.03em] text-[#10233A] sm:text-32">
               {headline[0]}
               <span
                 style={{
@@ -375,7 +375,7 @@ export default function EvaluatorReviews({
           {/* 확인할 것은 핵심결론 한 곳에서만 보여 준다 */}
           <a
             href="#conclusion"
-            className="group mt-1 flex w-fit items-center gap-2 rounded-full border bg-white py-2.5 pr-4 pl-5 text-[15px] font-semibold text-[#10233A] transition-colors hover:border-[#2453D6] hover:text-[#2453D6]"
+            className="group mt-1 flex w-fit items-center gap-2 rounded-full border bg-white py-2.5 pr-4 pl-5 text-15 font-semibold text-[#10233A] transition-colors hover:border-[#2453D6] hover:text-[#2453D6]"
             style={{ borderColor: P.line }}
           >
             <span className="hidden sm:inline">
@@ -416,15 +416,12 @@ export default function EvaluatorReviews({
                     ring={VERDICT[v].bar}
                     muted={v === 'failed'}
                   />
-                  <span
-                    className="mt-1 font-bold whitespace-nowrap text-[#10233A]"
-                    style={{ fontSize: 14 }}
-                  >
+                  <span className="mt-1 text-sm font-bold whitespace-nowrap text-[#10233A]">
                     {ACTORS[r.actor].name}
                   </span>
                   <span
-                    className="font-semibold whitespace-nowrap"
-                    style={{ color: VERDICT[v].color, fontSize: 13 }}
+                    className="text-13 font-semibold whitespace-nowrap"
+                    style={{ color: VERDICT[v].color }}
                   >
                     {VERDICT[v].label}
                   </span>
@@ -450,30 +447,30 @@ export default function EvaluatorReviews({
             return (
               <li
                 key={r.actor}
-                className="grid grid-cols-[40px_1fr] gap-x-4 gap-y-1.5 py-5 sm:grid-cols-[40px_170px_1fr_auto] sm:items-center sm:gap-x-6"
+                className="grid grid-cols-[44px_1fr] gap-x-4 gap-y-1.5 py-5 sm:grid-cols-[44px_220px_1fr_auto] sm:items-center sm:gap-x-6"
               >
-                <Avatar actor={r.actor} size={40} muted={v === 'failed'} />
+                <Avatar actor={r.actor} size={44} muted={v === 'failed'} />
                 <div className="flex items-center justify-between gap-3 sm:block">
                   <div>
-                    <p className="text-base font-bold text-[#10233A]">
+                    <p className="text-lg font-bold text-[#10233A]">
                       {ACTORS[r.actor].name}
                     </p>
-                    <p className="text-[13px] text-[#8A97A5]">
+                    <p className="text-sm text-[#8A97A5]">
                       {ACTORS[r.actor].view}
                     </p>
                   </div>
                   <span
-                    className="text-sm font-bold sm:hidden"
+                    className="text-base font-bold sm:hidden"
                     style={{ color: VERDICT[v].color }}
                   >
                     {VERDICT[v].label}
                   </span>
                 </div>
-                <p className="col-start-2 break-keep text-[15px] leading-7 text-[#3D4A5C] sm:col-start-auto">
+                <p className="col-start-2 break-keep text-17 leading-[1.7] text-[#3D4A5C] sm:col-start-auto">
                   {opinion}
                 </p>
                 <span
-                  className="hidden text-sm font-bold whitespace-nowrap sm:block"
+                  className="hidden text-base font-bold whitespace-nowrap sm:block"
                   style={{ color: VERDICT[v].color }}
                 >
                   {VERDICT[v].label}
@@ -496,11 +493,11 @@ export default function EvaluatorReviews({
               return (
                 <li
                   key={t.theme}
-                  className="grid gap-3 border-b py-6 sm:grid-cols-[220px_1fr] sm:gap-8"
+                  className="grid gap-3 border-b py-6 sm:grid-cols-[260px_1fr] sm:gap-8"
                   style={{ borderColor: P.line }}
                 >
                   <div className="flex flex-col gap-2">
-                    <p className="text-base font-bold text-[#10233A]">
+                    <p className="text-lg font-bold text-[#10233A]">
                       {meta.title}
                     </p>
                     <span className="flex items-center gap-1.5">
@@ -509,18 +506,18 @@ export default function EvaluatorReviews({
                           <Avatar key={a} actor={a} size={20} ring="#F5F8FB" />
                         ))}
                       </span>
-                      <span className="text-[13px] text-[#8A97A5]">
+                      <span className="text-13 text-[#8A97A5]">
                         {t.actors.map((a) => ACTORS[a].name).join(' · ')}
                       </span>
                     </span>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <p className="break-keep text-[15px] leading-7 text-[#3D4A5C]">
+                    <p className="break-keep text-17 leading-[1.7] text-[#3D4A5C]">
                       {meta.meaning}
                     </p>
                     {areas.length > 0 && (
-                      <table className="w-full max-w-[460px] text-sm">
-                        <caption className="pb-1.5 text-left text-[13px] text-[#8A97A5]">
+                      <table className="w-full max-w-[480px] text-15">
+                        <caption className="pb-1.5 text-left text-sm text-[#8A97A5]">
                           업종별 권장 면적
                           {areas[0].mine
                             ? ` · 이 상가 ${areas[0].mine}`
@@ -541,7 +538,7 @@ export default function EvaluatorReviews({
                                 {a.band}
                               </td>
                               <td
-                                className="w-16 py-1.5 text-right text-[13px] font-bold"
+                                className="w-20 py-1.5 text-right text-13 font-bold"
                                 style={{
                                   color:
                                     a.fits === null
@@ -563,11 +560,11 @@ export default function EvaluatorReviews({
                       </table>
                     )}
                     {t.theme === 'buildout' && facility && (
-                      <p className="text-sm text-[#4B5866]">
+                      <p className="text-15 text-[#4B5866]">
                         입력하신 설비: {facility}
                       </p>
                     )}
-                    <p className="text-[13px] text-[#8A97A5]">
+                    <p className="text-sm text-[#8A97A5]">
                       {t.industries.length
                         ? t.industries.map(industryName).join(' · ')
                         : '추천 결과 전체'}
