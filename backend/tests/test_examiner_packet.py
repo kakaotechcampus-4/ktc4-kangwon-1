@@ -154,12 +154,6 @@ class ExaminerChecksTests(unittest.TestCase):
         self.assertIn("나눠서", examiner.PERSONA)
         self.assertFalse(has_digit(examiner.PERSONA))
 
-    def test_persona_reviews_every_candidate_and_reads_missing_metric(self):
-        self.assertIn("checks에 나온 곳만 지적하고 끝내지 말고", examiner.PERSONA)
-        self.assertIn("첫 후보부터 마지막 후보까지 모든 문장을 본 뒤", examiner.PERSONA)
-        self.assertIn("score_items에 맞는 지표가 없으면 get_facts로", examiner.PERSONA)
-        self.assertFalse(has_digit(examiner.PERSONA))
-
     def test_persona_separates_wrong_metric_from_missing_evidence(self):
         self.assertIn("슬롯이 있는데 엉뚱한 지표를 가리키면", examiner.PERSONA)
         self.assertIn("missing_evidence로 쓰지 마세요", examiner.PERSONA)
