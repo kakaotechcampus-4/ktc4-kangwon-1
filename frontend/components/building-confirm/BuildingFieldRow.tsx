@@ -41,7 +41,7 @@ export default function BuildingFieldRow<T>({
         >
           {label}
         </p>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="@container flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
           <div className="min-w-0 max-w-full grow">
             {editable ? (
               editor

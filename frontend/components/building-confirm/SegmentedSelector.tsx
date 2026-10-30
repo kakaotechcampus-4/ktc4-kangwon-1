@@ -18,7 +18,7 @@ export default function SegmentedSelector<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="grid w-full grid-cols-2 gap-px self-start overflow-hidden rounded-lg border [&>:last-child:nth-child(odd)]:col-span-2 @lg:inline-grid @lg:w-fit @lg:max-w-full @lg:grid-flow-col @lg:auto-cols-fr @lg:grid-cols-none @lg:[&>:last-child:nth-child(odd)]:col-span-1"
+      className="grid w-full grid-cols-2 gap-px self-start overflow-hidden rounded-lg border [&>:last-child:nth-child(odd)]:col-span-2 @min-[28rem]:inline-grid @min-[28rem]:w-fit @min-[28rem]:max-w-full @min-[28rem]:grid-flow-col @min-[28rem]:auto-cols-fr @min-[28rem]:grid-cols-none @min-[28rem]:[&>:last-child:nth-child(odd)]:col-span-1"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.border,
