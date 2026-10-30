@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import HeaderUserMenu from '@/components/layout/HeaderUserMenu';
+import { MOCK_MODE } from '@/lib/api/mockMode';
 import { colors } from '@/styles/tokens';
 
 const navLinks = [
@@ -18,8 +19,8 @@ const navLinks = [
   },
   {
     label: '리포트',
-    href: '/report',
-    matchPaths: ['/report', '/reports'],
+    href: MOCK_MODE ? '/report' : '/my/reports',
+    matchPaths: ['/report', '/reports', '/my/reports'],
   },
 ];
 

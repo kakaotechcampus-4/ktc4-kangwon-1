@@ -11,6 +11,7 @@ import {
   Building2,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import RequireAuth from '@/components/auth/RequireAuth';
 import PropertyMap from '@/components/report/PropertyMap';
 import IndustryReview, {
   candidateChecks,
@@ -50,7 +51,11 @@ import type { DecisionResult, FactView } from '@/lib/api/types';
 import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
 import { indexFacts, renderSegments } from '@/lib/api/segments';
 import { MOCK_MODE } from '@/lib/api/mockMode';
-import { reportSource, storedReport } from '@/lib/api/reportSource';
+import {
+  isExampleReport,
+  reportSource,
+  storedReport,
+} from '@/lib/api/reportSource';
 import { formatDay } from '@/lib/api/analysisStatus';
 import StateNotice from '@/components/ui/StateNotice';
 import {
@@ -206,6 +211,24 @@ function reasonDescription(reason: string, target: string) {
 }
 
 export default function ReportPage() {
+  const [example, setExample] = useState<boolean>();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExample(isExampleReport(window.location.search));
+  }, []);
+  if (example === undefined) {
+    return null;
+  }
+  return example ? (
+    <ReportContent />
+  ) : (
+    <RequireAuth>
+      <ReportContent />
+    </RequireAuth>
+  );
+}
+
+function ReportContent() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
   const [largeText, setLargeText] = useState(false);
@@ -243,7 +266,7 @@ export default function ReportPage() {
       savedRequestId: loadRequestId(),
       saved: loadAnalysisResult(),
       mockMode: MOCK_MODE,
-      example: params.has('example'),
+      example: isExampleReport(window.location.search),
     });
     if (source.kind !== 'fetch') {
       const fromSession = source.kind === 'saved' || source.kind === 'preview';

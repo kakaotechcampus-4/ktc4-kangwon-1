@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { reportSource, storedReport } from '@/lib/api/reportSource';
+import {
+  isExampleReport,
+  reportSource,
+  storedReport,
+} from '@/lib/api/reportSource';
 import type { DecisionResult, StoredAnalysis } from '@/lib/api/types';
 
 const resultFor = (requestId: string) =>
@@ -151,5 +155,17 @@ describe('storedReport', () => {
         })
       )
     ).toEqual({ kind: 'failed', message: '서버가 다시 시작되었습니다.' });
+  });
+});
+
+describe('isExampleReport', () => {
+  it('주소에 example이 있으면 예시 리포트다', () => {
+    expect(isExampleReport('?example=1')).toBe(true);
+    expect(isExampleReport('?id=a&example=1')).toBe(true);
+  });
+
+  it('example이 없으면 예시가 아니다', () => {
+    expect(isExampleReport('?id=a')).toBe(false);
+    expect(isExampleReport('')).toBe(false);
   });
 });

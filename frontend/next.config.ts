@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  async redirects() {
+    return process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
+      ? []
+      : [{ source: '/reports', destination: '/my/reports', permanent: false }];
+  },
 };
 
 export default nextConfig;

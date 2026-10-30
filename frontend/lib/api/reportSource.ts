@@ -83,3 +83,7 @@ export function storedReport(detail: StoredAnalysis): StoredReport {
   }
   return { kind: 'pending', requestId: detail.request_id };
 }
+
+export function isExampleReport(search: string): boolean {
+  return new URLSearchParams(search).has('example');
+}
