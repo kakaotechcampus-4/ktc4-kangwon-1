@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/:path*',
-        has: [{ type: 'host', value: 'ktc4-kangwon-1.vercel.app' }],
+        has: [{ type: 'host', value: 'ktc4-kangwon-1\\.vercel\\.app' }],
         destination: 'https://chaeum-ai.kr/:path*',
         permanent: false,
       },
