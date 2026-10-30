@@ -561,8 +561,8 @@ export default function ReportPreview() {
           onFocus={() => setPaused(true)}
           onBlur={() => setPaused(false)}
         >
-          {/* 단계 표시 — 진행 막대가 차오르고, 눌러서 바로 이동할 수도 있다 */}
-          <ol className="flex gap-2 sm:gap-3 lg:flex-col lg:gap-4 lg:pt-2">
+          {/* 단계 표시 — 진행 막대가 차오르고, 눌러서 바로 이동할 수도 있다. 큰 화면에서는 무대 높이의 가운데에 둔다 */}
+          <ol className="flex gap-2 sm:gap-3 lg:flex-col lg:gap-5 lg:self-center">
             {STEPS.map((s, i) => {
               const on = i === active;
               return (
@@ -579,7 +579,7 @@ export default function ReportPreview() {
                     >
                       {String(i + 1).padStart(2, '0')}
                     </span>
-                    <span className="relative h-1 w-full overflow-hidden rounded-full bg-white/10 lg:h-20 lg:w-1">
+                    <span className="relative h-1 w-full overflow-hidden rounded-full bg-white/10 lg:h-28 lg:w-1">
                       {on && (
                         <span
                           key={`${active}-${paused}`}
