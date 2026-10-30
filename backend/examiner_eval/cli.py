@@ -145,7 +145,7 @@ def build(args) -> int:
     return 0
 
 
-def run(args) -> int:
+def _run_refusal(args) -> int:
     if args.real and args.max_calls is None:
         return _refuse("--real에는 --max-calls가 필요합니다.")
     if args.repeats < 1:
@@ -160,6 +160,49 @@ def run(args) -> int:
         )
     if not args.cases.exists():
         return _refuse(f"사례 파일이 없습니다: {args.cases}")
+    return 0
+
+
+def _model_for(args) -> tuple[Callable | None, str | None, int]:
+    if not args.real:
+        return fake_generate, FAKE_MODEL, 0
+    load_environment()
+    settings = LLMSettings.from_env("evaluator")
+    try:
+        settings.require_credentials()
+    except ValueError as exc:
+        return None, None, _refuse(str(exc))
+    return None, settings.model, 0
+
+
+def _execute(args, pending, contexts, path, generate, model) -> int:
+    results, total, stopped = asyncio.run(
+        run_pending(
+            pending,
+            contexts,
+            args.db,
+            args.out,
+            variant=args.variant,
+            generate=generate,
+            model=model,
+            max_calls=args.max_calls,
+        )
+    )
+    statuses = Counter(r.status for r in results)
+    print(f"완료 {statuses['completed']}, 실패 {statuses['failed']}, 호출 {total}회 → {path}")
+    if stopped:
+        print(
+            f"호출 상한 {args.max_calls}회에 닿아 멈췄습니다. 남은 사례·회차 "
+            f"{len(pending) - len(results)}개",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
+
+
+def run(args) -> int:
+    if refused := _run_refusal(args):
+        return refused
     cases = [c for c in load_cases(args.cases) if args.split in ("all", c.split)]
     path = args.out / RESULTS
     try:
@@ -195,16 +238,9 @@ def run(args) -> int:
     if not pending:
         print("남은 사례가 없습니다.")
         return 0
-    generate: Callable | None = fake_generate
-    model: str | None = FAKE_MODEL
-    if args.real:
-        load_environment()
-        settings = LLMSettings.from_env("evaluator")
-        try:
-            settings.require_credentials()
-        except ValueError as exc:
-            return _refuse(str(exc))
-        generate, model = None, settings.model
+    generate, model, refused = _model_for(args)
+    if refused:
+        return refused
     current |= {"model": model, "first_repeats": args.repeats, "first_max_calls": args.max_calls}
     if header is not None and (refused := _header_differs(header, current)):
         return refused
@@ -212,28 +248,36 @@ def run(args) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     if header is None:
         append_row(path, current)
-    results, total, stopped = asyncio.run(
-        run_pending(
-            pending,
-            contexts,
-            args.db,
-            args.out,
-            variant=args.variant,
-            generate=generate,
-            model=model,
-            max_calls=args.max_calls,
-        )
-    )
-    statuses = Counter(r.status for r in results)
-    print(f"완료 {statuses['completed']}, 실패 {statuses['failed']}, 호출 {total}회 → {path}")
-    if stopped:
-        print(
-            f"호출 상한 {args.max_calls}회에 닿아 멈췄습니다. 남은 사례·회차 "
-            f"{len(pending) - len(results)}개",
-            file=sys.stderr,
-        )
-        return 3
-    return 0
+    return _execute(args, pending, contexts, path, generate, model)
+
+
+def _read_runs(runs, cases) -> tuple[list, int]:
+    per_run = []
+    for run_dir in runs:
+        path = run_dir / RESULTS
+        if not path.exists():
+            return [], _refuse(f"결과 파일이 없습니다: {path}")
+        try:
+            _, rows = read_results(path)
+        except ValueError as exc:
+            return [], _refuse(str(exc))
+        unknown = sorted({r.case_id for r in rows} - set(cases))
+        if unknown:
+            return [], _refuse("사례 파일에 없는 case_id입니다: " + ", ".join(unknown))
+        per_run.append((run_dir, rows))
+    return per_run, 0
+
+
+def _merge_rejections(per_run, splits) -> dict:
+    rejections: dict = {}
+    for run_dir, rows in per_run:
+        for key, counter in rejection_reasons(run_dir, rows, splits).items():
+            if counter is None:
+                rejections.setdefault(key, None)
+            else:
+                rejections[key] = rejections.get(key) or Counter()
+                rejections[key].update(counter)
+    return rejections
 
 
 def report(args) -> int:
@@ -245,19 +289,9 @@ def report(args) -> int:
     if not args.cases.exists():
         return _refuse(f"사례 파일이 없습니다: {args.cases}")
     cases = {c.case_id: c for c in load_cases(args.cases)}
-    per_run = []
-    for run_dir in args.runs:
-        path = run_dir / RESULTS
-        if not path.exists():
-            return _refuse(f"결과 파일이 없습니다: {path}")
-        try:
-            _, rows = read_results(path)
-        except ValueError as exc:
-            return _refuse(str(exc))
-        unknown = sorted({r.case_id for r in rows} - set(cases))
-        if unknown:
-            return _refuse("사례 파일에 없는 case_id입니다: " + ", ".join(unknown))
-        per_run.append((run_dir, rows))
+    per_run, refused = _read_runs(args.runs, cases)
+    if refused:
+        return refused
     results = [r for _, rows in per_run for r in rows]
     keys = Counter((r.case_id, r.variant, r.repeat) for r in results)
     duplicated = sorted(k for k, n in keys.items() if n > 1)
@@ -280,14 +314,7 @@ def report(args) -> int:
         for r in results
     ]
     splits = {case_id: case.split for case_id, case in cases.items()}
-    rejections: dict = {}
-    for run_dir, rows in per_run:
-        for key, counter in rejection_reasons(run_dir, rows, splits).items():
-            if counter is None:
-                rejections.setdefault(key, None)
-            else:
-                rejections[key] = rejections.get(key) or Counter()
-                rejections[key].update(counter)
+    rejections = _merge_rejections(per_run, splits)
     write_report(results, scores, args.out, rejections=rejections)
     print(f"보고서: {args.out} (결과 {len(results)}건)")
     return 0
