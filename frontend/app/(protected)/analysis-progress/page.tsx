@@ -36,9 +36,11 @@ import {
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   prefillAnswers,
+  progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
 } from '@/lib/api/adapters/progress';
+import StateNotice from '@/components/ui/StateNotice';
 import { useAnalysisProgress } from '@/lib/hooks/useAnalysisProgress';
 import { useAnalysisProgressSimulation } from '@/lib/hooks/useAnalysisProgressSimulation';
 import type { ProgressStep } from '@/lib/mockData/analysisProgress';
@@ -173,10 +175,35 @@ export default function AnalysisProgressPage() {
   if (requestId === undefined) {
     return null;
   }
-  return requestId ? <LiveProgress requestId={requestId} /> : <MockProgress />;
+  const view = progressView({ mockMode: MOCK_MODE, requestId });
+  if (view === 'live' && requestId) {
+    return <LiveProgress requestId={requestId} />;
+  }
+  return view === 'mock' ? <MockProgress /> : <NoAnalysis />;
 }
 
-/** 백엔드 없이 타이머로 흐름을 흉내 낸다(mock 모드 또는 요청 ID 없이 들어온 경우). */
+function NoAnalysis() {
+  return (
+    <div
+      className="flex min-h-screen flex-col"
+      style={{ backgroundColor: colors.neutral.background }}
+    >
+      <Header />
+      <main className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 pt-14 pb-24 sm:px-8">
+        <StateNotice
+          title="진행 중인 분석을 찾지 못했어요"
+          description="새로 분석을 시작하거나, 지난 분석은 내 분석 기록에서 확인해 주세요."
+          links={[
+            { href: '/vacancy-input', label: '공실 분석 시작하기' },
+            { href: '/my/reports', label: '내 분석 기록' },
+          ]}
+        />
+      </main>
+    </div>
+  );
+}
+
+/** 백엔드 없이 타이머로 흐름을 흉내 낸다(mock 모드). */
 function MockProgress() {
   const router = useRouter();
   const known = useKnownSite();
@@ -243,10 +270,8 @@ function MockProgress() {
 function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
   const known = useKnownSite();
-  const { steps, stage, waiting, result, error, submit } = useAnalysisProgress(
-    requestId,
-    mockAnalysisProgress.steps
-  );
+  const { steps, stage, waiting, result, error, submitError, submit } =
+    useAnalysisProgress(requestId, mockAnalysisProgress.steps);
 
   const questions = useMemo(
     () => (waiting ? toClarifyingQuestions(waiting) : []),
@@ -288,6 +313,7 @@ function LiveProgress({ requestId }: { requestId: string }) {
       questionKey={waiting?.question_session_id}
       summary={known.summary}
       error={error}
+      submitError={submitError}
       onSubmit={handleAnswersSubmit}
       onViewReport={() => router.replace(REPORT_PATH)}
       onRestart={() => router.replace('/building-confirm')}
@@ -304,6 +330,7 @@ function ProgressView({
   questionKey,
   summary,
   error,
+  submitError,
   onSubmit,
   onViewReport,
   onRestart,
@@ -316,6 +343,7 @@ function ProgressView({
   questionKey?: string;
   summary: AnalysisSummary;
   error?: string | null;
+  submitError?: string | null;
   onSubmit: (answers: ClarifyingAnswers, note: string) => void;
   onViewReport: () => void;
   onRestart?: () => void;
@@ -390,6 +418,7 @@ function ProgressView({
                 questions={questions}
                 initialAnswers={initialAnswers}
                 showNote={showNote}
+                submitError={submitError}
                 onSubmit={onSubmit}
                 onViewReport={onViewReport}
               />

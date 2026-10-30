@@ -17,7 +17,6 @@ import {
   statusLabel,
   type StatusTone,
 } from '@/lib/api/analysisStatus';
-import { saveRequestId } from '@/lib/api/resultStore';
 import { colors } from '@/styles/tokens';
 
 const PAGE_SIZE = 20;
@@ -160,9 +159,7 @@ function AnalysisRow({ item }: { item: MyAnalysis }) {
   const openable = item.status === 'completed';
 
   function open() {
-    // 리포트 화면은 요청 ID를 세션 저장소에서 읽는다. 거기에 넣고 보낸다.
-    saveRequestId(item.request_id);
-    router.push('/report');
+    router.push(`/report?id=${encodeURIComponent(item.request_id)}`);
   }
 
   return (

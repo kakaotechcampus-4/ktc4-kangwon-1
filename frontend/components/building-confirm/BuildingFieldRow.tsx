@@ -25,7 +25,7 @@ export default function BuildingFieldRow<T>({
 }: BuildingFieldRowProps<T>) {
   return (
     <div
-      className="flex min-h-[88px] items-center gap-6 px-10 py-5"
+      className="@container"
       style={{
         borderTop: `1px solid ${colors.neutral.border}`,
         backgroundColor:
@@ -34,32 +34,38 @@ export default function BuildingFieldRow<T>({
             : colors.neutral.white,
       }}
     >
-      <p
-        className="w-[220px] shrink-0 text-base"
-        style={{ color: colors.text.secondary }}
-      >
-        {label}
-      </p>
-      <div className="flex min-w-0 flex-1 items-center">
-        {editable ? (
-          editor
-        ) : (
-          <p
-            className="text-xl font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {field.value === null ? '—' : format(field.value)}
-          </p>
-        )}
+      <div className="flex flex-col gap-3 px-6 py-5 @min-[40rem]:min-h-[88px] @min-[40rem]:flex-row @min-[40rem]:items-center @min-[40rem]:gap-6 @min-[40rem]:px-8">
+        <p
+          className="text-base @min-[40rem]:w-[120px] @min-[40rem]:shrink-0"
+          style={{ color: colors.text.secondary }}
+        >
+          {label}
+        </p>
+        <div className="@container flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="min-w-0 max-w-full grow">
+            {editable ? (
+              editor
+            ) : (
+              <p
+                className="text-xl font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {field.value === null ? '—' : format(field.value)}
+              </p>
+            )}
+          </div>
+          {showSource && (
+            <SourceBadge
+              source={field.source}
+              registryText={
+                field.registryValue === null
+                  ? null
+                  : format(field.registryValue)
+              }
+            />
+          )}
+        </div>
       </div>
-      {showSource && (
-        <SourceBadge
-          source={field.source}
-          registryText={
-            field.registryValue === null ? null : format(field.registryValue)
-          }
-        />
-      )}
     </div>
   );
 }

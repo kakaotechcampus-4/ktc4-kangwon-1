@@ -18,13 +18,13 @@ export default function SegmentedSelector<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-grid w-fit max-w-full grid-flow-col auto-cols-fr self-start overflow-hidden rounded-lg border"
+      className="grid w-full grid-cols-2 gap-px self-start overflow-hidden rounded-lg border [&>:last-child:nth-child(odd)]:col-span-2 @min-[28rem]:inline-grid @min-[28rem]:w-fit @min-[28rem]:max-w-full @min-[28rem]:grid-flow-col @min-[28rem]:auto-cols-fr @min-[28rem]:grid-cols-none @min-[28rem]:[&>:last-child:nth-child(odd)]:col-span-1"
       style={{
         borderColor: colors.neutral.border,
-        backgroundColor: colors.neutral.white,
+        backgroundColor: colors.neutral.border,
       }}
     >
-      {options.map((option, index) => {
+      {options.map((option) => {
         const isSelected = option.value === value;
         return (
           <button
@@ -35,8 +35,6 @@ export default function SegmentedSelector<T extends string>({
             onClick={() => onChange(option.value)}
             className="min-h-[52px] min-w-[72px] px-4 text-base whitespace-nowrap sm:min-w-[88px] sm:px-5"
             style={{
-              borderLeft:
-                index === 0 ? 'none' : `1px solid ${colors.neutral.border}`,
               backgroundColor: isSelected
                 ? colors.brand.dark
                 : colors.neutral.white,

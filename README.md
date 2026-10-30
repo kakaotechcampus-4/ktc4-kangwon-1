@@ -62,7 +62,7 @@ HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없�
   "status": "waiting_for_input",
   "question_session_id": "question_dcb9106c-eb14-4d18-9e62-00131dae7d0b",
   "questions": [
-    {"field":"floor","question":"몇 층인가요?","reason":"공간 조건 확인"}
+    {"field":"floor","question":"몇 층인가요?","reason":"층에 따라 들어올 수 있는 업종과 손님 동선이 달라져요."}
   ]
 }
 ```
