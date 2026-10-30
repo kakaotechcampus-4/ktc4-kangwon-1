@@ -39,6 +39,7 @@ type ClarifyingPanelProps = {
   initialAnswers?: ClarifyingAnswers;
   // "추가로 알려주실 내용" 칸. 실제 백엔드는 이 값을 받을 필드가 없어 숨긴다.
   showNote?: boolean;
+  submitError?: string | null;
 };
 
 /**
@@ -54,6 +55,7 @@ export default function ClarifyingPanel({
   onViewReport,
   initialAnswers,
   showNote = true,
+  submitError,
 }: ClarifyingPanelProps) {
   const [answers, setAnswers] = useState<ClarifyingAnswers>(
     initialAnswers ?? {}
@@ -185,6 +187,15 @@ export default function ClarifyingPanel({
       )}
 
       <div className="flex flex-col gap-2">
+        {submitError ? (
+          <p
+            role="alert"
+            className="text-center text-15 font-semibold"
+            style={{ color: colors.status.notRecommend }}
+          >
+            {submitError}
+          </p>
+        ) : null}
         <Button
           type="button"
           variant="primary"

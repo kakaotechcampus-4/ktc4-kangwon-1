@@ -47,8 +47,17 @@ import {
   formatArea,
 } from '@/components/building-confirm/labels';
 import type { DecisionResult, FactView } from '@/lib/api/types';
-import { getAnalysisFacts } from '@/lib/api/analyses';
+import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
 import { indexFacts, renderSegments } from '@/lib/api/segments';
+import { MOCK_MODE } from '@/lib/api/mockMode';
+import { reportSource, storedReport } from '@/lib/api/reportSource';
+import { formatDay } from '@/lib/api/analysisStatus';
+import StateNotice from '@/components/ui/StateNotice';
+import {
+  fetchFailed,
+  reportNotice,
+  type ReportNoticeState,
+} from '@/components/report/reportNotice';
 import {
   competitionFromFacts,
   floatingPopulationFromFacts,
@@ -219,16 +228,59 @@ export default function ReportPage() {
   // 없을 때도 리포트 머리말이 입력한 상가를 가리키게 한다.
   const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
+  const [notice, setNotice] = useState<ReportNoticeState | null | undefined>();
+  const [analyzedDay, setAnalyzedDay] = useState('');
+  const [isExample, setIsExample] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     // sessionStorage는 브라우저 전용이라 서버 렌더에서는 접근할 수 없다.
     // 마운트 후 한 번만 읽어 온다 — 이 첫 렌더 이후의 추가 렌더 한 번은
     // 페이지 진입 시 결과를 채워 넣는 데 불가피하다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAnalysisResult(loadAnalysisResult());
-    setVacancyInput(loadVacancyInput());
-    setBuilding(loadConfirmedBuilding());
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const source = reportSource({
+      urlId: params.get('id'),
+      savedRequestId: loadRequestId(),
+      saved: loadAnalysisResult(),
+      mockMode: MOCK_MODE,
+      example: params.has('example'),
+    });
+    if (source.kind !== 'fetch') {
+      const fromSession = source.kind === 'saved' || source.kind === 'preview';
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAnalysisResult(source.kind === 'saved' ? source.result : null);
+      setVacancyInput(fromSession ? loadVacancyInput() : null);
+      setBuilding(fromSession ? loadConfirmedBuilding() : null);
+      setIsExample(source.kind === 'example');
+      setNotice(source.kind === 'empty' ? { kind: 'empty' } : null);
+      return;
+    }
+    let cancelled = false;
+    setNotice({ kind: 'loading' });
+    getAnalysis(source.requestId)
+      .then((detail) => {
+        if (cancelled) return;
+        const report = storedReport(detail);
+        if (report.kind !== 'ready') {
+          setNotice(report);
+          return;
+        }
+        setAnalysisResult(report.result);
+        setVacancyInput(report.vacancyInput);
+        setBuilding(null);
+        setAnalyzedDay(report.analyzedDate);
+        setNotice(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setNotice(
+          fetchFailed(error, () => setLoadAttempt((attempt) => attempt + 1))
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAttempt]);
 
   // 차트용 전체 fact. 결과의 facts는 보고서가 인용한 것만 담아 따로 받는다.
   // undefined = 받는 중, null = 받지 못함
@@ -239,7 +291,7 @@ export default function ReportPage() {
     if (!analysisResult) {
       return;
     }
-    const requestId = loadRequestId() ?? analysisResult.request_id;
+    const requestId = analysisResult.request_id;
     // 이미 받아 둔 fact가 있으면 서버를 다시 부르지 않는다.
     const saved = loadAnalysisFacts(requestId);
     if (saved) {
@@ -292,7 +344,7 @@ export default function ReportPage() {
     : null;
 
   const analyzedDate = analysisResult
-    ? new Date().toLocaleDateString('ko-KR')
+    ? analyzedDay || formatDay(new Date().toISOString())
     : mockReportData.analyzedDate;
   const inputAddress = vacancyInput
     ? [vacancyInput.roadAddress, vacancyInput.floorUnit.trim()]
@@ -395,6 +447,21 @@ export default function ReportPage() {
       ))}
     </nav>
   );
+  const shownNotice: ReportNoticeState | null =
+    notice === undefined ? { kind: 'loading' } : notice;
+  if (shownNotice) {
+    return (
+      <div
+        className="flex min-h-screen flex-col"
+        style={{ backgroundColor: colors.neutral.background }}
+      >
+        <Header />
+        <main className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 pt-14 pb-24 sm:px-8">
+          <StateNotice {...reportNotice(shownNotice)} />
+        </main>
+      </div>
+    );
+  }
   return (
     <div
       className="min-h-screen"
@@ -424,7 +491,7 @@ export default function ReportPage() {
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
             <Link
-              href="/reports"
+              href={MOCK_MODE ? '/reports' : '/my/reports'}
               className="inline-flex min-h-11 items-center text-sm"
             >
               ← 리포트 목록 보기
@@ -442,6 +509,19 @@ export default function ReportPage() {
               {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}
             </button>
           </div>
+          {isExample ? (
+            <p
+              role="note"
+              className="mb-6 rounded-xl border px-5 py-4 text-base font-semibold"
+              style={{
+                borderColor: colors.accent.orange,
+                backgroundColor: `${colors.accent.orange}14`,
+                color: colors.text.primary,
+              }}
+            >
+              예시 리포트예요. 실제 상가를 분석한 결과가 아니에요.
+            </p>
+          ) : null}
           <header className="report-masthead">
             <div>
               <p className="report-masthead-eyebrow">ANALYSIS REPORT</p>

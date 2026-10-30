@@ -134,7 +134,7 @@ export default function Hero() {
           </Link>
           {/* 보조 버튼 — 목업 리포트로 결과가 어떻게 나오는지 먼저 보여준다. */}
           <Link
-            href="/report"
+            href="/report?example=1"
             className="inline-flex h-14 items-center rounded-full border-[1.5px] border-[#10233A] bg-white/70 px-7 text-base font-bold text-[#10233A] backdrop-blur transition-colors duration-200 hover:bg-white"
           >
             리포트 예시 보기

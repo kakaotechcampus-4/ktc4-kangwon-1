@@ -250,7 +250,7 @@ export default function BuildingConfirmPage() {
             <FlowPageTitle
               eyebrow="BUILDING CHECK"
               title="이 정보가 맞나요?"
-              description="건축물대장에 적힌 내용이에요. 실제와 다르면 고쳐 주세요. 고친 값으로 분석하고, 리포트에 건축물대장과 다르다고 표시해 둘게요."
+              description="건축물대장에 적힌 내용이에요. 실제와 다르면 고쳐 주세요. 전용면적과 설비는 고친 값으로 분석해요."
             />
             <StepIndicator currentStep={2} />
 
