@@ -1,20 +1,14 @@
 'use client';
 
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { LayoutGrid, Share2, Target, type LucideIcon } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 type Problem = {
   id: string;

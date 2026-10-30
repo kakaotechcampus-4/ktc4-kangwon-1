@@ -1,10 +1,12 @@
 'use client';
 
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
+import { Footprints, BarChart3, Users, Activity } from 'lucide-react';
 import Card from '@/components/ui/Card';
-import { Users, Clock3, CalendarDays, Activity } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import RevealBarChart from '@/components/charts/RevealBarChart';
+import PopulationBarChart from '@/components/charts/PopulationBarChart';
+import AreaTypeIllustration from '@/components/report/AreaTypeIllustration';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { colors } from '@/styles/tokens';
 import {
@@ -14,15 +16,9 @@ import {
   type ReliabilityLevel,
 } from '@/lib/mockData/report';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(
@@ -199,116 +195,6 @@ function TypeHeaderCard({ data }: { data: FloatingPopulationData }) {
   );
 }
 
-// 인사이트 문장의 주제에 맞는 아이콘. 컴포넌트를 변수에 담아 <Icon />으로
-// 그리면 같은 파일의 <style jsx> 보간과 겹쳐 Next 내장 styled-jsx 변환이 끝나지
-// 않는다(개발 서버·빌드가 멈춤). 그래서 아이콘을 직접 그리는 컴포넌트로 둔다.
-function InsightIcon({ reason }: { reason: string }) {
-  const props = { size: 22, strokeWidth: 1.7 };
-  if (/\d+대|연령/.test(reason)) return <Users {...props} />;
-  if (/시간|저녁|아침/.test(reason)) return <Clock3 {...props} />;
-  if (/주말|평일/.test(reason)) return <CalendarDays {...props} />;
-  return <Activity {...props} />;
-}
-
-function PopulationOverview({ data }: { data: FloatingPopulationData }) {
-  const periods = [...new Set(data.sources.map((source) => source.period))];
-  return (
-    <div className="population-summary">
-      <div className="population-metrics">
-        <div className="population-metric">
-          <div className="population-metric-title">
-            <Users size={20} />
-            <h3>하루 평균 유동인구</h3>
-          </div>
-          <p className="population-number">
-            {Math.round(data.population.daily_avg).toLocaleString('ko-KR')}
-            <span>명/일</span>
-          </p>
-          <p className="population-period">
-            반경 {data.radius_m}m · {periods.join(' · ') || '집계 기간 미제공'}
-          </p>
-          <p className="population-explanation">
-            주변 상권의 추정 통행량입니다. 상가 앞 통행량이나 중복을 제외한
-            방문자 수와는 다릅니다.
-          </p>
-        </div>
-        <div className="population-metric">
-          <div className="population-metric-title">
-            <Activity size={20} />
-            <h3>상권 규모</h3>
-          </div>
-          <p className="population-ranking">
-            서울 상권 상위{' '}
-            <strong>
-              {100 - data.benchmark.scale_percentile}
-              <span>%</span>
-            </strong>
-          </p>
-          <div className="population-scale" aria-hidden="true">
-            <span
-              style={{
-                left: `${Math.max(0, Math.min(100, 100 - data.benchmark.scale_percentile))}%`,
-              }}
-            />
-          </div>
-          <div className="population-scale-labels">
-            <span>상위 0%</span>
-            <span>100%</span>
-          </div>
-          <p className="population-explanation">
-            상위 비율이 작을수록 규모가 큽니다. 예상 매출을 뜻하지 않습니다.
-          </p>
-        </div>
-      </div>
-      <div className="population-profile">
-        <header className="population-profile-header">
-          <div>
-            <span className="population-profile-mark" />
-            <h3>{data.type.label}</h3>
-          </div>
-          <p>
-            신뢰도 {RELIABILITY_LABEL[data.reliability.level]} ·{' '}
-            {data.reliability.trade_area_count}곳 중{' '}
-            {data.reliability.covered_trade_areas}곳 자료 확보
-          </p>
-        </header>
-        <ul className="population-insights">
-          {data.type.reasons.map((reason) => {
-            const label = /\d+대|연령/.test(reason)
-              ? '연령 구성'
-              : /시간|저녁|아침/.test(reason)
-                ? '주요 시간대'
-                : /주말|평일/.test(reason)
-                  ? '요일별 흐름'
-                  : '상권 특징';
-            return (
-              <li key={reason}>
-                <span className="population-insight-icon">
-                  <InsightIcon reason={reason} />
-                </span>
-                <div>
-                  <h4>{label}</h4>
-                  <p>
-                    {reason
-                      .split(/(\d+(?:\.\d+)?(?:%|배))/g)
-                      .map((part, i) =>
-                        /^(\d+(?:\.\d+)?(?:%|배))$/.test(part) ? (
-                          <strong key={i}>{part}</strong>
-                        ) : (
-                          part
-                        )
-                      )}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 /** 2. 핵심 stat */
 function CoreStat({ data }: { data: FloatingPopulationData }) {
   const topPercent = 100 - data.benchmark.scale_percentile;
@@ -342,16 +228,16 @@ function CoreStat({ data }: { data: FloatingPopulationData }) {
 
 // 도넛, 범례, 구성 비율 막대가 동일한 연령대 팔레트를 공유합니다.
 const AGE_COLORS = [
-  '#19B3A2',
-  '#258F91',
+  '#1947B3',
+  '#254591',
   '#F0AE6A',
-  '#97DCD0',
-  '#60B8AE',
+  '#97ACDC',
+  '#607AB8',
   '#F6CCA8',
 ];
 
-/** 4. 연령대별 분포 */
-function AgeDistribution({ data }: { data: FloatingPopulationData }) {
+/** 연령대 구성 표(도넛 + 구성 비율 + 서울 평균 대비). 카드형·읽기형이 함께 쓴다. */
+function AgeComparison({ data }: { data: FloatingPopulationData }) {
   const ageKeys = Object.keys(data.population.age_share);
   const slices = ageKeys.map((key, i) => ({
     name: formatAgeLabel(key),
@@ -361,106 +247,111 @@ function AgeDistribution({ data }: { data: FloatingPopulationData }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
 
   return (
+    <div className="fp-age-wrap">
+      <div className="fp-age-donut">
+        <div className="fp-donut-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={slices}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="62%"
+                outerRadius="92%"
+                paddingAngle={1}
+                stroke="none"
+                isAnimationActive={false}
+              >
+                {slices.map((slice) => (
+                  <Cell key={slice.name} fill={slice.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="age-composition-note">이 지역의 연령 구성</p>
+      </div>
+      <div className="age-comparison-table">
+        <div className="age-table-head">
+          <span>연령대</span>
+          <span>구성 비율</span>
+          <span>
+            서울 평균 대비 <small>1.0배 기준</small>
+          </span>
+        </div>
+        {slices.map((slice, i) => {
+          const index = data.benchmark.age_index[ageKeys[i]] ?? null;
+          const maxIndex = Math.max(
+            2,
+            ...Object.values(data.benchmark.age_index).filter(
+              (v): v is number => typeof v === 'number'
+            )
+          );
+          const baseline = 100 / maxIndex;
+          const endpoint =
+            index === null ? baseline : Math.min(100, (index / maxIndex) * 100);
+          const share = total > 0 ? (slice.value / total) * 100 : 0;
+          const dominant =
+            slice.value === Math.max(...slices.map((s) => s.value));
+          return (
+            <div
+              className={`age-table-row ${dominant ? 'dominant' : ''}`}
+              key={slice.name}
+            >
+              <span className="age-row-label">
+                <i style={{ backgroundColor: slice.color }} />
+                {slice.name}
+              </span>
+              <div className="age-share">
+                <strong>
+                  {share.toFixed(1)}
+                  <small>%</small>
+                </strong>
+                <div aria-hidden="true">
+                  <span
+                    style={{
+                      width: `${share}%`,
+                      backgroundColor: slice.color,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="age-index-cell">
+                <div className="age-index-track" aria-hidden="true">
+                  <i style={{ left: `${baseline}%` }} />
+                  {index !== null && (
+                    <span
+                      className={index >= 1 ? 'above' : 'below'}
+                      style={{
+                        left: `${Math.min(baseline, endpoint)}%`,
+                        width: `${Math.abs(endpoint - baseline)}%`,
+                      }}
+                    />
+                  )}
+                </div>
+                <strong>
+                  {index === null ? '자료 없음' : `${index.toFixed(2)}배`}
+                </strong>
+              </div>
+            </div>
+          );
+        })}
+        <p className="age-table-note">
+          1.0배보다 높으면 서울 평균보다 많고, 낮으면 적습니다.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** 4. 연령대별 분포 */
+function AgeDistribution({ data }: { data: FloatingPopulationData }) {
+  return (
     <SectionCard
       title="연령대별 분포"
       description="이 반경 유동인구의 연령대 구성과, 서울 평균 대비 각 연령대가 얼마나 많은지를 함께 보여줍니다."
     >
-      <div className="fp-age-wrap">
-        <div className="fp-age-donut">
-          <div className="fp-donut-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={slices}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius="62%"
-                  outerRadius="92%"
-                  paddingAngle={1}
-                  stroke="none"
-                  isAnimationActive={false}
-                >
-                  {slices.map((slice) => (
-                    <Cell key={slice.name} fill={slice.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="age-composition-note">이 지역의 연령 구성</p>
-        </div>
-        <div className="age-comparison-table">
-          <div className="age-table-head">
-            <span>연령대</span>
-            <span>구성 비율</span>
-            <span>
-              서울 평균 대비 <small>1.0배 기준</small>
-            </span>
-          </div>
-          {slices.map((slice, i) => {
-            const index = data.benchmark.age_index[ageKeys[i]] ?? null;
-            const maxIndex = Math.max(
-              2,
-              ...Object.values(data.benchmark.age_index).filter(
-                (v): v is number => typeof v === 'number'
-              )
-            );
-            const baseline = 100 / maxIndex;
-            const endpoint =
-              index === null
-                ? baseline
-                : Math.min(100, (index / maxIndex) * 100);
-            const share = total > 0 ? (slice.value / total) * 100 : 0;
-            const dominant =
-              slice.value === Math.max(...slices.map((s) => s.value));
-            return (
-              <div
-                className={`age-table-row ${dominant ? 'dominant' : ''}`}
-                key={slice.name}
-              >
-                <span className="age-row-label">
-                  <i style={{ backgroundColor: slice.color }} />
-                  {slice.name}
-                </span>
-                <div className="age-share">
-                  <strong>
-                    {share.toFixed(1)}
-                    <small>%</small>
-                  </strong>
-                  <div aria-hidden="true">
-                    <span
-                      style={{
-                        width: `${share}%`,
-                        backgroundColor: slice.color,
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="age-index-cell">
-                  <div className="age-index-track" aria-hidden="true">
-                    <i style={{ left: `${baseline}%` }} />
-                    {index !== null && (
-                      <span
-                        className={index >= 1 ? 'above' : 'below'}
-                        style={{
-                          left: `${Math.min(baseline, endpoint)}%`,
-                          width: `${Math.abs(endpoint - baseline)}%`,
-                        }}
-                      />
-                    )}
-                  </div>
-                  <strong>
-                    {index === null ? '자료 없음' : `${index.toFixed(2)}배`}
-                  </strong>
-                </div>
-              </div>
-            );
-          })}
-          <p className="age-table-note">
-            1.0배보다 높으면 서울 평균보다 많고, 낮으면 적습니다.
-          </p>
-        </div>
-      </div>
+      <AgeComparison data={data} />
     </SectionCard>
   );
 }
@@ -601,6 +492,429 @@ function TradeAreaList({
   );
 }
 
+/**
+ * 리포트용 읽기형 구성 — 카드를 쌓는 대신 결론 → 핵심 숫자 → 근거(질문별 행)
+ * 순서로 위에서 아래로 읽히게 한다. 스타일은 app/report/report.css의 .story 블록.
+ */
+function PopulationStory({ data }: { data: FloatingPopulationData }) {
+  const periods = [...new Set(data.sources.map((source) => source.period))];
+  const ageEntries = Object.entries(data.population.age_share);
+  const ageTotal = ageEntries.reduce((sum, [, value]) => sum + value, 0);
+  const topAge = ageEntries.reduce<[string, number] | null>(
+    (best, entry) => (!best || entry[1] > best[1] ? entry : best),
+    null
+  );
+
+  return (
+    <div className="story">
+      <header className="story-lead">
+        <div className="story-lead-text">
+          <h3>
+            이 주변은 <em>{data.type.label}</em> 상권이에요
+          </h3>
+          <p className="story-meta">
+            신뢰도 {RELIABILITY_LABEL[data.reliability.level]} ·{' '}
+            {data.reliability.trade_area_count}곳 중{' '}
+            {data.reliability.covered_trade_areas}곳 자료 확보
+          </p>
+          <ul className="story-insights">
+            {data.type.reasons.map((reason) => (
+              <li key={reason}>
+                {reason
+                  .split(/(\d+(?:\.\d+)?(?:%|배))/g)
+                  .map((part, i) =>
+                    /^(\d+(?:\.\d+)?(?:%|배))$/.test(part) ? (
+                      <strong key={i}>{part}</strong>
+                    ) : (
+                      part
+                    )
+                  )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AreaTypeIllustration label={data.type.label} />
+      </header>
+
+      <dl className="story-stats">
+        <div>
+          <dt>
+            <span className="story-stat-icon" aria-hidden="true">
+              <Footprints size={18} strokeWidth={2} />
+            </span>
+            하루 평균 유동인구
+          </dt>
+          <dd>
+            {Math.round(data.population.daily_avg).toLocaleString('ko-KR')}
+            <small>명/일</small>
+          </dd>
+          <p>
+            반경 {data.radius_m}m · {periods.join(' · ') || '기간 미제공'}
+          </p>
+        </div>
+        <div>
+          <dt>
+            <span className="story-stat-icon" aria-hidden="true">
+              <BarChart3 size={18} strokeWidth={2} />
+            </span>
+            서울 상권 규모
+          </dt>
+          <dd>
+            <small>상위</small>
+            {100 - data.benchmark.scale_percentile}
+            <small>%</small>
+          </dd>
+          <p>작을수록 큰 상권 · 매출 예측 아님</p>
+        </div>
+        {topAge && (
+          <div>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Users size={18} strokeWidth={2} />
+              </span>
+              가장 많은 연령대
+            </dt>
+            <dd>
+              {formatAgeLabel(topAge[0])}
+              <small>
+                {ageTotal > 0
+                  ? `${((topAge[1] / ageTotal) * 100).toFixed(0)}%`
+                  : ''}
+              </small>
+            </dd>
+            <p>이 반경 유동인구 기준</p>
+          </div>
+        )}
+        {data.trend && data.trend.qoq_change !== null && (
+          <div>
+            <dt>
+              <span className="story-stat-icon" aria-hidden="true">
+                <Activity size={18} strokeWidth={2} />
+              </span>
+              전분기 대비
+            </dt>
+            <dd>
+              {data.trend.qoq_change > 0 ? '+' : ''}
+              {data.trend.qoq_change}
+              <small>%</small>
+            </dd>
+            <p>{data.trend.direction}</p>
+          </div>
+        )}
+      </dl>
+
+      <AgeStory data={data} />
+
+      {data.radius_profile && <RadiusStory data={data} />}
+      {data.trend && <TrendStory data={data} />}
+    </div>
+  );
+}
+
+/** 눈금 끝값을 0.25배 단위로 맞춘 1.0배 중심 범위(예: 0.25 ~ 1.75배). */
+function indexRange(values: number[]) {
+  const spread = Math.max(0.25, ...values.map((v) => Math.abs(v - 1)));
+  const half = Math.ceil(spread / 0.25) * 0.25;
+  return { min: Math.max(0, 1 - half), max: 1 + half };
+}
+
+function formatIndex(value: number) {
+  return `${value.toFixed(2)}배`;
+}
+
+/**
+ * 연령대 구성 — 서로 기준이 다른 두 지표를 나란히 보여준다.
+ * - 구성비: 이 반경 유동인구 중 그 연령대 비율(합 100%)
+ * - 서울 평균 대비: 이 반경 구성비 ÷ 서울 전체 상권 평균 구성비
+ *   (backend floating_population/baseline.py index(), AGE_SHARE_AVG)
+ * 행 강조는 쓰지 않고, 각 지표의 1위에만 이유를 적은 태그를 붙인다.
+ */
+function AgeStory({ data }: { data: FloatingPopulationData }) {
+  const keys = Object.keys(data.population.age_share);
+  const total = keys.reduce(
+    (sum, key) => sum + data.population.age_share[key],
+    0
+  );
+  const rows = keys.map((key) => ({
+    key,
+    label: formatAgeLabel(key),
+    share: total > 0 ? (data.population.age_share[key] / total) * 100 : 0,
+    index: data.benchmark.age_index[key] ?? null,
+  }));
+  if (rows.length === 0) return null;
+
+  const topShare = rows.reduce((best, row) =>
+    row.share > best.share ? row : best
+  );
+  const indexed = rows.filter(
+    (row): row is typeof row & { index: number } => row.index !== null
+  );
+  const topIndex = indexed.reduce<(typeof indexed)[number] | null>(
+    (best, row) => (!best || row.index > best.index ? row : best),
+    null
+  );
+  const range = indexRange(indexed.map((row) => row.index));
+  const span = range.max - range.min;
+  const toPercent = (value: number) =>
+    ((Math.min(range.max, Math.max(range.min, value)) - range.min) / span) *
+    100;
+  const shareCeiling = Math.max(10, Math.ceil(topShare.share / 10) * 10);
+  const periods = [...new Set(data.sources.map((source) => source.period))];
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">누가 오가나요?</p>
+        <h4>
+          연령대 구성
+          <span className="story-scope">
+            반경 {data.radius_m}m
+            {periods.length > 0 && ` · ${periods.join(' · ')}`}
+          </span>
+        </h4>
+      </div>
+
+      <div className="age-summary">
+        <p>
+          <span className="age-summary-tag">구성비</span>
+          <strong>{topShare.label}</strong> 비중이 가장 높아요
+          <b>{topShare.share.toFixed(1)}%</b>
+        </p>
+        {topIndex && (
+          <p>
+            <span className="age-summary-tag age-summary-tag-index">
+              서울 평균 대비
+            </span>
+            <strong>{topIndex.label}</strong> 비중이 가장 두드러져요
+            <b>{formatIndex(topIndex.index)}</b>
+          </p>
+        )}
+      </div>
+
+      <div
+        className="age-grid"
+        role="table"
+        aria-label="연령대별 구성비와 서울 평균 대비 배수"
+      >
+        <div className="age-grid-head" role="row">
+          <span role="columnheader">연령대</span>
+          <span role="columnheader">
+            구성비
+            <small>유동인구 중 비율</small>
+          </span>
+          <span role="columnheader">
+            서울 평균 대비
+            <small>구성비 배수 · 1.0배 = 서울 평균</small>
+          </span>
+        </div>
+        <div className="age-grid-axis" aria-hidden="true">
+          <span />
+          <span className="age-axis-share">
+            <i>0%</i>
+            <i>{shareCeiling}%</i>
+          </span>
+          <span className="age-axis-index">
+            <i style={{ left: '0%' }}>{range.min.toFixed(2)}</i>
+            <i style={{ left: `${toPercent(1)}%` }}>1.0배</i>
+            <i style={{ left: '100%' }}>{range.max.toFixed(2)}</i>
+          </span>
+        </div>
+        {rows.map((row) => {
+          const isTopShare = row === topShare;
+          const isTopIndex = row === topIndex;
+          const center = toPercent(1);
+          const end = row.index === null ? center : toPercent(row.index);
+          return (
+            <div className="age-grid-row" role="row" key={row.key}>
+              <span className="age-cell-label" role="rowheader">
+                {row.label}
+                {/* 좁은 화면에서는 강조 이유를 연령대 옆에 모아 둔다(값 칸 폭을 고정). */}
+                {isTopShare && (
+                  <b className="age-flag age-flag-share age-flag-inline">
+                    구성비 1위
+                  </b>
+                )}
+                {isTopIndex && (
+                  <b className="age-flag age-flag-inline">평균 대비 최고</b>
+                )}
+              </span>
+              <div className="age-cell-share" role="cell">
+                <em className="age-cell-caption">구성비</em>
+                <div className="age-share-track" aria-hidden="true">
+                  <span
+                    className={isTopShare ? 'is-top' : ''}
+                    style={{ width: `${(row.share / shareCeiling) * 100}%` }}
+                  />
+                </div>
+                <span className="age-value">
+                  <strong>{row.share.toFixed(1)}%</strong>
+                  {isTopShare && (
+                    <b className="age-flag age-flag-share">구성비 1위</b>
+                  )}
+                </span>
+              </div>
+              <div className="age-cell-index" role="cell">
+                <em className="age-cell-caption">서울 평균 대비</em>
+                <div className="age-index-scale" aria-hidden="true">
+                  <i style={{ left: `${center}%` }} />
+                  {row.index !== null && (
+                    <span
+                      className={row.index >= 1 ? 'is-above' : 'is-below'}
+                      style={{
+                        left: `${Math.min(center, end)}%`,
+                        width: `${Math.abs(end - center)}%`,
+                      }}
+                    />
+                  )}
+                </div>
+                <span className="age-value">
+                  <strong>
+                    {row.index === null ? '자료 없음' : formatIndex(row.index)}
+                  </strong>
+                  {isTopIndex && <b className="age-flag">평균 대비 최고</b>}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <ul className="story-notes">
+        <li>
+          <strong>구성비</strong>: 이 반경 유동인구 중 그 연령대가 차지하는
+          비율이에요(합계 100%).
+        </li>
+        <li>
+          <strong>서울 평균 대비</strong>: 이 반경의 연령대 구성비 ÷ 서울 전체
+          상권의 평균 구성비예요. 사람 수가 아니라 <strong>비중</strong>을
+          비교한 값이에요.
+          {topIndex &&
+            ` 예를 들어 ${topIndex.label} ${formatIndex(topIndex.index)}는 “${topIndex.label}가 그만큼 많이 지나간다”가 아니라 “${topIndex.label} 비중이 서울 평균의 ${formatIndex(topIndex.index)}”라는 뜻이에요.`}
+        </li>
+        <li>
+          길을 지나는 유동인구(통행량) 기준이라 실제 매장 방문객 수와는 달라요.
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+/** 50m·100m처럼 작은 반경은 걸친 상권이 적어 추정 성격이 강하다(각주 * 로 연결). */
+const SMALL_RADIUS_LIMIT_M = 100;
+
+/** 반경별 인구 — 값은 그 반경 안 전체(누적)다. backend metrics._radius_profile 참고. */
+function RadiusStory({ data }: { data: FloatingPopulationData }) {
+  const points = data.radius_profile?.points ?? [];
+  if (points.length === 0) return null;
+  const nearest = points[0];
+  const widest = points[points.length - 1];
+  const small = points
+    .filter((point) => point.radius_m <= SMALL_RADIUS_LIMIT_M)
+    .map((point) => `${point.radius_m}m`);
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">어디까지 퍼져 있나요?</p>
+        <h4>반경별 인구</h4>
+      </div>
+      <div className="story-summary">
+        <p className="story-summary-main">
+          반경 {widest.radius_m}m 안 하루 평균{' '}
+          <strong>
+            {Math.round(widest.daily_avg).toLocaleString('ko-KR')}
+          </strong>
+          명
+        </p>
+        <p className="story-summary-sub">
+          가장 가까운 반경 {nearest.radius_m}m 안에는{' '}
+          {Math.round(nearest.daily_avg).toLocaleString('ko-KR')}명이에요.
+        </p>
+      </div>
+      <PopulationBarChart
+        data={points.map((point) => ({
+          label: `${point.radius_m}m 이내`,
+          value: Math.round(point.daily_avg),
+          footnote: point.radius_m <= SMALL_RADIUS_LIMIT_M,
+        }))}
+        label="반경 안 하루 평균 유동인구(누적)"
+        unit="하루 평균 유동인구(명) · 반경 안 누적"
+      />
+      <ul className="story-notes">
+        <li>
+          각 막대는 그 반경 <strong>안 전체를 합친 값</strong>이에요. 거리
+          구간(예: 100~200m)별 인구가 아니에요.
+        </li>
+        {small.length > 0 && (
+          <li>
+            <span className="story-notes-mark">*</span> 반경 {small.join('·')}{' '}
+            안은 표본이 적어 추정 성격이 강해요.
+          </li>
+        )}
+        {data.radius_profile?.method && (
+          <li>산정 기준: {data.radius_profile.method}</li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+function formatChange(change: number) {
+  if (change === 0) return '0%';
+  return `${change > 0 ? '▲' : '▼'} ${Math.abs(change)}%`;
+}
+
+/** 분기별 추세 — 최신 분기만 강조하고, 직전 분기 대비 변화율을 최신 값 옆에 둔다. */
+function TrendStory({ data }: { data: FloatingPopulationData }) {
+  const trend = data.trend;
+  if (!trend || trend.quarters.length === 0) return null;
+  const latest = trend.quarters[trend.quarters.length - 1];
+  const change = trend.qoq_change;
+
+  return (
+    <section className="story-row story-row-stack">
+      <div className="story-row-head">
+        <p className="story-question">늘고 있나요?</p>
+        <h4>분기별 추세</h4>
+      </div>
+      <div className="story-summary">
+        <p className="story-summary-main">
+          {latest.period} 하루 평균{' '}
+          <strong>
+            {Math.round(latest.daily_avg).toLocaleString('ko-KR')}
+          </strong>
+          명
+          {change !== null && (
+            <span className="story-change">
+              직전 분기 대비 {formatChange(change)}
+            </span>
+          )}
+          {trend.direction !== '판단 불가' && (
+            <span className="story-direction">{trend.direction}</span>
+          )}
+        </p>
+        {trend.direction === '보합' && (
+          <p className="story-summary-sub">
+            변화율이 ±5% 이내면 ‘보합’으로 봐요. 전년 같은 분기 자료가 있으면
+            그것과, 없으면 직전 분기와 비교해요.
+          </p>
+        )}
+      </div>
+      <PopulationBarChart
+        data={trend.quarters.map((quarter) => ({
+          label: quarter.period,
+          value: Math.round(quarter.daily_avg),
+        }))}
+        label="분기별 하루 평균 유동인구"
+        unit="하루 평균 유동인구(명)"
+        highlightIndex={trend.quarters.length - 1}
+        highlightTag="최신 분기"
+        annotation={change !== null ? formatChange(change) : undefined}
+      />
+    </section>
+  );
+}
+
 export default function FloatingPopulationSection({
   data = mockReportData.floatingPopulation as FloatingPopulationData,
   compactReference = false,
@@ -625,19 +939,13 @@ export default function FloatingPopulationSection({
   }
 
   return (
-    <div className="fp-root flex w-full flex-col items-start">
+    <div
+      className={`fp-root flex w-full flex-col items-start ${reportLayout ? 'fp-root-story' : ''}`}
+    >
       {reportLayout ? (
-        <>
-          <PopulationOverview data={data} />
-          <AgeDistribution data={data} />
-          <div className="analysis-chart-pair population-chart-pair">
-            <RadiusProfileChart data={data} />
-            <TrendChart data={data} />
-          </div>
-        </>
+        <PopulationStory data={data} />
       ) : (
         <>
-          {' '}
           <TypeHeaderCard data={data} />
           <CoreStat data={data} />
           <RadiusProfileChart data={data} />

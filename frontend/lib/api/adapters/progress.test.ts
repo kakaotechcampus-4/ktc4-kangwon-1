@@ -3,8 +3,10 @@ import {
   ANSWERED_OPTION_ID,
   SKIPPED_ANSWER,
   UNKNOWN_ANSWER,
+  answerFailureAction,
   applyProgressEvent,
   prefillAnswers,
+  progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
   toWaiting,
@@ -181,5 +183,38 @@ describe('pollInterval', () => {
     expect(pollInterval(0)).toBe(1_000);
     expect(pollInterval(10_000)).toBe(2_000);
     expect(pollInterval(60_000)).toBe(3_000);
+  });
+});
+
+describe('progressView', () => {
+  it('요청 ID가 있으면 실제 진행을 보여 준다', () => {
+    expect(progressView({ mockMode: false, requestId: 'req-a' })).toBe('live');
+  });
+
+  it('mock 모드는 요청 ID와 상관없이 흉내 낸 진행이다', () => {
+    expect(progressView({ mockMode: true, requestId: null })).toBe('mock');
+    expect(progressView({ mockMode: true, requestId: 'req-a' })).toBe('mock');
+  });
+
+  it('실제 모드에서 요청 ID 없이 들어오면 흉내 내지 않는다', () => {
+    expect(progressView({ mockMode: false, requestId: null })).toBe('none');
+  });
+});
+
+describe('answerFailureAction', () => {
+  it('서버가 이미 답을 받았거나 질문이 끝났으면 진행 확인을 이어 간다', () => {
+    expect(answerFailureAction(409)).toBe('resume');
+  });
+
+  it('연결 오류·호출 과다·서버 오류는 같은 답을 다시 보내게 한다', () => {
+    expect(answerFailureAction(undefined)).toBe('retry');
+    expect(answerFailureAction(429)).toBe('retry');
+    expect(answerFailureAction(503)).toBe('retry');
+  });
+
+  it('다시 보내도 결과가 같은 거절은 실패로 끝낸다', () => {
+    for (const status of [400, 401, 403, 404, 422]) {
+      expect(answerFailureAction(status)).toBe('fail');
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import {
   AlertTriangle,
   ArrowRight,
@@ -19,10 +19,7 @@ import {
 } from '@/lib/api/building';
 import { LOOKUP_LABELS } from './labels';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 const STATUS_TEXT: Record<LookupStatus, string> = {
   pending: '대기',
@@ -35,6 +32,8 @@ type BuildingLoadingProps = {
   statuses: Record<LookupId, LookupStatus>;
   floorLabel: string;
   address?: string;
+  errorMessage?: string | null;
+  onRetry?: () => void;
 };
 
 /** 조회 상태와 다음 행동을 한 화면에서 확인할 수 있도록 구성한다. */
@@ -42,6 +41,8 @@ export default function BuildingLoading({
   statuses,
   floorLabel,
   address,
+  errorMessage,
+  onRetry,
 }: BuildingLoadingProps) {
   const finished = LOOKUP_ORDER.filter(
     (id) => statuses[id] === 'done' || statuses[id] === 'failed'
@@ -81,7 +82,7 @@ export default function BuildingLoading({
         </div>
         <div className="flex flex-col gap-2">
           <h1
-            className="text-2xl font-bold leading-snug sm:text-32"
+            className="text-fluid-24-32 font-bold leading-snug"
             style={{ color: colors.text.primary }}
           >
             {complete
@@ -229,6 +230,38 @@ export default function BuildingLoading({
             );
           })}
         </ul>
+
+        {errorMessage && (
+          <div
+            className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+            role="alert"
+            style={{
+              backgroundColor: `${colors.accent.orange}0F`,
+              borderColor: `${colors.accent.orange}40`,
+            }}
+          >
+            <p
+              className="text-sm leading-relaxed"
+              style={{ color: colors.text.primary }}
+            >
+              {errorMessage}
+            </p>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="min-h-10 shrink-0 rounded-lg border px-4 text-sm font-semibold"
+                style={{
+                  color: colors.brand.dark,
+                  borderColor: colors.neutral.border,
+                  backgroundColor: colors.neutral.white,
+                }}
+              >
+                다시 조회
+              </button>
+            )}
+          </div>
+        )}
 
         <div
           className="flex items-start gap-3 rounded-xl p-4"

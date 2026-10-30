@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="14" y1="5" x2="82" y2="91" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF1D9"/><stop offset="1" stop-color="#FAD49B"/></linearGradient>
+    <linearGradient id="skin" x1="34" y1="27" x2="63" y2="63" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD8B2"/><stop offset="1" stop-color="#EBA77D"/></linearGradient>
+    <linearGradient id="hair" x1="32" y1="18" x2="66" y2="46" gradientUnits="userSpaceOnUse"><stop stop-color="#604433"/><stop offset="1" stop-color="#382D29"/></linearGradient>
+    <linearGradient id="shirt" x1="24" y1="63" x2="73" y2="98" gradientUnits="userSpaceOnUse"><stop stop-color="#F0A94F"/><stop offset="1" stop-color="#CB713C"/></linearGradient>
+    <clipPath id="circle"><circle cx="48" cy="48" r="47"/></clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <circle cx="48" cy="48" r="48" fill="url(#bg)"/>
+    <ellipse cx="48" cy="101" rx="39" ry="35" fill="url(#shirt)"/>
+    <path d="M39 62h18v11H39z" fill="url(#skin)"/>
+    <path d="M29 39c0-17 7-27 20-27 14 0 21 10 21 27l-3 19c-2 11-10 18-19 18-10 0-18-8-20-19l1-18Z" fill="url(#hair)"/>
+    <path d="M34 39c0-12 6-19 15-19 10 0 16 8 16 20v12c0 12-7 20-17 20S33 63 33 52l1-13Z" fill="url(#skin)"/>
+    <path d="M32 40c2-14 7-22 18-22 9 0 15 5 18 19-7-2-13-7-17-13-4 8-10 13-19 16Z" fill="url(#hair)"/>
+    <path d="M40 44h5m7 0h5" stroke="#443936" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="43" cy="47" rx="1.6" ry="2.1" fill="#302D2D"/><ellipse cx="55" cy="47" rx="1.6" ry="2.1" fill="#302D2D"/>
+    <path d="M49 48v6l-2.5 1" stroke="#D28D6B" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M43 59c3 4 9 4 12 0" stroke="#A94E46" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="m37 65 11 11 11-11 6 4-4 28H35l-4-28 6-4Z" fill="#F5F1E7"/>
+    <path d="m38 67 10 9 10-9 5 4-5 26H38l-5-26 5-4Z" fill="#487064"/>
+    <path d="M48 77v20m-9-18 9 8 9-8" stroke="#E4C5A3" stroke-width="2" stroke-linecap="round"/>
+    <path d="M39 31c4-6 10-9 16-8" stroke="#FFF" stroke-opacity=".3" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="70" cy="70" r="10" fill="#FFF" fill-opacity=".92"/><path d="M70 64v12m-3-9h6" stroke="#C47A31" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

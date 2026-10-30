@@ -1,12 +1,9 @@
 'use client';
 
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 /*
  * CompetitorAnalysisSection.tsx(lq/lq_district)와 FloatingPopulationSection.tsx

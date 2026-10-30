@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import AreaChart from '@/components/charts/AreaChart';
@@ -18,15 +18,9 @@ import {
   type RecommendedIndustry,
 } from '@/lib/mockData/report';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 const fluid = (min: number, max: number) =>
   `clamp(${min}px, calc(${min}px + (100vw - 375px) * ${(
@@ -100,7 +94,13 @@ function SectionCard({
 }
 
 /** A-1. 반경별 점포 수 증가 곡선 */
-function RadiusGrowthChart({ data }: { data: CommercialAreaData }) {
+function RadiusGrowthChart({
+  data,
+  height = 200,
+}: {
+  data: CommercialAreaData;
+  height?: number;
+}) {
   const points = data.byRadius.map((slice) => ({
     label: `${slice.radiusM}m`,
     value: slice.storeTotal,
@@ -114,7 +114,7 @@ function RadiusGrowthChart({ data }: { data: CommercialAreaData }) {
       <div className="ca-chart-wrap">
         <AreaChart
           data={points}
-          height={200}
+          height={height}
           valueSuffix="개"
           showPointLabels
         />
@@ -498,24 +498,291 @@ function IndustryCompetitionGrid({
       title="업종별 경쟁 지표"
       description="추천·비추천 업종 각각이 이 상권에서 얼마나 밀집해 있는지 보여줍니다. lq는 좋고 나쁨의 지표가 아니라 기준 대비 배수입니다."
     >
-      <div className="ca-industry-grid">
-        {recommended.map((item) => (
-          <IndustryCompetitionCard
-            key={item.key}
-            item={item}
-            recommended
-            data={data}
-          />
-        ))}
-        {notRecommended.map((item) => (
-          <IndustryCompetitionCard
-            key={item.key}
-            item={item}
-            recommended={false}
-            data={data}
-          />
-        ))}
+      {/* 추천·비추천을 한 그리드에 섞으면 1열(모바일)에서 작은 배지 말고는
+          구분할 단서가 없다. 그룹 제목을 달아 두 묶음으로 나눈다. */}
+      <div className="ca-industry-groups">
+        {[
+          { label: '추천 업종', items: recommended, isRecommended: true },
+          { label: '비추천 업종', items: notRecommended, isRecommended: false },
+        ]
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <section
+              key={group.label}
+              className="ca-industry-group"
+              data-recommended={group.isRecommended}
+            >
+              <p className="ca-industry-group-title">
+                <span className="ca-industry-group-dot" />
+                {group.label}
+                <span className="ca-industry-group-count">
+                  {group.items.length}
+                </span>
+              </p>
+              <div className="ca-industry-grid">
+                {group.items.map((item) => (
+                  <IndustryCompetitionCard
+                    key={item.key}
+                    item={item}
+                    recommended={group.isRecommended}
+                    data={data}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
       </div>
+    </SectionCard>
+  );
+}
+
+/* ── 리포트용 대시보드 배치 ─────────────────────────────────────────
+   KPI 4칸 → 차트 2칸(반경별 점포 수 · 상위 업종) → 표(업종별 경쟁 지표)와
+   목록(자치구 대비 특화 업종) → 구성 차트 2칸. 스타일은 report.css .ca-dash. */
+
+/** 마지막 글자 받침 여부로 은/는을 고른다(한글이 아니면 '는'). */
+function topicParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '는';
+  return code % 28 === 0 ? '는' : '은';
+}
+
+/**
+ * 06장 맨 위 한 줄 결론. 추천 업종마다 반경 비교 배수(lq, 없으면 자치구 배수)가
+ * 1.0보다 작은지 큰지로 "같은 업종이 적은 곳 / 이미 몰린 곳"을 나눠 문장을 만든다.
+ */
+function CompetitionLead({
+  data,
+  recommended,
+}: {
+  data: CommercialAreaData;
+  recommended: CompetitionItem[];
+}) {
+  const radius = (
+    data.lqBaseline.appliedRadiusM ?? data.lqBaseline.requestedRadiusM
+  ).toLocaleString('ko-KR');
+  const rows = recommended
+    .map((item) => {
+      const middle = findMiddleCategory(item.name, data);
+      const value = middle ? (middle.lq ?? middle.lqDistrict) : null;
+      return { name: item.name, value };
+    })
+    .filter(
+      (row): row is { name: string; value: number } => row.value !== null
+    );
+  const sparse = rows.filter((row) => row.value < 1).map((row) => row.name);
+  const crowded = rows.filter((row) => row.value > 1).map((row) => row.name);
+  const join = (names: string[]) => names.join(', ');
+
+  return (
+    <header className="ca-lead">
+      <p className="ca-lead-eyebrow">추천 업종의 경쟁 상황</p>
+      {rows.length === 0 ? (
+        <h3>추천 업종의 경쟁 자료가 아직 없어요</h3>
+      ) : (
+        <h3>
+          {sparse.length > 0 && (
+            <>
+              <em className="is-sparse">{join(sparse)}</em>
+              {topicParticle(sparse[sparse.length - 1])} 주변에 같은 업종이 적고
+              {crowded.length > 0 ? ', ' : '요.'}
+            </>
+          )}
+          {crowded.length > 0 && (
+            <>
+              <em className="is-crowded">{join(crowded)}</em>
+              {topicParticle(crowded[crowded.length - 1])} 이미 몰려 있어요.
+            </>
+          )}
+          {sparse.length === 0 && crowded.length === 0 && (
+            <>추천 업종 모두 주변과 비슷한 수준으로 있어요.</>
+          )}
+        </h3>
+      )}
+      <p className="ca-lead-meta">
+        기준: 반경 {radius}m 안 같은 업종 비중 대비(자료가 없으면 자치구 대비) ·
+        1.0배보다 작으면 적고, 크면 몰려 있다는 뜻
+      </p>
+    </header>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  unit,
+  note,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  note?: string;
+}) {
+  return (
+    <div className="ca-kpi">
+      <p className="ca-kpi-label">{label}</p>
+      <p className="ca-kpi-value">
+        {value}
+        {unit && <small>{unit}</small>}
+      </p>
+      {note && <p className="ca-kpi-note">{note}</p>}
+    </div>
+  );
+}
+
+function CompetitionKpis({ data }: { data: CommercialAreaData }) {
+  const currentSlice = data.byRadius.find((r) => r.radiusM === data.radiusM);
+  const topSpecial = data.districtSpecialization[0];
+  return (
+    <div className="ca-dash-kpis">
+      <KpiCard
+        label="반경 안 점포 수"
+        value={data.storeTotal.toLocaleString('ko-KR')}
+        unit="개"
+        note={`반경 ${data.radiusM.toLocaleString('ko-KR')}m`}
+      />
+      <KpiCard
+        label="업종 다양성"
+        value={String(data.diversity.effectiveCategories)}
+        unit="종"
+        note={
+          currentSlice
+            ? `관측된 ${currentSlice.categoryCount}종 중 실질 다양성`
+            : '실질적으로 고르게 있는 업종 수'
+        }
+      />
+      <KpiCard
+        label="프랜차이즈 비율"
+        value={
+          data.franchise ? (data.franchise.ratio * 100).toFixed(1) : '자료 없음'
+        }
+        unit={data.franchise ? '%' : undefined}
+        note={
+          data.franchise
+            ? `${data.franchise.count.toLocaleString('ko-KR')}개 · 상호명 대조 추정`
+            : undefined
+        }
+      />
+      <KpiCard
+        label={`${data.districtBaseline?.signguName ?? '자치구'} 대비 최고 특화`}
+        value={
+          topSpecial ? topSpecial.timesVsSurroundings.toFixed(1) : '자료 없음'
+        }
+        unit={topSpecial ? '배' : undefined}
+        note={topSpecial?.name}
+      />
+    </div>
+  );
+}
+
+function IndexCell({ value }: { value: number | null }) {
+  if (value === null) return <span className="ca-index-na">비교 불가</span>;
+  const dir = value > 1 ? 'up' : value < 1 ? 'down' : 'flat';
+  return (
+    <span className={`ca-index ca-index-${dir}`}>
+      {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '–'} {value.toFixed(2)}배
+    </span>
+  );
+}
+
+function CompetitionTable({
+  data,
+  recommended,
+  notRecommended,
+}: {
+  data: CommercialAreaData;
+  recommended: CompetitionItem[];
+  notRecommended: CompetitionItem[];
+}) {
+  const radius = (
+    data.lqBaseline.appliedRadiusM ?? data.lqBaseline.requestedRadiusM
+  ).toLocaleString('ko-KR');
+  const district = data.districtBaseline?.signguName ?? '자치구';
+  const rows = [
+    ...recommended.map((item) => ({ item, recommended: true })),
+    ...notRecommended.map((item) => ({ item, recommended: false })),
+  ];
+  return (
+    <SectionCard
+      title="업종별 경쟁 지표"
+      description="배수는 기준 대비 밀집도예요. ▲ 주황은 같은 업종이 기준보다 몰려 있고, ▼ 파랑은 기준보다 적다는 뜻이에요."
+    >
+      <div className="ca-table-wrap">
+        <table className="ca-table">
+          <thead>
+            <tr>
+              <th>업종</th>
+              <th>동종 점포</th>
+              <th>반경 {radius}m 대비</th>
+              <th>{district} 대비</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, recommended: isRec }) => {
+              const middle = findMiddleCategory(item.name, data);
+              return (
+                <tr key={item.key}>
+                  <td>
+                    <span className="ca-table-name">{item.name}</span>
+                    <span
+                      className={`ca-table-tag ${isRec ? 'is-rec' : 'is-not'}`}
+                    >
+                      {isRec ? '추천' : '비추천'}
+                    </span>
+                  </td>
+                  {middle ? (
+                    <>
+                      <td className="ca-num">{middle.sameTypeCount}개</td>
+                      <td className="ca-num">
+                        <IndexCell value={middle.lq} />
+                      </td>
+                      <td className="ca-num">
+                        <IndexCell
+                          value={
+                            data.districtBaseline ? middle.lqDistrict : null
+                          }
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <td colSpan={3} className="ca-index-na">
+                      경쟁 데이터 매칭 안 됨
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  );
+}
+
+function SpecializationList({ data }: { data: CommercialAreaData }) {
+  const district = data.districtBaseline?.signguName ?? '자치구';
+  return (
+    <SectionCard
+      title="자치구 대비 특화 업종"
+      description={`${district} 전체보다 이 반경에 유난히 많은 업종이에요.`}
+    >
+      {data.districtSpecialization.length === 0 ? (
+        <p className="ca-empty-note">자치구 비교 자료 없음</p>
+      ) : (
+        <ol className="ca-spec-list">
+          {data.districtSpecialization.map((item) => (
+            <li key={item.code}>
+              <span className="ca-spec-rank">
+                {String(item.rank).padStart(2, '0')}
+              </span>
+              <span className="ca-spec-name">{item.name}</span>
+              <span className="ca-spec-times">
+                {item.timesVsSurroundings.toFixed(1)}배
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </SectionCard>
   );
 }
@@ -549,8 +816,15 @@ export default function CompetitorAnalysisSection({
   return (
     <div className="ca-root flex w-full flex-col items-start">
       {reportLayout ? (
-        <>
-          <IndustryCompetitionGrid
+        <div className="ca-dash">
+          <CompetitionLead
+            data={data}
+            recommended={toCompetitionItems(
+              recommendations,
+              mockReportData.recommended
+            )}
+          />
+          <CompetitionTable
             data={data}
             recommended={toCompetitionItems(
               recommendations,
@@ -561,31 +835,26 @@ export default function CompetitorAnalysisSection({
               mockReportData.notRecommended
             )}
           />
-
-          <div className="market-landscape">
-            <h3 className="analysis-subheading">상권 전체의 구성</h3>
-            <p className="analysis-subcopy">
-              추천 업종의 경쟁 지표와 함께, 주변 상권이 어떤 업종으로
-              이루어졌는지 살펴보세요.
-            </p>
-            <div className="ca-major-diversity-row">
-              <div className="ca-major-category-col">
+          {/* 상권 전체 자료는 접지 않고 이어서 보여준다(롱스크롤로 정보를 충분히 전달). */}
+          <section className="ca-more">
+            <h3 className="ca-more-title">
+              상권 전체 구성
+              <span>점포 수 · 업종 다양성 · 특화 업종 · 프랜차이즈 비율</span>
+            </h3>
+            <div className="ca-more-body">
+              <CompetitionKpis data={data} />
+              <div className="ca-dash-row">
+                <RadiusGrowthChart data={data} height={340} />
+                <TopByCountBars data={data} />
+              </div>
+              <div className="ca-dash-row">
+                <SpecializationList data={data} />
                 <MajorCategoryDonut data={data} />
               </div>
-              <div className="ca-diversity-col">
-                <DiversityStat data={data} />
-              </div>
-            </div>
-            <div className="analysis-chart-pair">
-              <RadiusGrowthChart data={data} />
               <FranchiseDonut data={data} />
             </div>
-          </div>
-          <div className="analysis-chart-pair">
-            <TopByCountBars data={data} />
-            <DistrictSpecializationBars data={data} />
-          </div>
-        </>
+          </section>
+        </div>
       ) : (
         <>
           {' '}
@@ -947,6 +1216,46 @@ export default function CompetitorAnalysisSection({
         }
 
         /* ---- B. 업종별 경쟁 지표 카드 ---- */
+        .ca-industry-groups {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: clamp(18px, calc(18px + (100vw - 375px) * 0.007512), 26px);
+        }
+        .ca-industry-group {
+          --ca-group-color: ${colors.brand.dark};
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: clamp(8px, calc(8px + (100vw - 375px) * 0.003756), 12px);
+        }
+        .ca-industry-group[data-recommended='false'] {
+          --ca-group-color: ${colors.status.notRecommend};
+        }
+        .ca-industry-group-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 700;
+          color: var(--ca-group-color);
+          font-size: calc(
+            clamp(12px, calc(12px + (100vw - 375px) * 0.001878), 14px) *
+              var(--font-scale)
+          );
+        }
+        .ca-industry-group-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background-color: var(--ca-group-color);
+        }
+        .ca-industry-group-count {
+          font-weight: 500;
+          color: var(--color-gray-400);
+        }
+        .ca-industry-group .ca-industry-card {
+          border-left: 3px solid var(--ca-group-color) !important;
+        }
         .ca-industry-grid {
           display: grid;
           grid-template-columns: 1fr;

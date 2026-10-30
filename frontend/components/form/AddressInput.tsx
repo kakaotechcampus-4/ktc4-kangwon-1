@@ -21,18 +21,17 @@ export default function AddressInput({
     <Card
       className="w-full gap-4"
       style={{
-        padding: '24px',
-        borderRadius: '12px',
-        borderWidth: '1px',
-        boxShadow: 'none',
+        padding: 'clamp(18px, 5vw, 32px)',
+        borderRadius: '24px',
+        borderWidth: '0px',
       }}
     >
       <p className="text-xl font-bold" style={{ color: colors.brand.dark }}>
         1. 공실 주소
       </p>
 
-      <div className="flex w-full items-start gap-4">
-        <div className="flex flex-1 flex-col items-start gap-2">
+      <div className="flex w-full min-w-0 flex-col items-start gap-4 sm:flex-row">
+        <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:flex-1">
           <label
             htmlFor="road-address"
             className="text-15 font-medium text-gray-500"
@@ -48,7 +47,7 @@ export default function AddressInput({
             placeholder={mockProperty.address}
           />
         </div>
-        <div className="flex flex-1 flex-col items-start gap-2">
+        <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:flex-1">
           <label
             htmlFor="floor-unit"
             className="text-15 font-medium text-gray-500"

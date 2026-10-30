@@ -319,10 +319,16 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
                 "app.agentic.landlord.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
+            patch("app.agentic.customer_rubric.code_checks", return_value=([], [], set())),
+            patch("app.agentic.customer_rubric.packet", return_value={"draft_id": "draft"}),
             patch("app.agentic.tools._audit"),
             patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
             patch(
                 "app.agentic.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
+            patch(
+                "app.agentic.founder.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
         ):
