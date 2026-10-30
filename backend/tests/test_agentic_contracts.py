@@ -162,7 +162,7 @@ class AgenticContractsTests(unittest.TestCase):
         document = (Path(__file__).resolve().parents[2] / "docs/API_CONTRACT.md").read_text(
             encoding="utf-8"
         )
-        section = document.split("## 새 결과 형태(PR7 전환 후)", 1)[1]
+        section = document.split("## 현재 결과 형태", 1)[1]
         example = json.loads(re.search(r"```json\s*(.*?)\s*```", section, re.S).group(1))
         result = s.DecisionResult.model_validate_json(json.dumps(example, ensure_ascii=False))
         self.assertEqual(result, s.DecisionResult.model_validate_json(result.model_dump_json()))
@@ -171,7 +171,7 @@ class AgenticContractsTests(unittest.TestCase):
         document = (Path(__file__).resolve().parents[2] / "docs/API_CONTRACT.md").read_text(
             encoding="utf-8"
         )
-        section = document.split("## 새 결과 형태(PR7 전환 후)", 1)[1]
+        section = document.split("## 현재 결과 형태", 1)[1]
         result = json.loads(re.search(r"```json\s*(.*?)\s*```", section, re.S).group(1))
         final = result["top5"][0]
         summary = {name: final[name] for name in c.ScorecardSummary.model_fields}

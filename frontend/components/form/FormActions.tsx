@@ -10,11 +10,11 @@ export default function FormActions({
   onSubmit,
 }: FormActionsProps) {
   return (
-    <div className="flex w-full justify-end gap-3">
+    <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:justify-end">
       <Button
         type="button"
         variant="outline"
-        className="text-gray-500"
+        className="min-h-12 w-full text-gray-500 sm:w-auto"
         style={{ padding: '14px 24px' }}
       >
         임시 저장
@@ -22,6 +22,7 @@ export default function FormActions({
       <Button
         type="button"
         variant="primary"
+        className="min-h-12 w-full whitespace-normal text-center leading-snug sm:w-auto"
         style={{ padding: '14px 24px' }}
         disabled={isAnalyzing}
         onClick={onSubmit}

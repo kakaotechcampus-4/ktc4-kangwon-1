@@ -1,4 +1,9 @@
 import { mockProperty } from '@/lib/mockData/property';
+import type {
+  EvaluatorReview,
+  FactView,
+  ReviewResolution,
+} from '@/lib/api/types';
 export interface RecommendedIndustry {
   rank: number;
   name: string;
@@ -393,6 +398,124 @@ export const mockReportData = {
   address: mockProperty.fullAddress,
   floor: mockProperty.floorUnit,
   area: mockProperty.areaLabel,
+  // 미리보기(분석 결과 없음)용 평가자 검토. 실제 결과는 DecisionResult에서 받는다.
+  evaluatorReviews: [
+    {
+      actor: 'examiner',
+      status: 'completed',
+      review_id: 'review_mock_examiner',
+      verdict: 'conditional',
+      issues: [
+        {
+          issue_id: 'examiner:1',
+          industry_code: 'I212',
+          target: 'score',
+          kind: 'scope_mismatch',
+          comment: '경쟁 자료의 비교 범위를 맞춰야 해요.',
+          fact_ids: [],
+          suggested_check:
+            '같은 반경 기준의 경쟁 점포 수로 다시 비교해 보세요.',
+        },
+      ],
+      error_code: null,
+    },
+    {
+      actor: 'founder',
+      status: 'completed',
+      review_id: 'review_mock_founder',
+      verdict: 'conditional',
+      issues: [
+        {
+          issue_id: 'founder:1',
+          industry_code: 'I201',
+          target: 'condition',
+          kind: 'action_condition',
+          comment: '주방 설비를 설치할 수 있는지 확인이 필요해요.',
+          fact_ids: [],
+          suggested_check:
+            '급·배수와 배기 덕트 설치 가능 여부를 현장에서 확인하세요.',
+        },
+      ],
+      error_code: null,
+    },
+    {
+      actor: 'customer',
+      status: 'completed',
+      review_id: 'review_mock_customer',
+      verdict: 'agree',
+      issues: [],
+      error_code: null,
+    },
+    {
+      actor: 'landlord_advocate',
+      status: 'completed',
+      review_id: 'review_mock_landlord',
+      verdict: 'oppose',
+      issues: [
+        {
+          issue_id: 'landlord_advocate:1',
+          industry_code: 'I212',
+          target: 'claim',
+          kind: 'missing_evidence',
+          comment: '실제 임차 수요를 확인한 뒤 추천 순위를 재검토해야 해요.',
+          fact_ids: [],
+          suggested_check:
+            '인근 중개사무소에 같은 업종의 임차 문의가 있는지 알아보세요.',
+        },
+      ],
+      error_code: null,
+    },
+  ] satisfies EvaluatorReview[],
+  reviewResolutions: [
+    {
+      issue_id: 'examiner:1',
+      disposition: 'accepted',
+      reason:
+        '분석 반경과 비교 기준의 반경이 달라, 같은 조건의 경쟁 밀도로 볼 수 없었어요.',
+      fact_ids: [],
+      applied: ['비교 범위가 다른 경쟁 점수는 제외했어요.'],
+      not_applied: [],
+    },
+    {
+      issue_id: 'founder:1',
+      disposition: 'partial',
+      reason: '입점 조건에 추가했지만, 설치 가능 여부는 미확인이에요.',
+      fact_ids: [],
+      applied: ['입점 조건에 추가했지만, 설치 가능 여부는 미확인이에요.'],
+      not_applied: ['설치 가능 여부 판단(현장 확인 필요)'],
+    },
+  ] satisfies ReviewResolution[],
+  // 평가자 지적이 인용하는 예시 fact. 미리보기에서만 쓴다.
+  reviewFacts: [
+    {
+      fact_id: 'mock_radius',
+      source: 'commercial_area',
+      metric: 'radius_m',
+      value: 100,
+      unit: 'm',
+      period: '예시 수치',
+      spatial_scope: {},
+      industry_code: null,
+      status: 'observed',
+      citable: true,
+      calc_version: 'mock',
+      provenance_ref: 'mock',
+    },
+    {
+      fact_id: 'mock_baseline_radius',
+      source: 'commercial_area',
+      metric: 'baseline_radius_m',
+      value: 500,
+      unit: 'm',
+      period: '예시 수치',
+      spatial_scope: {},
+      industry_code: null,
+      status: 'observed',
+      citable: true,
+      calc_version: 'mock',
+      provenance_ref: 'mock',
+    },
+  ] satisfies FactView[],
   rent: '월세 120만원',
   analyzedDate: '2026.08.22',
 

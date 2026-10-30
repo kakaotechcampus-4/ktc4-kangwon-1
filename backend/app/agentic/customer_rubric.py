@@ -3,69 +3,22 @@
 땅의 수요를 다시 채점하지 않습니다(D1~D4와 중복). K1~K4는 서버가 점수표·fact·초안 문장을
 대조해 비율 × 배점으로 계산하고(60점), K6(손님 눈으로 본 추천·근거 일치)만 모델 점수입니다(40점).
 판정과 코드 지적도 코드가 만듭니다. 특정 손님층 페르소나는 두지 않고 일반 손님으로 읽습니다.
-공용 계약(contracts.py)·평가 루프(evaluators.py)는 바꾸지 않았습니다. 결과 타입은 이 모듈에 두고,
-평가 루프 연결은 팀 합의 뒤에 합니다.
 L의 수요 지표 중복은 validate_l_records가 이미 거절하므로 문항에서 뺐습니다.
 SQLite 읽기는 호출자가 스레드로 격리합니다.
 """
 
 import json
-from typing import Annotated, Literal, Self
-
-from pydantic import Field, model_validator
 
 from app.canonical import canonical_json
 from app.db.connection import connect
-from app.schema_types import Schema, Text
 
-from .contracts import FactId, IndustryCode, ItemStatus, Ratio, ReviewIssue
+from .contracts import (
+    CustomerCandidateScore,
+    CustomerCheck,
+    CustomerRubric,
+    ReviewIssue,
+)
 from .scoring import WEIGHTS
-
-
-class FitCheck(Schema):
-    """K6 모델 제출. 손님 입장에서 추천과 근거가 맞는지 K6 배점의 다섯 값 중 하나로 매깁니다."""
-
-    industry_code: IndustryCode
-    points: Annotated[float, Field(ge=0, le=40, multiple_of=10)] | None
-    fact_ids: list[FactId] = Field(default_factory=list, max_length=5)
-    reason: Text
-
-
-class CustomerCheck(Schema):
-    item: Literal["K1", "K2", "K3", "K4", "K6"]
-    status: ItemStatus
-    weight: Annotated[int, Field(ge=0, le=100)]
-    points: Annotated[float, Field(ge=0, le=100)] | None
-    fact_ids: list[FactId] = Field(default_factory=list, max_length=12)
-    note: Text
-
-    @model_validator(mode="after")
-    def check_points(self) -> Self:
-        if (self.status == "observed") != (self.points is not None):
-            raise ValueError("관측 항목에만 점수를 채웁니다.")
-        if self.points is not None and self.points > self.weight:
-            raise ValueError("점수는 배점을 넘을 수 없습니다.")
-        return self
-
-
-class CustomerCandidateScore(Schema):
-    industry_code: IndustryCode
-    rank: Annotated[int, Field(ge=1, le=5)]
-    checks: list[CustomerCheck] = Field(min_length=5, max_length=5)
-    points: Annotated[float, Field(ge=0, le=100)]
-    applicable_weight: Annotated[int, Field(ge=0, le=100)]
-    ratio: Ratio | None
-
-
-class CustomerRubric(Schema):
-    """손님 평가표 v1. K1~K4는 코드, K6만 모델 점수입니다. 판정은 코드 규칙으로 계산합니다."""
-
-    version: Literal["customer-v1"] = "customer-v1"
-    candidates: list[CustomerCandidateScore] = Field(default_factory=list, max_length=5)
-    ratio: Ratio | None
-    verdict_basis: Text
-    model_status: Literal["completed", "failed"]
-
 
 DEMAND = ("D1", "D2", "D3", "D4")
 # 본 질문(K6)을 가장 크게 두고, 코드 문항은 확실한 잘못을 잡는 안전장치로 과반을 남깁니다.
@@ -129,6 +82,8 @@ PROMPT = """손님 편 평가자입니다. 질문은 하나입니다.
 - 특정 손님층을 가정하지 말고 일반 손님의 눈으로 읽으세요.
 - 학교·주거지·오피스 같은 주변 성격, 상주·직장 인구, 소득·성별을 fact 없이 추정하지 마세요.
 - 통행량은 방문자 수가 아닙니다. 지나가는 사람이 많다는 것을 곧 손님이 온다는 뜻으로 쓰지 마세요.
+- 공간·면적·층·설비·공사 조건(검토 전 공간 초안 포함)은 임차인 평가자 몫입니다.
+  그런 문장은 손님 지적이나 점수 근거로 쓰지 마세요.
 
 [fit_checks: candidates의 업종마다 하나씩, points는 아래 다섯 값 중 하나]
 points 40: 추천과 인용된 근거가 손님 입장에서 잘 맞고, 손님 쪽 한계도 밝혔다.
@@ -143,6 +98,8 @@ reason은 한두 문장, 숫자(연령대·층수 포함) 없이 씁니다.
 [issues]
 remaining_issue_slots 개까지만 추천과 근거가 손님 입장에서 어긋나는 점을 지적하세요.
 남길 것이 없으면 빈 목록입니다. issue_id는 지적마다 서로 달라야 합니다.
+위험·확인 조건 문장에 이미 밝힌 손님 쪽 약점은 다시 지적하지 마세요.
+단 같은 근거를 장점에도 써서 문장끼리 어긋나면 지적하세요.
 지적마다 실제 fact_id를 붙이고, comment·suggested_check에 숫자(연령대·층수 포함)를 쓰지 마세요.
 
 읽기 도구는 꼭 필요할 때만 최대 세 번 쓰고 submit_review로 한 번 제출하세요.

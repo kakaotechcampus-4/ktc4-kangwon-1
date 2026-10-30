@@ -12,6 +12,7 @@ from app.api.v1.analyses import analysis_runner
 from app.db.connection import initialize
 from app.main import create_app
 from app.services.settings import ExecutionSettings
+from tests.auth_fixture import login
 
 
 class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
@@ -26,6 +27,7 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
         app = create_app(
             settings=ExecutionSettings(db_path=self.path, max_concurrency=2), load_env=False
         )
+        login(app, self.path)
         started: asyncio.Queue = asyncio.Queue()
         release = asyncio.Event()
 
@@ -67,6 +69,7 @@ class AdmissionControlTests(unittest.IsolatedAsyncioTestCase):
         app = create_app(
             settings=ExecutionSettings(db_path=self.path, max_concurrency=1), load_env=False
         )
+        login(app, self.path)
 
         async def execute(*args, **kwargs):
             raise RuntimeError("대역 실패")

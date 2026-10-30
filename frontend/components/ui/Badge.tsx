@@ -1,11 +1,8 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
   children: ReactNode;

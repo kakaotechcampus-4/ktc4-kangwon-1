@@ -1,4 +1,4 @@
-import { DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { Check, Loader2, Pause } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -8,10 +8,7 @@ import type {
   ProgressStepStatus,
 } from '@/lib/mockData/analysisProgress';
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
-});
+const dmMono = pretendard;
 
 type ProgressTrackerProps = {
   steps: ProgressStep[];
@@ -38,8 +35,12 @@ export default function ProgressTracker({
 
   return (
     <Card
-      className="w-full gap-6"
-      style={{ padding: '26px 28px', borderRadius: '12px', borderWidth: '1px' }}
+      className="w-full gap-6 [--card-pad:20px] sm:[--card-pad:26px_28px]"
+      style={{
+        padding: 'var(--card-pad)',
+        borderRadius: '24px',
+        borderWidth: '0px',
+      }}
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -115,7 +116,7 @@ function StepRow({
         )}
       </div>
 
-      <div className={`flex-1 ${isLast ? '' : 'pb-5'}`}>
+      <div className={`flex-1 ${isLast ? '' : 'pb-4 xl:pb-5'}`}>
         <div
           // 현재 단계만 배경 상자를 두르고, 음수 마진으로 글자 위치는 다른
           // 단계와 같은 선에 맞춘다.
@@ -159,7 +160,9 @@ function StepRow({
             </p>
           ) : (
             <p
-              className="text-13 leading-relaxed"
+              // 화면이 좁아 진행 현황이 한 칸을 길게 차지할 때(xl 미만)는
+              // 지금 단계만 설명을 남기고, 끝났거나 아직인 단계는 이름만 보인다.
+              className={`text-13 leading-relaxed ${isCurrent ? '' : 'hidden xl:block'}`}
               style={{
                 color:
                   isDone || isPending

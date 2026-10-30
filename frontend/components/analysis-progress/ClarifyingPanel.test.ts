@@ -5,8 +5,8 @@ import type { ClarifyingAnswers } from '@/lib/mockData/analysisProgress';
 
 const state = vi.hoisted(() => ({ answers: {} as ClarifyingAnswers }));
 
-vi.mock('next/font/google', () => ({
-  DM_Mono: () => ({ className: 'test-font' }),
+vi.mock('@/styles/fonts', () => ({
+  pretendard: { className: 'test-font', variable: 'test-font-variable' },
 }));
 
 // 사용자 선택 이후 상태를 주입해 공통 UI의 표시·검증을 확인한다.

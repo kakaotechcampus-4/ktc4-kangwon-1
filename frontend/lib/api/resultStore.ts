@@ -67,14 +67,17 @@ export function clearRequestId(): void {
   sessionStorage.removeItem(REQUEST_ID_STORAGE_KEY);
 }
 
+// 분석 반경 — 팀 결정(10/20)으로 500m 고정이라 사용자가 고르지 않는다.
+// 서버 기본값(DEFAULT_RADIUS_M)과 같은 값이다.
+export const ANALYSIS_RADIUS_M = 500;
+
 // 공실 입력값 — 공실 입력 화면에서 저장하고, 상가 정보 확인 화면이 읽어
-// 분석 요청을 보낸다. radius는 입력칸 그대로(빈 문자열 가능)라 요청 시 변환한다.
+// 분석 요청을 보낸다.
 const VACANCY_INPUT_STORAGE_KEY = 'chaeum:vacancyInput';
 
 export type VacancyInput = {
   roadAddress: string;
   floorUnit: string;
-  radius: string;
 };
 
 export function saveVacancyInput(input: VacancyInput): void {

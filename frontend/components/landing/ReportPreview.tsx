@@ -1,280 +1,202 @@
 'use client';
 
-import { mockProperty } from '@/lib/mockData/property';
-
-import { Outfit, DM_Mono } from 'next/font/google';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import ProgressBar from '@/components/ui/ProgressBar';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Check } from 'lucide-react';
+import Eyebrow from '@/components/landing/Eyebrow';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
-
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
-
-type Rank = {
-  id: string;
-  number: string;
-  label: string;
-  score: number;
-};
-
-const defaultRanks: Rank[] = [
-  { id: 'nail-beauty', number: '01', label: '네일·뷰티', score: 92 },
-  { id: 'unmanned-store', number: '02', label: '무인점포', score: 87 },
-  { id: 'small-studio', number: '03', label: '소형 스튜디오', score: 82 },
+/**
+ * 리포트가 "왜 이 업종인지"를 어떻게 보여주는지 미리 보는 섹션.
+ * 실제 분석 결과가 아니라 표현 방식 예시라서 카드 아래에 그 사실을 적어 둔다.
+ */
+const examples = [
+  {
+    industry: '네일 · 뷰티',
+    reasons: [
+      {
+        title: '자연광이 드는 실내',
+        detail: '밝은 공간은 시술 환경을 편안하게 구성하는 데 도움이 돼요.',
+      },
+      {
+        title: '거리에서 보이는 전면',
+        detail: '유리창을 통해 매장 분위기를 전하기 좋아요.',
+      },
+      {
+        title: '공간 활용의 유연성',
+        detail: '시술석과 상담 공간을 나누는 구성을 검토할 수 있어요.',
+      },
+    ],
+  },
+  {
+    industry: '카페',
+    reasons: [
+      {
+        title: '오가는 사람이 많은 길목',
+        detail: '지나가다 들르는 손님을 기대할 수 있는 자리예요.',
+      },
+      {
+        title: '머물기 좋은 넓이',
+        detail: '좌석을 여유 있게 두고 오래 머무는 손님을 받을 수 있어요.',
+      },
+      {
+        title: '창가 자리를 만들 수 있는 전면',
+        detail: '바깥이 보이는 좌석은 매장을 알리는 역할도 해요.',
+      },
+    ],
+  },
+  {
+    industry: '쇼룸',
+    reasons: [
+      {
+        title: '넓게 트인 바닥',
+        detail: '제품을 여유 있게 놓아 보여주는 구성에 잘 맞아요.',
+      },
+      {
+        title: '눈에 띄는 진열창',
+        detail: '대표 제품을 밖에서도 보이게 진열할 수 있어요.',
+      },
+      {
+        title: '예약 방문에 맞는 동선',
+        detail: '상담과 체험 공간을 나눠 손님을 맞을 수 있어요.',
+      },
+    ],
+  },
 ];
 
-type ReportPreviewProps = {
-  ranks?: Rank[];
-};
+export default function ReportPreview() {
+  const [active, setActive] = useState(0);
+  const [hasEnteredView, setHasEnteredView] = useState(false);
+  const reasonsRef = useRef<HTMLOListElement>(null);
+  const current = examples[active];
 
-export default function ReportPreview({
-  ranks = defaultRanks,
-}: ReportPreviewProps) {
+  useEffect(() => {
+    const reasons = reasonsRef.current;
+    if (!reasons || hasEnteredView) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    );
+
+    observer.observe(reasons);
+    return () => observer.disconnect();
+  }, [hasEnteredView]);
+
   return (
-    <div
+    <section
       id="report-preview"
-      className="report-preview-container flex w-full flex-col items-start py-16"
+      className="w-full px-4 py-26 sm:px-8"
+      style={{ backgroundColor: colors.brand.dark }}
     >
-      <div className="flex w-full items-end justify-between">
-        <h2
-          className={`report-preview-headline ${outfit.className} font-bold`}
-          style={{ color: colors.neutral.black }}
-        >
-          분석 리포트 미리보기
-        </h2>
-        <button
-          type="button"
-          className={`rp-cta ${outfit.className} font-semibold`}
-          style={{ color: colors.brand.dark }}
-        >
-          전체 리포트 보기 →
-        </button>
-      </div>
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-12 lg:flex-row lg:items-center lg:justify-between">
+        <div className="lg:max-w-[420px]">
+          <Eyebrow tone="dark">REPORT PREVIEW</Eyebrow>
+          <h2 className="mt-3.5 text-4xl leading-[1.3] font-extrabold tracking-[-0.02em] text-white">
+            “왜 이 업종인가요?”
+            <br />
+            이유가 보여야 하니까
+          </h2>
+          <p className="mt-5 text-base leading-[1.8] text-[#C3CCD8]">
+            추천 업종을 골라 보세요. 공간의 어떤 점이 그 업종과 맞는지, 리포트가
+            보여주는 방식을 미리 확인할 수 있어요.
+          </p>
+        </div>
 
-      <Card
-        className="mt-8 w-full"
-        style={{ padding: 0, borderRadius: '12px' }}
-      >
-        <div
-          className="rp-header flex w-full items-center justify-between"
-          style={{
-            backgroundColor: colors.brand.dark,
-            borderBottom: `1px solid ${colors.neutral.border}`,
-          }}
-        >
-          <div className="flex flex-col items-start">
-            <p
-              className={`rp-address ${outfit.className} font-semibold text-white`}
-            >
-              {mockProperty.fullAddress}
+        <div className="w-full overflow-hidden rounded-[22px] bg-white lg:max-w-[620px]">
+          <div className="flex items-center justify-between border-b border-[#E2E8EE] px-7 py-6">
+            <p className="text-17 font-extrabold text-[#111827]">
+              이 공간에 어울리는 업종
             </p>
-            <p className="rp-address-sub pt-0.5 text-white/60">
-              {mockProperty.areaLabel} · 분석 2026.08.22
-            </p>
+            <p className="text-13 text-[#5B6672]">화면 구성 예시</p>
           </div>
-          <Badge
-            className="rp-badge"
-            style={{
-              backgroundColor: colors.brand.primary,
-              color: colors.neutral.white,
-              letterSpacing: '1.68px',
-            }}
-          >
-            분석 완료
-          </Badge>
-        </div>
 
-        <div
-          className="rp-section flex w-full flex-col items-start"
-          style={{ borderBottom: `1px solid ${colors.neutral.border}` }}
-        >
-          <p
-            className={`rp-section-label ${dmMono.className} tracking-[1.68px] uppercase`}
-
-            style={{ color: colors.brand.primary }}
-          >
-            AI 핵심 결론
-          </p>
-          <p
-            className={`rp-conclusion ${outfit.className} pt-2 font-semibold`}
-            style={{ color: colors.neutral.black }}
-          >
-            이 공실에 가장 적합한 업종은{' '}
-            <span style={{ color: colors.brand.primary }}>네일·뷰티</span>{' '}
-            업종입니다.
-          </p>
-          <p className="rp-desc pt-2 text-gray-600">
-            전면폭과 급·배수 조건이 양호하며, 반경 500m 내 동일 업종 경쟁점이
-            적어 시장 진입 여건이 우수합니다.
-          </p>
-        </div>
-
-        <div className="rp-ranks flex w-full">
-          {ranks.map(({ id, number, label, score }) => (
-            <div key={id} className="flex flex-1 flex-col gap-2">
-              <div className="flex w-full items-center justify-between">
-                <p
-                  className="rp-rank-label font-semibold"
-                  style={{ color: colors.neutral.black }}
-                >
-                  {label}
-                </p>
-                <p
-                  className={`rp-rank-score ${dmMono.className} font-medium`}
-                  style={{ color: colors.brand.primary }}
-                >
-                  {score}점
-                </p>
-              </div>
-              <div className="flex w-full items-center gap-4">
-                <p
-                  className={`rp-rank-number ${dmMono.className} shrink-0`}
-                  style={{ color: colors.neutral.border }}
-                >
-                  {number}
-                </p>
-                <ProgressBar value={score} className="flex-1" />
-              </div>
+          <div className="px-7 pt-6 pb-2">
+            <div
+              role="tablist"
+              aria-label="예시 업종"
+              className="flex flex-wrap gap-2"
+            >
+              {examples.map(({ industry }, index) => {
+                const selected = index === active;
+                return (
+                  <button
+                    key={industry}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActive(index)}
+                    className={`h-11 rounded-full px-5 text-15 font-semibold transition-colors ${
+                      selected
+                        ? 'text-white'
+                        : 'bg-[#EEF2F5] text-[#3F4A55] hover:bg-[#E2E8EE]'
+                    }`}
+                    style={
+                      selected
+                        ? { backgroundColor: colors.brand.primary }
+                        : undefined
+                    }
+                  >
+                    {industry}
+                  </button>
+                );
+              })}
             </div>
-          ))}
+
+            <ol
+              ref={reasonsRef}
+              key={current.industry}
+              role="tabpanel"
+              aria-label={`${current.industry} 추천 이유`}
+            >
+              {current.reasons.map(({ title, detail }, index) => (
+                <li
+                  key={title}
+                  className={`report-preview-reason flex items-center gap-5 py-5 ${
+                    hasEnteredView ? 'report-preview-reason--visible' : ''
+                  } ${index > 0 ? 'border-t border-[#E2E8EE]' : ''}`}
+                  style={
+                    {
+                      '--report-preview-delay': `${index * 220}ms`,
+                    } as CSSProperties
+                  }
+                >
+                  <span className="w-6 text-sm font-bold text-[#8A97A5]">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-base font-bold text-[#111827]">
+                      {title}
+                    </p>
+                    <p className="mt-1 text-sm text-[#5B6672]">{detail}</p>
+                  </div>
+                  <span
+                    className="flex size-7 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: colors.brand.wash }}
+                  >
+                    <Check
+                      aria-hidden="true"
+                      size={16}
+                      strokeWidth={2.5}
+                      color={colors.brand.primary}
+                    />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <p className="bg-[#F5F8FB] px-7 py-4 text-13 text-[#5B6672]">
+            * 실제 분석 데이터가 아닌, 추천 이유를 보여주는 방식의 예시예요.
+          </p>
         </div>
-      </Card>
-
-      {/*
-        375px~1337px 단일 clamp 원칙(ProblemCards.tsx / ValueSteps.tsx와 동일
-        앵커, divisor=962)을 헤드라인뿐 아니라 카드 내부 요소까지 전부
-        확장했다. 각 항목은 원래 Tailwind 고정 크기(text-base=16px,
-        text-sm=14px, text-xs=12px, text-[23px]/leading-[27.5px],
-        text-[15px], text-lg=18px, px-8=32px, py-5=20px, py-6=24px)를
-        1337px 앵커(=기존 데스크톱 값 그대로)로 유지하고, 375px 앵커는
-        그 비율에 맞춰 역산했다. Tailwind 쪽 크기 클래스는 전부 제거해
-        같은 속성을 두 곳에서 지정하는 충돌을 없앤다.
-      */}
-      <style jsx global>{`
-        .report-preview-container {
-          padding-inline: clamp(
-            20px,
-            calc(20px + (100vw - 375px) * 0.0832),
-            100px
-          );
-        }
-        .report-preview-headline {
-          --headline-fs: calc(
-            clamp(26px, calc(26px + (100vw - 375px) * 0.018711), 44px) *
-              var(--font-scale)
-          );
-          font-size: var(--headline-fs);
-          line-height: calc(var(--headline-fs) * 1.13636);
-        }
-        .rp-cta {
-          font-size: calc(
-            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
-              var(--font-scale)
-          );
-        }
-        .rp-header {
-          padding-inline: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.016632),
-            32px
-          );
-          padding-block: clamp(
-            12px,
-            calc(12px + (100vw - 375px) * 0.008316),
-            20px
-          );
-        }
-        .rp-address {
-          font-size: calc(
-            clamp(12px, calc(12px + (100vw - 375px) * 0.004158), 16px) *
-              var(--font-scale)
-          );
-        }
-        .rp-address-sub {
-          font-size: calc(
-            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
-              var(--font-scale)
-          );
-        }
-        .rp-badge {
-          font-size: calc(
-            clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px) *
-              var(--font-scale)
-          );
-        }
-        .rp-section {
-          padding-inline: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.016632),
-            32px
-          );
-          padding-block: clamp(
-            14px,
-            calc(14px + (100vw - 375px) * 0.010395),
-            24px
-          );
-        }
-
-        .rp-section-label {
-          font-size: calc(
-            clamp(9px, calc(9px + (100vw - 375px) * 0.003119), 12px) *
-              var(--font-scale)
-          );
-        }
-        .rp-conclusion {
-          --rp-conclusion-fs: calc(
-            clamp(16px, calc(16px + (100vw - 375px) * 0.007276), 23px) *
-              var(--font-scale)
-          );
-          font-size: var(--rp-conclusion-fs);
-          line-height: calc(var(--rp-conclusion-fs) * 1.19565);
-        }
-        .rp-desc {
-          font-size: calc(
-            clamp(11px, calc(11px + (100vw - 375px) * 0.004158), 15px) *
-              var(--font-scale)
-          );
-        }
-        .rp-ranks {
-          gap: clamp(16px, calc(16px + (100vw - 375px) * 0.010395), 24px);
-          padding-inline: clamp(
-            16px,
-            calc(16px + (100vw - 375px) * 0.016632),
-            32px
-          );
-          padding-block: clamp(
-            14px,
-            calc(14px + (100vw - 375px) * 0.010395),
-            24px
-          );
-        }
-        .rp-rank-label {
-          font-size: calc(
-            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
-              var(--font-scale)
-          );
-        }
-        .rp-rank-score {
-          font-size: calc(
-            clamp(11px, calc(11px + (100vw - 375px) * 0.003119), 14px) *
-              var(--font-scale)
-          );
-        }
-        .rp-rank-number {
-          font-size: calc(
-            clamp(13px, calc(13px + (100vw - 375px) * 0.005199), 18px) *
-              var(--font-scale)
-          );
-        }
-      `}</style>
-    </div>
+      </div>
+    </section>
   );
 }

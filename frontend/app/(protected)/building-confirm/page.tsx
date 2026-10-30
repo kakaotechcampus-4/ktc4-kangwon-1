@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import StepIndicator from '@/components/form/StepIndicator';
+import FlowPageTitle from '@/components/form/FlowPageTitle';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -42,6 +43,7 @@ import {
 import {
   clearAnalysisResult,
   clearRequestId,
+  ANALYSIS_RADIUS_M,
   loadVacancyInput,
   saveConfirmedBuilding,
   saveRequestId,
@@ -59,13 +61,6 @@ const FACILITY_OPTIONS = (
   Object.keys(FACILITY_SHORT_LABELS) as NeighborhoodFacility[]
 ).map((value) => ({ value, label: FACILITY_SHORT_LABELS[value] }));
 
-// 반경 입력칸 값 — 비어 있거나 양의 정수가 아니면 보내지 않는다(서버 기본 반경).
-function parseRadius(text: string): number | undefined {
-  const trimmed = text.trim();
-  const value = Number(trimmed);
-  return trimmed && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
 // 화면 확인용: ?mockFail=floor,sewage 처럼 넘기면 그 조회를 일부러 실패시킨다.
 function mockFailLookups(search: string): LookupId[] {
   const raw = new URLSearchParams(search).get('mockFail') ?? '';
@@ -79,6 +74,8 @@ export default function BuildingConfirmPage() {
   const [input, setInput] = useState<VacancyInput | null>(null);
   const [statuses, setStatuses] = useState(INITIAL_STATUSES);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   // 전용면적 입력 중인 문자열("275." 같은 중간 값)을 숫자 필드와 따로 든다.
   const [areaText, setAreaText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -97,7 +94,6 @@ export default function BuildingConfirmPage() {
       setInput({
         roadAddress: mockProperty.address,
         floorUnit: mockProperty.floorUnit,
-        radius: String(mockProperty.radiusM),
       });
       setStatuses({
         title: 'done',
@@ -118,8 +114,8 @@ export default function BuildingConfirmPage() {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     fetchBuildingInfo(saved.roadAddress, {
-      signal: controller.signal,
       floorUnit: saved.floorUnit,
+      signal: controller.signal,
       failLookups: mockFailLookups(window.location.search),
       onStepChange: (id, status) =>
         setStatuses((prev) => ({ ...prev, [id]: status })),
@@ -135,13 +131,23 @@ export default function BuildingConfirmPage() {
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : '건축물대장 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+        );
+        setStatuses(
+          Object.fromEntries(
+            LOOKUP_ORDER.map((id) => [id, 'failed'])
+          ) as Record<LookupId, LookupStatus>
+        );
       });
 
     return () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [router]);
+  }, [retryCount, router]);
 
   function updateBuilding(patch: Partial<BuildingInfo>) {
     setBuilding((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -187,7 +193,7 @@ export default function BuildingConfirmPage() {
       // 질문·결과는 진행 화면이 요청 ID로 받아 온다.
       const { request_id: requestId, facilitiesDropped } = await startAnalysis({
         address: fullAddress,
-        radiusM: parseRadius(input.radius),
+        radiusM: ANALYSIS_RADIUS_M,
         allowQuestions: true,
         floor: normalizeFloor(input.floorUnit) ?? undefined,
         exclusiveAreaM2: building.exclusiveAreaM2.value ?? undefined,
@@ -223,29 +229,39 @@ export default function BuildingConfirmPage() {
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
-        <StepIndicator currentStep={2} />
-
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
         {!building ? (
-          <BuildingLoading
-            statuses={statuses}
-            floorLabel={floorLabel}
-            address={input?.roadAddress}
-          />
+          <>
+            <StepIndicator currentStep={2} />
+            <BuildingLoading
+              statuses={statuses}
+              floorLabel={floorLabel}
+              address={input?.roadAddress}
+              errorMessage={loadError}
+              onRetry={() => {
+                setLoadError(null);
+                setStatuses(INITIAL_STATUSES);
+                setRetryCount((count) => count + 1);
+              }}
+            />
+          </>
         ) : (
           <>
-            <PageTitle
+            <FlowPageTitle
+              eyebrow="BUILDING CHECK"
               title="이 정보가 맞나요?"
               description="건축물대장에 적힌 내용이에요. 실제와 다르면 고쳐 주세요. 고친 값으로 분석하고, 리포트에 건축물대장과 다르다고 표시해 둘게요."
             />
+            <StepIndicator currentStep={2} />
 
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_440px] items-start gap-10">
+            {/* 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다. */}
+            <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_440px]">
               <Card
                 className="w-full gap-0"
                 style={{
                   padding: 0,
-                  borderRadius: '12px',
-                  borderWidth: '1px',
+                  borderRadius: '24px',
+                  borderWidth: '0px',
                 }}
               >
                 <BuildingSummaryHeader building={building} />
@@ -259,7 +275,7 @@ export default function BuildingConfirmPage() {
                   }
                   editor={
                     <div className="flex items-center gap-2">
-                      <div className="w-48">
+                      <div className="w-full max-w-48">
                         <Input
                           inputMode="decimal"
                           aria-label="전용면적"
@@ -350,7 +366,7 @@ export default function BuildingConfirmPage() {
                           ),
                         })
                       }
-                      className="min-h-[52px] w-72 rounded-lg border px-3.5 text-base"
+                      className="min-h-[52px] w-full max-w-72 rounded-lg border px-3.5 text-base"
                       style={{
                         borderColor: colors.neutral.border,
                         backgroundColor: colors.neutral.white,
@@ -373,13 +389,13 @@ export default function BuildingConfirmPage() {
                 />
 
                 <div
-                  className="flex justify-end gap-4 px-10 py-8"
+                  className="flex flex-col-reverse gap-3 px-5 py-6 sm:flex-row sm:justify-end sm:gap-4 sm:px-10 sm:py-8"
                   style={{ borderTop: `1px solid ${colors.neutral.border}` }}
                 >
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-[60px] min-w-[176px]"
+                    className="min-h-[60px] w-full sm:w-auto sm:min-w-[176px]"
                     // Button 기본 text-sm이 클래스보다 우선 적용돼 글자 크기는 style로 준다.
                     style={{
                       fontSize: 'var(--text-base)',
@@ -394,7 +410,7 @@ export default function BuildingConfirmPage() {
                   <Button
                     type="button"
                     variant="primary"
-                    className="min-h-[60px] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-[60px] w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     style={{ fontSize: 'var(--text-base)' }}
                     disabled={isSubmitting || building.parking.value === null}
                     aria-describedby={
@@ -416,31 +432,6 @@ export default function BuildingConfirmPage() {
           </>
         )}
       </main>
-    </div>
-  );
-}
-
-function PageTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <h1
-        className="text-32 leading-tight font-bold"
-        style={{ color: colors.text.primary }}
-      >
-        {title}
-      </h1>
-      <p
-        className="text-base leading-relaxed"
-        style={{ color: colors.text.secondary }}
-      >
-        {description}
-      </p>
     </div>
   );
 }

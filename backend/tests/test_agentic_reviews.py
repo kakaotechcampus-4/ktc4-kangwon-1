@@ -177,7 +177,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         }
         target = {
             "examiner": "app.agentic.examiner.review_packet",
-            "founder": "app.agentic.evaluators.review_packet",
+            "founder": "app.agentic.founder.review_packet",
         }[actor]
         with patch(target, return_value=packet):
             await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
@@ -214,7 +214,8 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
             if len(entered) == 4:
                 ready.set()
             await asyncio.wait_for(ready.wait(), 2)
-            if actor == "customer":
+            # 손님 평가자는 모델이 실패해도 완료로 남으므로 창업자로 실패 칸을 만듭니다.
+            if actor == "founder":
                 raise TimeoutError()
             return self.message(
                 "submit_review",
@@ -223,8 +224,16 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
 
         async def decision(messages, definitions, settings, receipt):
             finals.append(messages)
+            # 손님 평가자의 코드 지적도 모두 수용 처리해야 최종 제출이 통과합니다.
+            reviews = json.loads(messages[-1]["content"])["reviews"]
+            resolutions = [
+                {"issue_id": i["issue_id"], "disposition": "accepted", "reason": "반영"}
+                for r in reviews
+                for i in r["issues"]
+            ]
             return self.message(
-                "submit_draft", {"phase": "final", "report": {}, "review_resolutions": []}
+                "submit_draft",
+                {"phase": "final", "report": {}, "review_resolutions": resolutions},
             )
 
         loop = await DecisionLoop.create(

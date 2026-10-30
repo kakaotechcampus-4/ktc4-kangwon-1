@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import StepIndicator from '@/components/form/StepIndicator';
+import FlowPageTitle from '@/components/form/FlowPageTitle';
 import ProgressTracker from '@/components/analysis-progress/ProgressTracker';
 import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
@@ -27,6 +28,7 @@ import {
 import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
 import {
   loadConfirmedBuilding,
+  ANALYSIS_RADIUS_M,
   loadVacancyInput,
   saveAnalysisResult,
   saveRequestId,
@@ -134,7 +136,6 @@ function useKnownSite(): KnownSite {
     }
     const building = loadConfirmedBuilding();
     const area = building?.exclusiveAreaM2.value ?? null;
-    const radius = Number(input.radius.trim());
     // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setKnown((prev) => ({
@@ -142,10 +143,7 @@ function useKnownSite(): KnownSite {
         ...prev.summary,
         address: input.roadAddress,
         floorAndUnit: input.floorUnit.trim() || '—',
-        radiusM:
-          input.radius.trim() && Number.isInteger(radius) && radius > 0
-            ? radius
-            : prev.summary.radiusM,
+        radiusM: ANALYSIS_RADIUS_M,
         exclusiveAreaText:
           area === null
             ? '확인 안 됨'
@@ -333,27 +331,16 @@ function ProgressView({
     >
       <Header />
 
-      <main className="flex w-full flex-col items-start gap-8 px-8 py-10">
-        <StepIndicator currentStep={3} />
-
-        <div className="flex w-full items-start justify-between gap-6">
-          <div className="flex flex-col items-start gap-3">
-            <h1
-              className="text-32 leading-tight font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              {copy.title}
-            </h1>
-            <p
-              className="text-base leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              {copy.description}
-            </p>
-          </div>
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
+        <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:justify-between sm:gap-6">
+          <FlowPageTitle
+            eyebrow="AI ANALYSIS"
+            title={copy.title}
+            description={copy.description}
+          />
 
           <div
-            className="flex shrink-0 items-center gap-3 rounded-xl px-5 py-3.5"
+            className="flex w-full shrink-0 items-center gap-3 rounded-xl px-5 py-3.5 sm:w-auto"
             style={{ backgroundColor: `${toneColor}14` }}
             role="status"
           >
@@ -383,25 +370,34 @@ function ProgressView({
           </div>
         </div>
 
-        {/* 데스크톱 3컬럼 기준(반응형은 이번 범위 밖). 중앙 재질문 영역이 가장
-            넓고, 좌측 진행 현황·우측 분석 대상은 고정 폭 보조 영역이다. */}
-        <div className="grid w-full grid-cols-[340px_minmax(0,1fr)_300px] items-start gap-6">
-          <ProgressTracker steps={steps} questionCount={questions.length} />
-          {stage === 'failed' ? (
-            <FailedNotice message={error} onRestart={onRestart} />
-          ) : (
-            <ClarifyingPanel
-              key={questionKey ?? 'none'}
-              stage={stage}
-              steps={steps}
-              questions={questions}
-              initialAnswers={initialAnswers}
-              showNote={showNote}
-              onSubmit={onSubmit}
-              onViewReport={onViewReport}
-            />
-          )}
-          <AnalysisSummaryPanel summary={summary} />
+        <StepIndicator currentStep={3} />
+
+        {/* 넓은 화면(xl)은 3컬럼: 진행 현황 · 질문·결과 · 분석 대상.
+            태블릿·작은 노트북(md~lg)은 왼쪽에 진행 현황과 분석 대상을 쌓고 오른쪽에 질문·결과.
+            폰은 한 줄로, 지금 할 일이 있는 질문·결과 영역을 맨 위에 둔다. */}
+        <div className="grid w-full grid-cols-1 items-start gap-4 sm:gap-6 md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)_300px]">
+          <div className="order-2 md:order-none md:col-start-1 md:row-start-1">
+            <ProgressTracker steps={steps} questionCount={questions.length} />
+          </div>
+          <div className="order-1 md:order-none md:col-start-2 md:row-span-2 md:row-start-1 xl:row-span-1">
+            {stage === 'failed' ? (
+              <FailedNotice message={error} onRestart={onRestart} />
+            ) : (
+              <ClarifyingPanel
+                key={questionKey ?? 'none'}
+                stage={stage}
+                steps={steps}
+                questions={questions}
+                initialAnswers={initialAnswers}
+                showNote={showNote}
+                onSubmit={onSubmit}
+                onViewReport={onViewReport}
+              />
+            )}
+          </div>
+          <div className="order-3 md:order-none md:col-start-1 md:row-start-2 xl:col-start-3 xl:row-start-1">
+            <AnalysisSummaryPanel summary={summary} />
+          </div>
         </div>
       </main>
     </div>
@@ -417,7 +413,7 @@ function FailedNotice({
 }) {
   return (
     <div
-      className="flex w-full flex-col gap-4 rounded-xl border p-8"
+      className="flex w-full flex-col gap-4 rounded-3xl shadow-[0_18px_40px_rgba(16,35,58,0.06)] p-5 sm:p-8"
       style={{
         borderColor: colors.neutral.border,
         backgroundColor: colors.neutral.white,
