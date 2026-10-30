@@ -70,5 +70,8 @@ jobs:
       - name: eslint 검사
         run: npm run lint
 
+      - name: 테스트
+        run: npm test
+
       - name: 빌드 (타입 검사 포함)
         run: npm run build
