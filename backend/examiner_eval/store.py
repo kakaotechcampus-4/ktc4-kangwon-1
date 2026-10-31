@@ -1,0 +1,142 @@
+"""저장된 요청 DB에서 심사 시험에 쓸 요청 재료를 읽습니다."""
+
+import json
+import logging
+import sqlite3
+from contextlib import closing
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from app.schemas import Site
+from app.storage.raw import CaptureScope
+
+LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RequestContext:
+    request_id: str
+    snapshot_id: str
+    run_id: str
+    site: Site
+    stored_draft: dict
+    facts: dict[tuple[str, str, str], str]
+    ratios: dict[str, float | None] = field(default_factory=dict)
+
+
+def open_readonly(path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def copy_store(src: Path, dest: Path) -> Path:
+    dest = Path(dest)
+    if dest.exists():
+        raise FileExistsError(dest)
+    try:
+        with closing(open_readonly(src)) as source, closing(sqlite3.connect(dest)) as target:
+            source.backup(target)
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return dest
+
+
+def load_contexts(db_path: Path) -> list[RequestContext]:
+    contexts = []
+    with closing(open_readonly(db_path)) as db:
+        requests = db.execute(
+            "SELECT request_id, site_json FROM analysis_requests ORDER BY request_id"
+        ).fetchall()
+        for request in requests:
+            request_id = request["request_id"]
+            draft = db.execute(
+                "SELECT snapshot_id, result_json FROM agentic_reports "
+                "WHERE request_id=? AND phase='draft_candidate' "
+                "ORDER BY created_at, report_id LIMIT 1",
+                (request_id,),
+            ).fetchone()
+            if draft is None:
+                continue
+            if not request["site_json"]:
+                LOGGER.warning("요청 %s 건너뜀: site_json 없음", request_id)
+                continue
+            snapshot_id = draft["snapshot_id"]
+            run = db.execute(
+                "SELECT run_id FROM agentic_runs WHERE request_id=? AND snapshot_id=? "
+                "ORDER BY updated_at DESC LIMIT 1",
+                (request_id, snapshot_id),
+            ).fetchone()
+            if run is None:
+                LOGGER.warning(
+                    "요청 %s 건너뜀: snapshot %s의 agentic_runs 행 없음", request_id, snapshot_id
+                )
+                continue
+            facts = {}
+            ratios = {}
+            for fact in db.execute(
+                "SELECT fact_id, industry_code, source, metric, value_json FROM facts "
+                "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
+                "ORDER BY fact_id",
+                (request_id, snapshot_id),
+            ):
+                key = (fact["industry_code"], fact["source"], fact["metric"])
+                if key not in facts and fact["metric"] == "close_rate_ratio":
+                    value = json.loads(fact["value_json"])
+                    ratios[fact["industry_code"]] = (
+                        float(value) if isinstance(value, (int, float)) else None
+                    )
+                facts.setdefault(key, fact["fact_id"])
+            contexts.append(
+                RequestContext(
+                    request_id=request_id,
+                    snapshot_id=snapshot_id,
+                    run_id=run["run_id"],
+                    site=Site.model_validate_json(request["site_json"]),
+                    stored_draft=json.loads(draft["result_json"]),
+                    facts=facts,
+                    ratios=ratios,
+                )
+            )
+    return contexts
+
+
+def candidate_facts(
+    db_path: Path, contexts: list[RequestContext]
+) -> dict[str, dict[str | None, set[str]]]:
+    found: dict[str, dict[str | None, set[str]]] = {}
+    with closing(open_readonly(db_path)) as db:
+        for ctx in contexts:
+            by_code: dict[str | None, set[str]] = {}
+            for fact in db.execute(
+                "SELECT fact_id, industry_code FROM facts "
+                "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1",
+                (ctx.request_id, ctx.snapshot_id),
+            ):
+                by_code.setdefault(fact["industry_code"], set()).add(fact["fact_id"])
+            found[ctx.request_id] = by_code
+    return found
+
+
+def fact_sources(db_path: Path, contexts: list[RequestContext]) -> dict[str, dict[str, str]]:
+    found: dict[str, dict[str, str]] = {}
+    with closing(open_readonly(db_path)) as db:
+        for ctx in contexts:
+            found[ctx.request_id] = {
+                fact["fact_id"]: fact["source"]
+                for fact in db.execute(
+                    "SELECT fact_id, source FROM facts WHERE request_id=? AND snapshot_id=?",
+                    (ctx.request_id, ctx.snapshot_id),
+                )
+            }
+    return found
+
+
+def make_scope(ctx: RequestContext, db_path: Path) -> CaptureScope:
+    return CaptureScope(
+        request_id=ctx.request_id,
+        path=Path(db_path),
+        run_id=ctx.run_id,
+        snapshot_id=ctx.snapshot_id,
+    )

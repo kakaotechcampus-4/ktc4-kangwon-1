@@ -21,7 +21,7 @@ from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, comple
 from app.llm.config import LLMSettings
 
 from . import advisor, questions
-from .aliases import encode, encode_messages
+from .aliases import encode, encode_messages, labels_periods
 from .budget import RuntimeBudget
 from .contracts import (
     EvaluatorReview,
@@ -331,7 +331,9 @@ class DecisionLoop:
 
     async def _model(self, role, messages, settings, definitions=None, receipt=None):
         if role != "advisor":
-            messages = await run_in_thread(encode_messages, self.scope, messages)
+            messages = await run_in_thread(
+                encode_messages, self.scope, messages, labels_periods(role)
+            )
         started = monotonic()
         receipt = receipt if receipt is not None else {}
         if self.recorder:
