@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { preload } from 'react-dom';
+import './fonts/pretendard.css';
 import './globals.css';
 import StyledJsxRegistry from './StyledJsxRegistry';
-import { pretendard } from '@/styles/fonts';
+import { PRETENDARD_LATIN_URL } from '@/styles/fonts';
 import AuthProvider from '@/components/auth/AuthProvider';
 
 export const metadata: Metadata = {
@@ -11,8 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
+  // 영문·숫자 묶음은 모든 화면에서 쓰므로 미리 받는다(나머지 묶음은 쓰일 때 받는다. app/fonts/pretendard.css).
+  preload(PRETENDARD_LATIN_URL, { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
   return (
-    <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
+    <html lang="ko" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <StyledJsxRegistry>
           <AuthProvider>{children}</AuthProvider>
