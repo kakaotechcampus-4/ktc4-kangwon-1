@@ -11,14 +11,8 @@ MODEL_SQL_TOOL = "sql_tool.py"
 PENDING = {
     "advisor.py",
     "evaluators.py",
-    "examiner.py",
-    "l_input.py",
     "questions.py",
-    "read_tools.py",
-    "report.py",
     "runtime.py",
-    "space.py",
-    "tools.py",
 }
 
 

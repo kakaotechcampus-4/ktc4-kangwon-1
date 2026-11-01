@@ -5,6 +5,8 @@ import re
 from contextlib import nullcontext
 
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository.agentic import begin_immediate
 from app.industries.catalog import INDUSTRIES
 
 from .facts import register_fact
@@ -92,13 +94,7 @@ def _chosen_answer(metric, rows):
 
 def rule_answers(scope, *, connection=None):
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        rows = db.execute(
-            "SELECT fact_id,metric,value_json,unit FROM facts WHERE request_id=? "
-            "AND snapshot_id=? AND source='user' AND status='observed' AND citable=1 "
-            "AND metric IN ('floor','exclusive_area','existing_facilities') "
-            "ORDER BY created_at DESC,fact_id DESC",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchall()
+        rows = fact_db.user_space_answers(db, scope.request_id, scope.snapshot_id)
     answers, candidates = {}, {}
     for fact_id, metric, raw, unit in rows:
         value = json.loads(raw)
@@ -117,16 +113,9 @@ def rule_answers(scope, *, connection=None):
 def ensure_space_fits(scope, *, connection=None):
     """비교 값·부모 계보가 바뀌면 새 fact를 만들고 현재 포인터만 갱신합니다."""
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        if not db.in_transaction:
-            db.execute("BEGIN IMMEDIATE")
+        begin_immediate(db)
         profiles, answers, answer_ids, candidates = {}, {}, {}, {}
-        for row in db.execute(
-            "SELECT fact_id,industry_code,source,metric,value_json FROM facts "
-            "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
-            "AND (metric='space_requirements' OR source='user') "
-            "ORDER BY created_at DESC,fact_id DESC",
-            (scope.request_id, scope.snapshot_id),
-        ):
+        for row in fact_db.space_fit_inputs(db, scope.request_id, scope.snapshot_id):
             if row[2] == "industry_profile" and row[3] == "space_requirements":
                 profiles.setdefault(row[1], (row[0], json.loads(row[4])))
             elif row[2] == "user" and row[3] in {
@@ -178,11 +167,6 @@ def ensure_space_fits(scope, *, connection=None):
                 period="현재 임대인 답변과 업종 공간 요건",
                 connection=db,
             )
-            db.execute(
-                "INSERT INTO space_fit_current VALUES(?,?,?,?) "
-                "ON CONFLICT(request_id,snapshot_id,industry_code) DO UPDATE "
-                "SET fact_id=excluded.fact_id WHERE fact_id!=excluded.fact_id",
-                (scope.request_id, scope.snapshot_id, code, fact_id),
-            )
+            fact_db.point_space_fit(db, scope.request_id, scope.snapshot_id, code, fact_id)
             current[code] = fact_id
         return current

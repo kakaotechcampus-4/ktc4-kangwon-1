@@ -6,6 +6,9 @@ from copy import deepcopy
 
 from app.clock import utc_now_iso
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
+from app.db.repository import facts as fact_db
+from app.db.repository import scores as score_db
 from app.industries.catalog import INDUSTRIES
 from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 from app.schemas import DecisionResult
@@ -58,11 +61,7 @@ def l_grade(factors):
 
 def load_base(scope):
     with connect(scope.path) as db:
-        row = db.execute(
-            "SELECT score_snapshot_id,summary_json FROM score_snapshots WHERE "
-            "request_id=? AND snapshot_id=? ORDER BY created_at LIMIT 1",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchone()
+        row = score_db.first_score_snapshot(db, scope.request_id, scope.snapshot_id)
     if row is None:
         raise ValueError("코드 점수가 없습니다.")
     rows = json.loads(row[1])
@@ -104,15 +103,10 @@ def fact_rows(scope, ids):
     if not ids:
         return {}
     with connect(scope.path) as db:
-        cursor = db.execute(
-            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
-            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id IN ("
-            + ",".join("?" for _ in ids)
-            + ")",
-            [scope.request_id, scope.snapshot_id, *ids],
-        )
-        names = [c[0] for c in cursor.description]
-        rows = {r[0]: dict(zip(names, r, strict=True)) for r in cursor.fetchall()}
+        rows = {
+            r["fact_id"]: r
+            for r in fact_db.find_facts(db, scope.request_id, scope.snapshot_id, fact_ids=list(ids))
+        }
     expand_spatial_scope(scope, rows.values())
     if set(rows) != set(ids):
         raise ReportInvalid("현재 스냅샷에 없는 fact_id입니다.")
@@ -163,30 +157,15 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
         if fact["status"] != "observed" or not fact["citable"]:
             raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")
     with connect(scope.path) as db:
-        code_ids = {
-            f
-            for r in db.execute(
-                "SELECT fact_ids_json FROM scores WHERE score_snapshot_id=? AND item!='L'",
-                (base_id,),
-            )
-            for f in json.loads(r[0])
-        }
+        code_ids = {f for r in score_db.code_item_fact_ids(db, base_id) for f in json.loads(r[0])}
         space_values = {
             row[0]: json.loads(row[1])
-            for row in db.execute(
-                "SELECT c.industry_code,f.value_json FROM space_fit_current c "
-                "JOIN facts f USING(fact_id) WHERE c.request_id=? AND c.snapshot_id=?",
-                (scope.request_id, scope.snapshot_id),
-            )
+            for row in fact_db.current_space_fit_values(db, scope.request_id, scope.snapshot_id)
         }
         for record in records:
             if record.status != "observed":
                 continue
-            calls = db.execute(
-                "SELECT tool_call_id,reply_json FROM tool_calls WHERE request_id=? "
-                "AND snapshot_id=? AND actor='decision'",
-                (scope.request_id, scope.snapshot_id),
-            ).fetchall()
+            calls = agentic_db.decision_tool_calls(db, scope.request_id, scope.snapshot_id)
             calls = {r[0]: json.loads(r[1]) for r in calls}
             valid_calls = {k for k, v in calls.items() if v["status"] in {"ok", "partial"}}
             if not set(record.tool_call_ids) <= valid_calls:
@@ -260,10 +239,7 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
             if record.grade != l_grade([factor.model_dump() for factor in record.new_factors]):
                 raise ReportInvalid("L 등급과 새 유리·불리 요인 개수가 맞지 않습니다.")
             if record.advisor_consult_ids:
-                found = db.execute(
-                    "SELECT consult_id FROM advisor_consults WHERE request_id=? AND snapshot_id=?",
-                    (scope.request_id, scope.snapshot_id),
-                ).fetchall()
+                found = agentic_db.advisor_consult_ids(db, scope.request_id, scope.snapshot_id)
                 if not set(record.advisor_consult_ids) <= {r[0] for r in found}:
                     raise ReportInvalid("자문 기록이 현재 요청에 없습니다.")
             record.advisor_unavailable = record.advisor_unavailable or advisor_unavailable
@@ -330,8 +306,8 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         rows.append(apply_space(scored, judge(requirements.get(original["code"], {}), answers)))
     score_id = "ss_" + str(uuid.uuid4())
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO score_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
+        score_db.insert_score_snapshot(
+            db,
             (
                 score_id,
                 scope.request_id,
@@ -350,16 +326,10 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
                 ids = (
                     [f for factor in indexed[row["code"]].new_factors for f in factor.fact_ids]
                     if item == "L"
-                    else json.loads(
-                        db.execute(
-                            "SELECT fact_ids_json FROM scores WHERE score_snapshot_id=? "
-                            "AND industry_code=? AND item=?",
-                            (base_id, row["code"], item),
-                        ).fetchone()[0]
-                    )
+                    else json.loads(score_db.item_fact_ids_json(db, base_id, row["code"], item))
                 )
-                db.execute(
-                    "INSERT INTO scores VALUES(?,?,?,?,?,?,?,?)",
+                score_db.insert_score(
+                    db,
                     (
                         score_id,
                         row["code"],
@@ -525,8 +495,8 @@ def finalize(
         ],
     }
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO agentic_reports VALUES(?,?,?,?,?,?,?,?)",
+        agentic_db.insert_report(
+            db,
             (
                 report_id,
                 scope.request_id,

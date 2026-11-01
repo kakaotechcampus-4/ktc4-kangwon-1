@@ -4,6 +4,8 @@ import json
 
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository import scores as score_db
 from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 
 from .contracts import (
@@ -34,11 +36,7 @@ def _cursor(value):
 
 def _scorecards(scope, input):
     with connect(scope.path) as db:
-        snapshot = db.execute(
-            "SELECT score_snapshot_id,summary_json FROM score_snapshots "
-            "WHERE request_id=? AND snapshot_id=? ORDER BY created_at DESC LIMIT 1",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchone()
+        snapshot = score_db.latest_score_snapshot(db, scope.request_id, scope.snapshot_id)
         if snapshot is None:
             return error("SOURCE_UNAVAILABLE", "저장된 코드 점수가 없습니다.")
         answers = rule_answers(scope, connection=db)
@@ -69,11 +67,7 @@ def _scorecards(scope, input):
                         points=r[3],
                         fact_ids=json.loads(r[4]),
                     )
-                    for r in db.execute(
-                        "SELECT item,status,grade,points,fact_ids_json FROM scores "
-                        "WHERE score_snapshot_id=? AND industry_code=?",
-                        (snapshot[0], row["code"]),
-                    )
+                    for r in score_db.industry_scores(db, snapshot[0], row["code"])
                 ]
                 details.append(Scorecard(**fields, items=items))
     return ScorecardResult(
@@ -86,29 +80,16 @@ def _scorecards(scope, input):
 def _facts(scope, input):
     validate_snapshot(scope)
     with connect(scope.path) as db:
-        query = (
-            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
-            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=?"
+        records = fact_db.find_facts(
+            db,
+            scope.request_id,
+            scope.snapshot_id,
+            fact_ids=input.fact_ids,
+            industry_code=input.industry_code,
+            source=input.source,
+            metrics=input.metrics,
+            current_space_fit=input.source == "industry_profile" and input.metrics == ["space_fit"],
         )
-        params = [scope.request_id, scope.snapshot_id]
-        if input.fact_ids:
-            query += " AND fact_id IN (" + ",".join("?" for _ in input.fact_ids) + ")"
-            params.extend(input.fact_ids)
-        else:
-            if input.industry_code is not None:
-                query += " AND industry_code=?"
-                params.append(input.industry_code)
-            query += " AND source=? AND metric IN (" + ",".join("?" for _ in input.metrics) + ")"
-            params.extend([input.source, *input.metrics])
-            if input.source == "industry_profile" and input.metrics == ["space_fit"]:
-                query += (
-                    " AND fact_id IN (SELECT fact_id FROM space_fit_current "
-                    "WHERE request_id=? AND snapshot_id=?)"
-                )
-                params.extend([scope.request_id, scope.snapshot_id])
-        cursor = db.execute(query + " ORDER BY fact_id", params)
-        columns = [c[0] for c in cursor.description]
-        records = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
         expand_spatial_scope(scope, records)
         if input.fact_ids and len(records) != len(set(input.fact_ids)):
             return error("UNKNOWN_FACT", "현재 스냅샷에 없는 fact_id입니다.")
