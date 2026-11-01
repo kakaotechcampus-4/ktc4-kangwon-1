@@ -15,22 +15,23 @@ backend/    FastAPI · Python 3.12 · 비동기(asyncio)
 docs/       규칙 문서 (컨벤션 · Git · API 계약)
 ```
 
-기본 흐름은 고정이며 최종판단 이후 필요한 보완·지도 조회·질문만 선택합니다.
+현재 공개 API는 `services/analysis.py`에서 단일 decision 도구 루프를 실행합니다.
 
 ```
 주소 → 좌표(address.py)
-     → 분석 에이전트 3종 병렬 실행(agents/orchestration)
-          floating_population · business_lifecycle · commercial_area
-     → 최종 판단(decision) : 추천·비추천 업종과 근거
-     → SQLite 저장 → API 조회
+     → 자료 DB 버전 고정·SQL 조회(local_data) + 시설·규제 사전 조회
+     → 코드 채점·fact 저장(agentic)
+     → decision 도구 루프: 필요한 조회·선택적 질문·답변 재개 → 초안
+     → 평가자 4명 병렬 검토 → decision이 한 번 반영
+     → 서버 검증·요청 SQLite 저장 → API 조회
 ```
 
 ## 반드시 지킬 것
 
-1. **에이전트 사이 입출력은 `backend/app/schemas.py`가 유일한 기준이다.**
-   여기 정의된 `AnalysisTask` / `AgentAnalysis` / `DecisionRequest` / `DecisionResult`를 바꾸면
-   다른 사람 코드가 같이 깨집니다. 바꾸려면 PR에 먼저 올려 합의합니다.
-   각 에이전트가 자유롭게 정하는 곳은 `AgentAnalysis.data` 안쪽뿐입니다.
+1. **공개 결과는 `backend/app/schemas.py`, 도구 입력·응답은 `backend/app/agentic/contracts.py`가 기준이다.**
+   `AnalysisTask`·`AgentAnalysis`는 수집·계산 경계에도 사용합니다. HTTP 요청·응답 모델은
+   `app/api/v1/`에 있습니다. 계약 변경은 호출자·화면에 영향을 주므로 PR에서 합의합니다.
+   자료 DB는 수집·활성화용이며 요청 DB에는 버전 참조·근거·판단·질문 이력을 저장합니다.
 
 2. **외부 호출은 전부 비동기다.** `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
    `httpx.Client`, `time.sleep`을 새로 넣지 마세요 — 분석 한 번이 100회 넘는 HTTP 요청을 만들고,
@@ -42,8 +43,9 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
    단, 공통 계약 검증 오류는 잘못된 결과로 숨기지 않고 요청 경계까지 전파해 failed로 저장합니다.
    저장소 오류도 서비스 계층에서 전파하며 에이전트 오류로 바꾸지 않습니다.
 
-4. **모델 응답을 그대로 믿지 않는다.** 구조는 pydantic으로 검증하고,
-   근거(`evidence.path`)는 실제 입력 자료에 있는 필드인지 확인합니다(`decision/agent.py`).
+4. **모델 응답을 그대로 믿지 않는다.** Pydantic으로 도구 계약을 검증하고,
+   `agentic/report.py`에서 fact 소유·인용 가능 상태·업종·숫자 슬롯·코드 채점과의 정합성을 검증합니다.
+   유효한 근거가 있다는 것만으로 모델 문장의 의미까지 참이라고 보장하지 않습니다.
 
 5. **키는 코드에 넣지 않는다.** `backend/.env`만 씁니다. `.env.example`에 변수 이름만 올립니다.
 

@@ -19,6 +19,7 @@ from app.building_registry import (
 )
 from app.config import AddressSettings
 from app.services.settings import ExecutionSettings
+from tests.auth_fixture import login
 
 KAKAO = {
     "meta": {"total_count": 1, "pageable_count": 1, "is_end": True},
@@ -119,12 +120,12 @@ def sequence(*responses):
 
 
 class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
-    async def lookup(self, responses):
+    async def lookup(self, responses, *, key="fake"):
         mock, seen = transport(responses)
         async with httpx.AsyncClient(transport=mock) as client:
             result = await lookup_building(
                 "서울 송파구 위례광장로 199 4층",
-                BuildingRegistrySettings(api_key="fake", retry_delay=0),
+                BuildingRegistrySettings(api_key=key, retry_delay=0),
                 AddressSettings(api_key="fake"),
                 client=client,
             )
@@ -306,12 +307,19 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
         error = httpx.Response(200, json={"response": {"header": {"resultCode": "30"}}})
         with self.assertRaises(BuildingRegistryError) as caught:
             await self.lookup({name: error for name in answers()})
-        self.assertEqual(caught.exception.code, "UPSTREAM_ERROR")
+        self.assertEqual(caught.exception.code, "AUTH")
 
     async def test_missing_key_stops_before_calls(self):
         with self.assertRaises(BuildingRegistryError) as caught:
             await lookup_building("서울 송파구 위례광장로 199", BuildingRegistrySettings())
         self.assertEqual(caught.exception.code, "CONFIG_ERROR")
+
+
+def _logged_in_client(path):
+    """대장 조회는 외부 할당량 보호 때문에 로그인을 요구합니다."""
+    app = main.create_app(settings=ExecutionSettings(db_path=path), load_env=False)
+    login(app, path)
+    return TestClient(app)
 
 
 class BuildingRegistryApiTests(unittest.TestCase):
@@ -321,12 +329,7 @@ class BuildingRegistryApiTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as folder,
             patch.dict(os.environ, {"MOCK_MODE": ""}),
             patch(target, new=AsyncMock(side_effect=error)),
-            TestClient(
-                main.create_app(
-                    settings=ExecutionSettings(db_path=Path(folder) / "test.sqlite3"),
-                    load_env=False,
-                )
-            ) as client,
+            _logged_in_client(Path(folder) / "test.sqlite3") as client,
         ):
             return client.get(
                 "/api/v1/building-registry", params={"address": "서울 어딘가", **params}
@@ -343,6 +346,15 @@ class BuildingRegistryApiTests(unittest.TestCase):
     def test_registry_failure_is_502(self):
         response = self.get(BuildingRegistryError("AUTH", "x"))
         self.assertEqual(response.status_code, 502)
+
+    def test_rate_limit_is_distinct_from_auth_failure(self):
+        response = self.get(BuildingRegistryError("RATE_LIMIT", "외부 원문"))
+        self.assertEqual(response.status_code, 429)
+        self.assertNotIn("외부 원문", response.text)
+
+    def test_mismatched_address_is_400(self):
+        response = self.get(GeocodeError("ADDRESS_MISMATCH", "외부 원문"))
+        self.assertEqual(response.status_code, 400)
 
     def test_mock_needs_no_lookup(self):
         response = self.get(AssertionError("외부 조회 금지"), mock="true")

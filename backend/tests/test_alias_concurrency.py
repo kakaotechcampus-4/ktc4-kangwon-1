@@ -121,9 +121,11 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
 
         self.loop.generate = replays["decision"]
         self.loop.evaluator_generate = evaluator
-        outcome, _ = await asyncio.wait_for(
-            asyncio.gather(self.loop.review_and_finalize(), writer()), 10
-        )
+        # 기록된 최종 제출은 수용 목록이 비어 있으므로 손님 코드 지적이 생기지 않게 합니다.
+        with patch("app.agentic.customer_rubric.code_checks", return_value=([], [], set())):
+            outcome, _ = await asyncio.wait_for(
+                asyncio.gather(self.loop.review_and_finalize(), writer()), 10
+            )
         self.assertEqual(outcome.status, "completed")
         self.assertEqual(outcome.result.review_completeness, 1)
         self.assertEqual(len(entered), 4)

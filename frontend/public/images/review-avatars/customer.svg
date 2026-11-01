@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="14" y1="6" x2="82" y2="91" gradientUnits="userSpaceOnUse"><stop stop-color="#FCE8EA"/><stop offset="1" stop-color="#F5C9CF"/></linearGradient>
+    <linearGradient id="skin" x1="35" y1="27" x2="62" y2="63" gradientUnits="userSpaceOnUse"><stop stop-color="#FFDDBD"/><stop offset="1" stop-color="#F0B48E"/></linearGradient>
+    <linearGradient id="hair" x1="28" y1="19" x2="68" y2="62" gradientUnits="userSpaceOnUse"><stop stop-color="#8B5541"/><stop offset="1" stop-color="#5A372F"/></linearGradient>
+    <linearGradient id="top" x1="25" y1="64" x2="72" y2="98" gradientUnits="userSpaceOnUse"><stop stop-color="#D77B86"/><stop offset="1" stop-color="#A84F67"/></linearGradient>
+    <clipPath id="circle"><circle cx="48" cy="48" r="47"/></clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <circle cx="48" cy="48" r="48" fill="url(#bg)"/>
+    <ellipse cx="48" cy="101" rx="39" ry="35" fill="url(#top)"/>
+    <path d="M39 61h18v13H39z" fill="url(#skin)"/>
+    <path d="M25 44c0-19 9-30 24-30 16 0 24 12 24 31v19c0 8-6 13-12 13H35c-7 0-12-5-12-13V44Z" fill="url(#hair)"/>
+    <path d="M34 39c0-12 6-19 15-19 10 0 16 8 16 20v12c0 12-7 20-17 20S33 63 33 52l1-13Z" fill="url(#skin)"/>
+    <path d="M29 47c-2-13 2-24 10-30 10-8 25-4 31 6-7 0-11-1-15-4 2 8 9 12 15 15v16c-5-5-8-11-10-18-8 7-17 11-31 12Z" fill="url(#hair)"/>
+    <path d="M40 44h5m7 0h5" stroke="#61443D" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="43" cy="47" rx="1.6" ry="2.1" fill="#302D2D"/><ellipse cx="55" cy="47" rx="1.6" ry="2.1" fill="#302D2D"/>
+    <path d="M49 48v6l-2.5 1" stroke="#D28D6B" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M42 59c3.2 4.5 10.8 4.5 14 0" stroke="#B64F5F" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="38" cy="55" rx="3" ry="1.8" fill="#E99091" fill-opacity=".55"/><ellipse cx="60" cy="55" rx="3" ry="1.8" fill="#E99091" fill-opacity=".55"/>
+    <path d="m48 75 8-7 7 5-5 24H38l-5-24 7-5 8 7Z" fill="#FFF5F1"/>
+    <path d="m48 75 8-7 7 5-5 24H38l-5-24 7-5 8 7Z" fill="#E9B2A2" fill-opacity=".55"/>
+    <path d="M39 31c4-7 10-10 17-9" stroke="#FFF" stroke-opacity=".34" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="70" cy="70" r="10" fill="#FFF" fill-opacity=".92"/><path d="M67 67h6v7h-6zM66 66h8v2h-8zM68.5 74v2m3-2v2" stroke="#B65D69" stroke-width="1.5" stroke-linejoin="round"/>
+  </g>
+</svg>

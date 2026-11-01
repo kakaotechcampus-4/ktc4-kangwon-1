@@ -5,8 +5,8 @@ import type { ClarifyingAnswers } from '@/lib/mockData/analysisProgress';
 
 const state = vi.hoisted(() => ({ answers: {} as ClarifyingAnswers }));
 
-vi.mock('next/font/google', () => ({
-  DM_Mono: () => ({ className: 'test-font' }),
+vi.mock('@/styles/fonts', () => ({
+  pretendard: { className: 'test-font', variable: 'test-font-variable' },
 }));
 
 // 사용자 선택 이후 상태를 주입해 공통 UI의 표시·검증을 확인한다.
@@ -120,5 +120,25 @@ describe('새 질문 데이터에 따른 공통 UI', () => {
       'new-sign-question': { optionId: 'yes' },
     };
     expect(submitDisabled(render())).toBe(true);
+  });
+
+  it('답변을 보내지 못했으면 고른 답을 둔 채 알리고 다시 보낼 수 있게 한다', () => {
+    state.answers = {
+      'new-ventilation-question': { optionId: 'ready' },
+      'new-sign-question': { optionId: 'yes' },
+    };
+    const html = renderToStaticMarkup(
+      createElement(ClarifyingPanel, {
+        stage: 'awaiting_input',
+        steps: [],
+        questions,
+        onSubmit: vi.fn(),
+        onViewReport: vi.fn(),
+        submitError: '서버에 연결하지 못했어요.',
+      })
+    );
+    expect(html).toMatch(/role="alert"[^>]*>[^<]*서버에 연결하지 못했어요\./);
+    expect(submitDisabled(html)).toBe(false);
+    expect(render()).not.toContain('role="alert"');
   });
 });

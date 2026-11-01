@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -13,15 +13,9 @@ import {
   type BusinessLifecycleIndustryResult,
 } from '@/lib/mockData/report';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-});
+const dmMono = pretendard;
 
 /**
  * 375px에서 min, 1440px에서 max가 되도록 선형 보간한 clamp 문자열.

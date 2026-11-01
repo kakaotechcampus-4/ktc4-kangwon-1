@@ -234,3 +234,33 @@ export function toAnswerSubmission(
     answers: submitted,
   };
 }
+
+export function progressView({
+  mockMode,
+  requestId,
+}: {
+  mockMode: boolean;
+  requestId: string | null;
+}): 'live' | 'mock' | 'none' {
+  if (mockMode) {
+    return 'mock';
+  }
+  return requestId ? 'live' : 'none';
+}
+
+export function answerFailureAction(
+  status: number | undefined
+): 'resume' | 'retry' | 'fail' {
+  if (status === 409) {
+    return 'resume';
+  }
+  if (
+    status === undefined ||
+    status === 408 ||
+    status === 429 ||
+    status >= 500
+  ) {
+    return 'retry';
+  }
+  return 'fail';
+}

@@ -31,13 +31,33 @@ def generators(*, ask=False):
     async def decision(messages, definitions, settings, receipt):
         receipt.update(model="mock", usage={"prompt_tokens": 0, "completion_tokens": 0})
         if ask and len(messages) == 2:
+            confirmed = (
+                json.loads(messages[1]["content"]).get("confirmed_space", {}).get("values", {})
+            )
+            field, question, reason = next(
+                (field, question, reason)
+                for field, question, reason in (
+                    (
+                        "floor",
+                        "몇 층인가요?",
+                        "층에 따라 들어올 수 있는 업종과 손님 동선이 달라져요.",
+                    ),
+                    (
+                        "exclusive_area",
+                        "전용면적은 얼마인가요?",
+                        "업종마다 필요한 최소 면적이 있어 맞는지 확인해야 해요.",
+                    ),
+                    (
+                        "existing_facilities",
+                        "아직 확인하지 않은 설비 상태를 알려주세요.",
+                        "배기·주방·급배수가 있어야 들어올 수 있는 업종이 있어요.",
+                    ),
+                )
+                if field not in confirmed or field == "existing_facilities"
+            )
             return call(
                 "ask_user",
-                {
-                    "questions": [
-                        {"field": "floor", "question": "몇 층인가요?", "reason": "공간 조건 확인"}
-                    ]
-                },
+                {"questions": [{"field": field, "question": question, "reason": reason}]},
             )
         if "submit_l" in {d["function"]["name"] for d in definitions}:
             return call("submit_l", {"L_records": [], "finish": True})

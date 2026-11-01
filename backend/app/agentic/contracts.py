@@ -494,10 +494,20 @@ class SubmitDraftInput(Schema):
     review_resolutions: list[ReviewResolution] = Field(default_factory=list, max_length=16)
 
 
+class FitCheck(Schema):
+    """손님 평가자 전용. 손님 입장에서 추천과 근거가 맞는지 K6 배점의 다섯 값 중 하나로 매깁니다."""
+
+    industry_code: IndustryCode
+    points: Annotated[float, Field(ge=0, le=40, multiple_of=10)] | None
+    fact_ids: list[FactId] = Field(default_factory=list, max_length=5)
+    reason: Text
+
+
 class SubmitReviewInput(Schema):
     draft_id: Text
     verdict: Literal["agree", "conditional", "oppose"]
     issues: list[ReviewIssue] = Field(max_length=4)
+    fit_checks: list[FitCheck] = Field(default_factory=list, max_length=5)
 
 
 class ScorecardResult(Schema):
@@ -626,6 +636,42 @@ class FinalCandidate(ScorecardSummary):
     review_state: Literal["reviewed", "unreviewed"]
 
 
+class CustomerCheck(Schema):
+    item: Literal["K1", "K2", "K3", "K4", "K6"]
+    status: ItemStatus
+    weight: Annotated[int, Field(ge=0, le=100)]
+    points: Annotated[float, Field(ge=0, le=100)] | None
+    fact_ids: list[FactId] = Field(default_factory=list, max_length=12)
+    note: Text
+
+    @model_validator(mode="after")
+    def check_points(self) -> Self:
+        if (self.status == "observed") != (self.points is not None):
+            raise ValueError("관측 항목에만 점수를 채웁니다.")
+        if self.points is not None and self.points > self.weight:
+            raise ValueError("점수는 배점을 넘을 수 없습니다.")
+        return self
+
+
+class CustomerCandidateScore(Schema):
+    industry_code: IndustryCode
+    rank: Annotated[int, Field(ge=1, le=5)]
+    checks: list[CustomerCheck] = Field(min_length=5, max_length=5)
+    points: Annotated[float, Field(ge=0, le=100)]
+    applicable_weight: Annotated[int, Field(ge=0, le=100)]
+    ratio: Ratio | None
+
+
+class CustomerRubric(Schema):
+    """손님 평가표 v1. K1~K4는 코드, K6만 모델 점수입니다. 판정은 코드 규칙으로 계산합니다."""
+
+    version: Literal["customer-v1"] = "customer-v1"
+    candidates: list[CustomerCandidateScore] = Field(default_factory=list, max_length=5)
+    ratio: Ratio | None
+    verdict_basis: Text
+    model_status: Literal["completed", "failed"]
+
+
 class EvaluatorReview(Schema):
     actor: EvaluatorActor
     status: Literal["completed", "failed"]
@@ -633,6 +679,7 @@ class EvaluatorReview(Schema):
     verdict: Literal["agree", "conditional", "oppose"] | None = None
     issues: list[ReviewIssue] = Field(max_length=4)
     error_code: ErrorCode | None = None
+    customer_rubric: CustomerRubric | None = None
 
     @model_validator(mode="after")
     def check_status(self) -> Self:

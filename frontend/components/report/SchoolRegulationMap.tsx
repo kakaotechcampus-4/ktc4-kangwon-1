@@ -68,7 +68,7 @@ export default function SchoolRegulationMap({
                 type="button"
                 aria-pressed={zone === value}
                 onClick={() => setZone(value)}
-                className={`rounded-lg border px-4 py-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 ${zone === value ? 'border-[#004F54] bg-[#E8F6F2] text-[#004F54]' : 'border-gray-200 text-gray-600'}`}
+                className={`rounded-lg border px-4 py-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 ${zone === value ? 'border-[#10233A] bg-[#EAF0FC] text-[#10233A]' : 'border-gray-200 text-gray-600'}`}
               >
                 {value === 'absolute' ? '50m 안' : '200m 안'}
               </button>

@@ -41,7 +41,10 @@ jobs:
         run: mypy
 
       - name: 테스트
-        run: python -m unittest discover -s tests -v
+        run: python -m coverage run -m unittest discover -s tests -v
+
+      - name: 커버리지 요약
+        run: python -m coverage report
 
   frontend:
     name: 프론트엔드 (lint · format · build)
@@ -66,6 +69,9 @@ jobs:
 
       - name: eslint 검사
         run: npm run lint
+
+      - name: 테스트
+        run: npm test
 
       - name: 빌드 (타입 검사 포함)
         run: npm run build

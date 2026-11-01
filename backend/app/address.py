@@ -106,6 +106,17 @@ def _base_name(doc: dict[str, Any], key: str) -> str | None:
     return name.strip()
 
 
+def matched_addresses(address: str, doc: dict[str, Any]) -> tuple[str | None, str | None]:
+    """분석과 허브가 같은 주소 일치 기준을 사용합니다. 조회 결과는 캐시하지 않습니다."""
+    base, _ = split_detail(address)
+    road, jibun = _base_name(doc, "road_address"), _base_name(doc, "address")
+    if not road and not jibun:
+        raise ValueError("기본 주소가 없습니다.")
+    if not any(_normalized(name) == _normalized(base) for name in (road, jibun) if name):
+        raise GeocodeError("ADDRESS_MISMATCH", "조회된 주소의 지역 또는 번지가 입력과 다릅니다.")
+    return road, jibun
+
+
 async def resolve_site(
     address: str,
     settings: AddressSettings | None = None,
@@ -156,9 +167,7 @@ async def resolve_site(
             raise GeocodeError("KAKAO_AUTH", "카카오 REST 키가 거부됐습니다.")
         response.raise_for_status()
         doc = _candidate(response.json())
-        road, jibun = _base_name(doc, "road_address"), _base_name(doc, "address")
-        if not road and not jibun:
-            raise ValueError("기본 주소가 없습니다.")
+        road, jibun = matched_addresses(cleaned, doc)
         if any(type(doc.get(key)) not in (str, int, float) for key in ("x", "y")):
             raise ValueError("좌표 형식이 잘못되었습니다.")
         site = Site(
@@ -171,10 +180,6 @@ async def resolve_site(
         )
         if (site.latitude, site.longitude) == (0, 0):
             raise ValueError("목업 좌표는 실제 주소로 확정할 수 없습니다.")
-        if not any(_normalized(name) == normalized for name in (road, jibun) if name):
-            raise GeocodeError(
-                "ADDRESS_MISMATCH", "조회된 주소의 지역 또는 번지가 입력과 다릅니다."
-            )
         return site
     except httpx.TimeoutException as exc:
         raise GeocodeError("UPSTREAM_TIMEOUT", "주소 조회 시간이 초과되었습니다.") from exc

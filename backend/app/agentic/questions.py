@@ -30,6 +30,8 @@ async def ask_user(loop, input):
         return error("QUESTION_NOT_ALLOWED", "현재 요청·단계에서 질문할 수 없습니다.")
     if loop.state["asked"]:
         return error("ALREADY_ANSWERED", "질문 세션을 반복할 수 없습니다.")
+    if any(q.field in loop.state.get("confirmed_question_fields", []) for q in input.questions):
+        return error("ALREADY_ANSWERED", "확인 화면에서 확정한 층·전용면적은 다시 묻지 마세요.")
     loop.state["asked"] = True
     session_id = "question_" + str(uuid.uuid4())
     await run_in_thread(save_question, loop, session_id, input)

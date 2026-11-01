@@ -1,18 +1,12 @@
 'use client';
 
 import { Fragment } from 'react';
-import { Outfit, DM_Mono } from 'next/font/google';
+import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['700'],
-});
+const outfit = pretendard;
 
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  weight: ['300', '400'],
-});
+const dmMono = pretendard;
 
 type Step = {
   id: string;

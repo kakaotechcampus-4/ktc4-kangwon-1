@@ -13,7 +13,7 @@ export default function Card({
 }: CardProps) {
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl border-[1.5px] p-7 shadow-[0px_1px_4px_0px_rgba(0,0,0,0.04)] ${className}`}
+      className={`relative flex flex-col overflow-hidden rounded-3xl border p-7 shadow-[0px_18px_40px_0px_rgba(16,35,58,0.06)] ${className}`}
       style={{
         backgroundColor: colors.neutral.white,
         borderColor: colors.neutral.border,

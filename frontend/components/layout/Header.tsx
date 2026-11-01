@@ -4,6 +4,8 @@ import type { CSSProperties } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import HeaderUserMenu from '@/components/layout/HeaderUserMenu';
+import { MOCK_MODE } from '@/lib/api/mockMode';
 import { colors } from '@/styles/tokens';
 
 const navLinks = [
@@ -15,47 +17,70 @@ const navLinks = [
     href: '/vacancy-input',
     matchPaths: ['/vacancy-input', '/building-confirm', '/analysis-progress'],
   },
-  { label: '리포트', href: '/report', matchPaths: ['/report'] },
+  {
+    label: '리포트',
+    href: MOCK_MODE ? '/report' : '/my/reports',
+    matchPaths: ['/report', '/reports', '/my/reports'],
+  },
 ];
 
 const navAccentStyle = {
   '--nav-accent': colors.brand.primary,
 } as CSSProperties;
 
-export default function Header() {
+/** 서비스 로고 마크(public/images/logo-mark.svg) — 남색·파랑 두 쪽이 맞물린 집 모양 */
+export function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <Image
+      src="/images/logo-mark.svg"
+      alt=""
+      aria-hidden="true"
+      width={Math.round((size * 25) / 28)}
+      height={size}
+      className="shrink-0"
+    />
+  );
+}
+
+type HeaderProps = {
+  /**
+   * 랜딩 히어로처럼 배경 위에 겹쳐 띄울 때 true. 흰 바탕·아래 테두리 없이
+   * 히어로 위에 절대 위치로 놓인다. 기본값 false라 기존 호출부는 그대로다.
+   */
+  overlay?: boolean;
+};
+
+export default function Header({ overlay = false }: HeaderProps) {
   const pathname = usePathname();
 
   return (
     <header
-      className="flex w-full flex-col items-start"
-      style={{
-        backgroundColor: colors.neutral.white,
-        borderBottom: `1px solid ${colors.neutral.border}`,
-      }}
+      className={`z-20 flex w-full flex-col items-start ${
+        overlay ? 'absolute inset-x-0 top-0' : ''
+      }`}
+      style={
+        overlay
+          ? undefined
+          : {
+              backgroundColor: colors.neutral.white,
+              borderBottom: `1px solid ${colors.neutral.border}`,
+            }
+      }
     >
-      <div className="mx-auto grid h-14 w-full max-w-[1440px] grid-cols-3 items-center px-5 sm:px-8">
+      <div
+        className={`mx-auto flex w-full max-w-[1440px] items-center justify-between px-4 sm:grid sm:grid-cols-3 sm:px-8 h-16`}
+      >
         <Link href="/" className="flex items-center gap-2.5 justify-self-start">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md">
-            <Image
-              src="/images/logo-mark.svg"
-              alt="chum.ai 로고"
-              width={25}
-              height={28}
-            />
-          </div>
-          <p
-            className="text-xl font-bold tracking-[0.5px]"
-            style={{ color: colors.neutral.black }}
+          <LogoMark />
+          <span
+            className="text-lg font-extrabold tracking-[-0.02em]"
+            style={{ color: colors.brand.dark }}
           >
-            chum
-            <span className="font-light">.</span>
-            <span
-              className="font-normal"
-              style={{ color: colors.brand.primary }}
-            >
-              ai
-            </span>
-          </p>
+            채움
+          </span>
+          <span className="hidden text-13 font-semibold text-[#4A5A6A] sm:inline">
+            chum.ai
+          </span>
         </Link>
 
         <nav
@@ -69,35 +94,35 @@ export default function Header() {
               <Link
                 key={label}
                 href={href}
-                className="group relative flex flex-col items-center justify-center px-4 py-1.5"
+                aria-current={active ? 'page' : undefined}
+                className="group relative flex flex-col items-center justify-center px-2.5 py-2 sm:px-4"
               >
-                <p
+                <span
                   className={`text-15 whitespace-nowrap transition-colors ${
                     active
-                      ? 'font-semibold'
-                      : 'font-normal text-gray-500 group-hover:text-[var(--nav-accent)]'
+                      ? 'font-bold'
+                      : 'font-medium text-[#4A5A6A] group-hover:text-[var(--nav-accent)]'
                   }`}
-                  style={active ? { color: colors.brand.dark } : undefined}
+                  style={active ? { color: colors.brand.primary } : undefined}
                 >
                   {label}
-                </p>
-                {active ? (
-                  <span
-                    className="absolute bottom-0 h-0.5 w-3 rounded-full"
-                    style={{ backgroundColor: colors.brand.dark }}
-                  />
-                ) : (
-                  <span
-                    className="absolute bottom-0 h-0.5 w-3 scale-x-0 rounded-full opacity-0 transition-all duration-150 group-hover:scale-x-100 group-hover:opacity-100"
-                    style={{ backgroundColor: colors.brand.primary }}
-                  />
-                )}
+                </span>
+                <span
+                  className={`absolute bottom-0 h-0.5 w-4 rounded-full transition-all duration-150 ${
+                    active
+                      ? ''
+                      : 'scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: colors.brand.primary }}
+                />
               </Link>
             );
           })}
         </nav>
 
-        <div />
+        <div className="hidden justify-self-end sm:block">
+          <HeaderUserMenu />
+        </div>
       </div>
     </header>
   );

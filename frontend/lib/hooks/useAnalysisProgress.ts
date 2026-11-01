@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AnalysisApiError,
   getAnalysis,
   getAnalysisEvents,
   submitAnswers,
 } from '@/lib/api/analyses';
-import { applyProgressEvent, toWaiting } from '@/lib/api/adapters/progress';
+import {
+  answerFailureAction,
+  applyProgressEvent,
+  toWaiting,
+} from '@/lib/api/adapters/progress';
 import type {
   AnswerSubmission,
   DecisionResult,
@@ -53,6 +58,7 @@ export function useAnalysisProgress(
   const [waiting, setWaiting] = useState<WaitingForInput | null>(null);
   const [result, setResult] = useState<DecisionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   // 폴링을 다시 시작할 때마다 바뀌는 값. 이전 폴링 루프는 이 값이 달라지면 멈춘다.
   const [pollRun, setPollRun] = useState(0);
   const afterRef = useRef(0);
@@ -126,11 +132,28 @@ export function useAnalysisProgress(
   /** 질문 답변을 제출하고 진행 폴링을 다시 시작한다. */
   const submit = useCallback(async (submission: AnswerSubmission) => {
     // 질문 묶음(waiting)은 지우지 않는다 — 재개 화면이 제출한 답을 요약해 보여준다.
+    setSubmitError(null);
     setStage('resuming');
     try {
       await submitAnswers(submission);
       setPollRun((run) => run + 1);
     } catch (caught) {
+      const status =
+        caught instanceof AnalysisApiError ? caught.status : undefined;
+      const action = answerFailureAction(status);
+      if (action === 'resume') {
+        setPollRun((run) => run + 1);
+        return;
+      }
+      if (action === 'retry') {
+        setSubmitError(
+          caught instanceof AnalysisApiError
+            ? caught.message
+            : '답변을 보내지 못했어요. 잠시 후 다시 보내 주세요.'
+        );
+        setStage('awaiting_input');
+        return;
+      }
       setError(
         caught instanceof Error ? caught.message : '답변을 보내지 못했습니다.'
       );
@@ -138,5 +161,5 @@ export function useAnalysisProgress(
     }
   }, []);
 
-  return { steps, stage, waiting, result, error, submit };
+  return { steps, stage, waiting, result, error, submitError, submit };
 }

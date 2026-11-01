@@ -1,105 +1,98 @@
 'use client';
 
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Outfit } from 'next/font/google';
-import Button from '@/components/ui/Button';
+import { saveVacancyInput } from '@/lib/api/resultStore';
 import { colors } from '@/styles/tokens';
 
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-});
-
+/**
+ * 랜딩 마지막 — 주소만 받아 바로 상가 정보 확인 화면으로 보낸다.
+ * 층·호수와 반경은 비워 두면 다음 단계에서 기본값과 질문으로 채운다
+ * (공실 입력 화면의 "지금 다 채울 필요는 없어요" 흐름과 같다).
+ */
 export default function CTABanner() {
   const router = useRouter();
+  const [address, setAddress] = useState('');
 
-  const handleStartAnalysis = () => {
-    router.push('/vacancy-input');
-  };
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!address.trim()) {
+      alert('주소를 입력해주세요');
+      return;
+    }
+    saveVacancyInput({
+      roadAddress: address.trim(),
+      floorUnit: '',
+    });
+    router.push('/building-confirm');
+  }
 
+  // 진한 파랑 통 박스는 눈이 피로해서, 연한 하늘색 바탕에 남색 글자와
+  // 파랑 버튼 하나만 강조하는 차분한 구성으로 둔다.
   return (
-    <div
-      className="flex w-full flex-col items-center py-16"
-      style={{
-        backgroundColor: colors.neutral.white,
-        borderTop: `1px solid ${colors.neutral.border}`,
-      }}
-    >
-      <div className="cta-row flex w-full max-w-[1440px] items-center justify-between px-[100px]">
-        <div className="flex flex-col items-start">
-          <h2
-            className={`cta-title ${outfit.className} text-44 font-bold`}
-            style={{ color: colors.neutral.black }}
+    <section className="w-full px-4 py-26 sm:px-8">
+      <div
+        className="mx-auto flex max-w-[1120px] flex-col gap-8 rounded-[28px] border px-8 py-14 sm:px-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between"
+        style={{
+          backgroundColor: colors.brand.wash,
+          borderColor: '#D5E1EC',
+        }}
+      >
+        <div>
+          <p
+            className="text-sm font-bold tracking-[0.08em]"
+            style={{ color: colors.brand.primary }}
           >
-            지금 바로 공실을 분석해보세요.
+            START ANALYSIS
+          </p>
+          <h2
+            className="mt-3 text-34 leading-[1.35] font-extrabold tracking-[-0.03em]"
+            style={{ color: colors.brand.dark }}
+          >
+            이 자리의 다음을
+            <br />
+            <span style={{ color: colors.brand.primary }}>찾아볼까요?</span>
           </h2>
-          <p className="cta-subtitle pt-1 text-15 text-gray-600">
-            도면과 임대 조건만 입력하면 AI가 업종 적합도를 분석합니다.
+          <p className="mt-3.5 text-base text-[#4B5866]">
+            상가 주소를 입력해 분석을 시작해 보세요.
           </p>
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          className={`cta-button ${outfit.className}`}
-          style={{ padding: '16px 32px' }}
-          onClick={handleStartAnalysis}
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full flex-wrap gap-2.5 rounded-2xl border bg-white p-2 shadow-[0_10px_30px_rgba(16,35,58,0.06)] lg:max-w-[480px]"
+          style={{ borderColor: '#D5DEE7' }}
         >
-          공실 분석 시작하기 →
-        </Button>
+          <label htmlFor="landing-address" className="sr-only">
+            분석할 상가 주소
+          </label>
+          <input
+            id="landing-address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="예) 서울시 강동구 길동 ○○로 12"
+            className="h-12 min-w-[180px] flex-1 bg-transparent px-3 text-base outline-none placeholder:text-[#8A97A5]"
+            style={{ color: colors.brand.dark }}
+          />
+          <button
+            type="submit"
+            className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-bold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            분석 시작
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path
+                d="M2 7h10M8 3l4 4-4 4"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </form>
       </div>
-
-      {/*
-        1024px 미만 전용 축소 처리. 1024px 이상 구간(기존 px-[100px]/text-[44px]/
-        leading-[50px]/text-[15px]/버튼 padding 등 className·inline style)은 절대
-        건드리지 않고, 아래 @media (max-width: 1023.98px) 블록에서만 !important로
-        덮어써 좌측 텍스트 + 우측 버튼 가로 배치는 유지한 채 컨테이너 padding·
-        타이틀/서브텍스트 폰트·버튼 크기를 함께 줄인다.
-
-        cta-button은 Button 컴포넌트 내부에서 렌더링되는 <button> 엘리먼트라 scoped
-        <style jsx>로는 룰이 전혀 매칭되지 않아(ProblemCards.tsx의 Card/Badge와 동일한
-        문제) global로 선언한다. 클래스명이 이 파일에서만 쓰이는 것을 확인했으므로
-        다른 컴포넌트와 충돌하지 않는다.
-
-        모든 값은 vw=900px~1024px 구간에서 "MIN + (MAX-MIN) * (100vw-900px)/124"
-        형태로 선형 보간해 1024px 지점에서 기존 값과 정확히 일치하고(경계에서 끊기지
-        않음), 900px 지점에서 축소된 값에 도달한다.
-      */}
-      <style jsx global>{`
-        @media (max-width: 1023.98px) {
-          .cta-row {
-            padding-inline: clamp(
-              40px,
-              calc(40px + (100vw - 900px) * 0.48387),
-              100px
-            ) !important;
-          }
-
-          .cta-title {
-            font-size: calc(
-              clamp(26px, calc(26px + (100vw - 900px) * 0.14516), 44px) *
-                var(--font-scale)
-            ) !important;
-            line-height: 1.18 !important;
-          }
-
-          .cta-subtitle {
-            font-size: calc(
-              clamp(12px, calc(12px + (100vw - 900px) * 0.02419), 15px) *
-                var(--font-scale)
-            ) !important;
-          }
-
-          .cta-button {
-            font-size: calc(
-              clamp(12px, calc(12px + (100vw - 900px) * 0.01613), 14px) *
-                var(--font-scale)
-            ) !important;
-            padding: clamp(10px, calc(10px + (100vw - 900px) * 0.04839), 16px)
-              clamp(18px, calc(18px + (100vw - 900px) * 0.1129), 32px) !important;
-          }
-        }
-      `}</style>
-    </div>
+    </section>
   );
 }

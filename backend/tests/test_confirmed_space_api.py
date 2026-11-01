@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.analyses import analysis_runner
 from app.main import create_app
 from app.services.settings import ExecutionSettings
+from tests.auth_fixture import login
 
 
 class ConfirmedSpaceApiTests(unittest.TestCase):
@@ -21,10 +22,9 @@ class ConfirmedSpaceApiTests(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as directory:
-            app = create_app(
-                settings=ExecutionSettings(db_path=Path(directory) / "api.sqlite3"),
-                load_env=False,
-            )
+            path = Path(directory) / "api.sqlite3"
+            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
+            login(app, path)
             app.dependency_overrides[analysis_runner] = lambda: runner
             with TestClient(app) as client:
                 response = client.post("/api/v1/analyses", json={"address": "시험", **fields})

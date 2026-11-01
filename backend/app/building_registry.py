@@ -10,13 +10,14 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.address import KAKAO_ADDRESS_URL, GeocodeError, _candidate, split_detail
+from app.address import KAKAO_ADDRESS_URL, GeocodeError, _candidate, matched_addresses, split_detail
 from app.config import AddressSettings
 
 HUB_URL = "https://apis.data.go.kr/1613000/BldRgstHubService"
@@ -183,13 +184,13 @@ async def _parcel(
             raise GeocodeError("KAKAO_AUTH", "카카오 REST 키가 거부됐습니다.")
         response.raise_for_status()
         doc = _candidate(response.json())
+        road_name, jibun_name = matched_addresses(address, doc)
         jibun = doc.get("address")
         if not isinstance(jibun, dict):
             raise GeocodeError("NOT_FOUND", "지번 주소를 찾지 못했습니다.")
         code = str(jibun.get("b_code") or "")
         if len(code) != 10 or not code.isdigit():
             raise ValueError("법정동 코드가 올바르지 않습니다.")
-        road = doc.get("road_address")
         return (
             {
                 "sigunguCd": code[:5],
@@ -199,8 +200,8 @@ async def _parcel(
                 "bun": str(jibun.get("main_address_no") or "0").zfill(4),
                 "ji": str(jibun.get("sub_address_no") or "0").zfill(4),
             },
-            _text(road.get("address_name")) if isinstance(road, dict) else None,
-            _text(jibun.get("address_name")),
+            road_name,
+            jibun_name,
         )
     except httpx.TimeoutException as exc:
         raise GeocodeError("UPSTREAM_TIMEOUT", "주소 조회 시간이 초과되었습니다.") from exc
@@ -238,6 +239,15 @@ async def _fetch(
         await asyncio.sleep(settings.retry_delay * attempt)
 
 
+def _result_code(code: str) -> None:
+    if code in {"22"}:
+        raise BuildingRegistryError("RATE_LIMIT", "건축HUB 호출 한도를 초과했습니다.")
+    if code in {"20", "21", "30", "31", "32", "33"}:
+        raise BuildingRegistryError("AUTH", "건축HUB 인증키 또는 사용 권한을 확인하세요.")
+    if code not in {"00", "03"}:
+        raise BuildingRegistryError("UPSTREAM_ERROR", "건축HUB가 오류를 반환했습니다.")
+
+
 async def _items(
     client: httpx.AsyncClient,
     operation: str,
@@ -262,15 +272,28 @@ async def _items(
             )
             if response.status_code in {401, 403}:
                 raise BuildingRegistryError("AUTH", "건축HUB 인증키가 거부됐습니다.")
+            if response.status_code == 429:
+                raise BuildingRegistryError("RATE_LIMIT", "건축HUB 호출 한도를 초과했습니다.")
             response.raise_for_status()
             # 미등록 키 등 게이트웨이 오류는 _type=json이어도 XML로 옵니다.
+            if response.content.removeprefix(b"\xef\xbb\xbf").lstrip().startswith(b"<"):
+                root = ET.fromstring(response.content)
+                code = next(
+                    (
+                        node.text
+                        for node in root.iter()
+                        if node.tag.rsplit("}", 1)[-1] == "returnReasonCode"
+                    ),
+                    "",
+                )
+                _result_code(str(code).strip())
+                raise ValueError("JSON 응답이 아닙니다.")
             body = response.json()["response"]
-            code = body["header"]["resultCode"]
+            code = str(body["header"]["resultCode"])
+            _result_code(code)
             # 공공데이터포털 공통 코드 03(NODATA_ERROR)은 실패가 아니라 행이 없다는 뜻입니다.
             if code == "03":
                 return rows
-            if code != "00":
-                raise BuildingRegistryError("UPSTREAM_ERROR", f"건축HUB 오류 코드 {code}")
             result = body.get("body") or {}
             # 결과가 없으면 items가 빈 문자열, 한 건이면 item이 객체로 옵니다.
             items = result.get("items")
@@ -279,12 +302,12 @@ async def _items(
             rows += [row for row in page_rows if isinstance(row, dict)]
             if not page_rows or len(rows) >= (_count(result.get("totalCount")) or 0):
                 return rows
-    except httpx.TimeoutException as exc:
-        raise BuildingRegistryError("UPSTREAM_TIMEOUT", "건축HUB 시간 초과입니다.") from exc
-    except httpx.HTTPError as exc:
-        raise BuildingRegistryError("UPSTREAM_FAILED", "건축HUB 연결에 실패했습니다.") from exc
-    except (ValueError, TypeError, KeyError) as exc:
-        raise BuildingRegistryError("BAD_RESPONSE", "건축HUB 응답 구조가 다릅니다.") from exc
+    except httpx.TimeoutException:
+        raise BuildingRegistryError("UPSTREAM_TIMEOUT", "건축HUB 시간 초과입니다.") from None
+    except httpx.HTTPError:
+        raise BuildingRegistryError("UPSTREAM_FAILED", "건축HUB 연결에 실패했습니다.") from None
+    except (ValueError, TypeError, KeyError, ET.ParseError):
+        raise BuildingRegistryError("BAD_RESPONSE", "건축HUB 응답 구조가 다릅니다.") from None
     raise BuildingRegistryError("TOO_MANY_ROWS", f"{operation} 결과가 {len(rows)}행을 넘습니다.")
 
 
