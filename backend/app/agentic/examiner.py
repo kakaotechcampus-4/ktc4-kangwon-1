@@ -1,22 +1,31 @@
 """심사관이 초안 문장과 근거를 대조하도록 문장·문항 근거·근거 카드를 제한된 크기로 제공합니다."""
 
 import json
+import re
 
 from app.canonical import canonical_json
 from app.db.connection import connect
 
-from .aliases import encode
+from .aliases import encode, label_periods
 from .report import fact_rows
 
 PERSONA = (
     "심사관입니다. 점수·순위는 바꾸지 않고 보고서 문장과 근거가 맞는지 검토합니다. "
     "candidates의 상위 후보마다 reasons·risks·confirmation_conditions 문장을 하나씩 보고 "
     "근거·출처·기간 범위·중복의 네 칸을 확인하세요. "
+    "checks를 먼저 보세요. checks.uncited는 fact 슬롯이 없는 문장의 후보·칸·순번이고 "
+    "순번은 칸 안 문장을 영부터 센 값입니다. 그 후보 score_items에서 문장을 뒷받침할 "
+    "fact_id를 골라 missing_evidence로 지적하세요. "
+    "checks를 본 뒤에도 폐업률처럼 기간이 있는 문장은 이유·위험 칸을 가리지 말고 "
+    "인용 fact의 출처·기간 범위 칸을 확인하세요. "
     "근거 칸: 문장에 fact 슬롯이 없으면 그 후보 score_items에서 문장을 뒷받침할 fact_id를 골라 "
     "target=claim, kind=missing_evidence로 지적하세요. "
     "출처 칸: 인용 fact의 source·metric이 문장 내용과 다르면 scope_mismatch입니다. "
-    "기간 범위 칸: fact의 period·spatial_scopes가 문장이 말하는 시점·범위와 다르면 "
-    "scope_mismatch입니다. "
+    "슬롯이 있는데 엉뚱한 지표를 가리키면 근거가 없는 것이 아니라 출처가 틀린 것이니 "
+    "missing_evidence로 쓰지 마세요. "
+    "기간 범위 칸: fact의 period·spatial_scopes가 문장이 말하는 시점·범위와 "
+    "실제로 다를 때만 scope_mismatch입니다. 문장이 기간·범위를 근거보다 "
+    "덜 자세히 썼을 뿐 어긋나지 않으면 kind=action_condition으로 남기세요. "
     "중복 칸: 같은 원천 지표가 두 문항에서 함께 점수가 되어 같은 현상을 두 번 세면 "
     "target=score, kind=duplicate_score입니다. "
     "확인하지 못한 칸은 kind=action_condition으로 남기세요. "
@@ -24,11 +33,19 @@ PERSONA = (
     "공간 요건 경고를 되풀이하지 마세요. unknown 이유와 L 중복 채점은 서버가 검사합니다. "
     "facts와 score_items의 관측 fact만 인용하고 "
     "제공 근거가 충분하면 읽기 도구 없이 제출해도 됩니다. "
-    "제출 전에 지적마다 fact_ids가 있는지, comment와 suggested_check에 숫자가 없는지 확인하세요. "
+    "get_facts는 꼭 필요한 근거만 골라 한 번에 서른두 개 이하로 요청하고, "
+    "거절되면 같은 요청을 반복하지 말고 나눠서 다시 요청하세요. "
+    "comment와 suggested_check에 숫자 문자가 하나라도 있으면 서버가 거절합니다. "
+    "연도·분기, 값, 업종 코드, 문항 이름, fact_id 별칭에도 숫자가 섞여 있으니 "
+    "문장에 옮겨 쓰지 마세요. 후보는 industry_code 칸, 근거는 fact_ids 칸이 가리키므로 "
+    "문장에서는 '이 후보', '인용 근거'로 쓰고 "
+    "기간은 '최근 한 해', '가장 이른 해', '관측 기간 전체'처럼 말로 쓰세요. "
+    "제출 전에 지적마다 fact_ids가 있는지 확인하세요. "
     "지적이 없으면 agree, 지적이나 확인 조건이 있으면 conditional, "
     "인용 근거가 문장과 반대 방향이면 oppose입니다."
 )
 MAX_PACKET_CHARS = 12000
+SENTENCE_END = re.compile(r"(?<=[.!?])(?![.!?])")
 MAX_VALUE_CHARS = 500
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 SEGMENTS = ("reasons_segments", "risks_segments", "confirmation_conditions_segments")
@@ -75,6 +92,36 @@ def _score_items(scope, score_snapshot_id, codes):
 
 def _cited(segments):
     return [s["fact_id"] for s in segments if s.get("type") == "fact"]
+
+
+def _sentences(segments):
+    found, text, cited = [], "", False
+    for segment in segments:
+        if segment.get("type") == "fact":
+            if text == "" and found:
+                found[-1] = (found[-1][0], True)
+            else:
+                cited = True
+            continue
+        parts = SENTENCE_END.split(segment.get("text", ""))
+        for part in parts[:-1]:
+            text += part
+            found.append((text.strip(), cited))
+            text, cited = "", False
+        text += parts[-1]
+    if text.strip():
+        found.append((text.strip(), cited))
+    return found
+
+
+def _uncited(candidates):
+    groups = [(c["industry_code"], key, c.get(key, [])) for c in candidates for key in SEGMENTS]
+    return [
+        {"industry_code": code, "field": key, "sentence": index}
+        for code, key, segments in groups
+        for index, (_, cited) in enumerate(_sentences(segments))
+        if not cited
+    ]
 
 
 def review_packet(scope, draft):
@@ -131,8 +178,11 @@ def review_packet(scope, draft):
         "spatial_scopes": {ref: json.loads(raw) for raw, ref in scopes.items()},
         "facts": facts,
         "omitted_fact_ids": [],
+        "checks": {
+            "uncited": _uncited(top5),
+        },
     }
-    packet = encode(scope, packet)
+    packet = label_periods(encode(scope, packet))
     for candidate in packet["candidates"]:
         candidate["score_items"] = _table(candidate["score_items"], SCORE_COLUMNS)
     packet["facts"] = _table(packet["facts"], FACT_COLUMNS)

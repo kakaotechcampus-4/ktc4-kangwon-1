@@ -295,9 +295,7 @@ def persist_report(scope, report, lineage, responses, version=None):
                     row_ids=refs,
                     response_ids=response_ids,
                     comparison=comparison,
-                    period=version.get("periods", {}).get(source, "승인 기준선·프로필")
-                    if version
-                    else "승인 기준선·프로필",
+                    period=fact_period(version or {}, source, metric, "승인 기준선·프로필"),
                     connection=db,
                 )
                 facts_by_item[(row["code"], item)] = [fact]
@@ -347,6 +345,12 @@ def persist_report(scope, report, lineage, responses, version=None):
                     ),
                 )
     return score_id
+
+
+def fact_period(version, source, metric, default):
+    return version.get("metric_periods", {}).get(source, {}).get(metric) or version.get(
+        "periods", {}
+    ).get(source, default)
 
 
 def persist_input_facts(scope, data, lineage, responses, version):
@@ -442,7 +446,7 @@ def persist_input_facts(scope, data, lineage, responses, version):
                 row_ids=refs,
                 response_ids=response_ids,
                 comparison={"input_versions": version, "calculation": "기존 분석 함수 출력"},
-                period=version["periods"].get(source, "원문 시점"),
+                period=fact_period(version, source, metric, "원문 시점"),
                 connection=db,
             )
 

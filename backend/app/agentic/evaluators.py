@@ -19,7 +19,7 @@ from app.llm.config import LLMSettings
 from app.text import has_digit
 
 from . import customer_rubric, examiner, founder, landlord
-from .aliases import encode
+from .aliases import encode, label_periods, labels_periods
 from .contracts import EvaluatorReview, ReviewRef, ToolReply
 from .report import ReportInvalid, fact_rows
 from .sql_tool import error
@@ -43,6 +43,10 @@ get_facts는 업종·source·metrics 또는 받은 fact_ids로 좁혀 조회하�
 새 점수·순위를 만들지 마세요. 지적마다 실제 fact_id 근거를 최대 다섯 개 붙이세요.
 문장에 숫자를 직접 쓰지 말고 fact_ids로 인용하세요. 확인하지 못한 것은 확인 조건으로 남기세요.
 실패한 조회를 동의로 해석하지 마세요."""
+TRUNCATED = (
+    "답이 길이 상한에서 잘렸습니다. 같은 기호나 공백을 반복하지 말고 "
+    "지적만 짧게 담아 submit_review를 다시 제출하세요."
+)
 
 
 def _without_fit_checks(definitions):
@@ -268,10 +272,20 @@ async def review(loop, actor, executor, draft):
             if submit_only:
                 definitions = [d for d in definitions if d["function"]["name"] == "submit_review"]
             model_calls += 1
-            async with asyncio.timeout(
-                max(0.01, loop.budget.seconds_limit - loop.budget.active_seconds)
-            ):
-                message, _ = await loop._model(actor, messages, settings, definitions)
+            try:
+                async with asyncio.timeout(
+                    max(0.01, loop.budget.seconds_limit - loop.budget.active_seconds)
+                ):
+                    message, _ = await loop._model(actor, messages, settings, definitions)
+            except LLMResponseError as exc:
+                if exc.code != "LLM_OUTPUT_LIMIT":
+                    raise
+                submit_failures += 1
+                if submit_failures >= 3:
+                    code = "REPORT_INVALID"
+                    break
+                messages.append({"role": "user", "content": TRUNCATED})
+                continue
             calls = message.tool_calls or []
             if len(calls) != 1:
                 code = "REPORT_INVALID"
@@ -296,12 +310,13 @@ async def review(loop, actor, executor, draft):
                 "completed",
                 {"actor": actor, "tool": call.function.name, "status": reply.status},
             )
+            body = await run_in_thread(encode, loop.scope, reply.model_dump(mode="json"))
             messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": canonical_json(
-                        await run_in_thread(encode, loop.scope, reply.model_dump(mode="json"))
+                        label_periods(body) if labels_periods(actor) else body
                     ),
                 }
             )
