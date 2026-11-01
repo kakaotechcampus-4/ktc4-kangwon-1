@@ -105,7 +105,7 @@ def fact_rows(scope, ids):
     with connect(scope.path) as db:
         rows = {
             r["fact_id"]: r
-            for r in fact_db.find_facts(db, scope.request_id, scope.snapshot_id, fact_ids=list(ids))
+            for r in fact_db.facts_by_ids(db, scope.request_id, scope.snapshot_id, ids)
         }
     expand_spatial_scope(scope, rows.values())
     if set(rows) != set(ids):

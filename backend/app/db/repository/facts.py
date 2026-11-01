@@ -141,6 +141,18 @@ def find_facts(
     return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
+def facts_by_ids(db, request_id, snapshot_id, ids):
+    cursor = db.execute(
+        "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
+        "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id IN ("
+        + ",".join("?" for _ in ids)
+        + ")",
+        [request_id, snapshot_id, *ids],
+    )
+    names = [c[0] for c in cursor.description]
+    return [dict(zip(names, r, strict=True)) for r in cursor.fetchall()]
+
+
 def current_space_fit_values(db, request_id, snapshot_id):
     return db.execute(
         "SELECT c.industry_code,f.value_json FROM space_fit_current c "
