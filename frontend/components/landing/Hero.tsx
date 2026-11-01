@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import HeroIntroStart from '@/components/landing/HeroIntroStart';
 import { colors } from '@/styles/tokens';
 import { mockReportData } from '@/lib/mockData/report';
 import { mockFloatingPopulationFacts } from '@/lib/mockData/reportPresentation';
@@ -19,6 +21,8 @@ export default function Hero() {
   return (
     <section
       className="landing-hero relative w-full overflow-hidden"
+      // 시작 신호(HeroIntroStart)가 하이드레이션 전에 클래스를 붙이므로 불일치 경고를 끈다.
+      suppressHydrationWarning
       style={{
         backgroundColor: colors.brand.wash,
         height: 'clamp(640px, 100svh, 940px)',
@@ -71,12 +75,20 @@ export default function Hero() {
             aria-hidden="true"
             className="wordmark-line absolute top-0 left-0"
           >
-            <span className="wordmark-fill">CH</span>
-            <span className="wordmark-ai-out">AI</span>
-            <span className="wordmark-fill">UM</span>
-            <span className="wordmark-ai-in">
-              <span className="wordmark-dot">.</span>
-              <span className="wordmark-ai-land">AI</span>
+            <span className="wm-glyph">
+              CH
+              <span className="intro wm-fill">CH</span>
+            </span>
+            <span className="intro wm-um">
+              <span className="intro wm-ai-out">AI</span>
+              <span className="wm-glyph">
+                UM
+                <span className="intro wm-fill">UM</span>
+              </span>
+            </span>
+            <span className="intro wordmark-ai-in">
+              <span className="intro wordmark-dot">.</span>
+              <span className="intro wordmark-ai-land">AI</span>
             </span>
           </span>
         </p>
@@ -93,19 +105,24 @@ export default function Hero() {
         >
           {/* 워드마크가 완성된 뒤 올라오고, 둘째 줄은 파랑이 차오른다(globals.css .slogan 블록) */}
           <span className="slogan-line">
-            <span className="slogan-rise">비어 있는 공간에</span>
+            <span className="intro slogan-rise">비어 있는 공간에</span>
           </span>
           <span className="slogan-line">
-            <span className="slogan-rise slogan-rise-late slogan-fill font-semibold tracking-[0em] sm:font-bold sm:tracking-[-0.015em]">
+            <span className="intro slogan-rise slogan-rise-late slogan-outline font-semibold tracking-[0em] sm:font-bold sm:tracking-[-0.015em]">
               새로운 가치를 채우다
+              <span aria-hidden="true" className="intro slogan-mask">
+                <span className="intro slogan-mask-text">
+                  새로운 가치를 채우다
+                </span>
+              </span>
             </span>
           </span>
         </h1>
-        <p className="hero-sub max-w-[400px] text-base leading-[1.7] text-[#4B5866] sm:text-17">
+        <p className="intro hero-sub max-w-[400px] text-base leading-[1.7] text-[#4B5866] sm:text-17">
           주소와 임대 조건, 주변 상권 데이터로 내 공실에 맞는 업종을
           추천해드려요.
         </p>
-        <div className="hero-sub flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
+        <div className="intro hero-sub flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
           {/* 모바일에서는 두 CTA를 한 줄에 배치해 첫 화면에서 함께 보이게 한다. */}
           <Link
             href="/vacancy-input"
@@ -117,7 +134,7 @@ export default function Hero() {
           {/* 보조 버튼 — 아래 "분석 리포트 미리보기" 섹션으로 내려가 결과를 먼저 보여준다. */}
           <Link
             href="#report-preview"
-            className="inline-flex h-12 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-[#10233A] bg-white/70 px-2 text-sm font-bold text-[#10233A] backdrop-blur transition-colors duration-200 hover:bg-white sm:h-14 sm:flex-none sm:px-7 sm:text-base"
+            className="inline-flex h-12 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-[#10233A] bg-white/85 px-2 text-sm font-bold text-[#10233A] transition-colors duration-200 hover:bg-white sm:h-14 sm:flex-none sm:px-7 sm:text-base"
           >
             리포트 예시 보기
           </Link>
@@ -130,8 +147,8 @@ export default function Hero() {
         className="pointer-events-none absolute top-[34%] right-[3%] bottom-[max(14%,120px)] hidden w-[250px] lg:block"
       >
         <div
-          className="hero-card hero-card-sm hero-card-pos top-0 left-[4%] w-[200px]"
-          style={{ animationDelay: '3.6s' }}
+          className="intro hero-card hero-card-sm hero-card-pos top-0 left-[4%] w-[200px]"
+          style={{ '--d': '3.6s' } as CSSProperties}
         >
           <p className="hero-card-label">
             업종 적합도 <span className="hero-card-tag">예시</span>
@@ -148,8 +165,8 @@ export default function Hero() {
           </p>
         </div>
         <div
-          className="hero-card hero-card-sm hero-card-pos top-[37%] right-0 w-[184px]"
-          style={{ animationDelay: '3.75s' }}
+          className="intro hero-card hero-card-sm hero-card-pos top-[37%] right-0 w-[184px]"
+          style={{ '--d': '3.75s' } as CSSProperties}
         >
           <p className="hero-card-label">
             하루 평균 유동인구 <span className="hero-card-tag">예시</span>
@@ -166,8 +183,8 @@ export default function Hero() {
           </p>
         </div>
         <div
-          className="hero-card hero-card-sm hero-card-pos bottom-0 left-0 w-[210px]"
-          style={{ animationDelay: '3.9s' }}
+          className="intro hero-card hero-card-sm hero-card-pos bottom-0 left-0 w-[210px]"
+          style={{ '--d': '3.9s' } as CSSProperties}
         >
           <p className="hero-card-label">
             추천 업종 TOP 3 <span className="hero-card-tag">예시</span>
@@ -183,6 +200,12 @@ export default function Hero() {
           </ol>
         </div>
       </div>
+      {/* 인트로 시작 신호 — 히어로 글자를 다 읽은 뒤 실행되도록 섹션 끝에 둔다(HeroIntroStart.tsx). */}
+      <HeroIntroStart />
+      {/* 스크립트가 꺼진 환경에서는 바로 재생한다. */}
+      <noscript>
+        <style>{`.landing-hero .intro { animation-play-state: running !important; }`}</style>
+      </noscript>
     </section>
   );
 }

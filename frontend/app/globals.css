@@ -87,7 +87,8 @@ body {
     font-size: clamp(52px, 16.5vw, 150px) !important;
   }
 
-  .slogan-fill {
+  .slogan-outline,
+  .slogan-mask-text {
     -webkit-text-stroke-width: 0.75px;
   }
 }
@@ -195,30 +196,58 @@ body {
  * 랜딩 히어로 워드마크 — CHAIUM에서 AI가 오른쪽으로 빠져나가 CHUM.AI가 된다.
  * "빈 자리(CH_UM)를 AI로 채운다"는 뜻이라, AI가 빠지는 순간 CHUM이 남색으로 채워진다.
  * 0.7s~1.9s AI 이동 · 1.2s~2.2s CHUM 채움 · 1.4s~2.6s 점과 AI 도착. 한 번만 재생한다.
+ *
+ * 성능: 글자 폭·색을 움직이면 매 프레임 레이아웃·페인트를 다시 해야 해서 끊긴다.
+ * 그래서 최종 배치(CHUM.AI)를 고정해 두고 transform·opacity만 움직인다.
+ *  - UM 묶음(.wm-um)이 AI 폭만큼 오른쪽에서 출발해 제자리로 온다.
+ *  - 빠지는 AI(.wm-ai-out)는 UM 묶음 왼쪽에 붙어 있다가 오른쪽으로 사라진다.
+ *  - 채움은 외곽선 글자 위에 겹친 남색 글자(.wm-fill)의 opacity로 바꾼다.
  */
 .wordmark {
   --wm-blue: #2453d6;
   --wm-navy: #10233a;
   --wm-amber: #f2b84b;
+  /* 빠지는 AI가 차지하는 폭 — 예전 max-width 값과 같다 */
+  --wm-ai: 1.1em;
 }
 .wordmark-line > span {
   display: inline-block;
   vertical-align: top;
 }
-.wordmark-fill {
+.wm-glyph {
+  position: relative;
+  display: inline-block;
   color: transparent;
   -webkit-text-stroke: 3px var(--wm-blue);
-  animation: wordmark-fill 1s ease 1.2s forwards;
 }
-.wordmark-ai-out {
-  max-width: 1.1em;
-  color: var(--wm-blue);
-  animation: wordmark-ai-out 1.2s cubic-bezier(0.6, 0, 0.3, 1) 0.7s forwards;
-}
-.wordmark-ai-in {
-  max-width: 0;
+.wm-fill {
+  position: absolute;
+  inset: 0;
+  color: var(--wm-navy);
+  -webkit-text-stroke: 3px var(--wm-navy);
   opacity: 0;
-  animation: wordmark-ai-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s forwards;
+  animation: wm-fade-in 1s ease 1.2s forwards;
+}
+.wm-um {
+  position: relative;
+  transform: translateX(var(--wm-ai));
+  animation: wm-um-slide 1.2s cubic-bezier(0.6, 0, 0.3, 1) 0.7s forwards;
+}
+.wm-ai-out {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  width: var(--wm-ai);
+  color: var(--wm-blue);
+  animation: wm-ai-out 1.2s cubic-bezier(0.6, 0, 0.3, 1) 0.7s forwards;
+}
+/* 들어오는 .AI도 UM과 함께 움직여야 M과의 간격이 예전처럼 유지된다 */
+.wordmark-ai-in {
+  opacity: 0;
+  transform: translateX(var(--wm-ai));
+  animation:
+    wm-fade-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s forwards,
+    wm-um-slide 1.2s cubic-bezier(0.6, 0, 0.3, 1) 0.7s forwards;
 }
 .wordmark-ai-in > span {
   display: inline-block;
@@ -234,23 +263,20 @@ body {
   transform: translateX(-0.6em);
   animation: wordmark-ai-land 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.4s forwards;
 }
-@keyframes wordmark-fill {
+@keyframes wm-fade-in {
   to {
-    color: var(--wm-navy);
-    -webkit-text-stroke-color: var(--wm-navy);
-  }
-}
-@keyframes wordmark-ai-out {
-  to {
-    max-width: 0;
-    opacity: 0;
-    transform: translateX(1.6em);
-  }
-}
-@keyframes wordmark-ai-in {
-  to {
-    max-width: 3em;
     opacity: 1;
+  }
+}
+@keyframes wm-um-slide {
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes wm-ai-out {
+  to {
+    opacity: 0;
+    transform: translateX(calc(1.6em + var(--wm-ai)));
   }
 }
 @keyframes wordmark-dot {
@@ -263,22 +289,13 @@ body {
     transform: translateX(0);
   }
 }
-/* 움직임 줄이기를 켠 사용자에게는 완성된 CHUM.AI를 바로 보여준다. */
-@media (prefers-reduced-motion: reduce) {
-  .wordmark-fill,
-  .wordmark-ai-out,
-  .wordmark-ai-in,
-  .wordmark-dot,
-  .wordmark-ai-land {
-    animation-duration: 0s;
-    animation-delay: 0s;
-  }
-}
 
 /*
  * 히어로 슬로건 — 워드마크(CHUM.AI)가 완성된 뒤 두 줄이 아래에서 올라오고,
  * 둘째 줄 "새로운 가치를 채우다"는 옅은 외곽선에서 왼쪽부터 파랑으로 채워진다.
  * 2.6s 첫 줄 · 2.8s 둘째 줄 등장 · 3.3s~4.7s 채움.
+ * 채움은 파란 글자를 담은 창(.slogan-mask)이 왼쪽에서 들어오고 안의 글자는 반대로
+ * 움직여 제자리에 머무는 방식이라, transform만으로 왼쪽부터 드러난다.
  */
 .slogan-line {
   display: block;
@@ -293,34 +310,40 @@ body {
 .slogan-rise-late {
   animation-delay: 2.8s;
 }
-.slogan-fill {
+.slogan-outline {
+  position: relative;
   color: transparent;
   -webkit-text-stroke: 1.5px rgba(36, 83, 214, 0.45);
-  background-image: linear-gradient(90deg, #2453d6 50%, transparent 50%);
-  background-size: 200% 100%;
-  background-position: 100% 0;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation:
-    slogan-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 2.8s forwards,
-    slogan-fill 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.3s forwards;
+}
+.slogan-mask {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: translateX(-100%);
+  animation: slogan-sweep 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.3s forwards;
+}
+.slogan-mask-text {
+  display: block;
+  color: #2453d6;
+  -webkit-text-stroke: 1.5px #2453d6;
+  white-space: nowrap;
+  transform: translateX(100%);
+  animation: slogan-sweep 1.4s cubic-bezier(0.45, 0, 0.25, 1) 3.3s forwards;
 }
 @keyframes slogan-rise {
   to {
     transform: translateY(0);
   }
 }
-@keyframes slogan-fill {
+@keyframes slogan-sweep {
   to {
-    background-position: 0 0;
-    -webkit-text-stroke-color: transparent;
+    transform: translateX(0);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .slogan-rise,
-  .slogan-fill {
-    animation-duration: 0s;
-    animation-delay: 0s;
+  .landing-hero .intro {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }
 
@@ -439,11 +462,11 @@ body {
       rgba(36, 83, 214, 0.018) 52% 70%,
       transparent 70%
     );
-  filter: blur(0.5px);
-  animation: hero-orb-breathe 7s ease-in-out infinite;
+  /* 숨쉬기는 인트로(약 5초)가 끝난 뒤에 시작해 인트로와 프레임을 다투지 않게 한다. */
+  animation: hero-orb-breathe 7s ease-in-out 5s infinite;
 }
 .hero-orb-late {
-  animation-delay: -3.5s;
+  animation-delay: 8.5s;
 }
 @keyframes hero-orb-breathe {
   0%,
@@ -479,16 +502,17 @@ body {
   padding: 16px 18px;
   border: 1px solid rgba(213, 222, 231, 0.9);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
+  /* 뒤를 흐리는 backdrop-filter는 뒤 그림이 움직일 때마다 다시 계산돼서 빼고 불투명도를 올렸다. */
+  background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 40px rgba(16, 35, 58, 0.1);
-  backdrop-filter: blur(8px);
   color: #10233a;
   opacity: 0;
   transform: translateY(14px);
+  /* --d: 카드별 등장 시각(Hero.tsx). 둥실거림은 등장이 끝난 뒤에 시작한다. */
   animation:
     hero-sub-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards,
-    hero-card-float 6s ease-in-out 5s infinite;
-  animation-delay: inherit;
+    hero-card-float 6s ease-in-out infinite;
+  animation-delay: var(--d, 0s), calc(var(--d, 0s) + 1.4s);
 }
 @keyframes hero-card-float {
   0%,
@@ -658,3 +682,24 @@ body {
 }
 
 /* 랜딩 리포트 예시의 세 가지 추천 이유를 화면 진입 때 차례로 보여준다. */
+
+/* 첫 화면 밖 랜딩 섹션 — 화면 근처에 올 때까지 렌더링을 미룬다(app/page.tsx). */
+.lazy-section {
+  content-visibility: auto;
+}
+
+/*
+ * 히어로 인트로 시작 조건 — 글꼴이 준비될 때까지(Hero.tsx 시작 신호) 인트로 애니메이션(.intro)을
+ * 멈춰 둔다. 지연 시간도 함께 멈추므로 신호를 받은 순간부터 원래 순서대로 재생된다.
+ * hero-skip: 글꼴이 늦게 오면 인트로 없이 완성된 상태로 바로 보여준다.
+ */
+.landing-hero .intro {
+  animation-play-state: paused;
+}
+.landing-hero:is(.hero-go, .hero-skip) .intro {
+  animation-play-state: running;
+}
+.landing-hero.hero-skip .intro {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
