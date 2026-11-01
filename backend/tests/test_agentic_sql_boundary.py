@@ -12,7 +12,6 @@ PENDING = {
     "advisor.py",
     "evaluators.py",
     "examiner.py",
-    "founder.py",
     "l_input.py",
     "questions.py",
     "read_tools.py",

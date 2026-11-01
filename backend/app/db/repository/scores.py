@@ -9,6 +9,14 @@ def snapshot_summary_json(db, score_snapshot_id):
     return None if row is None else row[0]
 
 
+def scoped_snapshot_summary(db, score_snapshot_id, request_id, snapshot_id):
+    return db.execute(
+        "SELECT summary_json FROM score_snapshots WHERE score_snapshot_id=? "
+        "AND request_id=? AND snapshot_id=?",
+        (score_snapshot_id, request_id, snapshot_id),
+    ).fetchone()
+
+
 def item_fact_ids(db, score_snapshot_id):
     return db.execute(
         "SELECT industry_code,item,fact_ids_json FROM scores WHERE score_snapshot_id=?",

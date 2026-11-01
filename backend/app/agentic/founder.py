@@ -4,6 +4,7 @@ import json
 
 from app.canonical import canonical_json
 from app.db.connection import connect
+from app.db.repository import scores as score_db
 
 from .aliases import encode
 from .landlord import _facts
@@ -56,11 +57,9 @@ def review_packet(scope, draft):
     # 요청·스냅샷 격리와 현재 공간 비교 선택은 기존 읽기 경로를 재사용합니다.
     rows = _facts(scope, codes)
     with connect(scope.path) as db:
-        stored = db.execute(
-            "SELECT summary_json FROM score_snapshots WHERE score_snapshot_id=? "
-            "AND request_id=? AND snapshot_id=?",
-            (payload["score_snapshot_id"], scope.request_id, scope.snapshot_id),
-        ).fetchone()
+        stored = score_db.scoped_snapshot_summary(
+            db, payload["score_snapshot_id"], scope.request_id, scope.snapshot_id
+        )
     if stored is None:
         raise ValueError("초안의 점수표가 없습니다.")
     spaces = {r["code"]: r.get("space", {}) for r in json.loads(stored[0])}
