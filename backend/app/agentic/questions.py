@@ -8,6 +8,9 @@ from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
+from app.db.repository import raw as raw_db
+from app.db.repository.agentic import begin_immediate
 from app.errors import AnalysisConflictError
 
 from .contracts import QuestionSessionRef, ToolReply
@@ -46,8 +49,8 @@ async def ask_user(loop, input):
 
 def save_question(loop, session_id, input):
     with connect(loop.scope.path) as db:
-        db.execute(
-            "INSERT INTO agentic_questions VALUES(?,?,?,?,?,?,?)",
+        agentic_db.insert_question(
+            db,
             (
                 session_id,
                 loop.scope.request_id,
@@ -63,15 +66,8 @@ def save_question(loop, session_id, input):
 async def validate_resume(scope, answers):
     def load():
         with connect(scope.path) as db:
-            row = db.execute(
-                "SELECT state_json,status FROM agentic_runs WHERE request_id=? AND snapshot_id=?",
-                (scope.request_id, scope.snapshot_id),
-            ).fetchone()
-            question = db.execute(
-                "SELECT question_session_id,questions_json,status FROM "
-                "agentic_questions WHERE request_id=? AND snapshot_id=?",
-                (scope.request_id, scope.snapshot_id),
-            ).fetchone()
+            row = agentic_db.run_state(db, scope.request_id, scope.snapshot_id)
+            question = agentic_db.question_session(db, scope.request_id, scope.snapshot_id)
             if (
                 row is None
                 or row[1] != "waiting_for_input"
@@ -97,7 +93,7 @@ async def resume(loop_type, scope, site, answers, *, resume_state=None, **kwargs
 
 def save_confirmed_space(scope, values):
     with connect(scope.path) as db:
-        db.execute("BEGIN IMMEDIATE")
+        begin_immediate(db)
         response = scope.record_sync(
             source="user",
             source_type="api",
@@ -107,9 +103,7 @@ def save_confirmed_space(scope, values):
             payload={"rows": [values]},
             connection=db,
         )
-        ref = db.execute(
-            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
-        ).fetchone()[0]
+        ref = raw_db.first_row_id(db, response)
         ids = {
             field: register_fact(
                 scope,
@@ -130,10 +124,8 @@ def save_confirmed_space(scope, values):
 
 def save_user_facts(scope, answers, question_id, saved):
     with connect(scope.path) as db:
-        db.execute("BEGIN IMMEDIATE")
-        question = db.execute(
-            "SELECT status FROM agentic_questions WHERE question_session_id=?", (question_id,)
-        ).fetchone()
+        begin_immediate(db)
+        question = agentic_db.question_status(db, question_id)
         if question is None or question[0] != "waiting":
             raise AnalysisConflictError("이미 답변한 질문입니다.")
         response = scope.record_sync(
@@ -145,9 +137,7 @@ def save_user_facts(scope, answers, question_id, saved):
             payload={"rows": [answers]},
             connection=db,
         )
-        ref = db.execute(
-            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
-        ).fetchone()[0]
+        ref = raw_db.first_row_id(db, response)
         ids = {}
         for field, value in answers.items():
             metric = (
@@ -189,29 +179,14 @@ def save_user_facts(scope, answers, question_id, saved):
         saved["known_fact_ids"] = list(
             dict.fromkeys([*saved.get("known_fact_ids", []), *ids.values()])
         )
-        db.execute(
-            "UPDATE tool_calls SET reply_json=? WHERE request_id=? AND snapshot_id=? "
-            "AND tool_name='ask_user' AND json_extract(reply_json,'$.data.question_session_id')=?",
-            (
-                canonical_json({k: v for k, v in body.items() if k != "tool_call_id"}),
-                scope.request_id,
-                scope.snapshot_id,
-                question_id,
-            ),
+        agentic_db.replace_ask_user_reply(
+            db,
+            scope.request_id,
+            scope.snapshot_id,
+            question_id,
+            canonical_json({k: v for k, v in body.items() if k != "tool_call_id"}),
         )
-        db.execute(
-            "UPDATE agentic_questions SET status='answered',answers_json=? "
-            "WHERE question_session_id=?",
-            (canonical_json(answers), question_id),
-        )
-        db.execute(
-            "UPDATE agentic_runs SET status='running',state_json=? "
-            "WHERE request_id=? AND snapshot_id=?",
-            (canonical_json(saved), scope.request_id, scope.snapshot_id),
-        )
-        db.execute(
-            "UPDATE analysis_requests SET status='running' WHERE request_id=? "
-            "AND status='waiting_for_input'",
-            (scope.request_id,),
-        )
+        agentic_db.mark_question_answered(db, question_id, canonical_json(answers))
+        agentic_db.resume_run(db, scope.request_id, scope.snapshot_id, canonical_json(saved))
+        agentic_db.resume_request(db, scope.request_id)
     return saved

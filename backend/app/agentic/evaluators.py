@@ -13,6 +13,7 @@ from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
@@ -62,8 +63,8 @@ def _without_fit_checks(definitions):
 
 def save_review(scope, review):
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO agentic_reviews VALUES(?,?,?,?,?)",
+        agentic_db.insert_review(
+            db,
             (
                 scope.request_id,
                 scope.snapshot_id,

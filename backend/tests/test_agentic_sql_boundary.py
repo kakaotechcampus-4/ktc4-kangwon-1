@@ -8,12 +8,7 @@ from pathlib import Path
 AGENTIC = Path(__file__).resolve().parents[1] / "app" / "agentic"
 SQL = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|BEGIN|WITH|CREATE)\b")
 MODEL_SQL_TOOL = "sql_tool.py"
-PENDING = {
-    "advisor.py",
-    "evaluators.py",
-    "questions.py",
-    "runtime.py",
-}
+PENDING = set()
 
 
 def sql_strings(path):

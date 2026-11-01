@@ -14,6 +14,7 @@ from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
 from app.db.repository import append_event
 from app.industries.catalog import INDUSTRIES
 from app.llm.budget import BudgetExceeded, llm_scope
@@ -98,10 +99,8 @@ submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출
 
 def _save(scope, state, status, result_model=None):
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO agentic_runs VALUES(?,?,?,?,?,?,?) ON "
-            "CONFLICT(request_id) DO UPDATE SET "
-            "status=excluded.status,state_json=excluded.state_json,result_json=excluded.result_json,updated_at=excluded.updated_at",
+        agentic_db.save_run(
+            db,
             (
                 scope.request_id,
                 scope.snapshot_id,
@@ -309,10 +308,7 @@ class DecisionLoop:
 
     def _save_final_result(self, result):
         with connect(self.scope.path) as db:
-            db.execute(
-                "UPDATE agentic_reports SET result_json=?,phase='final' WHERE report_id=?",
-                (result.model_dump_json(), result.report_id),
-            )
+            agentic_db.finalize_report(db, result.report_id, result.model_dump_json())
 
     async def save(self, status="running", result_model=None):
         shared = self.tools.shared
