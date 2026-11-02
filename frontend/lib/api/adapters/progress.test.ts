@@ -7,7 +7,9 @@ import {
   applyProgressEvent,
   prefillAnswers,
   progressReportPath,
+  progressRestartPath,
   progressSite,
+  siteOrUnknown,
   progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
@@ -277,5 +279,27 @@ describe('progressReportPath', () => {
 
   it('기록에서 다시 연 분석은 분석 번호로 리포트를 연다', () => {
     expect(progressReportPath('a b', false)).toBe('/report?id=a%20b');
+  });
+});
+
+describe('siteOrUnknown', () => {
+  it('주소를 못 받으면 확인 안 됨으로 둔다', () => {
+    expect(siteOrUnknown(null)).toEqual({
+      address: '확인 안 됨',
+      floorUnit: '',
+      areaM2: null,
+      parking: null,
+      fromSession: false,
+    });
+  });
+});
+
+describe('progressRestartPath', () => {
+  it('이 탭에서 시작한 분석은 확인 화면부터 다시 한다', () => {
+    expect(progressRestartPath(true)).toBe('/building-confirm');
+  });
+
+  it('기록에서 다시 연 분석은 주소 입력부터 다시 한다', () => {
+    expect(progressRestartPath(false)).toBe('/vacancy-input');
   });
 });

@@ -318,3 +318,19 @@ export function progressReportPath(
     ? '/report'
     : `/report?id=${encodeURIComponent(requestId)}`;
 }
+
+export function siteOrUnknown(site: ProgressSite | null): ProgressSite {
+  return (
+    site ?? {
+      address: '확인 안 됨',
+      floorUnit: '',
+      areaM2: null,
+      parking: null,
+      fromSession: false,
+    }
+  );
+}
+
+export function progressRestartPath(fromSession: boolean): string {
+  return fromSession ? '/building-confirm' : '/vacancy-input';
+}

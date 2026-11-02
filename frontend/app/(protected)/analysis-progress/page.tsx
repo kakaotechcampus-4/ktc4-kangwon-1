@@ -39,8 +39,10 @@ import { getAnalysis } from '@/lib/api/analyses';
 import {
   prefillAnswers,
   progressReportPath,
+  progressRestartPath,
   progressSite,
   progressView,
+  siteOrUnknown,
   toAnswerSubmission,
   toClarifyingQuestions,
   type ProgressSite,
@@ -184,13 +186,13 @@ function useKnownSite(requestId: string | null): KnownSite {
     }
     let active = true;
     getAnalysis(requestId)
-      .then((detail) => {
-        const site = progressSite(requestId, session, detail);
-        if (active && site) {
-          setKnown((prev) => toKnownSite(prev, site));
+      .then((detail) => progressSite(requestId, session, detail))
+      .catch(() => null)
+      .then((site) => {
+        if (active) {
+          setKnown((prev) => toKnownSite(prev, siteOrUnknown(site)));
         }
-      })
-      .catch(() => {});
+      });
     return () => {
       active = false;
     };
@@ -359,7 +361,9 @@ function LiveProgress({ requestId }: { requestId: string }) {
           progressReportPath(requestId, Boolean(known.fromSession))
         )
       }
-      onRestart={() => router.replace('/building-confirm')}
+      onRestart={() =>
+        router.replace(progressRestartPath(Boolean(known.fromSession)))
+      }
       showNote={false}
     />
   );
