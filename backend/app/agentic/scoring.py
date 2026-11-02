@@ -27,6 +27,7 @@ from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 
 from . import code90
+from .availability import coverage_notes
 from .space_rules import judge, load_requirements
 
 WEIGHTS = {
@@ -433,9 +434,15 @@ def summarize(
     if applicable < 60:
         conditions.append("채점 가능한 문항이 적음")
     if not any(items.get(k, {}).get("status") == "observed" for k in ("D1", "D3")):
-        conditions.append("손님 수요 근거 없음")
+        # 미적용은 조회 실패나 자료 누락과 다르므로 확인 문구도 구분합니다.
+        if all(items.get(k, {}).get("status") == "n.a." for k in ("D1", "D3")):
+            conditions.append("시간대·연령 항목 미적용: 업종별 수요 별도 확인 필요")
+        else:
+            conditions.append("적용 가능한 시간대·연령 수요 자료 미확인")
     if badge == "추천" and len(conditions) > 1:
         badge = "조건부"
+    # 자료 범위 설명을 추가하되 기존 배지·점수·순위 정책은 유지합니다.
+    conditions.extend(coverage_notes(code, items))
     out = {
         "code": code,
         "name": INDUSTRIES[code],

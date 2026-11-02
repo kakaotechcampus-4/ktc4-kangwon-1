@@ -235,6 +235,33 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(unknown.error.code, "INVALID_ARGUMENT")
 
+    async def test_scorecard_exposes_source_limits_without_inventing_scores(self):
+        from app.agentic.contracts import ScorecardResult
+        from app.agentic.scoring import WEIGHTS, result, summarize
+        from app.agentic.snapshot import persist_report
+
+        rows = [
+            summarize(code, {key: result(key) for key in WEIGHTS}, "unknown")
+            for code in ("M107", "S202")
+        ]
+        persist_report(self.scope, {"rows": rows, "top5": rows}, {}, [])
+        reply = await self.executor().execute("get_scorecard", {"mode": "detail", "limit": 5})
+        cards = {
+            card.industry_code: card
+            for card in ScorecardResult.model_validate(reply.data).scorecards
+        }
+        self.assertTrue(
+            any("대응 업종이 없어" in note for note in cards["M107"].confirmation_conditions)
+        )
+        self.assertTrue(
+            any("밀도 기준선이 희소" in note for note in cards["S202"].confirmation_conditions)
+        )
+        for card in cards.values():
+            for item in card.items:
+                if item.item.startswith("S"):
+                    self.assertEqual(item.status, "unknown")
+                    self.assertIsNone(item.points)
+
     async def test_scorecard_follows_confirmed_space(self):
         from app.agentic.contracts import ScorecardResult
         from app.agentic.questions import save_confirmed_space

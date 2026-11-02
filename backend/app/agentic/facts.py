@@ -35,6 +35,8 @@ def register_fact(
     retain_unknown_value=False,
 ):
     """동일 값·계보는 기존 ID를 반환합니다. 값을 바꾸면 새 ID를 생성합니다."""
+    if status == "observed" and value is None:
+        raise ValueError("관측 fact에는 실제 값이 필요합니다.")
     local = comparison and comparison.get("input_versions", {}).get("local_snapshot")
     if local and local != scope.snapshot_id:
         raise ValueError("다른 로컬 스냅샷")
