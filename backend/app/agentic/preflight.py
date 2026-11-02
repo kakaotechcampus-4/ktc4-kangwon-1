@@ -11,6 +11,7 @@ from app.canonical import canonical_hash
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
 from app.education_zone import (
     EducationZoneError,
     EducationZoneSettings,
@@ -48,15 +49,14 @@ def _facility_places(scope, reply, category):
     places = {}
     with connect(scope.path) as db:
         for place in reply.data.places:
-            row = db.execute(
-                "SELECT value_json FROM facts WHERE fact_id=? AND request_id=? AND snapshot_id=?",
-                (place.distance_fact_id, scope.request_id, scope.snapshot_id),
-            ).fetchone()
+            row = fact_db.fact_value_json(
+                db, place.distance_fact_id, scope.request_id, scope.snapshot_id
+            )
             if row is None:
                 raise ValueError("시설 거리 fact가 현재 요청에 없습니다.")
             places[place.place_id] = {
                 "category_code": category if place.match_status == "category_match" else None,
-                "distance_m": json.loads(row[0]),
+                "distance_m": json.loads(row),
             }
     return places
 

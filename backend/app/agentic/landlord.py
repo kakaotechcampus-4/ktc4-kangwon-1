@@ -4,6 +4,7 @@ import json
 
 from app.canonical import canonical_json
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
 from app.industries.catalog import INDUSTRIES
 from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 
@@ -44,17 +45,7 @@ def _facts(scope, codes):
     validate_snapshot(scope)
     with connect(scope.path) as db:
         rows = [
-            dict(r)
-            for r in db.execute(
-                "SELECT f.*,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=f.fact_id) "
-                "AS local_lineage FROM facts f WHERE f.request_id=? AND f.snapshot_id=? "
-                "AND (f.industry_code IS NULL OR f.industry_code IN ("
-                + ",".join("?" for _ in codes)
-                + ")) AND (f.metric!='space_fit' OR EXISTS(SELECT 1 FROM space_fit_current c "
-                "WHERE c.request_id=f.request_id AND c.snapshot_id=f.snapshot_id "
-                "AND c.fact_id=f.fact_id)) ORDER BY f.fact_id",
-                [scope.request_id, scope.snapshot_id, *codes],
-            )
+            dict(r) for r in fact_db.review_facts(db, scope.request_id, scope.snapshot_id, codes)
         ]
     expand_spatial_scope(scope, rows)
     return rows

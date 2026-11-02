@@ -7,6 +7,9 @@ from contextlib import nullcontext
 from app.canonical import canonical_hash, canonical_json
 from app.clock import utc_now_iso
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository import raw as raw_db
+from app.db.repository.agentic import begin_immediate
 from app.local_data.provenance import pin_provenance
 
 CALC_VERSION = "rubric-v0.8-pr3-2"
@@ -62,43 +65,21 @@ def register_fact(
         identity["parents"] = parent_fact_ids
     identity_hash = canonical_hash(identity)
     with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        if not db.in_transaction:
-            db.execute("BEGIN IMMEDIATE")
+        begin_immediate(db)
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
             batch = row_ids[offset : offset + 400]
-            found = {
-                r[0]
-                for r in db.execute(
-                    "SELECT DISTINCT e.raw_row_id FROM raw_response_rows e "
-                    "INDEXED BY raw_response_row_ref CROSS JOIN raw_responses p "
-                    "ON p.response_id=e.response_id WHERE e.raw_row_id IN ("
-                    + ",".join("?" for _ in batch)
-                    + ") AND p.request_id=? AND p.snapshot_id=?",
-                    [*batch, scope.request_id, scope.snapshot_id],
-                )
-            }
+            found = raw_db.raw_rows_in_scope(db, batch, scope.request_id, scope.snapshot_id)
             if set(batch) != found:
                 raise ValueError("다른 요청·스냅샷의 원문을 fact 근거로 사용할 수 없습니다.")
         for response in response_ids:
-            if (
-                db.execute(
-                    "SELECT 1 FROM raw_responses WHERE response_id=? AND request_id=? AND "
-                    "snapshot_id=?",
-                    (response, scope.request_id, scope.snapshot_id),
-                ).fetchone()
-                is None
-            ):
+            if not raw_db.response_in_scope(db, response, scope.request_id, scope.snapshot_id):
                 raise ValueError("응답 계보의 요청 범위가 다릅니다.")
         for parent_id in parent_fact_ids:
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            parent = db.execute(
-                "SELECT industry_code,status,citable FROM facts WHERE fact_id=? "
-                "AND request_id=? AND snapshot_id=?",
-                (parent_id, scope.request_id, scope.snapshot_id),
-            ).fetchone()
+            parent = fact_db.fact_scope_row(db, parent_id, scope.request_id, scope.snapshot_id)
             if parent is None or parent[0] not in (None, industry_code):
                 raise ValueError("부모 fact의 요청·스냅샷·업종이 다릅니다.")
             if status == "observed" and (parent[1] != "observed" or not parent[2]):
@@ -106,15 +87,12 @@ def register_fact(
         citable = status == "observed" and bool(row_ids or response_ids or local or parent_fact_ids)
         if status == "observed" and not citable:
             raise ValueError("관측 fact에는 검증 가능한 원문 계보가 필요합니다.")
-        old = db.execute(
-            "SELECT fact_id FROM facts WHERE snapshot_id=? AND identity_hash=?",
-            (scope.snapshot_id, identity_hash),
-        ).fetchone()
+        old = fact_db.fact_id_by_identity(db, scope.snapshot_id, identity_hash)
         if old:
-            return old[0]
+            return old
         fact_id = "f_" + str(uuid.uuid4())
-        db.execute(
-            "INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        fact_db.insert_fact(
+            db,
             (
                 fact_id,
                 scope.request_id,
@@ -152,25 +130,19 @@ def register_fact(
             ref = pin_provenance(
                 db, scope, source, metric, industry_code, CALC_VERSION, local_cell, unit
             )
-            db.execute(
-                "INSERT INTO local_fact_lineage VALUES(?,?,?,?)",
-                (
-                    fact_id,
-                    ref,
-                    local_cell["row_key"] if local_cell else None,
-                    local_cell["column"] if local_cell else None,
-                ),
+            fact_db.insert_local_fact_lineage(
+                db,
+                fact_id,
+                ref,
+                local_cell["row_key"] if local_cell else None,
+                local_cell["column"] if local_cell else None,
             )
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            db.executemany(
-                "INSERT INTO fact_sources VALUES(?,?,?)",
-                [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]],
+            fact_db.insert_fact_sources(
+                db, [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]]
             )
         if parent_fact_ids:
-            db.executemany(
-                "INSERT INTO fact_parents VALUES(?,?)",
-                [(fact_id, parent_id) for parent_id in parent_fact_ids],
-            )
+            fact_db.insert_fact_parents(db, [(fact_id, parent_id) for parent_id in parent_fact_ids])
     return fact_id

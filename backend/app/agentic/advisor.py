@@ -10,6 +10,7 @@ from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
@@ -107,8 +108,8 @@ def save_advisor(loop, input, answer, receipt, settings):
         else "unknown"
     )
     with connect(loop.scope.path) as db:
-        db.execute(
-            "INSERT INTO advisor_consults VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        agentic_db.insert_advisor_consult(
+            db,
             (
                 answer.consult_id,
                 loop.scope.request_id,

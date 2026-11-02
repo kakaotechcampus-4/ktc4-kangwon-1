@@ -5,6 +5,7 @@ import re
 
 from app.canonical import canonical_json
 from app.db.connection import connect
+from app.db.repository import scores as score_db
 
 from .aliases import encode, label_periods
 from .report import fact_rows
@@ -73,11 +74,7 @@ def _table(rows, columns):
 
 def _score_items(scope, score_snapshot_id, codes):
     with connect(scope.path) as db:
-        rows = db.execute(
-            "SELECT industry_code,item,status,grade,points,fact_ids_json FROM scores "
-            "WHERE score_snapshot_id=? AND industry_code IN (" + ",".join("?" for _ in codes) + ")",
-            [score_snapshot_id, *codes],
-        ).fetchall()
+        rows = score_db.scores_for_industries(db, score_snapshot_id, codes)
     found = {code: {} for code in codes}
     for code, item, status, grade, points, fact_ids in rows:
         found[code][item] = {

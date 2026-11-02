@@ -31,6 +31,7 @@ from app.agents.floating_population.population import (
     worker_block,
 )
 from app.db.connection import connect
+from app.db.repository import raw as raw_db
 from app.geo import to_epsg5181
 from app.industries.catalog import SEOUL_TO_INDUSTRY
 from app.industries.lookup import service_code
@@ -43,25 +44,8 @@ def to_float(value):
 
 def load_raw(scope):
     with connect(scope.path) as db:
-        responses = [
-            dict(r)
-            for r in db.execute(
-                "SELECT p.*,b.response_json FROM raw_responses p "
-                "JOIN raw_payloads b USING(payload_hash) "
-                "WHERE p.snapshot_id=? AND p.duplicate_of IS NULL",
-                (scope.snapshot_id,),
-            )
-        ]
-        rows = [
-            dict(r)
-            for r in db.execute(
-                "SELECT r.*,p.source,p.run_id,p.request_args_json,p.group_key FROM "
-                "raw_rows r JOIN raw_response_rows e USING(raw_row_id) "
-                "JOIN raw_responses p USING(response_id) WHERE p.snapshot_id=? "
-                "AND p.duplicate_of IS NULL AND e.duplicate_of IS NULL",
-                (scope.snapshot_id,),
-            )
-        ]
+        responses = [dict(r) for r in raw_db.snapshot_responses(db, scope.snapshot_id)]
+        rows = [dict(r) for r in raw_db.snapshot_rows(db, scope.snapshot_id)]
     # 큰 원문 BLOB을 SQL에서 정렬하면 불필요한 임시 파일이 생깁니다.
     responses.sort(key=lambda r: (r["collected_at"], r["response_id"]))
     # 같은 원천의 재수집을 이전 관측과 섞지 않고 원천별 최신 run을 선택합니다.

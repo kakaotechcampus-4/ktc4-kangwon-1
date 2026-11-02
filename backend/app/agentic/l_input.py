@@ -3,6 +3,7 @@
 import json
 
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
 from app.text import has_digit
 
 from .aliases import decode
@@ -17,11 +18,7 @@ def build_record(scope, raw, base_id, base_rows):
     with connect(scope.path) as db:
         calls = [
             row[0]
-            for row in db.execute(
-                "SELECT tool_call_id,reply_json FROM tool_calls WHERE request_id=? "
-                "AND snapshot_id=? AND actor='decision'",
-                (scope.request_id, scope.snapshot_id),
-            )
+            for row in agentic_db.decision_tool_calls(db, scope.request_id, scope.snapshot_id)
             if json.loads(row[1])["status"] in {"ok", "partial"}
             and any(fid in row[1] for fid in ids)
         ]
