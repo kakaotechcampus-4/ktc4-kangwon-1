@@ -36,9 +36,12 @@ from app.industries.catalog import SEOUL_TO_INDUSTRY
 from app.industries.lookup import service_code
 
 
-def to_float(value):
-    """pandas 결측을 없애고 기존 보고 자료의 소수 두 자리 규칙을 유지합니다."""
-    return None if pd.isna(value) else round(float(value), 2)
+def to_float(value, *, digits: int | None = 2):
+    """pandas 결측을 없애고 계산용 값은 요청에 따라 정밀도를 보존합니다."""
+    if pd.isna(value):
+        return None
+    number = float(value)
+    return number if digits is None else round(number, digits)
 
 
 def load_raw(scope):
@@ -271,7 +274,11 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
                     "industry_id": r["service_id"],
                     "data_complete": bool(r["data_complete"]),
                     "zero_filled_sources": int(r["zero_filled_sources"]),
-                    "metrics": {key: to_float(r[key]) for key in metrics},
+                    # 평균은 노출량 판정에 다시 쓰므로 표시용 반올림으로 40 경계를 낮추지 않습니다.
+                    "metrics": {
+                        key: to_float(r[key], digits=None if key == "avg_store_count" else 2)
+                        for key in metrics
+                    },
                 }
                 for r in frame.to_dict("records")
             ],
