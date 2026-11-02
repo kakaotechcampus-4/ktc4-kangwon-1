@@ -38,6 +38,7 @@ import { MOCK_MODE } from '@/lib/api/mockMode';
 import { getAnalysis } from '@/lib/api/analyses';
 import {
   prefillAnswers,
+  progressReportPath,
   progressSite,
   progressView,
   toAnswerSubmission,
@@ -128,6 +129,7 @@ type KnownSite = {
   floor?: string;
   exclusiveArea?: string;
   parking?: string | null;
+  fromSession?: boolean;
 };
 
 const LOADING_SUMMARY: AnalysisSummary = {
@@ -153,6 +155,7 @@ function toKnownSite(prev: KnownSite, site: ProgressSite): KnownSite {
     floor: normalizeFloor(site.floorUnit) ?? undefined,
     exclusiveArea: area === null ? undefined : `${area}㎡`,
     parking: site.parking,
+    fromSession: site.fromSession,
   };
 }
 
@@ -327,11 +330,11 @@ function LiveProgress({ requestId }: { requestId: string }) {
 
   // 완료되면 리포트가 읽을 수 있게 결과를 저장한다.
   useEffect(() => {
-    if (result) {
+    if (result && known.fromSession) {
       saveAnalysisResult(result);
       saveRequestId(requestId);
     }
-  }, [result, requestId]);
+  }, [result, requestId, known.fromSession]);
 
   function handleAnswersSubmit(answers: ClarifyingAnswers) {
     // 백엔드는 질문별 답만 받는다(자유 입력 "추가 조건"을 받을 필드가 없다).
@@ -351,7 +354,11 @@ function LiveProgress({ requestId }: { requestId: string }) {
       error={error}
       submitError={submitError}
       onSubmit={handleAnswersSubmit}
-      onViewReport={() => router.replace(REPORT_PATH)}
+      onViewReport={() =>
+        router.replace(
+          progressReportPath(requestId, Boolean(known.fromSession))
+        )
+      }
       onRestart={() => router.replace('/building-confirm')}
       showNote={false}
     />

@@ -273,6 +273,7 @@ export type ProgressSite = {
   floorUnit: string;
   areaM2: number | null;
   parking: string | null;
+  fromSession: boolean;
 };
 
 export function progressSite(
@@ -291,6 +292,7 @@ export function progressSite(
       floorUnit: session.input.floorUnit,
       areaM2: session.areaM2,
       parking: session.parking,
+      fromSession: true,
     };
   }
   const site =
@@ -303,6 +305,16 @@ export function progressSite(
         floorUnit: site.floorUnit,
         areaM2: null,
         parking: null,
+        fromSession: false,
       }
     : null;
+}
+
+export function progressReportPath(
+  requestId: string,
+  fromSession: boolean
+): string {
+  return fromSession
+    ? '/report'
+    : `/report?id=${encodeURIComponent(requestId)}`;
 }

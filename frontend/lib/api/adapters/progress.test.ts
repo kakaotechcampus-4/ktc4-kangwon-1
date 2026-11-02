@@ -6,6 +6,7 @@ import {
   answerFailureAction,
   applyProgressEvent,
   prefillAnswers,
+  progressReportPath,
   progressSite,
   progressView,
   toAnswerSubmission,
@@ -243,6 +244,7 @@ describe('progressSite', () => {
       floorUnit: '2층',
       areaM2: 50,
       parking: 'possible',
+      fromSession: true,
     });
   });
 
@@ -252,6 +254,7 @@ describe('progressSite', () => {
       floorUnit: '1층',
       areaM2: null,
       parking: null,
+      fromSession: false,
     });
   });
 
@@ -264,5 +267,15 @@ describe('progressSite', () => {
     expect(
       progressSite(null, { ...session, requestId: null }, null)?.address
     ).toBe('서울 마포구 양화로 1');
+  });
+});
+
+describe('progressReportPath', () => {
+  it('이 탭에서 시작한 분석은 탭에 둔 결과로 리포트를 연다', () => {
+    expect(progressReportPath('r1', true)).toBe('/report');
+  });
+
+  it('기록에서 다시 연 분석은 분석 번호로 리포트를 연다', () => {
+    expect(progressReportPath('a b', false)).toBe('/report?id=a%20b');
   });
 });
