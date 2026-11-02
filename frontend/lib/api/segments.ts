@@ -53,6 +53,19 @@ function spaceFitText(value: Record<string, JsonValue>): string {
   return confidence ? `${text} (비교 신뢰도 ${confidence})` : text;
 }
 
+function textValue(value: JsonValue): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? '예' : '아니요';
+  }
+  return null;
+}
+
 function grouped(value: number): string {
   return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -82,7 +95,13 @@ export function formatFact(
     if (typeof value === 'object' && !Array.isArray(value)) {
       return fact.metric === 'space_fit' ? spaceFitText(value) : null;
     }
-    return typeof value === 'string' ? value : JSON.stringify(value);
+    if (Array.isArray(value)) {
+      const items = value.map(textValue);
+      return items.length && items.every((item) => item !== null)
+        ? items.join(', ')
+        : null;
+    }
+    return textValue(value);
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;

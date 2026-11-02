@@ -3,6 +3,7 @@
 import json
 import uuid
 from copy import deepcopy
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.clock import utc_now_iso
 from app.db.connection import connect
@@ -359,6 +360,27 @@ def space_fit_text(value):
     return f"{text} (비교 신뢰도 {confidence})" if confidence else text
 
 
+def text_value(value):
+    if isinstance(value, bool):
+        return "예" if value else "아니요"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e21 else repr(value)
+    return None
+
+
+def fixed(value, digits):
+    exponent = Decimal(1).scaleb(-digits)
+    return format(Decimal(value).quantize(exponent, rounding=ROUND_HALF_UP), "f")
+
+
+def grouped(value):
+    return format(Decimal(value).quantize(Decimal(1), rounding=ROUND_HALF_UP), ",f")
+
+
 def render_segment(segment, facts):
     if segment.type == "text":
         return segment.text
@@ -373,18 +395,22 @@ def render_segment(segment, facts):
             )
         if isinstance(value, dict):
             return space_fit_text(value) if fact["metric"] == "space_fit" else "확인 불가"
-        return str(value)
+        if isinstance(value, list):
+            items = [text_value(item) for item in value]
+            return ", ".join(items) if items and None not in items else "확인 불가"
+        text = text_value(value)
+        return "확인 불가" if text is None else text
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
     if segment.format == "percent":
         if fact["unit"] not in {"%", "비율"}:
             raise ReportInvalid("백분율 단위가 아닙니다.")
-        return f"{value * 100 if fact['unit'] == '비율' else value:.1f}%"
+        return fixed(value * 100 if fact["unit"] == "비율" else value, 1) + "%"
     if segment.format == "count":
-        return f"{value:,.0f}"
+        return grouped(value)
     if segment.format == "distance":
-        return f"{value:,.0f}m"
-    return f"{value:.2f}"
+        return grouped(value) + "m"
+    return fixed(value, 2)
 
 
 def join_segments(segments, facts):

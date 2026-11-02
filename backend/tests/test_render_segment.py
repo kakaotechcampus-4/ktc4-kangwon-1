@@ -125,3 +125,23 @@ class StrippedTextJoinTests(unittest.TestCase):
         ]
         facts = {"a": fact("store_total", 1200)}
         self.assertEqual(join_segments(segments, facts), "(1,200)")
+
+
+class TextValueParityTests(unittest.TestCase):
+    def render(self, value, fmt="text", unit=""):
+        segment = SimpleNamespace(type="fact", fact_id="f", format=fmt)
+        return render_segment(segment, {"f": fact("x", value, unit)})
+
+    def test_lists_read_as_comma_separated(self):
+        self.assertEqual(self.render(["카페", "학원"]), "카페, 학원")
+
+    def test_whole_floats_and_booleans_read_like_the_screen(self):
+        self.assertEqual(self.render(2.0), "2")
+        self.assertEqual(self.render(True), "예")
+        self.assertEqual(self.render(None), "확인 불가")
+
+    def test_ties_round_away_from_zero_like_the_screen(self):
+        self.assertEqual(self.render(0.0625, "percent", "비율"), "6.3%")
+        self.assertEqual(self.render(12.5, "distance"), "13m")
+        self.assertEqual(self.render(0.125, "rate"), "0.13")
+        self.assertEqual(self.render(1.005, "rate"), "1.00")

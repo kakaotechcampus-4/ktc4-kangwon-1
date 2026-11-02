@@ -178,3 +178,22 @@ describe('문장 조각 잇기', () => {
     ).toBe('표본이 작음 서울 밖 점포 미반영.');
   });
 });
+
+describe('서버와 같은 글자', () => {
+  it('목록 값은 쉼표로 잇는다', () => {
+    expect(formatFact(fact('x', ['카페', '학원']), 'text')).toBe('카페, 학원');
+  });
+
+  it('참거짓은 예·아니요로 읽는다', () => {
+    expect(formatFact(fact('x', true), 'text')).toBe('예');
+    expect(formatFact(fact('x', false), 'text')).toBe('아니요');
+  });
+
+  it('딱 중간인 값은 0에서 먼 쪽으로 반올림한다', () => {
+    const ratio = { ...fact('x', 0.0625), unit: '비율' };
+    expect(formatFact(ratio, 'percent')).toBe('6.3%');
+    expect(formatFact(fact('x', 12.5), 'distance')).toBe('13m');
+    expect(formatFact(fact('x', 0.125), 'rate')).toBe('0.13');
+    expect(formatFact(fact('x', 1.005), 'rate')).toBe('1.00');
+  });
+});
