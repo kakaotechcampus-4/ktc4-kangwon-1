@@ -4,7 +4,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from app.agentic.report import join_segments, render_segment
+from app.agentic.report import join_segments, limitation_segments, render_segment
 
 
 def fact(metric, value, unit=""):
@@ -74,3 +74,54 @@ class JoinSegmentsTests(unittest.TestCase):
         self.assertEqual(
             join_segments(segments, facts), "낮습니다. 면적 일치 (비교 신뢰도 낮음) 학원을 찾는"
         )
+
+    def test_no_space_before_punctuation_after_space_fit(self):
+        segments = [
+            SimpleNamespace(type="fact", fact_id="a", format="text"),
+            SimpleNamespace(type="text", text="."),
+        ]
+        facts = {"a": fact("space_fit", {"area": "일치", "confidence": "low"})}
+        self.assertEqual(join_segments(segments, facts), "면적 일치 (비교 신뢰도 낮음).")
+
+    def test_other_facts_ending_in_parenthesis_stay_attached(self):
+        segments = [
+            SimpleNamespace(type="text", text="근처에 "),
+            SimpleNamespace(type="fact", fact_id="a", format="text"),
+            SimpleNamespace(type="text", text="이 있습니다."),
+        ]
+        facts = {"a": fact("place_name", "스타벅스(강남점)")}
+        self.assertEqual(join_segments(segments, facts), "근처에 스타벅스(강남점)이 있습니다.")
+
+
+class LimitationSegmentsTests(unittest.TestCase):
+    def test_server_sentences_do_not_stick_to_model_text(self):
+        from app.agentic.contracts import TextSegment
+
+        model = [TextSegment(type="text", text="표본이 작음")]
+        segments = limitation_segments(model, ["서울 밖 점포 미반영", "검토를 마쳤습니다."])
+        expected = "표본이 작음 서울 밖 점포 미반영. 검토를 마쳤습니다."
+        self.assertEqual(join_segments(segments, {}).strip(), expected)
+
+    def test_server_sentences_alone_have_no_leading_gap(self):
+        segments = limitation_segments([], ["서울 밖 점포 미반영"])
+        self.assertEqual([s.text for s in segments], ["서울 밖 점포 미반영."])
+
+
+class StrippedTextJoinTests(unittest.TestCase):
+    def test_space_before_a_number_after_stripped_text(self):
+        segments = [
+            SimpleNamespace(type="text", text="점포는"),
+            SimpleNamespace(type="fact", fact_id="a", format="count"),
+            SimpleNamespace(type="text", text="곳입니다."),
+        ]
+        facts = {"a": fact("store_total", 1200)}
+        self.assertEqual(join_segments(segments, facts), "점포는 1,200곳입니다.")
+
+    def test_no_space_inside_brackets(self):
+        segments = [
+            SimpleNamespace(type="text", text="("),
+            SimpleNamespace(type="fact", fact_id="a", format="count"),
+            SimpleNamespace(type="text", text=")"),
+        ]
+        facts = {"a": fact("store_total", 1200)}
+        self.assertEqual(join_segments(segments, facts), "(1,200)")

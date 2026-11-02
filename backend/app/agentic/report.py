@@ -389,16 +389,34 @@ def render_segment(segment, facts):
 
 def join_segments(segments, facts):
     joined = ""
-    previous_fact = False
+    previous = None
     for segment in segments:
         piece = render_segment(segment, facts)
-        touching = joined[-1:].strip() and piece[:1].strip()
-        after_phrase = previous_fact and (segment.type == "fact" or joined.endswith(")"))
-        if touching and (joined[-1] in ".!?" or after_phrase):
+        kind = segment.type
+        if kind == "fact" and facts[segment.fact_id]["metric"] == "space_fit":
+            kind = "space_fit"
+        touching = joined[-1:].strip() and piece[:1].strip() and piece[0] not in ".,!?;:)]…"
+        gap = (
+            joined[-1:] in (".", "!", "?")
+            or previous == "space_fit"
+            or (previous == "text" and joined[-1:] not in "([{'\"“‘~-/·")
+            or (previous not in (None, "text") and kind != "text")
+        )
+        if touching and gap:
             joined += " "
         joined += piece
-        previous_fact = segment.type == "fact"
+        if piece:
+            previous = kind
     return joined
+
+
+def limitation_segments(model_segments, texts):
+    from .contracts import TextSegment
+
+    added = [
+        TextSegment(type="text", text=t if t.endswith((".", "!", "?")) else t + ".") for t in texts
+    ]
+    return [*model_segments, *added]
 
 
 def finalize(
@@ -479,7 +497,6 @@ def finalize(
         )
         for f in facts.values()
     ]
-    from .contracts import TextSegment
 
     result_model = DecisionResult(
         request_id=scope.request_id,
@@ -502,18 +519,17 @@ def finalize(
         review_completeness=sum(r.status == "completed" for r in reviews) / 4 if reviews else 0,
         review_resolutions=list(resolutions),
         confirmation_conditions_segments=[],
-        limitations_segments=proposal.limitations_segments
-        + [
-            TextSegment(type="text", text=t if t.endswith((".", "!", "?")) else t + ".")
-            for t in [
+        limitations_segments=limitation_segments(
+            proposal.limitations_segments,
+            [
                 *limitations,
                 *(
                     ["평가 미완료: 실패한 평가를 동의로 간주하지 않습니다."]
                     if reviews and any(r.status == "failed" for r in reviews)
                     else []
                 ),
-            ]
-        ],
+            ],
+        ),
     )
     rendered = {
         "summary": join_segments(proposal.summary_segments, facts),

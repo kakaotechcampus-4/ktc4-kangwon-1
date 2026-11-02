@@ -105,23 +105,31 @@ export function renderSegments(
   facts: FactIndex
 ): string {
   let joined = '';
-  let previousWasFact = false;
+  let previous: 'text' | 'fact' | 'spaceFit' | null = null;
   for (const segment of segments) {
-    const isFact = segment.type === 'fact';
     let piece: string;
+    let kind: 'text' | 'fact' | 'spaceFit' = 'text';
     if (segment.type === 'text') {
       piece = segment.text;
     } else {
       const fact = facts.get(segment.fact_id);
+      kind = fact?.metric === 'space_fit' ? 'spaceFit' : 'fact';
       piece = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
     }
-    const touching = /\S$/.test(joined) && /^\S/.test(piece);
-    const afterPhrase = previousWasFact && (isFact || /\)$/.test(joined));
-    if (touching && (/[.!?]$/.test(joined) || afterPhrase)) {
+    const touching =
+      /\S$/.test(joined) && /^\S/.test(piece) && !/^[.,!?;:)\]…]/.test(piece);
+    const gap =
+      /[.!?]$/.test(joined) ||
+      previous === 'spaceFit' ||
+      (previous === 'text' && !/[([{'"“‘~\-/·]$/.test(joined)) ||
+      (previous !== null && previous !== 'text' && kind !== 'text');
+    if (touching && gap) {
       joined += ' ';
     }
     joined += piece;
-    previousWasFact = isFact;
+    if (piece) {
+      previous = kind;
+    }
   }
   return joined;
 }

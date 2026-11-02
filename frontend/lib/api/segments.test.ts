@@ -108,4 +108,73 @@ describe('문장 조각 잇기', () => {
       )
     ).toBe('낮습니다. 면적 일치 (비교 신뢰도 낮음) 학원을 찾는');
   });
+
+  it('공간 비교 문구 뒤 문장부호는 띄우지 않는다', () => {
+    const facts = indexFacts([
+      fact('space_fit', { area: '일치', confidence: 'low' }, 'a'),
+    ]);
+    expect(
+      renderSegments(
+        [
+          { type: 'fact', fact_id: 'a', format: 'text' },
+          { type: 'text', text: '.' },
+        ],
+        facts
+      )
+    ).toBe('면적 일치 (비교 신뢰도 낮음).');
+  });
+
+  it('괄호로 끝나는 다른 값 뒤 조사는 붙여 둔다', () => {
+    const facts = indexFacts([fact('place_name', '스타벅스(강남점)', 'a')]);
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '근처에 ' },
+          { type: 'fact', fact_id: 'a', format: 'text' },
+          { type: 'text', text: '이 있습니다.' },
+        ],
+        facts
+      )
+    ).toBe('근처에 스타벅스(강남점)이 있습니다.');
+  });
+
+  it('앞뒤 빈칸이 지워진 글 뒤 숫자는 띄운다', () => {
+    const facts = indexFacts([fact('store_total', 1200, 'a')]);
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '점포는' },
+          { type: 'fact', fact_id: 'a', format: 'count' },
+          { type: 'text', text: '곳입니다.' },
+        ],
+        facts
+      )
+    ).toBe('점포는 1,200곳입니다.');
+  });
+
+  it('괄호 안 숫자는 붙여 둔다', () => {
+    const facts = indexFacts([fact('store_total', 1200, 'a')]);
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '(' },
+          { type: 'fact', fact_id: 'a', format: 'count' },
+          { type: 'text', text: ')' },
+        ],
+        facts
+      )
+    ).toBe('(1,200)');
+  });
+
+  it('글 조각 둘 사이는 띄운다', () => {
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '표본이 작음' },
+          { type: 'text', text: '서울 밖 점포 미반영.' },
+        ],
+        indexFacts([])
+      )
+    ).toBe('표본이 작음 서울 밖 점포 미반영.');
+  });
 });
