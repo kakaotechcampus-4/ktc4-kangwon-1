@@ -334,3 +334,16 @@ export function siteOrUnknown(site: ProgressSite | null): ProgressSite {
 export function progressRestartPath(fromSession: boolean): string {
   return fromSession ? '/building-confirm' : '/vacancy-input';
 }
+
+export function liveProgressSite(
+  requestId: string,
+  session: Parameters<typeof progressSite>[1],
+  detail: StoredAnalysis | null,
+  failed: boolean
+): ProgressSite | null {
+  const site = progressSite(requestId, session, detail);
+  if (site) {
+    return site;
+  }
+  return detail || failed ? siteOrUnknown(null) : null;
+}

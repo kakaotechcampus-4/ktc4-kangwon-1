@@ -35,14 +35,13 @@ import {
   saveRequestId,
 } from '@/lib/api/resultStore';
 import { MOCK_MODE } from '@/lib/api/mockMode';
-import { getAnalysis } from '@/lib/api/analyses';
 import {
   prefillAnswers,
+  liveProgressSite,
   progressReportPath,
   progressRestartPath,
   progressSite,
   progressView,
-  siteOrUnknown,
   toAnswerSubmission,
   toClarifyingQuestions,
   type ProgressSite,
@@ -161,42 +160,29 @@ function toKnownSite(prev: KnownSite, site: ProgressSite): KnownSite {
   };
 }
 
-function useKnownSite(requestId: string | null): KnownSite {
+function readSession(requestId: string | null) {
+  const building = loadConfirmedBuilding();
+  return {
+    requestId: requestId ? loadRequestId() : null,
+    input: loadVacancyInput(),
+    areaM2: building?.exclusiveAreaM2.value ?? null,
+    parking: building?.parking.value ?? null,
+  };
+}
+
+function useKnownSite(): KnownSite {
   const [known, setKnown] = useState<KnownSite>({
-    summary: requestId ? LOADING_SUMMARY : mockAnalysisProgress.summary,
+    summary: mockAnalysisProgress.summary,
   });
 
   useEffect(() => {
-    const building = loadConfirmedBuilding();
-    const session = {
-      requestId: requestId ? loadRequestId() : null,
-      input: loadVacancyInput(),
-      areaM2: building?.exclusiveAreaM2.value ?? null,
-      parking: building?.parking.value ?? null,
-    };
-    const local = progressSite(requestId, session, null);
+    const local = progressSite(null, readSession(null), null);
     if (local) {
       // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setKnown((prev) => toKnownSite(prev, local));
-      return;
     }
-    if (!requestId) {
-      return;
-    }
-    let active = true;
-    getAnalysis(requestId)
-      .then((detail) => progressSite(requestId, session, detail))
-      .catch(() => null)
-      .then((site) => {
-        if (active) {
-          setKnown((prev) => toKnownSite(prev, siteOrUnknown(site)));
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [requestId]);
+  }, []);
 
   return known;
 }
@@ -247,7 +233,7 @@ function NoAnalysis() {
 /** 백엔드 없이 타이머로 흐름을 흉내 낸다(mock 모드). */
 function MockProgress() {
   const router = useRouter();
-  const known = useKnownSite(null);
+  const known = useKnownSite();
   const { steps, stage, resume } = useAnalysisProgressSimulation(
     mockAnalysisProgress.steps
   );
@@ -310,9 +296,14 @@ function MockProgress() {
 /** 실제 백엔드 진행 이벤트를 폴링한다(?id=요청 ID). */
 function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
-  const known = useKnownSite(requestId);
-  const { steps, stage, waiting, result, error, submitError, submit } =
-    useAnalysisProgress(requestId, mockAnalysisProgress.steps);
+  const [session] = useState(() => readSession(requestId));
+  const fromSession = progressSite(requestId, session, null) !== null;
+  const { steps, stage, waiting, result, error, submitError, submit, detail } =
+    useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
+  const site = liveProgressSite(requestId, session, detail, stage === 'failed');
+  const known: KnownSite = site
+    ? toKnownSite({ summary: LOADING_SUMMARY }, site)
+    : { summary: LOADING_SUMMARY };
 
   const questions = useMemo(
     () => (waiting ? toClarifyingQuestions(waiting) : []),
@@ -332,11 +323,11 @@ function LiveProgress({ requestId }: { requestId: string }) {
 
   // 완료되면 리포트가 읽을 수 있게 결과를 저장한다.
   useEffect(() => {
-    if (result && known.fromSession) {
+    if (result && fromSession) {
       saveAnalysisResult(result);
       saveRequestId(requestId);
     }
-  }, [result, requestId, known.fromSession]);
+  }, [result, requestId, fromSession]);
 
   function handleAnswersSubmit(answers: ClarifyingAnswers) {
     // 백엔드는 질문별 답만 받는다(자유 입력 "추가 조건"을 받을 필드가 없다).
@@ -357,13 +348,9 @@ function LiveProgress({ requestId }: { requestId: string }) {
       submitError={submitError}
       onSubmit={handleAnswersSubmit}
       onViewReport={() =>
-        router.replace(
-          progressReportPath(requestId, Boolean(known.fromSession))
-        )
+        router.replace(progressReportPath(requestId, fromSession))
       }
-      onRestart={() =>
-        router.replace(progressRestartPath(Boolean(known.fromSession)))
-      }
+      onRestart={() => router.replace(progressRestartPath(fromSession))}
       showNote={false}
     />
   );

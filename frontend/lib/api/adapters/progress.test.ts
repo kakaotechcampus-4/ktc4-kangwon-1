@@ -6,6 +6,7 @@ import {
   answerFailureAction,
   applyProgressEvent,
   prefillAnswers,
+  liveProgressSite,
   progressReportPath,
   progressRestartPath,
   progressSite,
@@ -301,5 +302,48 @@ describe('progressRestartPath', () => {
 
   it('기록에서 다시 연 분석은 주소 입력부터 다시 한다', () => {
     expect(progressRestartPath(false)).toBe('/vacancy-input');
+  });
+});
+
+describe('liveProgressSite', () => {
+  const session = {
+    requestId: 'r1',
+    input: { roadAddress: '서울 마포구 양화로 1', floorUnit: '2층' },
+    areaM2: null,
+    parking: null,
+  };
+  const detail = {
+    request_id: 'r2',
+    status: 'waiting_for_input' as const,
+    site: { road_address: '서울 송파구 위례광장로 199', detail_address: '1층' },
+    result: null,
+    error: null,
+    questions: null,
+    rendered: null,
+  };
+
+  it('이 탭 분석이면 분석 정보 없이도 입력값을 쓴다', () => {
+    expect(liveProgressSite('r1', session, null, false)?.address).toBe(
+      '서울 마포구 양화로 1'
+    );
+  });
+
+  it('받아 온 분석 정보가 있으면 그 주소를 쓴다', () => {
+    expect(liveProgressSite('r2', session, detail, false)?.floorUnit).toBe(
+      '1층'
+    );
+  });
+
+  it('아직 분석 정보가 없으면 불러오는 중이다', () => {
+    expect(liveProgressSite('r2', session, null, false)).toBeNull();
+  });
+
+  it('실패했거나 주소가 없으면 확인 안 됨이다', () => {
+    expect(liveProgressSite('r2', session, null, true)?.address).toBe(
+      '확인 안 됨'
+    );
+    expect(
+      liveProgressSite('r2', session, { ...detail, site: null }, false)?.address
+    ).toBe('확인 안 됨');
   });
 });
