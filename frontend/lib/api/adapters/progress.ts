@@ -2,9 +2,12 @@ import type {
   AnalysisEvent,
   AnswerSubmission,
   QuestionField,
+  StoredAnalysis,
   StoredQuestions,
   WaitingForInput,
 } from '@/lib/api/types';
+import type { VacancyInput } from '@/lib/api/resultStore';
+import { vacancyFromStored } from '@/lib/api/reportSource';
 import type {
   ClarifyingAnswers,
   ClarifyingQuestion,
@@ -263,4 +266,43 @@ export function answerFailureAction(
     return 'retry';
   }
   return 'fail';
+}
+
+export type ProgressSite = {
+  address: string;
+  floorUnit: string;
+  areaM2: number | null;
+  parking: string | null;
+};
+
+export function progressSite(
+  requestId: string | null,
+  session: {
+    requestId: string | null;
+    input: VacancyInput | null;
+    areaM2: number | null;
+    parking: string | null;
+  },
+  stored: StoredAnalysis | null
+): ProgressSite | null {
+  if (session.input && session.requestId === requestId) {
+    return {
+      address: session.input.roadAddress,
+      floorUnit: session.input.floorUnit,
+      areaM2: session.areaM2,
+      parking: session.parking,
+    };
+  }
+  const site =
+    stored && stored.request_id === requestId
+      ? vacancyFromStored(stored)
+      : null;
+  return site
+    ? {
+        address: site.roadAddress,
+        floorUnit: site.floorUnit,
+        areaM2: null,
+        parking: null,
+      }
+    : null;
 }

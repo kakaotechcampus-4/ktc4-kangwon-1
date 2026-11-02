@@ -29,16 +29,20 @@ import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
 import {
   loadConfirmedBuilding,
   ANALYSIS_RADIUS_M,
+  loadRequestId,
   loadVacancyInput,
   saveAnalysisResult,
   saveRequestId,
 } from '@/lib/api/resultStore';
 import { MOCK_MODE } from '@/lib/api/mockMode';
+import { getAnalysis } from '@/lib/api/analyses';
 import {
   prefillAnswers,
+  progressSite,
   progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
+  type ProgressSite,
 } from '@/lib/api/adapters/progress';
 import StateNotice from '@/components/ui/StateNotice';
 import { useAnalysisProgress } from '@/lib/hooks/useAnalysisProgress';
@@ -126,36 +130,68 @@ type KnownSite = {
   parking?: string | null;
 };
 
-function useKnownSite(): KnownSite {
+const LOADING_SUMMARY: AnalysisSummary = {
+  ...mockAnalysisProgress.summary,
+  address: '불러오는 중',
+  floorAndUnit: '—',
+  exclusiveAreaText: '확인 안 됨',
+};
+
+function toKnownSite(prev: KnownSite, site: ProgressSite): KnownSite {
+  const area = site.areaM2;
+  return {
+    summary: {
+      ...prev.summary,
+      address: site.address,
+      floorAndUnit: site.floorUnit.trim() || '—',
+      radiusM: ANALYSIS_RADIUS_M,
+      exclusiveAreaText:
+        area === null
+          ? '확인 안 됨'
+          : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
+    },
+    floor: normalizeFloor(site.floorUnit) ?? undefined,
+    exclusiveArea: area === null ? undefined : `${area}㎡`,
+    parking: site.parking,
+  };
+}
+
+function useKnownSite(requestId: string | null): KnownSite {
   const [known, setKnown] = useState<KnownSite>({
-    summary: mockAnalysisProgress.summary,
+    summary: requestId ? LOADING_SUMMARY : mockAnalysisProgress.summary,
   });
 
   useEffect(() => {
-    const input = loadVacancyInput();
-    if (!input) {
+    const building = loadConfirmedBuilding();
+    const session = {
+      requestId: requestId ? loadRequestId() : null,
+      input: loadVacancyInput(),
+      areaM2: building?.exclusiveAreaM2.value ?? null,
+      parking: building?.parking.value ?? null,
+    };
+    const local = progressSite(requestId, session, null);
+    if (local) {
+      // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setKnown((prev) => toKnownSite(prev, local));
       return;
     }
-    const building = loadConfirmedBuilding();
-    const area = building?.exclusiveAreaM2.value ?? null;
-    // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setKnown((prev) => ({
-      summary: {
-        ...prev.summary,
-        address: input.roadAddress,
-        floorAndUnit: input.floorUnit.trim() || '—',
-        radiusM: ANALYSIS_RADIUS_M,
-        exclusiveAreaText:
-          area === null
-            ? '확인 안 됨'
-            : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
-      },
-      floor: normalizeFloor(input.floorUnit) ?? undefined,
-      exclusiveArea: area === null ? undefined : `${area}㎡`,
-      parking: building?.parking.value ?? null,
-    }));
-  }, []);
+    if (!requestId) {
+      return;
+    }
+    let active = true;
+    getAnalysis(requestId)
+      .then((detail) => {
+        const site = progressSite(requestId, session, detail);
+        if (active && site) {
+          setKnown((prev) => toKnownSite(prev, site));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [requestId]);
 
   return known;
 }
@@ -206,7 +242,7 @@ function NoAnalysis() {
 /** 백엔드 없이 타이머로 흐름을 흉내 낸다(mock 모드). */
 function MockProgress() {
   const router = useRouter();
-  const known = useKnownSite();
+  const known = useKnownSite(null);
   const { steps, stage, resume } = useAnalysisProgressSimulation(
     mockAnalysisProgress.steps
   );
@@ -269,7 +305,7 @@ function MockProgress() {
 /** 실제 백엔드 진행 이벤트를 폴링한다(?id=요청 ID). */
 function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
-  const known = useKnownSite();
+  const known = useKnownSite(requestId);
   const { steps, stage, waiting, result, error, submitError, submit } =
     useAnalysisProgress(requestId, mockAnalysisProgress.steps);
 

@@ -6,6 +6,7 @@ import {
   answerFailureAction,
   applyProgressEvent,
   prefillAnswers,
+  progressSite,
   progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
@@ -216,5 +217,52 @@ describe('answerFailureAction', () => {
     for (const status of [400, 401, 403, 404, 422]) {
       expect(answerFailureAction(status)).toBe('fail');
     }
+  });
+});
+
+describe('progressSite', () => {
+  const session = {
+    requestId: 'r1',
+    input: { roadAddress: '서울 마포구 양화로 1', floorUnit: '2층' },
+    areaM2: 50,
+    parking: 'possible',
+  };
+  const stored = {
+    request_id: 'r2',
+    status: 'waiting_for_input' as const,
+    site: { road_address: '서울 송파구 위례광장로 199', detail_address: '1층' },
+    result: null,
+    error: null,
+    questions: null,
+    rendered: null,
+  };
+
+  it('이 탭에서 시작한 분석이면 입력값을 그대로 쓴다', () => {
+    expect(progressSite('r1', session, null)).toEqual({
+      address: '서울 마포구 양화로 1',
+      floorUnit: '2층',
+      areaM2: 50,
+      parking: 'possible',
+    });
+  });
+
+  it('다른 분석이면 서버에 저장된 주소를 쓰고 입력값은 쓰지 않는다', () => {
+    expect(progressSite('r2', session, stored)).toEqual({
+      address: '서울 송파구 위례광장로 199',
+      floorUnit: '1층',
+      areaM2: null,
+      parking: null,
+    });
+  });
+
+  it('서버 정보가 아직 없거나 다른 분석 것이면 모른다', () => {
+    expect(progressSite('r2', session, null)).toBeNull();
+    expect(progressSite('r3', session, stored)).toBeNull();
+  });
+
+  it('목업 진행 화면은 이 탭의 입력값을 쓴다', () => {
+    expect(
+      progressSite(null, { ...session, requestId: null }, null)?.address
+    ).toBe('서울 마포구 양화로 1');
   });
 });

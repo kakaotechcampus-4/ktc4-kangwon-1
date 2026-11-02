@@ -50,7 +50,7 @@ export type StoredReport =
 const text = (value: unknown) =>
   typeof value === 'string' && value.trim() ? value.trim() : null;
 
-function vacancyFromStored(detail: StoredAnalysis): VacancyInput | null {
+export function vacancyFromStored(detail: StoredAnalysis): VacancyInput | null {
   const site = detail.site;
   const address =
     text(site?.road_address) ??

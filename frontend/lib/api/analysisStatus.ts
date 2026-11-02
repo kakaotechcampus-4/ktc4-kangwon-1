@@ -29,3 +29,17 @@ export function formatDay(value: string | null): string {
   const day = `${parsed.getDate()}`.padStart(2, '0');
   return `${parsed.getFullYear()}.${month}.${day}`;
 }
+
+export function analysisLink(
+  requestId: string,
+  status: string
+): { label: string; href: string } | null {
+  const id = encodeURIComponent(requestId);
+  if (status === 'completed') {
+    return { label: '리포트 열기', href: `/report?id=${id}` };
+  }
+  if (status === 'waiting_for_input') {
+    return { label: '답변하러 가기', href: `/analysis-progress?id=${id}` };
+  }
+  return null;
+}
