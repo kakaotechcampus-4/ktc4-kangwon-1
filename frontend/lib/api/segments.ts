@@ -1,4 +1,4 @@
-import type { FactSegment, FactView } from '@/lib/api/types';
+import type { FactSegment, FactView, JsonValue } from '@/lib/api/types';
 
 /**
  * 문장 조각을 화면 문장으로 이어 붙인다.
@@ -27,6 +27,31 @@ const FACILITY_STATE_TEXT: Record<string, string> = {
   installable: '설치 가능',
   unavailable: '설치 불가',
 };
+const SPACE_FIT_TEXT: [string, string][] = [
+  ['floor', '층'],
+  ['area', '면적'],
+  ...FACILITY_TEXT,
+];
+const CONFIDENCE_TEXT: Record<string, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+};
+
+function spaceFitText(value: Record<string, JsonValue>): string {
+  const parts = SPACE_FIT_TEXT.flatMap(([key, name]) => {
+    const state = value[key];
+    return typeof state === 'string' && state !== '해당 없음'
+      ? [`${name} ${state}`]
+      : [];
+  });
+  const confidence =
+    typeof value.confidence === 'string'
+      ? CONFIDENCE_TEXT[value.confidence]
+      : undefined;
+  const text = parts.length ? parts.join(' · ') : '비교할 공간 조건 없음';
+  return confidence ? `${text} (비교 신뢰도 ${confidence})` : text;
+}
 
 function grouped(value: number): string {
   return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -54,6 +79,9 @@ export function formatFact(
           : [];
       }).join(' · ');
     }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      return fact.metric === 'space_fit' ? spaceFitText(value) : null;
+    }
     return typeof value === 'string' ? value : JSON.stringify(value);
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -76,13 +104,23 @@ export function renderSegments(
   segments: readonly FactSegment[],
   facts: FactIndex
 ): string {
-  return segments
-    .map((segment) => {
-      if (segment.type === 'text') {
-        return segment.text;
-      }
+  let joined = '';
+  let previousWasFact = false;
+  for (const segment of segments) {
+    const isFact = segment.type === 'fact';
+    let piece: string;
+    if (segment.type === 'text') {
+      piece = segment.text;
+    } else {
       const fact = facts.get(segment.fact_id);
-      return (fact && formatFact(fact, segment.format)) ?? '확인 불가';
-    })
-    .join('');
+      piece = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
+    }
+    const touching = /\S$/.test(joined) && /^\S/.test(piece);
+    if (touching && (/[.!?]$/.test(joined) || (previousWasFact && isFact))) {
+      joined += ' ';
+    }
+    joined += piece;
+    previousWasFact = isFact;
+  }
+  return joined;
 }

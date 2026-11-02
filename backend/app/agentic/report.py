@@ -344,6 +344,21 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
     return score_id, rows
 
 
+SPACE_FIT_NAMES = {"floor": "층", "area": "면적", **FACILITY_NAMES}
+CONFIDENCE_TEXT = {"low": "낮음", "medium": "보통", "high": "높음"}
+
+
+def space_fit_text(value):
+    parts = [
+        f"{name} {value[key]}"
+        for key, name in SPACE_FIT_NAMES.items()
+        if isinstance(value.get(key), str) and value[key] != "해당 없음"
+    ]
+    text = " · ".join(parts) if parts else "비교할 공간 조건 없음"
+    confidence = CONFIDENCE_TEXT.get(value.get("confidence"))
+    return f"{text} (비교 신뢰도 {confidence})" if confidence else text
+
+
 def render_segment(segment, facts):
     if segment.type == "text":
         return segment.text
@@ -356,6 +371,8 @@ def render_segment(segment, facts):
                 for key, name in FACILITY_NAMES.items()
                 if value.get(key) in FACILITY_STATE_TEXT
             )
+        if isinstance(value, dict):
+            return space_fit_text(value) if fact["metric"] == "space_fit" else "확인 불가"
         return str(value)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
@@ -368,6 +385,19 @@ def render_segment(segment, facts):
     if segment.format == "distance":
         return f"{value:,.0f}m"
     return f"{value:.2f}"
+
+
+def join_segments(segments, facts):
+    joined = ""
+    previous_fact = False
+    for segment in segments:
+        piece = render_segment(segment, facts)
+        touching = joined[-1:].strip() and piece[:1].strip()
+        if touching and (joined[-1] in ".!?" or (previous_fact and segment.type == "fact")):
+            joined += " "
+        joined += piece
+        previous_fact = segment.type == "fact"
+    return joined
 
 
 def finalize(
@@ -473,7 +503,7 @@ def finalize(
         confirmation_conditions_segments=[],
         limitations_segments=proposal.limitations_segments
         + [
-            TextSegment(type="text", text=t)
+            TextSegment(type="text", text=t if t.endswith((".", "!", "?")) else t + ".")
             for t in [
                 *limitations,
                 *(
@@ -485,11 +515,11 @@ def finalize(
         ],
     )
     rendered = {
-        "summary": "".join(render_segment(s, facts) for s in proposal.summary_segments),
+        "summary": join_segments(proposal.summary_segments, facts),
         "top5": [
             {
                 "industry_code": c.industry_code,
-                "reasons": "".join(render_segment(s, facts) for s in c.reasons_segments),
+                "reasons": join_segments(c.reasons_segments, facts),
             }
             for c in top
         ],
