@@ -113,7 +113,9 @@ class RubricDryrunTests(unittest.TestCase):
         report = summarize("G204", items, "해당 없음")
         self.assertEqual(report["applicable_weight"], 80)
         self.assertEqual(report["badge"], "조건부")
-        self.assertIn("손님 수요 근거 없음", report["confirmation_conditions"])
+        self.assertIn(
+            "시간대·연령 항목 미적용: 업종별 수요 별도 확인 필요", report["confirmation_conditions"]
+        )
         items["D1"] = {"status": "observed", "points": 7.5}
         for key in ("D2", "C4", "D4", "S1"):
             items[key] = {"status": "n.a.", "points": None}
