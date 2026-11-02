@@ -27,6 +27,12 @@ class _AccessQueryFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and record.args:
+            record.args = tuple(
+                _SENSITIVE_QUERY.sub(r"\1=[REDACTED]", arg) if isinstance(arg, str) else arg
+                for arg in record.args
+            )
+            return True
         record.msg = _SENSITIVE_QUERY.sub(r"\1=[REDACTED]", record.getMessage())
         record.args = ()
         return True
