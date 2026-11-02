@@ -92,4 +92,20 @@ describe('문장 조각 잇기', () => {
       )
     ).toBe('점포는 1,200곳입니다.');
   });
+
+  it('공간 비교 문구 뒤에 오는 문장은 띄운다', () => {
+    const facts = indexFacts([
+      fact('space_fit', { area: '일치', confidence: 'low' }, 'a'),
+    ]);
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '낮습니다.' },
+          { type: 'fact', fact_id: 'a', format: 'text' },
+          { type: 'text', text: '학원을 찾는' },
+        ],
+        facts
+      )
+    ).toBe('낮습니다. 면적 일치 (비교 신뢰도 낮음) 학원을 찾는');
+  });
 });

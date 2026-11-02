@@ -63,3 +63,14 @@ class JoinSegmentsTests(unittest.TestCase):
         ]
         facts = {"a": fact("store_total", 1200)}
         self.assertEqual(join_segments(segments, facts), "점포는 1,200곳입니다.")
+
+    def test_spaces_after_a_space_fit_phrase(self):
+        segments = [
+            SimpleNamespace(type="text", text="낮습니다."),
+            SimpleNamespace(type="fact", fact_id="a", format="text"),
+            SimpleNamespace(type="text", text="학원을 찾는"),
+        ]
+        facts = {"a": fact("space_fit", {"area": "일치", "confidence": "low"})}
+        self.assertEqual(
+            join_segments(segments, facts), "낮습니다. 면적 일치 (비교 신뢰도 낮음) 학원을 찾는"
+        )

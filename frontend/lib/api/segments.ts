@@ -116,7 +116,8 @@ export function renderSegments(
       piece = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
     }
     const touching = /\S$/.test(joined) && /^\S/.test(piece);
-    if (touching && (/[.!?]$/.test(joined) || (previousWasFact && isFact))) {
+    const afterPhrase = previousWasFact && (isFact || /\)$/.test(joined));
+    if (touching && (/[.!?]$/.test(joined) || afterPhrase)) {
       joined += ' ';
     }
     joined += piece;

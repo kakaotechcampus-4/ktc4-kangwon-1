@@ -393,7 +393,8 @@ def join_segments(segments, facts):
     for segment in segments:
         piece = render_segment(segment, facts)
         touching = joined[-1:].strip() and piece[:1].strip()
-        if touching and (joined[-1] in ".!?" or (previous_fact and segment.type == "fact")):
+        after_phrase = previous_fact and (segment.type == "fact" or joined.endswith(")"))
+        if touching and (joined[-1] in ".!?" or after_phrase):
             joined += " "
         joined += piece
         previous_fact = segment.type == "fact"
