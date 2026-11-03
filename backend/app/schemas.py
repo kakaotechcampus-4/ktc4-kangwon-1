@@ -1,12 +1,13 @@
 """공개 팀 계약. 공통 분석 타입은 동일한 클래스로 재사용합니다."""
 
-from typing import Literal, Self, get_args
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
 from app.agentic.contracts import (
+    EVALUATOR_ACTORS,
+    EVALUATOR_COUNT,
     ConditionExcludedCandidate,
-    EvaluatorActor,
     EvaluatorReview,
     FactId,
     FactSegment,
@@ -52,7 +53,9 @@ class DecisionResult(Schema):
     )
     facts: list[FactView]
     L_records: list[LRecord] = Field(min_length=51, max_length=51)
-    evaluator_reviews: list[EvaluatorReview] = Field(min_length=4, max_length=4)
+    evaluator_reviews: list[EvaluatorReview] = Field(
+        min_length=EVALUATOR_COUNT, max_length=EVALUATOR_COUNT
+    )
     review_completeness: Ratio
     review_resolutions: list[ReviewResolution] = Field(default_factory=list, max_length=16)
     confirmation_conditions_segments: list[FactSegment]
@@ -62,11 +65,11 @@ class DecisionResult(Schema):
     def check_reviewers(self) -> Self:
         if {r.industry_code for r in self.L_records} != set(INDUSTRIES):
             raise ValueError("판단 기록은 전체 업종을 중복 없이 포함해야 합니다.")
-        if {r.actor for r in self.evaluator_reviews} != set(get_args(EvaluatorActor)):
+        if {r.actor for r in self.evaluator_reviews} != set(EVALUATOR_ACTORS):
             raise ValueError("평가자 네 명이 중복 없이 필요합니다.")
         if (
             self.review_completeness
-            != sum(r.status == "completed" for r in self.evaluator_reviews) / 4
+            != sum(r.status == "completed" for r in self.evaluator_reviews) / EVALUATOR_COUNT
         ):
             raise ValueError("평가 완료 비율이 상태와 맞지 않습니다.")
         codes = [r.industry_code for r in self.top5]

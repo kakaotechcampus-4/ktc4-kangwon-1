@@ -25,6 +25,8 @@ from . import advisor, questions
 from .aliases import encode, encode_messages, labels_periods
 from .budget import RuntimeBudget
 from .contracts import (
+    EVALUATOR_ACTORS,
+    EVALUATOR_COUNT,
     EvaluatorReview,
     LInput,
     LRecord,
@@ -237,10 +239,7 @@ class DecisionLoop:
         self.tools.shared.regulation = shared.regulation
 
     def evaluator_executors(self):
-        return {
-            actor: self.tools.for_actor(actor)
-            for actor in ("examiner", "founder", "customer", "landlord_advocate")
-        }
+        return {actor: self.tools.for_actor(actor) for actor in EVALUATOR_ACTORS}
 
     async def _budget_changed(self, budget):
         self.state["budget"] = budget
@@ -298,7 +297,8 @@ class DecisionLoop:
             result = outcome.result.model_copy(
                 update={
                     "evaluator_reviews": reviews,
-                    "review_completeness": sum(r.status == "completed" for r in reviews) / 4,
+                    "review_completeness": sum(r.status == "completed" for r in reviews)
+                    / EVALUATOR_COUNT,
                     "limitations_segments": [
                         *outcome.result.limitations_segments,
                         TextSegment(type="text", text="피드백 최종 반영을 완료하지 못했습니다."),

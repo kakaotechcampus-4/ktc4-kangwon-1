@@ -106,7 +106,9 @@ async def _failure(path, request_id, exc, stage, timings=None):
             if changed.rowcount != 1:
                 raise ValueError("종료할 수 있는 요청이 없습니다.")
             db.execute(
-                "INSERT INTO decision_failures VALUES(?,?,?,?)",
+                "INSERT INTO decision_failures(request_id,failed_at,error_json,"
+                "diagnostics_json) "
+                "VALUES(?,?,?,?)",
                 (
                     request_id,
                     failed_at,

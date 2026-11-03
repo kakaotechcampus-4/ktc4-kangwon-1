@@ -25,11 +25,22 @@ def item_fact_ids(db, score_snapshot_id):
 
 
 def insert_score_snapshot(db, values):
-    db.execute("INSERT INTO score_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO score_snapshots(score_snapshot_id,request_id,snapshot_id,"
+        "run_id,rubric_version,calc_version,summary_json,top5_json,L_review_state,"
+        "created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def insert_score(db, values):
-    db.execute("INSERT INTO scores VALUES(?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO scores(score_snapshot_id,industry_code,item,weight,status,"
+        "grade,points,fact_ids_json) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def first_score_snapshot(db, request_id, snapshot_id):

@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from app.schemas import AgentError, DecisionResult, FactView, Schema, Text
+from app.schemas import AgentError, DecisionResult, FactView, RequestStatus, Schema, Text
 
 
 class AcceptedAnalysis(BaseModel):
@@ -45,7 +45,7 @@ class StoredAnalysis(BaseModel):
     input_address: str
     catalog_version: str | None
     radius_m: int | None
-    status: Literal["pending", "running", "waiting_for_input", "completed", "failed"]
+    status: RequestStatus
     created_at: str
     completed_at: str | None
     site: dict[str, Any] | None
