@@ -55,6 +55,7 @@ import {
   isExampleReport,
   reportSource,
   storedReport,
+  type Coordinates,
 } from '@/lib/api/reportSource';
 import { formatDay } from '@/lib/api/analysisStatus';
 import StateNotice from '@/components/ui/StateNotice';
@@ -251,6 +252,8 @@ function ReportContent() {
   // 없을 때도 리포트 머리말이 입력한 상가를 가리키게 한다.
   const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
+  // 분석이 쓴 좌표. 지도 중심이자 반경 원의 중심이다. 없으면 지도가 주소로 찾는다.
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [notice, setNotice] = useState<ReportNoticeState | null | undefined>();
   const [analyzedDay, setAnalyzedDay] = useState('');
   const [isExample, setIsExample] = useState(false);
@@ -274,6 +277,17 @@ function ReportContent() {
       setAnalysisResult(source.kind === 'saved' ? source.result : null);
       setVacancyInput(fromSession ? loadVacancyInput() : null);
       setBuilding(fromSession ? loadConfirmedBuilding() : null);
+      // 미리보기·예시는 목업 상가를 가리킨다. 주소에 건물 이름이 붙어 있어
+      // 좌표 없이 주소로만 찾으면 못 찾는다.
+      // 저장된 결과(saved)에는 좌표가 없어 주소로 찾는다.
+      setCoordinates(
+        source.kind === 'preview' || source.kind === 'example'
+          ? {
+              latitude: mockProperty.latitude,
+              longitude: mockProperty.longitude,
+            }
+          : null
+      );
       setIsExample(source.kind === 'example');
       setNotice(source.kind === 'empty' ? { kind: 'empty' } : null);
       return;
@@ -291,6 +305,7 @@ function ReportContent() {
         setAnalysisResult(report.result);
         setVacancyInput(report.vacancyInput);
         setBuilding(null);
+        setCoordinates(report.coordinates);
         setAnalyzedDay(report.analyzedDate);
         setNotice(null);
       })
@@ -625,7 +640,12 @@ function ReportContent() {
                   )}
                 </header>
                 <div className="property-photo-layout space-report-layout">
-                  <PropertyMap address={displayAddress} />
+                  <PropertyMap
+                    address={displayAddress}
+                    latitude={coordinates?.latitude}
+                    longitude={coordinates?.longitude}
+                    radiusM={ANALYSIS_RADIUS_M}
+                  />
                   <div className="property-preview-info space-report-info">
                     <dl className="property-facts property-main-facts">
                       <div>

@@ -2956,6 +2956,9 @@
   padding: 8px 14px;
   border-radius: 999px;
   box-shadow: 0 6px 16px rgba(16, 35, 58, 0.12);
+  /* 지도 레이어 위에 둔다. 빼면 타일 아래에 깔려, 확대·축소로 타일을 다시 그리는
+     순간에만 잠깐 비쳐 보인다. */
+  z-index: 10;
 }
 .report-page .property-map-caption {
   display: flex;
@@ -5646,6 +5649,12 @@
 .report-page svg,
 .report-page canvas {
   max-width: 100%;
+}
+/* 카카오맵이 만든 레이어는 예외다. 도형(반경 원)을 담는 svg의 부모 div는 폭이 0이고
+   svg를 지도 밖까지 넓게 깔아 그리는 구조라, 위 max-width가 걸리면 너비가 0으로 깎여
+   원이 통째로 사라진다. 타일·마커는 다른 레이어라 멀쩡해 보여 원인을 찾기 어렵다. */
+.report-page .property-map-canvas svg {
+  max-width: none;
 }
 .report-page :is(p, h1, h2, h3, h4, dd, dt, li, a, button) {
   overflow-wrap: anywhere;
