@@ -40,14 +40,51 @@ type MapsSDK = {
   load: (callback: () => void) => void;
   services: {
     Status: { OK: string };
+    SortBy: { DISTANCE: string };
     Geocoder: new () => {
       addressSearch: (
         address: string,
         callback: (result: { x: string; y: string }[], status: string) => void
       ) => void;
     };
+    Places: new () => {
+      categorySearch: (
+        code: string,
+        callback: (result: KakaoPlace[], status: string) => void,
+        options: Record<string, unknown>
+      ) => void;
+    };
   };
 };
+
+type KakaoPlace = {
+  id: string;
+  place_name: string;
+  x: string;
+  y: string;
+  distance: string;
+};
+
+// 한 화면에 들어오는 수. 카카오 장소 검색 한 쪽의 최대치이기도 하다.
+const SCHOOL_LIMIT = 15;
+
+// 지도 위 학교 표시 색. 상가(남색)·반경(파랑)과 구분되게 경고 계열로 둔다.
+const SCHOOL_COLOR = '#9B3545';
+
+/** 지도 오버레이는 HTML 문자열이라 장소 이름을 그대로 넣지 않는다. */
+function escapeHtml(text: string): string {
+  return text.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character] as string
+  );
+}
 
 function kakaoMaps(): MapsSDK | undefined {
   return (window as Window & { kakao?: { maps: MapsSDK } }).kakao?.maps;
@@ -58,16 +95,24 @@ export default function PropertyMap({
   latitude,
   longitude,
   radiusM = ANALYSIS_RADIUS_M,
+  showSchools = false,
 }: {
   address: string;
   latitude?: number | null;
   longitude?: number | null;
   radiusM?: number;
+  /** 교육환경보호구역 안일 때만 켠다. 주변 학교를 참고로 함께 표시한다. */
+  showSchools?: boolean;
 }) {
   const keyId = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY;
   const container = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  // 학교 표시는 지도를 다시 그리지 않고 얹기만 한다(fact가 늦게 와도 화면이 튀지 않게).
+  const [drawn, setDrawn] = useState<{
+    map: MapInstance;
+    center: LatLng;
+  } | null>(null);
   const kakaoLink = `https://map.kakao.com/?q=${encodeURIComponent(address)}`;
 
   useEffect(() => {
@@ -94,17 +139,15 @@ export default function PropertyMap({
       });
       // 원은 생성자 options의 map을 보지 않는다. setMap으로 직접 올린다.
       circle.setMap(map);
-      // 지도를 만들 때 칸의 크기가 아직 0이면 도형 레이어가 화면 밖 크기로 잡힌다.
-      // 타일과 마커는 다시 그려지지만 원은 그대로 안 보인다. 칸 크기가 정해질 때마다
-      // 지도에 다시 재어 보게 하고, 반경 원이 다 들어오도록 범위를 맞춘다.
-      // 가장자리가 잘리면 분석 범위를 오해한다.
-      // 칸 크기가 바뀌면(인쇄·창 크기·늦게 도착한 CSS) 지도에 다시 재어 보게 한다.
+      // 칸 크기가 바뀌면(인쇄·창 크기·늦게 도착한 CSS) 지도에 다시 재어 보게 하고
+      // 반경 원이 다 들어오게 맞춘다. 가장자리가 잘리면 분석 범위를 오해한다.
       observer?.disconnect();
       observer = new ResizeObserver(() => {
         map.relayout();
         map.setBounds(circle.getBounds(), 8, 8, 8, 8);
       });
       observer.observe(element);
+      setDrawn({ map, center });
       overlays.push(
         circle,
         new sdk.CustomOverlay({
@@ -148,8 +191,45 @@ export default function PropertyMap({
       observer?.disconnect();
       overlays.forEach((overlay) => overlay.setMap(null));
       element.replaceChildren();
+      setDrawn(null);
     };
   }, [ready, address, latitude, longitude, radiusM]);
+
+  // 교육환경보호구역에 걸린 상가만 주변 학교를 함께 보여 준다. 어느 학교 때문인지
+  // 눈으로 가늠하라는 참고 표시이고, 고시된 구역 경계 자체는 아니다.
+  useEffect(() => {
+    if (!drawn || !showSchools) return;
+    const sdk = kakaoMaps();
+    if (!sdk) return;
+    const overlays: Overlay[] = [];
+    let cancelled = false;
+    new sdk.services.Places().categorySearch(
+      'SC4',
+      (places, status) => {
+        if (cancelled || status !== sdk.services.Status.OK) return;
+        for (const place of places) {
+          overlays.push(
+            new sdk.CustomOverlay({
+              map: drawn.map,
+              position: new sdk.LatLng(Number(place.y), Number(place.x)),
+              yAnchor: 1,
+              content: `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="background:#fff;border:2px solid ${SCHOOL_COLOR};border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;color:${SCHOOL_COLOR};white-space:nowrap">\u{1F3EB} ${escapeHtml(place.place_name)}</div><div style="width:10px;height:10px;border-radius:50%;background:${SCHOOL_COLOR};border:2px solid #fff"></div></div>`,
+            })
+          );
+        }
+      },
+      {
+        location: drawn.center,
+        radius: radiusM,
+        sort: sdk.services.SortBy.DISTANCE,
+        size: SCHOOL_LIMIT,
+      }
+    );
+    return () => {
+      cancelled = true;
+      overlays.forEach((overlay) => overlay.setMap(null));
+    };
+  }, [drawn, showSchools, radiusM]);
 
   const fallback = !keyId || failed;
 
@@ -189,7 +269,12 @@ export default function PropertyMap({
         </>
       )}
       <figcaption className="property-map-caption">
-        {/* 주소는 바로 위 제목에 있으니 지도에는 외부 링크만 둔다. */}
+        {/* 주소는 바로 위 제목에 있으니 지도에는 범례와 외부 링크만 둔다. */}
+        {showSchools && !fallback && (
+          <span className="property-map-legend">
+            🏫 학교 · 카카오맵 장소 기준 참고 표시
+          </span>
+        )}
         <a href={kakaoLink} target="_blank" rel="noreferrer">
           카카오맵에서 보기 <ExternalLink size={14} aria-hidden="true" />
         </a>

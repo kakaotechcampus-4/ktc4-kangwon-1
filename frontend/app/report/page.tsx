@@ -50,6 +50,10 @@ import {
 import type { DecisionResult, FactView } from '@/lib/api/types';
 import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
 import { indexFacts, renderSegments } from '@/lib/api/segments';
+import {
+  EDUCATION_ZONE_LABELS,
+  educationZoneStatus,
+} from '@/lib/api/educationZone';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   isExampleReport,
@@ -361,10 +365,10 @@ function ReportContent() {
   const retryFacts = () => setFactsAttempt((attempt) => attempt + 1);
 
   // 문장 속 fact는 결과의 인용 fact로 충분하지만, 전체 fact가 오면 함께 찾는다.
-  const factIndex = indexFacts([
-    ...(allFacts ?? []),
-    ...(analysisResult?.facts ?? []),
-  ]);
+  const facts = [...(allFacts ?? []), ...(analysisResult?.facts ?? [])];
+  const factIndex = indexFacts(facts);
+  // 보호구역 판정. 걸린 상가만 지도에 주변 학교를 함께 표시한다.
+  const educationZone = educationZoneStatus(facts);
   const candidateCodes = analysisResult
     ? [
         ...analysisResult.top5.map((item) => item.industry_code),
@@ -645,6 +649,7 @@ function ReportContent() {
                     latitude={coordinates?.latitude}
                     longitude={coordinates?.longitude}
                     radiusM={ANALYSIS_RADIUS_M}
+                    showSchools={educationZone === 'inside'}
                   />
                   <div className="property-preview-info space-report-info">
                     <dl className="property-facts property-main-facts">
@@ -700,12 +705,19 @@ function ReportContent() {
                           {parkingValue ? PARKING_LABELS[parkingValue] : '모름'}
                         </dd>
                       </div>
-                      <div className="property-analysis-range">
-                        <dt>분석 범위</dt>
+                      <div>
+                        {/* 분석 반경은 머리말 칩과 지도 원에 이미 있어 이 자리는
+                            지도에 학교가 왜 떠 있는지를 설명하는 데 쓴다. */}
+                        <dt>교육환경보호구역</dt>
                         <dd>
-                          <strong>{radiusLabel}</strong>
-                          <span className="property-fact-note">
-                            (상가 중심 반경)
+                          <span
+                            className={
+                              educationZone === 'inside'
+                                ? 'property-fact-alert'
+                                : undefined
+                            }
+                          >
+                            {EDUCATION_ZONE_LABELS[educationZone]}
                           </span>
                         </dd>
                       </div>
