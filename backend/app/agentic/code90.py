@@ -303,10 +303,11 @@ def calculate(
 
 
 def summary(items):
+    # JSON 저장이 문항 키 순서를 바꿔도 실수 합산·동점 순위를 동일하게 유지합니다.
     applicable = sum(
-        v["scoring"]["weight"] for n, v in items.items() if n != "L" and v["status"] != "n.a."
+        items[name]["scoring"]["weight"] for name in WEIGHTS if items[name]["status"] != "n.a."
     )
-    raw = sum(v["scoring"]["points"] for n, v in items.items() if n != "L")
+    raw = sum(items[name]["scoring"]["points"] for name in WEIGHTS)
     code = min(90.0, max(0.0, 90 * raw / applicable)) if applicable else 0.0
     return {
         "method": METHOD,
@@ -315,8 +316,8 @@ def summary(items):
         "applicable_weight": applicable,
         "raw_points": raw,
         "estimated_points": sum(
-            v["scoring"]["points"]
-            for n, v in items.items()
-            if n != "L" and v["scoring"]["estimated"]
+            items[name]["scoring"]["points"]
+            for name in WEIGHTS
+            if items[name]["scoring"]["estimated"]
         ),
     }

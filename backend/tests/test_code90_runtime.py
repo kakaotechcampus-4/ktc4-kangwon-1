@@ -90,6 +90,14 @@ class Code90RuntimeTests(unittest.TestCase):
                 )
                 self.assertEqual(actual["scoring"]["points"], 0)
 
+    def test_json_key_order_does_not_change_the_score(self):
+        for fixture in self.cases.values():
+            items = self.calculate(fixture)
+            restored = json.loads(json.dumps(items, sort_keys=True))
+            reversed_items = dict(reversed(list(items.items())))
+            self.assertEqual(code90.summary(items), code90.summary(restored))
+            self.assertEqual(code90.summary(items), code90.summary(reversed_items))
+
     def test_conflicting_raw_counts_are_rejected(self):
         fixture = deepcopy(self.cases["complete_full_period_S2_half"])
         fixture["data"]["lifecycle_quarterly"]["industries"][0]["store_counts"][0] += 100
