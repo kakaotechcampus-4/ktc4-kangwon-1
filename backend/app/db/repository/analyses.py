@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.db.connection import connect
-from app.schemas import FactView
+from app.schemas import FactView, Site
 
 from .common import _request_row, _text
 
@@ -32,6 +32,15 @@ class AnswerGate:
     status: str
     question_session_id: str | None
     fields: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ResumeContext:
+    """답변으로 재개할 때 필요한 자리와 실행 식별자입니다."""
+
+    site: Site
+    snapshot_id: str
+    run_id: str
 
 
 @dataclass(frozen=True)
@@ -156,4 +165,22 @@ def _fact_view(row: sqlite3.Row, spatial: dict[str, Any] | None) -> FactView:
         citable=bool(row["citable"]),
         calc_version=row["calc_version"],
         provenance_ref=provenance + row["fact_id"],
+    )
+
+
+def get_resume_context(request_id: str, *, db_path: str | Path | None = None) -> ResumeContext:
+    """재개 대상 요청의 자리·스냅샷·실행 ID입니다. 재개할 수 없으면 ValueError."""
+    request_id = _text(request_id)
+    with connect(db_path) as db:
+        row = db.execute(
+            "SELECT a.site_json,r.snapshot_id,r.run_id FROM analysis_requests "
+            "a JOIN agentic_runs r USING(request_id) WHERE a.request_id=?",
+            (request_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError("새 판단 요청을 찾을 수 없습니다.")
+    return ResumeContext(
+        site=Site.model_validate_json(row["site_json"]),
+        snapshot_id=row["snapshot_id"],
+        run_id=row["run_id"],
     )

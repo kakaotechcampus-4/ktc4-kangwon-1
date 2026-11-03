@@ -24,11 +24,15 @@ from app.llm.session import with_client_session
 from app.local_data.adapter import LocalAdapter
 from app.local_data.persistence import persist_local
 from app.local_data.provenance import validate_snapshot
-from app.schemas import AgentError, AnalysisTask, Site
+from app.schemas import AgentError, AnalysisTask
 from app.storage.raw import CaptureScope, capture_scope
 from app.storage.scrub import env_secrets, scrub_text
 
 logger = logging.getLogger(__name__)
+
+# 주소 해석부터 채점까지의 상한입니다. 측정 모드는 모델 호출을 전부 기록하느라 느립니다.
+COLLECT_TIMEOUT_SECONDS = 120
+MEASURING_COLLECT_TIMEOUT_SECONDS = 600
 
 
 async def _event(path, request_id, stage, event):
@@ -114,6 +118,41 @@ async def _failure(path, request_id, exc, stage, timings=None):
     await run_in_thread(save)
 
 
+def _make_recorder(request_id, recording_path, measurement):
+    """측정 모드이거나 기록 경로를 받았을 때만 모델 호출을 파일로 남깁니다."""
+    if not (measurement or recording_path):
+        return None
+    return CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
+
+
+async def _resolve_and_save_site(path, request_id, address, radius_m, resolve):
+    """주소를 좌표로 바꿔 저장하고, 이어지는 단계가 쓸 작업 단위를 돌려줍니다."""
+    site = await (resolve or resolve_site)(address)
+    task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
+    await run_in_thread(lambda: repository.save_site(task, db_path=path))
+    await _event(path, request_id, "address", "completed")
+    await _event(path, request_id, "local_data", "started")
+    return task
+
+
+async def _collect_and_score(scope, task, adapter):
+    """로컬 자료를 적재해 채점합니다. 목업은 자료 없이 점수만 남깁니다."""
+    if adapter is None:
+        await persist_snapshot_scores(task)
+        return {}, None
+    observations, shared = await collect_preflight(scope, task.site)
+    data, _, _ = await run_in_thread(persist_local, task, scope, adapter, None, observations)
+    return data, shared
+
+
+async def _finish_loop(loop):
+    """루프를 돌리고, 초안이 나오면 평가까지 거쳐 최종 결과로 만듭니다."""
+    outcome = await loop.run()
+    if outcome.status == "draft_available":
+        outcome = await loop.review_and_finalize()
+    return outcome
+
+
 @with_client_session
 async def execute_agentic_analysis(
     address,
@@ -140,35 +179,19 @@ async def execute_agentic_analysis(
             lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
         )
     budget = RuntimeBudget(measurement=measurement)
-    recorder = (
-        CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
-        if measurement or recording_path
-        else None
-    )
+    recorder = _make_recorder(request_id, recording_path, measurement)
+    limit = MEASURING_COLLECT_TIMEOUT_SECONDS if measurement else COLLECT_TIMEOUT_SECONDS
     stage, started, timings = "수집", monotonic(), {}
     try:
         await run_in_thread(lambda: repository.mark_running(request_id, db_path=path))
         await _event(path, request_id, "address", "started")
         async with capture_scope(request_id, path) as scope:
             adapter = await run_in_thread(LocalAdapter, local_data_path) if not mock else None
-            async with asyncio.timeout(600 if measurement else 120):
-                site = await (resolve or resolve_site)(address)
-                task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
-                await run_in_thread(lambda: repository.save_site(task, db_path=path))
-                await _event(path, request_id, "address", "completed")
-                await _event(path, request_id, "local_data", "started")
-
+            async with asyncio.timeout(limit):
+                task = await _resolve_and_save_site(path, request_id, address, radius_m, resolve)
                 timings[stage] = monotonic() - started
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
-                shared = None
-                if adapter is not None:
-                    observations, shared = await collect_preflight(scope, site)
-                    data, _, _ = await run_in_thread(
-                        persist_local, task, scope, adapter, None, observations
-                    )
-                else:
-                    await persist_snapshot_scores(task)
-                    data = {}
+                data, shared = await _collect_and_score(scope, task, adapter)
                 confirmed = (
                     await run_in_thread(save_confirmed_space, scope, confirmed_space)
                     if confirmed_space
@@ -180,7 +203,7 @@ async def execute_agentic_analysis(
             await _event(path, request_id, "local_data", "completed")
             loop = await DecisionLoop.create(
                 scope,
-                site,
+                task.site,
                 generate=generate,
                 advisor_generate=advisor_generate,
                 evaluator_generate=evaluator_generate,
@@ -190,15 +213,11 @@ async def execute_agentic_analysis(
                 confirmed_space=confirmed,
             )
             if shared is not None:
-                loop.tools.shared.map_cache = shared.map_cache
-                loop.tools.shared.map_keys = shared.map_keys
-                loop.tools.shared.map_http = shared.map_http
-                loop.tools.shared.regulation = shared.regulation
+                loop.adopt_shared(shared)
             loop.state["limitations"].extend(data.get("limitations", []))
+            # 같은 dict 를 넘겨, 아래에서 기록하는 '루프' 시간까지 실패 진단에 함께 남습니다.
             loop.state["phase_seconds"] = timings
-            outcome = await loop.run()
-            if outcome.status == "draft_available":
-                outcome = await loop.review_and_finalize()
+            outcome = await _finish_loop(loop)
             timings[stage] = monotonic() - started
             await loop.save(outcome.status, outcome.result)
             await run_in_thread(_persist_outcome, path, request_id, outcome)
@@ -223,34 +242,18 @@ async def resume_agentic_analysis(
     recording_path=None,
 ):
     path = await run_in_thread(initialize, db_path)
-
-    def context():
-        with connect(path) as db:
-            row = db.execute(
-                "SELECT a.site_json,r.snapshot_id,r.run_id FROM analysis_requests "
-                "a JOIN agentic_runs r USING(request_id) WHERE a.request_id=?",
-                (request_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError("새 판단 요청을 찾을 수 없습니다.")
-        return Site.model_validate_json(row[0]), row[1], row[2]
-
-    site, snapshot, run_id = await run_in_thread(context)
-    scope = CaptureScope(request_id, path, run_id, snapshot)
+    context = await run_in_thread(lambda: repository.get_resume_context(request_id, db_path=path))
+    scope = CaptureScope(request_id, path, context.run_id, context.snapshot_id)
     try:
         resume_state = await DecisionLoop.validate_resume(scope, answers)
     except ValueError as exc:
         raise AnalysisConflictError(str(exc)) from None
-    recorder = (
-        CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
-        if measurement or recording_path
-        else None
-    )
+    recorder = _make_recorder(request_id, recording_path, measurement)
     try:
         await run_in_thread(validate_snapshot, scope)
         loop = await DecisionLoop.resume(
             scope,
-            site,
+            context.site,
             answers,
             generate=generate,
             advisor_generate=advisor_generate,
@@ -259,9 +262,7 @@ async def resume_agentic_analysis(
             recorder=recorder,
             resume_state=resume_state,
         )
-        outcome = await loop.run()
-        if outcome.status == "draft_available":
-            outcome = await loop.review_and_finalize()
+        outcome = await _finish_loop(loop)
         await scope.finish()
         await run_in_thread(_persist_outcome, path, request_id, outcome)
         return outcome
