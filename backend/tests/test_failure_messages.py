@@ -1,5 +1,3 @@
-"""분석이 실패하면 원인에 맞는 안내와 다음에 할 일을 사용자에게 보여 줍니다."""
-
 import asyncio
 import json
 import tempfile
@@ -32,6 +30,15 @@ class PublicFailureTests(unittest.TestCase):
             "ADDRESS_FAILED",
             "주소를 확인하지 못했어요. 주소를 다시 확인한 뒤 분석해 주세요.",
         )
+
+    def test_address_service_outage_is_not_an_address_problem(self):
+        for code in ("UPSTREAM_TIMEOUT", "UPSTREAM_FAILED", "KAKAO_AUTH", "BAD_RESPONSE"):
+            self.check(
+                GeocodeError(code, "x"),
+                "수집",
+                "AGENTIC_FAILED",
+                "분석을 끝까지 마치지 못했어요. 잠시 후 다시 분석해 주세요.",
+            )
 
     def test_any_loop_failure_is_ai(self):
         for exc in (RuntimeError("LLM_INVALID_JSON"), TimeoutError()):

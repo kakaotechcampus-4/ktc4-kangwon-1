@@ -41,11 +41,19 @@ FAILURE_MESSAGES = {
     "AGENTIC_FAILED": "분석을 끝까지 마치지 못했어요. 잠시 후 다시 분석해 주세요.",
 }
 
+ADDRESS_ERRORS = {
+    "EMPTY_ADDRESS",
+    "NOT_FOUND",
+    "ADDRESS_AMBIGUOUS",
+    "ADDRESS_MISMATCH",
+    "ADDRESS_TOO_LONG",
+}
+
 
 def public_failure(exc, stage):
     if isinstance(exc, asyncio.CancelledError):
         return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
-    if isinstance(exc, GeocodeError):
+    if isinstance(exc, GeocodeError) and exc.code in ADDRESS_ERRORS:
         code = "ADDRESS_FAILED"
     elif stage == "루프":
         code = "AI_FAILED"
