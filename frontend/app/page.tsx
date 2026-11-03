@@ -9,7 +9,11 @@ import CTABanner from '@/components/landing/CTABanner';
 
 export default function Home() {
   // 히어로 글자 묶음을 미리 받아 CHUM.AI 인트로가 바로 시작되게 한다(Hero.tsx 시작 신호).
-  preload(PRETENDARD_HERO_URL, { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
+  preload(PRETENDARD_HERO_URL, {
+    as: 'font',
+    type: 'font/woff2',
+    crossOrigin: 'anonymous',
+  });
   return (
     <div className="relative flex flex-1 flex-col bg-white">
       <Header overlay />

@@ -156,6 +156,12 @@ def main():
             '// 예전 next/font 객체와 같은 모양 — 컴포넌트의 `pretendard.className`이 그대로 동작한다.\n'
             "export const pretendard = { className: 'font-sans', variable: '' };\n"
         )
+    # 만든 파일을 프로젝트 코드 스타일에 맞춘다(CI의 prettier 확인을 통과하도록).
+    subprocess.run(
+        ['npx', '--no-install', 'prettier', '--write', 'app/fonts/pretendard.css', 'styles/fonts.ts'],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 if __name__ == '__main__':

@@ -33,17 +33,25 @@ const noopSubscribe = () => () => {};
 export default function HeroIntroStart() {
   const ref = useRef<HTMLSpanElement>(null);
   // 서버 렌더링·하이드레이션 중에는 true, 브라우저에서 새로 그릴 때는 false
-  const fromServer = useSyncExternalStore(noopSubscribe, () => false, () => true);
+  const fromServer = useSyncExternalStore(
+    noopSubscribe,
+    () => false,
+    () => true
+  );
 
   useEffect(() => {
-    const start = new Function('h', START_BODY) as (h: HTMLElement | null) => void;
+    const start = new Function('h', START_BODY) as (
+      h: HTMLElement | null
+    ) => void;
     start(ref.current?.parentElement ?? null);
   }, []);
 
   return (
     <>
       <span ref={ref} hidden />
-      {fromServer && <script dangerouslySetInnerHTML={{ __html: START_SCRIPT }} />}
+      {fromServer && (
+        <script dangerouslySetInnerHTML={{ __html: START_SCRIPT }} />
+      )}
     </>
   );
 }
