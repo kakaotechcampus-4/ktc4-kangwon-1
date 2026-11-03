@@ -28,6 +28,12 @@ describe('apiFetch', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abort));
     await expect(apiFetch('/api/v1/auth/me')).rejects.toBe(abort);
   });
+
+  it('다른 실행 환경의 취소 오류도 이름으로 알아보고 그대로 넘긴다', async () => {
+    const abort = Object.assign(new Error('x'), { name: 'AbortError' });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abort));
+    await expect(apiFetch('/api/v1/auth/me')).rejects.toBe(abort);
+  });
 });
 
 describe('readDetail', () => {

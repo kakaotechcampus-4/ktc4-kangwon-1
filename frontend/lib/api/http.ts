@@ -40,7 +40,7 @@ export async function apiFetch(
       credentials: 'include',
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if ((error as { name?: unknown } | null)?.name === 'AbortError') {
       throw error;
     }
     throw new ApiError(0, NETWORK_ERROR_MESSAGE);
