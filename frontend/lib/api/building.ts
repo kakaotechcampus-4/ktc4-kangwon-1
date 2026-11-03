@@ -189,7 +189,7 @@ export async function fetchBuildingInfo(
       note = ADDRESS_ERROR_NOTE;
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if ((error as { name?: unknown } | null)?.name === 'AbortError') {
       throw error;
     }
   }

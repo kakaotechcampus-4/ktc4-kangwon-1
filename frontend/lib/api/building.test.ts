@@ -406,6 +406,12 @@ describe('건축물대장 조회 호출', () => {
     });
   });
 
+  it('다른 실행 환경의 취소 오류도 그대로 거부한다', async () => {
+    const abort = Object.assign(new Error('x'), { name: 'AbortError' });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abort));
+    await expect(fetchBuildingInfo('입력 주소')).rejects.toBe(abort);
+  });
+
   it('시간 초과(504)는 화면이 다시 시도를 보이게 오류로 던진다', async () => {
     const notice =
       '건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.';
