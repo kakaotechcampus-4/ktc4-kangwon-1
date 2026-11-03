@@ -65,6 +65,9 @@ FACT_COLUMNS = (
 NOTE = (
     "score_items와 facts는 score_columns·fact_columns 순서의 행입니다. "
     "facts의 value가 null이거나 omitted_fact_ids에 있으면 get_facts로 원문을 확인하세요."
+    " 선택 scoring 열은 [새 배점, 반영 기여, 보완 추정 여부]입니다. "
+    "calculation은 추천 점수이며 기존 B/H·grade/points는 원래 관측 점수입니다. "
+    "보완 추정은 실제 관측 사실로 인용하지 않습니다."
 )
 
 
@@ -75,14 +78,20 @@ def _table(rows, columns):
 def _score_items(scope, score_snapshot_id, codes):
     with connect(scope.path) as db:
         rows = score_db.scores_for_industries(db, score_snapshot_id, codes)
+        snapshot = score_db.snapshot_summary_json(db, score_snapshot_id)
+    calculations = {r["code"]: r["items"] for r in json.loads(snapshot or "[]")}
     found = {code: {} for code in codes}
     for code, item, status, grade, points, fact_ids in rows:
+        scoring = calculations.get(code, {}).get(item, {}).get("scoring")
         found[code][item] = {
             "item": item,
             "status": status,
             "grade": grade,
             "points": points,
             "fact_ids": json.loads(fact_ids),
+            "scoring": [scoring["weight"], round(scoring["points"], 6), scoring["estimated"]]
+            if scoring
+            else None,
         }
     return {code: [items[i] for i in ITEMS if i in items] for code, items in found.items()}
 
@@ -126,6 +135,9 @@ def review_packet(scope, draft):
     top5 = payload.get("top5", [])[:5]
     codes = [c["industry_code"] for c in top5]
     items = _score_items(scope, payload["score_snapshot_id"], codes) if codes else {}
+    columns = (
+        (*SCORE_COLUMNS, "scoring") if any(c.get("calculation") for c in top5) else SCORE_COLUMNS
+    )
     order = []
     for candidate in top5:
         for key in SEGMENTS:
@@ -154,13 +166,14 @@ def review_packet(scope, draft):
     packet = {
         "draft_id": draft.report_id,
         "note": NOTE,
-        "score_columns": list(SCORE_COLUMNS),
+        "score_columns": list(columns),
         "fact_columns": list(FACT_COLUMNS),
         "candidates": [
             {
                 "industry_code": c["industry_code"],
                 "industry_name": c.get("industry_name"),
                 **{key: c.get(key) for key in SUMMARY},
+                **({"calculation": c["calculation"]} if c.get("calculation") else {}),
                 **{key: c.get(key, []) for key in SEGMENTS},
                 "fact_ids": [f for f in c.get("fact_ids", []) if f in allowed],
                 "score_items": [
@@ -181,7 +194,7 @@ def review_packet(scope, draft):
     }
     packet = label_periods(encode(scope, packet))
     for candidate in packet["candidates"]:
-        candidate["score_items"] = _table(candidate["score_items"], SCORE_COLUMNS)
+        candidate["score_items"] = _table(candidate["score_items"], columns)
     packet["facts"] = _table(packet["facts"], FACT_COLUMNS)
     value = FACT_COLUMNS.index("value")
 

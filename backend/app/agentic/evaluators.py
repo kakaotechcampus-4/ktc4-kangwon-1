@@ -95,6 +95,7 @@ def compact_draft(draft):
                 in {
                     "industry_code",
                     "code_points",
+                    "calculation",
                     "L_points",
                     "L_status",
                     "A",

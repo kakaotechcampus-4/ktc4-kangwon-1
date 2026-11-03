@@ -14,6 +14,7 @@ from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 from app.schemas import DecisionResult
 from app.text import has_digit
 
+from .code90 import METHOD
 from .contracts import (
     ConditionExcludedCandidate,
     FactView,
@@ -65,7 +66,7 @@ def load_base(scope):
     if row is None:
         raise ValueError("코드 점수가 없습니다.")
     rows = json.loads(row[1])
-    rows.sort(key=lambda r: (-r["lower"], -(r["coverage"] or 0), r["code"]))
+    rows.sort(key=rank_key)
     return row[0], rows
 
 
@@ -124,8 +125,14 @@ def segments(proposal):
     return fields
 
 
+def code90_uses_metric(row, metric):
+    basis = row.get("items", {}).get("C1", {}).get("scoring", {}).get("basis", "")
+    return metric == "lq" and "LQ" in basis
+
+
 def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=False):
     ranks = {r["code"]: i for i, r in enumerate(base_rows, 1)}
+    original_rows = {r["code"]: r for r in base_rows}
     seen = set()
     ids = set()
     for record in records:
@@ -215,7 +222,10 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
                 if factor.major_constraint and factor.direction != "adverse":
                     raise ReportInvalid("큰 운영 제약은 불리 요인으로 기록해야 합니다.")
                 if any(
-                    f in code_ids or facts[f]["metric"] not in NEW_METRICS for f in factor.fact_ids
+                    f in code_ids
+                    or facts[f]["metric"] not in NEW_METRICS
+                    or code90_uses_metric(original_rows[record.industry_code], facts[f]["metric"])
+                    for f in factor.fact_ids
                 ):
                     raise ReportInvalid("D/C/S 코드 점수 요인을 L에 중복 채점할 수 없습니다.")
                 if any(f not in call_text for f in factor.fact_ids):
@@ -314,7 +324,7 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
                 scope.snapshot_id,
                 scope.run_id,
                 "v0.8",
-                "rubric-v0.8-pr5",
+                METHOD if any("code90" in row for row in rows) else "rubric-v0.8-pr5",
                 json.dumps(rows, ensure_ascii=False),
                 json.dumps([r["code"] for r in rank_candidates(rows)[:5]]),
                 "reviewed",

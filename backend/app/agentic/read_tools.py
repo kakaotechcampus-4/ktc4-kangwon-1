@@ -66,6 +66,7 @@ def _scorecards(scope, input):
                         grade=r[2],
                         points=r[3],
                         fact_ids=json.loads(r[4]),
+                        scoring=row["items"][r[0]].get("scoring"),
                     )
                     for r in score_db.industry_scores(db, snapshot[0], row["code"])
                 ]
@@ -137,7 +138,9 @@ async def get_facts(scope, input):
 def score_summary(row):
     fields = dict(
         industry_code=row["code"],
-        code_points=row["lower"] - (row["items"]["L"]["points"] or 0),
+        code_points=row.get("code90", {}).get(
+            "code_points", row["lower"] - (row["items"]["L"]["points"] or 0)
+        ),
         L_points=row["items"]["L"]["points"],
         L_status=row["items"]["L"]["status"],
         A=row["applicable_weight"],
@@ -151,5 +154,6 @@ def score_summary(row):
         G=row["regulation"],
         badge=row["badge"],
         confirmation_conditions=row["confirmation_conditions"],
+        calculation=row.get("code90"),
     )
     return fields
