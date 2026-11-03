@@ -26,7 +26,7 @@ import {
 } from '@/components/building-confirm/labels';
 import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
-import { startAnalysis } from '@/lib/api/analyses';
+import { AnalysisApiError, startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import { ApiError } from '@/lib/api/http';
 import {
@@ -80,6 +80,7 @@ export default function BuildingConfirmPage() {
   const [statuses, setStatuses] = useState(INITIAL_STATUSES);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   // 전용면적 입력 중인 문자열("275." 같은 중간 값)을 숫자 필드와 따로 든다.
   const [areaText, setAreaText] = useState('');
@@ -132,15 +133,15 @@ export default function BuildingConfirmPage() {
         }, CONFIRM_DELAY_MS);
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if ((error as { name?: unknown } | null)?.name === 'AbortError') {
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
-        if (
-          retryCount > 0 &&
-          error instanceof ApiError &&
-          error.status === 504
-        ) {
+        if (error instanceof ApiError && error.status === 504) {
+          if (retryCount === 0) {
+            setTimedOut(true);
+            return;
+          }
           setBuilding(
             emptyBuildingInfo(
               saved.roadAddress,
@@ -230,7 +231,11 @@ export default function BuildingConfirmPage() {
       router.push(`/analysis-progress?id=${encodeURIComponent(requestId)}`);
     } catch (error) {
       console.error('[BuildingConfirmPage] 분석 요청 실패:', error);
-      alert('잠시 후 다시 시도해주세요.');
+      alert(
+        error instanceof AnalysisApiError && error.status === 422
+          ? error.message
+          : '잠시 후 다시 시도해주세요.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -246,7 +251,29 @@ export default function BuildingConfirmPage() {
       <Header />
 
       <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
-        {!building ? (
+        {!building && timedOut && input ? (
+          <>
+            <StepIndicator currentStep={2} />
+            <LookupTimeoutNotice
+              onRetry={() => {
+                setTimedOut(false);
+                setStatuses(INITIAL_STATUSES);
+                setRetryCount((count) => count + 1);
+              }}
+              onManual={() => {
+                setTimedOut(false);
+                setBuilding(
+                  emptyBuildingInfo(
+                    input.roadAddress,
+                    input.floorUnit,
+                    LOOKUP_ERROR_NOTE
+                  )
+                );
+                setAreaText('');
+              }}
+            />
+          </>
+        ) : !building ? (
           <>
             <StepIndicator currentStep={2} />
             <BuildingLoading
@@ -449,5 +476,39 @@ export default function BuildingConfirmPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function LookupTimeoutNotice({
+  onRetry,
+  onManual,
+}: {
+  onRetry: () => void;
+  onManual: () => void;
+}) {
+  return (
+    <Card className="mx-auto flex w-full max-w-[720px] flex-col gap-4 p-6 sm:p-8">
+      <h1
+        className="text-fluid-24-32 font-bold leading-snug break-keep"
+        style={{ color: colors.text.primary }}
+      >
+        건축물대장 조회가 오래 걸려 멈췄어요
+      </h1>
+      <p
+        className="text-base break-keep"
+        style={{ color: colors.text.secondary }}
+      >
+        공공데이터 서버가 느려요. 다시 조회하거나, 직접 입력해서 분석을 계속할
+        수 있어요.
+      </p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button type="button" variant="outline" onClick={onRetry}>
+          다시 조회
+        </Button>
+        <Button type="button" variant="primary" onClick={onManual}>
+          직접 입력하고 계속
+        </Button>
+      </div>
+    </Card>
   );
 }
