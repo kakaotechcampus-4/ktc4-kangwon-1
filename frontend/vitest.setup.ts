@@ -12,5 +12,13 @@ class NoopResizeObserver {
   disconnect() {}
 }
 
+class NoopIntersectionObserver extends NoopResizeObserver {
+  takeRecords() {
+    return [];
+  }
+}
+
 globalThis.ResizeObserver ??= NoopResizeObserver;
+globalThis.IntersectionObserver ??=
+  NoopIntersectionObserver as unknown as typeof IntersectionObserver;
 window.scrollTo = () => {};
