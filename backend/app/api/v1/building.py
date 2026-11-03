@@ -53,6 +53,10 @@ async def get_building_registry(
     except BuildingRegistryError as exc:
         if exc.code == "RATE_LIMIT":
             raise HTTPException(429, "건축물대장 조회 한도를 초과했습니다.") from None
+        if exc.code == "UPSTREAM_TIMEOUT":
+            raise HTTPException(
+                504, "건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요."
+            ) from None
         if exc.code == "AUTH":
             raise HTTPException(502, "건축물대장 인증키 또는 사용 권한을 확인해 주세요.") from None
         raise HTTPException(502, "건축물대장 조회에 실패했습니다.") from exc

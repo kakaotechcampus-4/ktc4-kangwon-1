@@ -12,6 +12,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any, Literal
 
 import httpx
@@ -66,6 +67,7 @@ class BuildingRegistrySettings:
     # 일시 오류(5xx·빈 응답·시간 초과·연결 실패)를 다시 요청하는 횟수와 간격(초, 회차마다 늘림)
     retries: int = 2
     retry_delay: float = 0.5
+    deadline: float = 20.0
 
     @classmethod
     def from_env(cls) -> BuildingRegistrySettings:
@@ -382,6 +384,10 @@ def _sewage(rows: list[dict[str, Any]]) -> list[SewageFacility]:
     return facilities
 
 
+def _timed_out() -> BuildingRegistryError:
+    return BuildingRegistryError("UPSTREAM_TIMEOUT", "건축물대장 조회가 오래 걸려 멈췄어요.")
+
+
 async def lookup_building(
     address: str,
     settings: BuildingRegistrySettings | None = None,
@@ -396,13 +402,27 @@ async def lookup_building(
     if client is None:
         async with httpx.AsyncClient() as owned:
             return await lookup_building(address, settings, address_settings, client=owned)
-    parcel, road, jibun = await _parcel(
-        client, address.strip(), address_settings or AddressSettings.from_env()
-    )
-    results = await asyncio.gather(
-        *(_items(client, op, parcel, settings) for op in (TITLE, FLOOR, UNIT, SEWAGE)),
-        return_exceptions=True,
-    )
+    started = monotonic()
+    try:
+        parcel, road, jibun = await asyncio.wait_for(
+            _parcel(client, address.strip(), address_settings or AddressSettings.from_env()),
+            settings.deadline,
+        )
+    except TimeoutError:
+        raise _timed_out() from None
+    tasks = [
+        asyncio.create_task(_items(client, op, parcel, settings))
+        for op in (TITLE, FLOOR, UNIT, SEWAGE)
+    ]
+    try:
+        await asyncio.wait(tasks, timeout=max(settings.deadline - (monotonic() - started), 0))
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    results = [
+        _timed_out() if task.cancelled() else task.exception() or task.result() for task in tasks
+    ]
     for result in results:
         if isinstance(result, BaseException) and not isinstance(result, BuildingRegistryError):
             raise result

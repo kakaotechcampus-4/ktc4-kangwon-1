@@ -9,6 +9,7 @@ import {
   type LookupId,
   type LookupStatus,
 } from './building';
+import { ApiError } from './http';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -403,6 +404,38 @@ describe('건축물대장 조회 호출', () => {
     await expect(fetchBuildingInfo('입력 주소')).rejects.toMatchObject({
       name: 'AbortError',
     });
+  });
+
+  it('시간 초과(504)는 화면이 다시 시도를 보이게 오류로 던진다', async () => {
+    const notice =
+      '건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.';
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail: notice }), { status: 504 })
+        )
+    );
+    const caught = await fetchBuildingInfo('입력 주소').catch(
+      (e: unknown) => e
+    );
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(504);
+    expect((caught as ApiError).message).toBe(notice);
+  });
+
+  it('그 밖의 조회 실패(502)는 지금처럼 직접 입력을 안내한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail: 'x' }), { status: 502 })
+        )
+    );
+    const info = await fetchBuildingInfo('입력 주소');
+    expect(info.sourceNote).toBe(LOOKUP_ERROR_NOTE);
   });
 });
 
