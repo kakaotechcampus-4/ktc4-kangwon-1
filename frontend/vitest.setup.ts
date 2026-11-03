@@ -1,9 +1,10 @@
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  vi.restoreAllMocks();
 });
 
 class NoopResizeObserver {

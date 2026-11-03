@@ -86,6 +86,7 @@ test('로그인부터 리포트와 내 분석 기록까지', async ({ page }) =>
   await expect(page).toHaveURL(/\/vacancy-input/);
 
   await startAnalysis(page);
+  const requestId = new URL(page.url()).searchParams.get('id');
   await answerUntilDone(page);
   await page
     .locator('main')
@@ -99,7 +100,7 @@ test('로그인부터 리포트와 내 분석 기록까지', async ({ page }) =>
   await page.goto('/my/reports');
   await expect(page.locator('main')).toContainText('위례광장로 199');
   await page.getByRole('button', { name: '리포트 열기' }).first().click();
-  await expect(page).toHaveURL(/\/report\?id=/);
+  await expect(page).toHaveURL(`/report?id=${requestId}`);
   await expect(page.locator('main')).toContainText('위례광장로 199');
 
   expect(errors).toEqual([]);

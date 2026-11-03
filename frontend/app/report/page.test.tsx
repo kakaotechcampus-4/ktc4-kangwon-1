@@ -29,7 +29,7 @@ vi.mock('@/lib/api/analyses', async (importOriginal) => ({
 
 const candidate: FinalCandidate = {
   industry_code: 'I21201',
-  industry_name: '카페',
+  industry_name: '시험용 수제과자점',
   code_points: 62,
   L_points: 6,
   L_status: 'observed',
@@ -60,7 +60,7 @@ const result = {
   report_id: 'rep-1',
   snapshot_id: 'snap-1',
   score_snapshot_id: 'score-1',
-  summary_segments: [{ type: 'text', text: '카페가 가장 잘 맞습니다.' }],
+  summary_segments: [{ type: 'text', text: '직장인 수요가 가장 큽니다.' }],
   top5: [candidate],
   excluded_candidates: [],
   facts: [],
@@ -103,8 +103,9 @@ describe('리포트 화면', () => {
     vi.mocked(getAnalysis).mockResolvedValue(stored);
     render(<ReportPage />);
     await waitFor(() =>
-      expect(document.body.textContent).toContain('카페가 가장 잘 맞습니다.')
+      expect(document.body.textContent).toContain('직장인 수요가 가장 큽니다.')
     );
+    expect(document.body.textContent).toContain('시험용 수제과자점');
     expect(document.body.textContent).toContain('위례광장로 199');
     expect(getAnalysis).toHaveBeenCalledWith('r1');
   });
@@ -114,9 +115,10 @@ describe('리포트 화면', () => {
       .mockRejectedValueOnce(new Error('리포트를 불러오지 못했어요.'))
       .mockResolvedValue(stored);
     render(<ReportPage />);
+    expect(await screen.findByText('리포트를 불러오지 못했어요.')).toBeTruthy();
     await userEvent
       .setup()
-      .click(await screen.findByRole('button', { name: /다시 불러오기/ }));
+      .click(screen.getByRole('button', { name: /다시 불러오기/ }));
     await waitFor(() => expect(getAnalysis).toHaveBeenCalledTimes(2));
   });
 
