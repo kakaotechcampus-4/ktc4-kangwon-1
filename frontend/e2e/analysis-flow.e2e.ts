@@ -7,6 +7,21 @@ const FLOOR = '1층';
 function watchErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (
+      message.type() === 'error' &&
+      !message.text().startsWith('Failed to load resource')
+    ) {
+      errors.push(`console: ${message.text()}`);
+    }
+  });
+  page.on('response', (response) => {
+    const signedOutCheck =
+      response.status() === 401 && response.url().includes('/auth/me');
+    if (response.status() >= 400 && !signedOutCheck) {
+      errors.push(`${response.status()} ${response.url()}`);
+    }
+  });
   return errors;
 }
 
