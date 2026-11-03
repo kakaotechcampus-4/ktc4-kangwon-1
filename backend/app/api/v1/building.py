@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.address import GeocodeError
+from app.address import ADDRESS_INPUT_ERRORS, GeocodeError
 from app.building_registry import BuildingRegistry, BuildingRegistryError, lookup_building
 from app.services.mock import building_registry as mock_building_registry
 
@@ -40,12 +40,7 @@ async def get_building_registry(
     try:
         return await lookup_building(address)
     except GeocodeError as exc:
-        invalid = exc.code in {
-            "EMPTY_ADDRESS",
-            "NOT_FOUND",
-            "ADDRESS_AMBIGUOUS",
-            "ADDRESS_MISMATCH",
-        }
+        invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise HTTPException(
             400 if invalid else 502,
             "주소를 확인해 주세요." if invalid else "주소 조회 서비스에 실패했습니다.",

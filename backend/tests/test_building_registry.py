@@ -430,6 +430,10 @@ class BuildingRegistryApiTests(unittest.TestCase):
             "건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.",
         )
 
+    def test_too_long_address_is_400(self):
+        response = self.get(GeocodeError("ADDRESS_TOO_LONG", "x"))
+        self.assertEqual(response.status_code, 400)
+
     def test_mismatched_address_is_400(self):
         response = self.get(GeocodeError("ADDRESS_MISMATCH", "외부 원문"))
         self.assertEqual(response.status_code, 400)

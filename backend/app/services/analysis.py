@@ -7,7 +7,7 @@ import re
 import uuid
 from time import monotonic
 
-from app.address import GeocodeError, resolve_site
+from app.address import ADDRESS_INPUT_ERRORS, GeocodeError, resolve_site
 from app.agentic.budget import RuntimeBudget
 from app.agentic.preflight import collect_preflight
 from app.agentic.questions import save_confirmed_space
@@ -41,19 +41,11 @@ FAILURE_MESSAGES = {
     "AGENTIC_FAILED": "분석을 끝까지 마치지 못했어요. 잠시 후 다시 분석해 주세요.",
 }
 
-ADDRESS_ERRORS = {
-    "EMPTY_ADDRESS",
-    "NOT_FOUND",
-    "ADDRESS_AMBIGUOUS",
-    "ADDRESS_MISMATCH",
-    "ADDRESS_TOO_LONG",
-}
 
-
-def public_failure(exc, stage):
+def public_failure(exc: BaseException, stage: str) -> AgentError:
     if isinstance(exc, asyncio.CancelledError):
         return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
-    if isinstance(exc, GeocodeError) and exc.code in ADDRESS_ERRORS:
+    if isinstance(exc, GeocodeError) and exc.code in ADDRESS_INPUT_ERRORS:
         code = "ADDRESS_FAILED"
     elif stage == "루프":
         code = "AI_FAILED"
