@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BuildingConfirmPage from './page';
 import { startAnalysis } from '@/lib/api/analyses';
 import { fetchBuildingInfo } from '@/lib/api/building';
-import { emptyBuildingInfo } from '@/lib/api/buildingRegistry';
+import {
+  LOOKUP_ERROR_NOTE,
+  emptyBuildingInfo,
+} from '@/lib/api/buildingRegistry';
 import { ApiError } from '@/lib/api/http';
 import { saveVacancyInput } from '@/lib/api/resultStore';
 
@@ -120,5 +123,20 @@ describe('상가 정보 확인 화면', () => {
       .setup()
       .click(screen.getByRole('button', { name: /다시 조회/ }));
     await waitFor(() => expect(fetchBuildingInfo).toHaveBeenCalledTimes(2));
+  });
+
+  it('다시 조회도 오래 걸리면 직접 입력 화면으로 넘어간다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const notice =
+      '건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.';
+    vi.mocked(fetchBuildingInfo).mockRejectedValue(new ApiError(504, notice));
+    render(<BuildingConfirmPage />);
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: /다시 조회/ }));
+    const start = await screen.findByRole('button', { name: START });
+    expect(document.body.textContent).toContain(LOOKUP_ERROR_NOTE);
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('textbox', { name: '전용면적' })).toBeTruthy();
   });
 });

@@ -28,6 +28,11 @@ import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
 import { startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
+import { ApiError } from '@/lib/api/http';
+import {
+  LOOKUP_ERROR_NOTE,
+  emptyBuildingInfo,
+} from '@/lib/api/buildingRegistry';
 import {
   LOOKUP_ORDER,
   SEWAGE_OPTIONS,
@@ -131,6 +136,21 @@ export default function BuildingConfirmPage() {
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
+        if (
+          retryCount > 0 &&
+          error instanceof ApiError &&
+          error.status === 504
+        ) {
+          setBuilding(
+            emptyBuildingInfo(
+              saved.roadAddress,
+              saved.floorUnit,
+              LOOKUP_ERROR_NOTE
+            )
+          );
+          setAreaText('');
+          return;
+        }
         setLoadError(
           error instanceof Error
             ? error.message
