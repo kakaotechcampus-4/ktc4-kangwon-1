@@ -1,7 +1,6 @@
 """단일 도구 루프를 공개 API에 연결합니다. 옛 라우터는 등록하지 않습니다."""
 
 import asyncio
-import json
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -10,9 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from app.db.connection import connect
-from app.db.repository import create_request, owner_of
-from app.schemas import DecisionResult, FactView, Schema, Text
+from app.db.repository import (
+    create_request,
+    get_analysis_detail,
+    get_answer_gate,
+    list_snapshot_facts,
+    owner_of,
+)
+from app.schemas import DecisionResult, Schema, Text
 from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
 from app.services.mock import dependencies, generators
 
@@ -30,10 +34,12 @@ from .jobs import (
     start_job,
     start_task,
 )
-from .responses import AcceptedAnalysis, AnalysisEvents
+from .responses import AcceptedAnalysis, AnalysisEvents, RequestFacts, StoredAnalysis
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
+
+NOT_FOUND = "분석 요청을 찾을 수 없습니다."
 
 
 async def require_owner(
@@ -46,12 +52,12 @@ async def require_owner(
         owner_of, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if owner is None:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
+        raise HTTPException(404, NOT_FOUND)
     # 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. 그 자료만 열어 둡니다.
     if owner == "legacy":
         return
     if user is None or user["user_id"] != owner:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
+        raise HTTPException(404, NOT_FOUND)
 
 
 # 진행 이벤트는 함수로 등록돼 있어 데코레이터 대신 dependencies 인자로 가드를 겁니다.
@@ -176,111 +182,18 @@ async def create_analysis(
     return await run_or_http(await_task(task), request_id, kind="analysis")
 
 
-def detail(request_id, path):
-    with connect(path) as db:
-        row = db.execute(
-            "SELECT * FROM analysis_requests WHERE request_id=?", (request_id,)
-        ).fetchone()
-        if row is None:
-            return None
-        output = dict(row)
-        for field in ("site", "result", "error"):
-            output[field] = (
-                json.loads(output.pop(field + "_json")) if row[field + "_json"] else None
-            )
-        question = db.execute(
-            "SELECT * FROM agentic_questions WHERE request_id=?", (request_id,)
-        ).fetchone()
-        output["questions"] = (
-            {
-                "question_session_id": question["question_session_id"],
-                "questions": json.loads(question["questions_json"]),
-                "status": question["status"],
-            }
-            if question
-            else None
-        )
-        report = db.execute(
-            "SELECT rendered_json FROM agentic_reports WHERE report_id=?",
-            ((output["result"] or {}).get("report_id"),),
-        ).fetchone()
-        output["rendered"] = json.loads(report[0]) if report else None
-        if output["result"] is not None:
-            output["result"] = DecisionResult.model_validate(output["result"]).model_dump(
-                mode="json"
-            )
-        return output
-
-
-@router.get("/analyses/{request_id}", dependencies=[Depends(require_owner)])
+@router.get(
+    "/analyses/{request_id}",
+    response_model=StoredAnalysis,
+    dependencies=[Depends(require_owner)],
+)
 async def get_analysis(request_id: str, request: Request):
-    result = await asyncio.to_thread(
-        detail, request_id, request.app.state.execution_settings.db_path
+    stored = await asyncio.to_thread(
+        get_analysis_detail, request_id, db_path=request.app.state.execution_settings.db_path
     )
-    if result is None:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-    return result
-
-
-class RequestFacts(Schema):
-    request_id: Text
-    snapshot_id: Text | None
-    facts: list[FactView]
-
-
-def request_facts(request_id, path):
-    """리포트 차트용으로 요청 스냅샷의 전체 fact를 읽습니다. 보고서 인용 여부와 무관합니다."""
-    with connect(path) as db:
-        if not db.execute(
-            "SELECT 1 FROM analysis_requests WHERE request_id=?", (request_id,)
-        ).fetchone():
-            return None
-        snapshot = db.execute(
-            "SELECT snapshot_id FROM snapshots WHERE request_id=?", (request_id,)
-        ).fetchone()
-        if snapshot is None:
-            return RequestFacts(request_id=request_id, snapshot_id=None, facts=[])
-        snapshot_id = snapshot["snapshot_id"]
-        local = db.execute(
-            "SELECT scope_json FROM local_snapshots WHERE snapshot_id=?", (snapshot_id,)
-        ).fetchone()
-        rows = db.execute(
-            "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
-            "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? "
-            # 공간 비교는 답변마다 새로 만들어지므로 현재 판정만 돌려줍니다.
-            "AND (metric!='space_fit' OR fact_id IN (SELECT fact_id FROM space_fit_current "
-            "WHERE request_id=? AND snapshot_id=?)) ORDER BY source,metric,industry_code,fact_id",
-            (request_id, snapshot_id, request_id, snapshot_id),
-        ).fetchall()
-    # 로컬 자료 fact의 공간 범위는 스냅샷에 한 번만 저장되어 있어 읽을 때 펼칩니다.
-    spatial = json.loads(local["scope_json"]) | {"snapshot_id": snapshot_id} if local else None
-    facts = [
-        FactView(
-            fact_id=r["fact_id"],
-            source=r["source"],
-            metric=r["metric"],
-            value=json.loads(r["value_json"]),
-            unit=r["unit"],
-            period=r["period"],
-            spatial_scope=spatial
-            if r["local_lineage"] and spatial
-            else json.loads(r["spatial_scope_json"]),
-            industry_code=r["industry_code"],
-            status="not_applicable" if r["status"] == "n.a." else r["status"],
-            citable=bool(r["citable"]),
-            calc_version=r["calc_version"],
-            provenance_ref=(
-                "fact_parents:"
-                if r["metric"] == "space_fit"
-                else "local_fact_lineage:"
-                if r["local_lineage"]
-                else "fact_sources:"
-            )
-            + r["fact_id"],
-        )
-        for r in rows
-    ]
-    return RequestFacts(request_id=request_id, snapshot_id=snapshot_id, facts=facts)
+    if stored is None:
+        raise HTTPException(404, NOT_FOUND)
+    return stored
 
 
 @router.get(
@@ -289,12 +202,12 @@ def request_facts(request_id, path):
     dependencies=[Depends(require_owner)],
 )
 async def get_analysis_facts(request_id: str, request: Request):
-    result = await asyncio.to_thread(
-        request_facts, request_id, request.app.state.execution_settings.db_path
+    found = await asyncio.to_thread(
+        list_snapshot_facts, request_id, db_path=request.app.state.execution_settings.db_path
     )
-    if result is None:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-    return result
+    if found is None:
+        raise HTTPException(404, NOT_FOUND)
+    return RequestFacts(request_id=request_id, snapshot_id=found.snapshot_id, facts=found.facts)
 
 
 @router.post(
@@ -312,18 +225,19 @@ async def answers(
     mock: bool = False,
     wait: bool = WAIT_QUERY,
 ):
-    row = await asyncio.to_thread(detail, request_id, request.app.state.execution_settings.db_path)
-    if row is None:
-        raise HTTPException(404, "분석 요청을 찾을 수 없습니다.")
-    question = row["questions"]
+    gate = await asyncio.to_thread(
+        get_answer_gate, request_id, db_path=request.app.state.execution_settings.db_path
+    )
+    if gate is None:
+        raise HTTPException(404, NOT_FOUND)
+    # 질문 행이 없으면 question_session_id 가 None 이라 아래 비교에서 걸립니다.
     if (
         request_id in jobs(request)
-        or row["status"] != "waiting_for_input"
-        or not question
-        or question["question_session_id"] != body.question_session_id
+        or gate.status != "waiting_for_input"
+        or gate.question_session_id != body.question_session_id
     ):
         raise HTTPException(409, "현재 대기 중인 질문 세션이 아닙니다.")
-    if set(body.answers) != {q["field"] for q in question["questions"]}:
+    if set(body.answers) != gate.fields:
         raise HTTPException(422, "질문 항목과 답변 항목이 다릅니다.")
 
     async def work():
