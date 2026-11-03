@@ -121,13 +121,15 @@ def sequence(*responses):
     return lambda request: queue.pop(0) if len(queue) > 1 else queue[0]
 
 
-def slow_transport(slow):
+def slow_transport(slow, failing=()):
     async def handle(request: httpx.Request) -> httpx.Response:
         name = (
             "kakao" if request.url.host == "dapi.kakao.com" else request.url.path.rsplit("/", 1)[-1]
         )
         if name in slow:
             await asyncio.sleep(5)
+        if name in failing:
+            return httpx.Response(401)
         if name == "kakao":
             return httpx.Response(200, json=KAKAO)
         answer = answers()[name]
@@ -137,9 +139,9 @@ def slow_transport(slow):
 
 
 class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
-    async def slow_lookup(self, *slow):
+    async def slow_lookup(self, *slow, failing=()):
         started = time.monotonic()
-        async with httpx.AsyncClient(transport=slow_transport(set(slow))) as client:
+        async with httpx.AsyncClient(transport=slow_transport(set(slow), failing)) as client:
             try:
                 return await lookup_building(
                     "서울 송파구 위례광장로 199 4층",
@@ -161,6 +163,16 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
             await self.slow_lookup(*answers())
         self.assertEqual(caught.exception.code, "UPSTREAM_TIMEOUT")
         self.assertLess(self.elapsed, 1)
+
+    async def test_timeout_wins_when_every_section_fails(self):
+        with self.assertRaises(BuildingRegistryError) as caught:
+            await self.slow_lookup(
+                "getBrFlrOulnInfo",
+                "getBrExposPubuseAreaInfo",
+                "getBrWclfInfo",
+                failing=("getBrTitleInfo",),
+            )
+        self.assertEqual(caught.exception.code, "UPSTREAM_TIMEOUT")
 
     async def test_cancelled_lookup_leaves_no_sections_running(self):
         lookup = asyncio.create_task(self.slow_lookup(*answers()))

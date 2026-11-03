@@ -427,7 +427,12 @@ async def lookup_building(
         if isinstance(result, BaseException) and not isinstance(result, BuildingRegistryError):
             raise result
     if all(isinstance(result, BuildingRegistryError) for result in results):
-        raise results[0]  # type: ignore[misc]
+        timeouts = [
+            result
+            for result in results
+            if isinstance(result, BuildingRegistryError) and result.code == "UPSTREAM_TIMEOUT"
+        ]
+        raise (timeouts or results)[0]  # type: ignore[misc]
     titles, floors, units, sewage = (None if isinstance(r, BaseException) else r for r in results)
     return BuildingRegistry(
         road_address=road,
