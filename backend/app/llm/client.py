@@ -1,5 +1,6 @@
 """HTTP 재시도·응답 종료 검증을 한 경계에 둡니다."""
 
+import asyncio
 import json
 import time
 from copy import deepcopy
@@ -14,6 +15,9 @@ from openai.types.chat.chat_completion import Choice
 from .budget import current_scope
 from .config import LLMSettings
 from .session import acquire_client
+
+RETRY_DELAYS = (1.0, 2.0)
+RETRY_HTTP_STATUSES = frozenset({429, 502, 503, 504})
 
 
 class LLMResponseError(RuntimeError):
@@ -102,13 +106,23 @@ async def _complete(
         receipt["sent_messages"] = deepcopy(messages)
     budget, role, final = current_scope()
     metadata: dict[str, Any] = receipt if receipt is not None else {}
-    for retry in (False, True):
+    for delay in (*RETRY_DELAYS, None):
         try:
             return await _attempt(messages, settings, tools, metadata, budget, role, final)
-        except LLMResponseError as exc:
-            if retry or budget is None or exc.code != "LLM_CONNECTION_ERROR":
+        except (LLMResponseError, LLMHTTPError) as exc:
+            if delay is None or budget is None or not _transient(exc):
                 raise
+        await asyncio.sleep(delay)
     raise AssertionError("unreachable")
+
+
+def _transient(exc: LLMResponseError | LLMHTTPError) -> bool:
+    if isinstance(exc, LLMHTTPError):
+        return (
+            exc.diagnostics["http_status"] in RETRY_HTTP_STATUSES
+            and exc.diagnostics["provider_code"] != "insufficient_quota"
+        )
+    return exc.code == "LLM_CONNECTION_ERROR"
 
 
 async def _attempt(
