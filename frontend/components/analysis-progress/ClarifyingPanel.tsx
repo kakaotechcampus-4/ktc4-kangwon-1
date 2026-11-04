@@ -173,7 +173,7 @@ export default function ClarifyingPanel({
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={2}
-            placeholder="예: 2층까지 함께 임대 가능해요"
+            placeholder="예: 2층까지 함께 사용할 수 있어요"
             className="w-full resize-none rounded-lg border px-4 py-3 text-15 leading-relaxed placeholder:text-gray-400"
             style={{
               borderColor: colors.neutral.border,

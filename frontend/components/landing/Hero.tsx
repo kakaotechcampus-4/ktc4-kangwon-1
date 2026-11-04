@@ -119,7 +119,7 @@ export default function Hero() {
           </span>
         </h1>
         <p className="intro hero-sub max-w-[400px] text-base leading-[1.7] text-[#4B5866] sm:text-17">
-          주소와 임대 조건, 주변 상권 데이터로 내 공실에 맞는 업종을
+          주소와 건물·매물 조건, 주변 상권 데이터로 내 공실에 맞는 업종을
           추천해드려요.
         </p>
         <div className="intro hero-sub flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">

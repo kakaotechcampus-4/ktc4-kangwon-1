@@ -124,13 +124,13 @@ function AnswerScreen() {
             color="#A65B00"
             aria-hidden
           />
-          계약 전에 확인할 2가지
+          입점 전 확인할 2가지
         </p>
         <ol className="mt-2.5 flex flex-col gap-2 sm:mt-3 sm:gap-3">
           {[
             [
-              '4층까지 드나들기 쉬운지와 간판 노출',
-              '엘리베이터 동선과 간판 위치를 현장에서 확인하세요.',
+              '출입구와 간판 노출',
+              '1층 출입구에서 매장이 잘 보이고 찾아오기 쉬운지 확인하세요.',
             ],
             [
               '실제로 쓸 수 있는 면적',
@@ -327,11 +327,28 @@ function WhyScreen() {
           <div className="flex flex-col gap-3 sm:gap-5">
             <p className="text-base leading-snug font-extrabold text-[#10233A] sm:text-lg">
               주변에는{' '}
-              <span className="text-[#2453D6]">{COMPETITION[0]?.name}</span>{' '}
+              <span
+                className={
+                  mockRecommendedIndustryCodes.has(COMPETITION[0]?.code ?? '')
+                    ? 'text-[#2453D6]'
+                    : 'text-[#66758A]'
+                }
+              >
+                {COMPETITION[0]?.name}
+              </span>{' '}
               {COMPETITION[0]?.storeCount == null
                 ? '자료 없음'
                 : `${COMPETITION[0]?.storeCount}곳`}
-              , <span className="text-[#C2410C]">{COMPETITION[1]?.name}</span>{' '}
+              ,{' '}
+              <span
+                className={
+                  mockRecommendedIndustryCodes.has(COMPETITION[1]?.code ?? '')
+                    ? 'text-[#2453D6]'
+                    : 'text-[#66758A]'
+                }
+              >
+                {COMPETITION[1]?.name}
+              </span>{' '}
               {COMPETITION[1]?.storeCount == null
                 ? '자료 없음'
                 : `${COMPETITION[1]?.storeCount}곳`}
@@ -493,8 +510,8 @@ function CheckScreen() {
           </ul>
         </div>
         <p className="rounded-xl bg-[#EAF0F6] px-3 py-2.5 text-xs leading-4 text-[#3D4A5C] sm:px-4 sm:py-3 sm:text-13 sm:leading-5">
-          <b className="text-[#10233A]">임대인 대변인</b> · 임대료와 공실 기간
-          자료가 없어 수익은 따로 확인해야 한다고 봤어요.
+          <b className="text-[#10233A]">임대인 대변인</b> · 월세·보증금은
+          분석하지 않으므로 매물 수익성은 따로 확인해야 한다고 봤어요.
         </p>
       </div>
     </Frame>
@@ -657,24 +674,13 @@ export default function ReportPreview() {
               주소만 넣으면 같은 리포트를 받아볼 수 있어요.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/vacancy-input"
-              className="inline-flex h-12 items-center gap-2 rounded-full bg-[#2453D6] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.4)] sm:h-14 sm:px-7 sm:text-base"
-            >
-              내 상가로 분석해 보기 <ArrowRight size={18} aria-hidden />
-            </Link>
-            <Link
-              href="/report?demo=mock-hupyeong"
-              className="inline-flex h-12 items-center rounded-full border border-white/30 px-5 text-sm font-bold text-white/90 hover:bg-white/10 sm:h-14 sm:px-6 sm:text-base"
-            >
-              예시 리포트 전체 보기
-            </Link>
-          </div>
+          <Link
+            href="/vacancy-input"
+            className="inline-flex h-12 items-center gap-2 rounded-full bg-[#2453D6] px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,83,214,0.4)] sm:h-14 sm:px-7 sm:text-base"
+          >
+            내 상가로 분석해 보기 <ArrowRight size={18} aria-hidden />
+          </Link>
         </div>
-        <p className="mt-4 text-[11px] text-[#8EA0BA] sm:mt-6 sm:text-xs">
-          * 실제 분석 데이터가 아닌, 리포트 구성을 보여주는 예시예요.
-        </p>
       </div>
     </section>
   );
