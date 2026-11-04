@@ -50,11 +50,16 @@ import {
 import type { DecisionResult, FactView } from '@/lib/api/types';
 import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
 import { indexFacts, renderSegments } from '@/lib/api/segments';
+import {
+  EDUCATION_ZONE_LABELS,
+  educationZoneStatus,
+} from '@/lib/api/educationZone';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   isExampleReport,
   reportSource,
   storedReport,
+  type Coordinates,
 } from '@/lib/api/reportSource';
 import { formatDay } from '@/lib/api/analysisStatus';
 import { reportPdfTitle } from '@/lib/api/reportPdf';
@@ -242,6 +247,8 @@ function ReportContent() {
   // 분석 결과와 함께 입력한 주소 정보를 불러온다.
   const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
+  // 분석이 쓴 좌표. 지도 중심이자 반경 원의 중심이다. 없으면 지도가 주소로 찾는다.
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
 
   const [notice, setNotice] = useState<ReportNoticeState | null | undefined>();
   const [analyzedDay, setAnalyzedDay] = useState('');
@@ -272,6 +279,17 @@ function ReportContent() {
       setAnalysisResult(source.kind === 'saved' ? source.result : null);
       setVacancyInput(source.kind === 'saved' ? loadVacancyInput() : null);
       setBuilding(source.kind === 'saved' ? loadConfirmedBuilding() : null);
+      // 미리보기·예시는 목업 상가를 가리킨다. 주소에 건물 이름이 붙어 있어
+      // 좌표 없이 주소로만 찾으면 못 찾는다.
+      // 저장된 결과(saved)에는 좌표가 없어 주소로 찾는다.
+      setCoordinates(
+        isDemo
+          ? {
+              latitude: mockProperty.latitude,
+              longitude: mockProperty.longitude,
+            }
+          : null
+      );
       setNotice(source.kind === 'empty' ? { kind: 'empty' } : null);
       return;
     }
@@ -288,6 +306,7 @@ function ReportContent() {
         setAnalysisResult(report.result);
         setVacancyInput(report.vacancyInput);
         setBuilding(null);
+        setCoordinates(report.coordinates);
         setAnalyzedDay(report.analyzedDate);
         setNotice(null);
       })
@@ -343,10 +362,10 @@ function ReportContent() {
   const retryFacts = () => setFactsAttempt((attempt) => attempt + 1);
 
   // 문장 속 fact는 결과의 인용 fact로 충분하지만, 전체 fact가 오면 함께 찾는다.
-  const factIndex = indexFacts([
-    ...(allFacts ?? []),
-    ...(analysisResult?.facts ?? []),
-  ]);
+  const facts = [...(allFacts ?? []), ...(analysisResult?.facts ?? [])];
+  const factIndex = indexFacts(facts);
+  // 보호구역 판정. 걸린 상가만 지도에 주변 학교를 함께 표시한다.
+  const educationZone = educationZoneStatus(facts);
   const candidateCodes = analysisResult
     ? [
         ...analysisResult.top5.map((item) => item.industry_code),
@@ -628,7 +647,13 @@ function ReportContent() {
                   )}
                 </header>
                 <div className="property-photo-layout space-report-layout">
-                  <PropertyMap address={displayAddress} />
+                  <PropertyMap
+                    address={displayAddress}
+                    latitude={coordinates?.latitude}
+                    longitude={coordinates?.longitude}
+                    radiusM={ANALYSIS_RADIUS_M}
+                    showSchools={educationZone === 'inside'}
+                  />
                   <div className="property-preview-info space-report-info">
                     <dl className="property-facts property-main-facts">
                       <div>
@@ -685,12 +710,19 @@ function ReportContent() {
                           {parkingValue ? PARKING_LABELS[parkingValue] : '모름'}
                         </dd>
                       </div>
-                      <div className="property-analysis-range">
-                        <dt>분석 범위</dt>
+                      <div>
+                        {/* 분석 반경은 머리말 칩과 지도 원에 이미 있어 이 자리는
+                            지도에 학교가 왜 떠 있는지를 설명하는 데 쓴다. */}
+                        <dt>교육환경보호구역</dt>
                         <dd>
-                          <strong>{radiusLabel}</strong>
-                          <span className="property-fact-note">
-                            (상가 중심 반경)
+                          <span
+                            className={
+                              educationZone === 'inside'
+                                ? 'property-fact-alert'
+                                : undefined
+                            }
+                          >
+                            {EDUCATION_ZONE_LABELS[educationZone]}
                           </span>
                         </dd>
                       </div>

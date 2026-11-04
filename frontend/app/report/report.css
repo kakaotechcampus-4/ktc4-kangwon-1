@@ -710,12 +710,6 @@
   align-items: center;
 }
 
-.report-page .property-radius-row span {
-  font-size: calc(14px * var(--font-scale));
-  color: #646b7a;
-  font-weight: 400;
-}
-
 .report-page .report-masthead {
   display: flex;
   align-items: center;
@@ -879,17 +873,6 @@
 .report-page .property-radius-row {
   align-items: start;
 }
-.report-page .property-analysis-range dd {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.report-page .property-analysis-range dd strong {
-  font-size: calc(19px * var(--font-scale));
-  font-weight: 700;
-  line-height: 1.1;
-}
 
 /* 상가 정보의 세 행을 같은 높이와 여백으로 정렬합니다. */
 .report-page .property-preview-info {
@@ -916,9 +899,6 @@
   display: flex;
   align-items: baseline;
 }
-.report-page .property-analysis-range dd strong {
-  line-height: 1.5;
-}
 
 /* 모든 정보 행이 같은 열 너비와 값 기준선을 사용합니다. */
 .report-page .property-preview-info,
@@ -941,9 +921,6 @@
 }
 .report-page .property-preview-info .property-facts dd {
   min-height: 39px;
-  line-height: 39px;
-}
-.report-page .property-analysis-range dd strong {
   line-height: 39px;
 }
 .report-page .property-fact-note {
@@ -1409,6 +1386,9 @@
   padding: 8px 14px;
   border-radius: 999px;
   box-shadow: 0 6px 16px rgba(16, 35, 58, 0.12);
+  /* 지도 레이어 위에 둔다. 빼면 타일 아래에 깔려, 확대·축소로 타일을 다시 그리는
+     순간에만 잠깐 비쳐 보인다. */
+  z-index: 10;
 }
 .report-page .property-map-caption {
   display: flex;
@@ -1416,6 +1396,20 @@
   gap: 8px;
   font-size: calc(14px * var(--font-scale));
   color: #10233a;
+}
+/* 보호구역에 걸린 상가의 판정 값. 지도의 학교 표시와 같은 색으로 묶는다. */
+.report-page .property-fact-alert {
+  color: #9b3545;
+  font-weight: 700;
+}
+/* 학교 표시 범례 — 보호구역에 걸린 상가에서만 나온다. */
+.report-page .property-map-legend {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #9b3545;
 }
 .report-page .property-map-caption a {
   display: inline-flex;
@@ -3944,12 +3938,6 @@
   line-height: 1.5;
   white-space: normal;
 }
-.report-page .space-report-info .property-analysis-range dd {
-  display: block;
-}
-.report-page .space-report-info .property-analysis-range dd strong {
-  font-size: inherit;
-}
 @media (max-width: 900px) {
   .report-page .space-report-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -4003,6 +3991,12 @@
 .report-page svg,
 .report-page canvas {
   max-width: 100%;
+}
+/* 카카오맵이 만든 레이어는 예외다. 도형(반경 원)을 담는 svg의 부모 div는 폭이 0이고
+   svg를 지도 밖까지 넓게 깔아 그리는 구조라, 위 max-width가 걸리면 너비가 0으로 깎여
+   원이 통째로 사라진다. 타일·마커는 다른 레이어라 멀쩡해 보여 원인을 찾기 어렵다. */
+.report-page .property-map-canvas svg {
+  max-width: none;
 }
 .report-page :is(p, h1, h2, h3, h4, dd, dt, li, a, button) {
   overflow-wrap: anywhere;
