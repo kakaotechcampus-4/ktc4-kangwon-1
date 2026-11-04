@@ -13,6 +13,7 @@ from app.agents.map_analysis.matching import distance_m, match_place
 from app.canonical import canonical_json
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import raw as raw_db
 from app.education_zone import find_education_zones
 from app.geo import to_epsg5181
 from app.industries.catalog import INDUSTRIES
@@ -25,11 +26,7 @@ from .scoring import regulation
 
 def _place_facts(scope, response_id, documents):
     with connect(scope.path) as db:
-        rows = db.execute(
-            "SELECT r.raw_row_id,r.raw_json FROM raw_rows r "
-            "JOIN raw_response_rows e USING(raw_row_id) WHERE e.response_id=?",
-            (response_id,),
-        ).fetchall()
+        rows = raw_db.response_rows(db, response_id)
 
         refs = {canonical_json(json.loads(r[1])): r[0] for r in rows}
         facts = {}
@@ -213,9 +210,7 @@ def _regulation(scope, site, scan):
         secrets=[os.getenv("VWORLD_API_KEY", "")],
     )
     with connect(scope.path) as db:
-        ref = db.execute(
-            "SELECT raw_row_id FROM raw_response_rows WHERE response_id=?", (response,)
-        ).fetchone()[0]
+        ref = raw_db.first_row_id(db, response)
     fact = register_fact(
         scope,
         industry_code=None,
@@ -255,13 +250,7 @@ def _regulation(scope, site, scan):
 
 def _stored_regulation(scope):
     with connect(scope.path) as db:
-        rows = db.execute(
-            "SELECT r.raw_json FROM raw_rows r JOIN raw_response_rows e USING(raw_row_id) "
-            "JOIN raw_responses p USING(response_id) "
-            "WHERE p.request_id=? AND p.snapshot_id=? AND p.source='regulation' "
-            "ORDER BY p.collected_at DESC LIMIT 1",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchall()
+        rows = raw_db.latest_regulation_rows(db, scope.request_id, scope.snapshot_id)
     if rows:
         raw = json.loads(rows[0][0])
         if raw.get("status") in {"ok", "error"} and "queried_at" in raw:

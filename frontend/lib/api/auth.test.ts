@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { KAKAO_ERRORS, kakaoLoginUrl, safeNext } from '@/lib/api/auth';
+import {
+  KAKAO_ERRORS,
+  kakaoLoginUrl,
+  loginPath,
+  safeNext,
+} from '@/lib/api/auth';
+
+describe('loginPath', () => {
+  it('로그인 뒤 돌아올 주소에 쿼리까지 담는다', () => {
+    const path = loginPath('/analysis-progress', '?id=abc123');
+    const next = new URLSearchParams(path.split('?')[1]).get('next');
+    expect(path.startsWith('/login?next=')).toBe(true);
+    expect(safeNext(next)).toBe('/analysis-progress?id=abc123');
+  });
+
+  it('쿼리가 없으면 경로만 담는다', () => {
+    expect(loginPath('/report', '')).toBe('/login?next=%2Freport');
+  });
+});
 
 describe('safeNext', () => {
   it('우리 경로는 그대로 돌려준다', () => {
@@ -15,6 +33,8 @@ describe('safeNext', () => {
       '/\\evil.example',
       'javascript:alert(1)',
       'vacancy-input',
+      '/\t/evil.example',
+      '/\n/evil.example',
     ]) {
       expect(safeNext(evil)).toBe('/');
     }

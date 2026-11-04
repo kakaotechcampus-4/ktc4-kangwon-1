@@ -83,6 +83,8 @@ export type VacancyInput = {
 export function saveVacancyInput(input: VacancyInput): void {
   // 새 상가를 입력하면 이전 상가의 추가 답변을 제거합니다.
   sessionStorage.removeItem('chaeum:clarifyingRecord');
+  clearAnalysisResult();
+  clearRequestId();
   sessionStorage.setItem(VACANCY_INPUT_STORAGE_KEY, JSON.stringify(input));
 }
 

@@ -141,8 +141,70 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(caught.exception.code, expected)
                 self.assertNotIn("SECRET", str(caught.exception))
             self.assertTrue(body.closed)
-            self.assertEqual(budget.used, 1)
-            self.assertEqual(budget.calls[0]["status"], "error")
+            retried = expected == "LLM_CONNECTION_ERROR"
+            self.assertEqual(budget.used, 2 if retried else 1)
+            self.assertTrue(all(call["status"] == "error" for call in budget.calls))
+
+    def flaky_transport(self, failures):
+        chunks = [
+            {
+                "id": "test",
+                "object": "chat.completion.chunk",
+                "created": 0,
+                "model": "test",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": '{"ok":true}'},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+            {
+                "id": "test",
+                "object": "chat.completion.chunk",
+                "created": 0,
+                "model": "test",
+                "choices": [],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19},
+            },
+        ]
+        attempts = []
+
+        def respond(request):
+            attempts.append(request)
+            if len(attempts) <= failures:
+                raise httpx.ConnectError("SECRET")
+            return sse_response(chunks)
+
+        constructor = openai.AsyncOpenAI
+        return attempts, patch(
+            "app.llm.client.openai.AsyncOpenAI",
+            side_effect=lambda **kwargs: constructor(
+                **kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
+            ),
+        )
+
+    async def test_connection_error_is_retried_once_and_counted(self):
+        attempts, transport = self.flaky_transport(failures=1)
+        budget = LLMBudget()
+        with transport, llm_scope(budget, "decision", final=True):
+            result = await client.complete_json("", "{}", self.settings())
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(budget.used, 2)
+        self.assertEqual([call["status"] for call in budget.calls], ["error", "ok"])
+
+    async def test_second_connection_error_is_not_retried_again(self):
+        attempts, transport = self.flaky_transport(failures=2)
+        budget = LLMBudget()
+        with transport, llm_scope(budget, "decision", final=True):
+            with self.assertRaises(client.LLMResponseError) as caught:
+                await client.complete_json("", "{}", self.settings())
+        self.assertEqual(caught.exception.code, "LLM_CONNECTION_ERROR")
+        self.assertNotIn("SECRET", str(caught.exception))
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(budget.used, 2)
 
     def settings(self):
         return LLMSettings(model="test", api_key="test", base_url="https://test.invalid/v1")

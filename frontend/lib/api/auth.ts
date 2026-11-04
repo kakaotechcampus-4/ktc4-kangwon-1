@@ -122,7 +122,14 @@ export function safeNext(path: string | null | undefined): string {
   if (candidate.startsWith('//') || candidate.startsWith('/\\')) {
     return '/';
   }
+  if (/[\u0000-\u001F\u007F]/.test(candidate)) {
+    return '/';
+  }
   return candidate;
+}
+
+export function loginPath(pathname: string, search: string): string {
+  return `/login?next=${encodeURIComponent(pathname + search)}`;
 }
 
 /** 로그인 화면이 ?error= 로 받는 카카오 실패 사유. */

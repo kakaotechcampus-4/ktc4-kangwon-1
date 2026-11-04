@@ -101,6 +101,19 @@ async def _complete(
     if receipt is not None and receipt.get("_record_raw"):
         receipt["sent_messages"] = deepcopy(messages)
     budget, role, final = current_scope()
+    metadata: dict[str, Any] = receipt if receipt is not None else {}
+    for retry in (False, True):
+        try:
+            return await _attempt(messages, settings, tools, metadata, budget, role, final)
+        except LLMResponseError as exc:
+            if retry or budget is None or exc.code != "LLM_CONNECTION_ERROR":
+                raise
+    raise AssertionError("unreachable")
+
+
+async def _attempt(
+    messages, settings, tools, metadata, budget, role, final
+) -> ChatCompletionMessage:
     attempt = (
         await budget.reserve(
             role, final=final, input_chars=len(json.dumps(messages, ensure_ascii=False))
@@ -111,7 +124,6 @@ async def _complete(
     started = time.monotonic()
     usage: list[Any] = []
     status = "error"
-    metadata: dict[str, Any] = receipt if receipt is not None else {}
     try:
         result = await _request(messages, settings, tools=tools, usage=usage, receipt=metadata)
         status = "ok"

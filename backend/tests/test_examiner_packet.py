@@ -126,12 +126,121 @@ class ExaminerPacketLimitTests(unittest.TestCase):
         item = packet["candidates"][0]["score_items"][0]
         self.assertEqual(item[SCORE["fact_ids"]], [ids[2]])
 
+    def test_packet_periods_are_spelled_out(self):
+        ids = [fact_id(0)]
+        rows = {ids[0]: row(ids[0], period="20231~20234")}
+        _, _, packet = self.build(1, rows)
+        self.assertEqual(packet["facts"][0][FACT["period"]], "2023년 1분기~4분기")
+
     def test_long_value_is_left_for_reading(self):
         ids = [fact_id(0)]
         rows = {ids[0]: row(ids[0], value_json=json.dumps(list(range(400))))}
         _, _, packet = self.build(1, rows)
         self.assertIsNone(packet["facts"][0][FACT["value"]])
         self.assertIn("null", packet["note"])
+
+
+class ExaminerChecksTests(unittest.TestCase):
+    def build(self, items, rows, reasons):
+        with (
+            patch("app.agentic.examiner._score_items", return_value={"I201": items}),
+            patch("app.agentic.examiner.fact_rows", return_value=rows),
+            patch("app.agentic.examiner.encode", side_effect=lambda scope, value: value),
+        ):
+            return examiner.review_packet(None, draft(reasons))
+
+    def test_persona_points_to_checks(self):
+        self.assertIn("checks", examiner.PERSONA)
+        self.assertIn("checks를 본 뒤에도 폐업률처럼 기간이 있는 문장", examiner.PERSONA)
+        self.assertIn("이유·위험 칸을 가리지 말고", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_persona_limits_fact_reads(self):
+        self.assertIn("서른두 개 이하", examiner.PERSONA)
+        self.assertIn("나눠서", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_persona_separates_wrong_metric_from_missing_evidence(self):
+        self.assertIn("슬롯이 있는데 엉뚱한 지표를 가리키면", examiner.PERSONA)
+        self.assertIn("missing_evidence로 쓰지 마세요", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_persona_keeps_less_detailed_period_as_condition(self):
+        self.assertIn("실제로 다를 때만 scope_mismatch", examiner.PERSONA)
+        self.assertIn("덜 자세히 썼을 뿐 어긋나지 않으면 kind=action_condition", examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_persona_names_hidden_digits_and_word_periods(self):
+        hidden = ("연도·분기", "업종 코드", "문항 이름", "fact_id 별칭")
+        for word in (*hidden, "최근 한 해", "가장 이른 해"):
+            self.assertIn(word, examiner.PERSONA)
+        self.assertFalse(has_digit(examiner.PERSONA))
+
+    def test_checks_list_uncited_sentences(self):
+        ids = [fact_id(0)]
+        items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]
+        reasons = [
+            {"type": "text", "text": "점포가 "},
+            {"type": "fact", "fact_id": ids[0], "format": "count"},
+            {"type": "text", "text": "개로 많습니다. 손님이 꾸준합니다."},
+        ]
+        packet = self.build(items, {ids[0]: row(ids[0])}, reasons)
+        self.assertEqual(
+            packet["checks"]["uncited"],
+            [
+                {"industry_code": "I201", "field": "reasons_segments", "sentence": 1},
+                {"industry_code": "I201", "field": "risks_segments", "sentence": 0},
+            ],
+        )
+
+    def test_checks_hold_only_uncited_sentences(self):
+        ids = [fact_id(i) for i in range(2)]
+        rows = {
+            ids[0]: row(ids[0], source="business_lifecycle", metric="close_rate_ratio"),
+            ids[1]: row(ids[1], source="business_lifecycle", metric="close_trend_ratio"),
+        }
+        items = [
+            {"item": "S1", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[0]]},
+            {"item": "S4", "status": "observed", "grade": 3, "points": 5.0, "fact_ids": [ids[1]]},
+        ]
+        packet = self.build(items, rows, [{"type": "text", "text": "이유 문장"}])
+        self.assertEqual(set(packet["checks"]), {"uncited"})
+        self.assertNotIn("shared_sources", examiner.PERSONA)
+
+    def test_sentences_keep_trailing_fact_and_punctuation_runs(self):
+        fact = {"type": "fact", "fact_id": fact_id(0), "format": "count"}
+        segments = [
+            {"type": "text", "text": "폐업률이 높습니다."},
+            fact,
+            {"type": "text", "text": " 점포가 많습니다... 정말요?! 네."},
+        ]
+        self.assertEqual(
+            examiner._sentences(segments),
+            [
+                ("폐업률이 높습니다.", True),
+                ("점포가 많습니다...", False),
+                ("정말요?!", False),
+                ("네.", False),
+            ],
+        )
+        leading = [
+            {"type": "text", "text": "첫 문장입니다. "},
+            fact,
+            {"type": "text", "text": "가 둘째 문장입니다."},
+        ]
+        self.assertEqual(
+            examiner._sentences(leading),
+            [("첫 문장입니다.", False), ("가 둘째 문장입니다.", True)],
+        )
+
+    def test_packet_with_checks_stays_under_cap(self):
+        ids = [fact_id(i) for i in range(100)]
+        items = [{"item": "D1", "status": "observed", "grade": 3, "points": 7.5, "fact_ids": ids}]
+        reasons = [{"type": "text", "text": "근거 없는 이유 문장입니다. " * 20}]
+        packet = self.build(items, {fid: row(fid) for fid in ids}, reasons)
+        self.assertLessEqual(len(canonical_json(packet)), examiner.MAX_PACKET_CHARS)
+        self.assertEqual(len(packet["checks"]["uncited"]), 21)
+        self.assertTrue(packet["omitted_fact_ids"])
 
 
 class ExaminerPacketStoreTests(unittest.IsolatedAsyncioTestCase):

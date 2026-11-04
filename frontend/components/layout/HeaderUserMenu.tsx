@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { logout } from '@/lib/api/auth';
+import { loginPath, logout } from '@/lib/api/auth';
 import { clearAnalysisResult, clearRequestId } from '@/lib/api/resultStore';
 import { colors } from '@/styles/tokens';
 
@@ -36,7 +36,7 @@ export default function HeaderUserMenu() {
   if (status === 'anonymous') {
     return (
       <Link
-        href={`/login?next=${encodeURIComponent(pathname)}`}
+        href={loginPath(pathname, window.location.search)}
         className="inline-flex h-11 items-center justify-self-end rounded-md border-[1.5px] px-5 text-15 font-bold transition-colors hover:bg-white/60"
         style={{
           borderColor: colors.brand.dark,

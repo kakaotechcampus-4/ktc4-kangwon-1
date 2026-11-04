@@ -1,13 +1,44 @@
 """모델 경계에서만 짧은 요청별 별칭을 사용하고 저장 식별자는 보존합니다."""
 
 import json
+import re
 import sqlite3
 from hashlib import sha256
 
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository.agentic import begin_immediate
 
 SINGLES = {"fact_id", "distance_fact_id"}
 LISTS = {"fact_ids", "reason_fact_ids", "selection_fact_ids"}
+QUARTER_RANGE = re.compile(r"\d{4}[1-4](~\d{4}[1-4])?")
+PERIOD_LABEL_ROLES = frozenset({"examiner"})
+
+
+def period_label(period):
+    if not QUARTER_RANGE.fullmatch(period):
+        return period
+    start, _, end = period.partition("~")
+    label = f"{start[:4]}년 {start[4]}분기"
+    if not end:
+        return label
+    if end[:4] == start[:4]:
+        return f"{label}~{end[4]}분기"
+    return f"{label}~{end[:4]}년 {end[4]}분기"
+
+
+def labels_periods(role):
+    return role in PERIOD_LABEL_ROLES
+
+
+def label_periods(value, key=None):
+    if key == "period" and isinstance(value, str):
+        return period_label(value)
+    if isinstance(value, dict):
+        return {name: label_periods(item, name) for name, item in value.items()}
+    if isinstance(value, list):
+        return [label_periods(item) for item in value]
+    return value
 
 
 def _walk(value, translate, key=None):
@@ -30,45 +61,30 @@ def encode(scope, value):
     resolved = {}
     with connect(scope.path) as db:
         # 먼저 쓰기 권한을 잡아 조회-삽입 사이의 동시 생성 경합을 막습니다.
-        db.execute("BEGIN IMMEDIATE")
+        begin_immediate(db)
 
         def alias(fid):
-            existing = db.execute(
-                "SELECT alias FROM fact_aliases WHERE request_id=? AND alias=?",
-                (scope.request_id, fid),
-            ).fetchone()
+            existing = fact_db.alias_named(db, scope.request_id, fid)
             if existing:
-                return existing[0]
-            row = db.execute(
-                "SELECT alias FROM fact_aliases WHERE request_id=? AND fact_id=?",
-                (scope.request_id, fid),
-            ).fetchone()
+                return existing
+            row = fact_db.alias_of_fact(db, scope.request_id, fid)
             if row:
-                return row[0]
-            if not db.execute(
-                "SELECT 1 FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id=?",
-                (scope.request_id, scope.snapshot_id, fid),
-            ).fetchone():
+                return row
+            if not fact_db.fact_in_snapshot(db, scope.request_id, scope.snapshot_id, fid):
                 raise ValueError("요청에 없는 fact를 별칭으로 내보낼 수 없습니다.")
             for counter in range(8):
                 short = sha256(f"{fid}:{counter}".encode()).hexdigest()[:8]
                 try:
-                    db.execute(
-                        "INSERT INTO fact_aliases VALUES(?,?,?)",
-                        (scope.request_id, short, fid),
-                    )
+                    fact_db.insert_alias(db, scope.request_id, short, fid)
                 except sqlite3.IntegrityError as exc:
                     if exc.sqlite_errorcode not in {
                         sqlite3.SQLITE_CONSTRAINT_UNIQUE,
                         sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
                     }:
                         raise
-                    row = db.execute(
-                        "SELECT alias FROM fact_aliases WHERE request_id=? AND fact_id=?",
-                        (scope.request_id, fid),
-                    ).fetchone()
+                    row = fact_db.alias_of_fact(db, scope.request_id, fid)
                     if row:
-                        return row[0]
+                        return row
                 else:
                     return short
             raise ValueError("별칭 충돌 재시도 8회 한도를 초과했습니다.")
@@ -78,7 +94,7 @@ def encode(scope, value):
     return _walk(value, resolved.__getitem__)
 
 
-def encode_messages(scope, messages):
+def encode_messages(scope, messages, label=False):
     output = []
     for message in messages:
         item = dict(message)
@@ -88,7 +104,10 @@ def encode_messages(scope, messages):
             except ValueError:
                 pass
             else:
-                item["content"] = json.dumps(encode(scope, body), ensure_ascii=False)
+                body = encode(scope, body)
+                item["content"] = json.dumps(
+                    label_periods(body) if label else body, ensure_ascii=False
+                )
         output.append(item)
     return output
 
@@ -99,18 +118,13 @@ def decode(scope, value):
         def original(reference):
             if not isinstance(reference, str):
                 raise ValueError("fact 별칭은 문자열이어야 합니다.")
-            row = db.execute(
-                "SELECT f.fact_id FROM facts f LEFT JOIN fact_aliases a "
-                "ON a.fact_id=f.fact_id AND a.request_id=f.request_id "
-                "WHERE f.request_id=? AND f.snapshot_id=? AND (f.fact_id=? OR a.alias=?)",
-                (scope.request_id, scope.snapshot_id, reference, reference),
-            ).fetchone()
+            row = fact_db.fact_id_by_reference(db, scope.request_id, scope.snapshot_id, reference)
             if not row:
                 visible = (
                     reference if len(reference) == 8 and reference.isalnum() else "미등록 식별자"
                 )
                 raise ValueError("존재하지 않는 fact: " + visible)
-            return row[0]
+            return row
 
         return _walk(value, original)
 

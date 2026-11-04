@@ -12,16 +12,18 @@ from app.canonical import canonical_hash, canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
+from app.db.repository import facts as fact_db
 from app.storage.scrub import env_secrets, scrub
 
 from .aliases import decode, decode_report
-from .contracts import TOOL_INPUTS, Actor, ToolReply, tool_definitions
+from .contracts import EVALUATOR_ACTORS, TOOL_INPUTS, Actor, ToolReply, tool_definitions
 from .map_regulation import check_regulation, map_search
 from .read_tools import InvalidCursor, get_facts, get_scorecard
 from .sql_tool import error, query_raw
 
 READS = {"get_scorecard", "get_facts", "query_raw", "map_search", "check_regulation"}
-EVALUATORS = {"examiner", "founder", "customer", "landlord_advocate"}
+EVALUATORS = set(EVALUATOR_ACTORS)
 EVALUATOR_READS = {"get_scorecard", "get_facts", "query_raw"}
 
 
@@ -74,8 +76,8 @@ class SharedTools:
 
 def _audit(scope, call_id, actor, name, arguments, reply):
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO tool_calls VALUES(?,?,?,?,?,?,?,?,?)",
+        agentic_db.insert_tool_call(
+            db,
             (
                 call_id,
                 scope.request_id,
@@ -92,11 +94,7 @@ def _audit(scope, call_id, actor, name, arguments, reply):
 
 def previous_reply(scope, actor, name, signature):
     with connect(scope.path) as db:
-        rows = db.execute(
-            "SELECT input_json,reply_json FROM tool_calls WHERE request_id=? AND "
-            "snapshot_id=? AND actor=? AND tool_name=? ORDER BY rowid",
-            (scope.request_id, scope.snapshot_id, actor, name),
-        ).fetchall()
+        rows = agentic_db.tool_call_history(db, scope.request_id, scope.snapshot_id, actor, name)
     for arguments, reply in rows:
         try:
             validated = TOOL_INPUTS[name].model_validate_json(arguments)
@@ -112,11 +110,7 @@ def previous_reply(scope, actor, name, signature):
 
 def space_revision(scope):
     with connect(scope.path) as db:
-        rows = db.execute(
-            "SELECT fact_id FROM space_fit_current WHERE request_id=? AND snapshot_id=? "
-            "ORDER BY industry_code",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchall()
+        rows = fact_db.current_space_fit_ids(db, scope.request_id, scope.snapshot_id)
     return canonical_hash([row[0] for row in rows])
 
 

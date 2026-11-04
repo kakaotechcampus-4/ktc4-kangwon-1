@@ -11,6 +11,8 @@ import json
 
 from app.canonical import canonical_json
 from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository import scores as score_db
 
 from .contracts import (
     CustomerCandidateScore,
@@ -129,28 +131,15 @@ def _cited(segments):
 def load(scope, draft):
     """점수표 문항·문항별 fact·인용 가능 여부를 한 번에 읽습니다."""
     with connect(scope.path) as db:
-        summary = db.execute(
-            "SELECT summary_json FROM score_snapshots WHERE score_snapshot_id=?",
-            (draft.score_snapshot_id,),
-        ).fetchone()
+        summary = score_db.snapshot_summary_json(db, draft.score_snapshot_id)
         if summary is None:
             raise ValueError("초안의 점수표가 없습니다.")
         item_facts = {
             (code, item): json.loads(ids)
-            for code, item, ids in db.execute(
-                "SELECT industry_code,item,fact_ids_json FROM scores WHERE score_snapshot_id=?",
-                (draft.score_snapshot_id,),
-            )
+            for code, item, ids in score_db.item_fact_ids(db, draft.score_snapshot_id)
         }
-        citable = {
-            row[0]
-            for row in db.execute(
-                "SELECT fact_id FROM facts WHERE request_id=? AND snapshot_id=? "
-                "AND status='observed' AND citable=1",
-                (scope.request_id, scope.snapshot_id),
-            )
-        }
-    rows = {row["code"]: row for row in json.loads(summary[0])}
+        citable = fact_db.citable_fact_ids(db, scope.request_id, scope.snapshot_id)
+    rows = {row["code"]: row for row in json.loads(summary)}
     return rows, item_facts, citable
 
 

@@ -121,4 +121,24 @@ describe('새 질문 데이터에 따른 공통 UI', () => {
     };
     expect(submitDisabled(render())).toBe(true);
   });
+
+  it('답변을 보내지 못했으면 고른 답을 둔 채 알리고 다시 보낼 수 있게 한다', () => {
+    state.answers = {
+      'new-ventilation-question': { optionId: 'ready' },
+      'new-sign-question': { optionId: 'yes' },
+    };
+    const html = renderToStaticMarkup(
+      createElement(ClarifyingPanel, {
+        stage: 'awaiting_input',
+        steps: [],
+        questions,
+        onSubmit: vi.fn(),
+        onViewReport: vi.fn(),
+        submitError: '서버에 연결하지 못했어요.',
+      })
+    );
+    expect(html).toMatch(/role="alert"[^>]*>[^<]*서버에 연결하지 못했어요\./);
+    expect(submitDisabled(html)).toBe(false);
+    expect(render()).not.toContain('role="alert"');
+  });
 });

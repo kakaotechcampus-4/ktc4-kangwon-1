@@ -14,6 +14,7 @@ from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
 from app.db.repository import append_event
 from app.industries.catalog import INDUSTRIES
 from app.llm.budget import BudgetExceeded, llm_scope
@@ -21,9 +22,11 @@ from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, comple
 from app.llm.config import LLMSettings
 
 from . import advisor, questions
-from .aliases import encode, encode_messages
+from .aliases import encode, encode_messages, labels_periods
 from .budget import RuntimeBudget
 from .contracts import (
+    EVALUATOR_ACTORS,
+    EVALUATOR_COUNT,
     EvaluatorReview,
     LInput,
     LRecord,
@@ -98,10 +101,8 @@ submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출
 
 def _save(scope, state, status, result_model=None):
     with connect(scope.path) as db:
-        db.execute(
-            "INSERT INTO agentic_runs VALUES(?,?,?,?,?,?,?) ON "
-            "CONFLICT(request_id) DO UPDATE SET "
-            "status=excluded.status,state_json=excluded.state_json,result_json=excluded.result_json,updated_at=excluded.updated_at",
+        agentic_db.save_run(
+            db,
             (
                 scope.request_id,
                 scope.snapshot_id,
@@ -226,11 +227,19 @@ class DecisionLoop:
         await run_in_thread(ensure_space_fits, scope)
         return cls(scope, site, base_id, rows, **kwargs)
 
+    def adopt_shared(self, shared):
+        """수집 단계에서 이미 부른 지도·규제 결과를 루프가 이어받습니다.
+
+        같은 곳을 두 번 조회하지 않으려는 것입니다. 바깥에서 tools.shared 를
+        직접 건드리면 도구 내부 구조가 서비스 계층으로 새어 나갑니다.
+        """
+        self.tools.shared.map_cache = shared.map_cache
+        self.tools.shared.map_keys = shared.map_keys
+        self.tools.shared.map_http = shared.map_http
+        self.tools.shared.regulation = shared.regulation
+
     def evaluator_executors(self):
-        return {
-            actor: self.tools.for_actor(actor)
-            for actor in ("examiner", "founder", "customer", "landlord_advocate")
-        }
+        return {actor: self.tools.for_actor(actor) for actor in EVALUATOR_ACTORS}
 
     async def _budget_changed(self, budget):
         self.state["budget"] = budget
@@ -288,7 +297,8 @@ class DecisionLoop:
             result = outcome.result.model_copy(
                 update={
                     "evaluator_reviews": reviews,
-                    "review_completeness": sum(r.status == "completed" for r in reviews) / 4,
+                    "review_completeness": sum(r.status == "completed" for r in reviews)
+                    / EVALUATOR_COUNT,
                     "limitations_segments": [
                         *outcome.result.limitations_segments,
                         TextSegment(type="text", text="피드백 최종 반영을 완료하지 못했습니다."),
@@ -309,10 +319,7 @@ class DecisionLoop:
 
     def _save_final_result(self, result):
         with connect(self.scope.path) as db:
-            db.execute(
-                "UPDATE agentic_reports SET result_json=?,phase='final' WHERE report_id=?",
-                (result.model_dump_json(), result.report_id),
-            )
+            agentic_db.finalize_report(db, result.report_id, result.model_dump_json())
 
     async def save(self, status="running", result_model=None):
         shared = self.tools.shared
@@ -331,7 +338,9 @@ class DecisionLoop:
 
     async def _model(self, role, messages, settings, definitions=None, receipt=None):
         if role != "advisor":
-            messages = await run_in_thread(encode_messages, self.scope, messages)
+            messages = await run_in_thread(
+                encode_messages, self.scope, messages, labels_periods(role)
+            )
         started = monotonic()
         receipt = receipt if receipt is not None else {}
         if self.recorder:

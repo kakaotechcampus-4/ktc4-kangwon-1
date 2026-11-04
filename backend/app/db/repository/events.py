@@ -27,7 +27,9 @@ def append_event(
             (request_id,),
         ).fetchone()
         db.execute(
-            "INSERT INTO analysis_events VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO analysis_events(request_id,seq,stage,event,detail_json,"
+            "created_at) "
+            "VALUES(?,?,?,?,?,?)",
             (
                 request_id,
                 seq,

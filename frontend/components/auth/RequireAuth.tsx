@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import VerificationNotice from '@/components/auth/VerificationNotice';
+import { loginPath } from '@/lib/api/auth';
 import { colors } from '@/styles/tokens';
 
 /**
@@ -17,7 +18,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status === 'anonymous') {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.replace(loginPath(pathname, window.location.search));
     }
   }, [status, pathname, router]);
 

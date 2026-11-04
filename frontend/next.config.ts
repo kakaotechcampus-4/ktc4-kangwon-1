@@ -20,6 +20,25 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'ktc4-kangwon-1\\.vercel\\.app' }],
+        destination: 'https://chaeum-ai.kr/:path*',
+        permanent: false,
+      },
+      ...(process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
+        ? []
+        : [
+            {
+              source: '/reports',
+              destination: '/my/reports',
+              permanent: false,
+            },
+          ]),
+    ];
+  },
 };
 
 export default nextConfig;

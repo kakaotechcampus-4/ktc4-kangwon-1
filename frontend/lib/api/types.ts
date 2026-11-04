@@ -290,4 +290,6 @@ export interface StoredAnalysis {
   error: AnalysisError | null;
   questions: StoredQuestions | null;
   rendered: RenderedReport | null;
+  input_address?: string;
+  completed_at?: string | null;
 }
