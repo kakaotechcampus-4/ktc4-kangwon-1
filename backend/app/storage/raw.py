@@ -141,7 +141,10 @@ def _save_response(
             (scope.snapshot_id, scope.run_id, source, group_key, str(page)),
         ).fetchone()
         db.execute(
-            "INSERT INTO raw_responses VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO raw_responses(response_id,request_id,run_id,snapshot_id,"
+            "source,source_type,request_args_json,page,http_status,collected_at,"
+            "payload_hash,group_key,expected_rows,duplicate_of) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 response_id,
                 scope.request_id,
@@ -173,7 +176,7 @@ def _save_response(
                 (scope.snapshot_id, scope.run_id, source, group_key, row_hash),
             ).fetchone()
             db.execute(
-                "INSERT INTO raw_response_rows VALUES(?,?,?)",
+                "INSERT INTO raw_response_rows(response_id,raw_row_id,duplicate_of) VALUES(?,?,?)",
                 (response_id, row_id, previous[0] if previous else None),
             )
         snap = db.execute(

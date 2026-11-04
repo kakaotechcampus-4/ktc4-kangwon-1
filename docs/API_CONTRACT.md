@@ -35,6 +35,9 @@ POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다.
 확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.
 접수된 ID의 GET은 pending/running/waiting_for_input/completed/failed 상태를200으로 반환한다.
 자료가 아직 없으면 site/result/error/rendered/questions는 null이다. 미존재 ID만404다.
+조회 응답은 request_id·input_address·catalog_version·radius_m·status·created_at·completed_at·
+site·result·error·questions·rendered 열두 칸이다(`StoredAnalysis`). DB 행을 그대로 흘려보내지
+않으므로 칸을 더하거나 빼려면 이 모델을 고쳐야 한다.
 답변 뒤 같은 요청 ID로 재개하며 자료 버전·모델 예산·이전 대화를 유지한다.
 wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를 오류 추적에 쓴다.
 

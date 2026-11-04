@@ -100,6 +100,10 @@ ToolName = Literal[
 ]
 Actor = Literal["decision", "examiner", "founder", "customer", "landlord_advocate", "advisor"]
 EvaluatorActor = Literal["examiner", "founder", "customer", "landlord_advocate"]
+
+# 평가자 명단과 인원수의 단일 출처입니다. 평가자를 더하거나 빼면 여기만 고칩니다.
+EVALUATOR_ACTORS = get_args(EvaluatorActor)
+EVALUATOR_COUNT = len(EVALUATOR_ACTORS)
 Source = Literal[
     "floating_population",
     "resident_population",
