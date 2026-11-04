@@ -85,5 +85,6 @@ export function storedReport(detail: StoredAnalysis): StoredReport {
 }
 
 export function isExampleReport(search: string): boolean {
-  return new URLSearchParams(search).has('example');
+  const params = new URLSearchParams(search);
+  return params.has('example') || params.has('demo');
 }

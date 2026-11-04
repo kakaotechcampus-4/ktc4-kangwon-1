@@ -18,13 +18,14 @@ export default function SegmentedSelector<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="grid w-full grid-cols-2 gap-px self-start overflow-hidden rounded-lg border [&>:last-child:nth-child(odd)]:col-span-2 @min-[28rem]:inline-grid @min-[28rem]:w-fit @min-[28rem]:max-w-full @min-[28rem]:grid-flow-col @min-[28rem]:auto-cols-fr @min-[28rem]:grid-cols-none @min-[28rem]:[&>:last-child:nth-child(odd)]:col-span-1"
+      className="grid w-full min-w-0 max-w-[460px] self-start overflow-hidden rounded-lg border"
       style={{
         borderColor: colors.neutral.border,
-        backgroundColor: colors.neutral.border,
+        backgroundColor: colors.neutral.white,
+        gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
       }}
     >
-      {options.map((option) => {
+      {options.map((option, index) => {
         const isSelected = option.value === value;
         return (
           <button
@@ -33,8 +34,10 @@ export default function SegmentedSelector<T extends string>({
             role="radio"
             aria-checked={isSelected}
             onClick={() => onChange(option.value)}
-            className="min-h-[52px] min-w-[72px] px-4 text-base whitespace-nowrap sm:min-w-[88px] sm:px-5"
+            className="min-h-12 min-w-0 px-2 text-sm leading-tight break-keep sm:min-h-14 sm:px-3 sm:text-base"
             style={{
+              borderLeft:
+                index === 0 ? 'none' : `1px solid ${colors.neutral.border}`,
               backgroundColor: isSelected
                 ? colors.brand.dark
                 : colors.neutral.white,

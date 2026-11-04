@@ -54,7 +54,7 @@ export default function Testimonials() {
           VOICES
         </p>
         <h2
-          className="mt-3.5 text-4xl font-extrabold tracking-[-0.02em]"
+          className="mt-3.5 text-3xl font-extrabold tracking-[-0.02em] sm:text-4xl"
           style={{ color: colors.brand.dark }}
         >
           사장님들의 이야기

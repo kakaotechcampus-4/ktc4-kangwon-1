@@ -5,14 +5,14 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { MapIllustration } from '@/components/report/PropertyMap';
-import { candidateScore } from '@/components/report/IndustryReview';
+import { candidateScore } from '@/lib/api/candidates';
 import { loadAnalysisResult, loadVacancyInput } from '@/lib/api/resultStore';
 import { mockReports, type ReportSummary } from '@/lib/mockData/reports';
 import { colors } from '@/styles/tokens';
 
 /**
  * 리포트 목록. 목록 API가 없어 목업 리포트를 보여주고, 이 브라우저에서 방금
- * 분석한 결과가 있으면 맨 앞에 붙인다. 카드를 누르면 /report로 간다.
+ * 분석한 결과가 있으면 맨 앞에 붙인다. 예시 카드는 해당 예시 ID를 /report에 전달한다.
  */
 export default function ReportsPage() {
   const [current, setCurrent] = useState<ReportSummary | null>(null);
@@ -56,7 +56,7 @@ export default function ReportsPage() {
               className="mt-3 font-extrabold tracking-[-0.04em]"
               style={{
                 color: colors.brand.dark,
-                fontSize: 'clamp(30px, 3vw, 42px)',
+                fontSize: 'clamp(26px, 3vw, 42px)',
               }}
             >
               리포트 목록
@@ -118,7 +118,11 @@ function ReportCard({ report }: { report: ReportSummary }) {
 
   return (
     <Link
-      href="/report"
+      href={
+        mockReports.some((mockReport) => mockReport.id === report.id)
+          ? `/report?demo=${encodeURIComponent(report.id)}`
+          : '/report'
+      }
       aria-label={`${report.address} 리포트 보기 · AI 추천 ${report.topIndustry} ${report.score}점`}
       className="group block overflow-hidden rounded-[22px] bg-white shadow-[0_10px_30px_rgba(16,35,58,0.06)] transition-all duration-200 ease-out hover:-translate-y-1.5 hover:shadow-[0_22px_44px_rgba(16,35,58,0.14)] focus-visible:-translate-y-1.5"
     >

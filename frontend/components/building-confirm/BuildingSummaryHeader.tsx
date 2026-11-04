@@ -7,12 +7,14 @@ const dmMono = pretendard;
 
 type BuildingSummaryHeaderProps = {
   building: BuildingInfo;
+  address: string;
 };
 
-/** 확인 카드 상단 — 다크 헤더(건물명·층, 주소)와 읽기 전용 요약 4칸. */
+/** 확인 카드 상단 — 주소를 한 줄의 정보 위계로 강조하고 조회 출처와 층은 보조 정보로 둔다. */
 
 export default function BuildingSummaryHeader({
   building,
+  address,
 }: BuildingSummaryHeaderProps) {
   const summary: { label: string; field: BuildingField<string | number> }[] = [
     { label: '건물 주용도', field: building.mainUse },
@@ -24,37 +26,51 @@ export default function BuildingSummaryHeader({
   return (
     <div className="flex flex-col">
       <div
-        className="flex flex-col-reverse items-start gap-3 px-5 py-6 sm:flex-row sm:justify-between sm:gap-6 sm:px-10 sm:py-8"
+        className="flex flex-col items-start gap-3 px-4 py-5 sm:gap-4 sm:px-8 sm:py-7"
         style={{ backgroundColor: colors.brand.dark }}
       >
-        <div className="flex min-w-0 flex-col gap-2">
-          <h2
-            className="text-fluid-24-30 font-bold break-keep"
-            style={{ color: colors.neutral.white }}
-          >
-            {building.buildingName} {building.floorLabel}
-          </h2>
-          <p
-            className="text-fluid-15-16 break-keep"
-            style={{ color: `${colors.neutral.white}CC` }}
-          >
-            {building.address}
-            {building.sourceNote && ` · ${building.sourceNote}`}
-          </p>
-        </div>
-        <span
-          className={`${dmMono.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
+        <h2
+          className="w-full font-bold leading-[1.4] break-keep"
           style={{
-            backgroundColor: `${colors.neutral.white}14`,
-            color: '#7F9BDC',
+            color: colors.neutral.white,
+            fontSize: 'clamp(1.25rem, 2vw, 1.875rem)',
+            overflowWrap: 'normal',
           }}
         >
-          건축물대장 HUB
-        </span>
+          {address || building.address}
+        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="rounded-md px-3 py-1.5 text-13 font-semibold"
+            style={{
+              backgroundColor: `${colors.neutral.white}14`,
+              color: `${colors.neutral.white}E6`,
+            }}
+          >
+            {building.floorLabel}
+          </span>
+          <span
+            className={`${dmMono.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
+            style={{
+              backgroundColor: `${colors.neutral.white}14`,
+              color: '#7F9BDC',
+            }}
+          >
+            건축물대장 HUB
+          </span>
+        </div>
+        {building.sourceNote && (
+          <p
+            className="text-sm break-keep"
+            style={{ color: `${colors.neutral.white}CC` }}
+          >
+            {building.sourceNote}
+          </p>
+        )}
       </div>
 
       <dl
-        className="grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-5 sm:flex sm:flex-wrap sm:gap-x-12 sm:px-10 sm:py-6"
+        className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 sm:flex sm:flex-wrap sm:gap-x-12 sm:px-10 sm:py-6"
         style={{ backgroundColor: `${colors.brand.primary}08` }}
       >
         {summary.map(({ label, field }) => (

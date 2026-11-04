@@ -103,9 +103,8 @@ describe('리포트 화면', () => {
     vi.mocked(getAnalysis).mockResolvedValue(stored);
     render(<ReportPage />);
     await waitFor(() =>
-      expect(document.body.textContent).toContain('직장인 수요가 가장 큽니다.')
+      expect(document.body.textContent).toContain('시험용 수제과자점')
     );
-    expect(document.body.textContent).toContain('시험용 수제과자점');
     expect(document.body.textContent).toContain('위례광장로 199');
     expect(getAnalysis).toHaveBeenCalledWith('r1');
   });
@@ -137,14 +136,22 @@ describe('리포트 화면', () => {
     await waitFor(() => expect(getAnalysis).toHaveBeenCalledTimes(2));
   });
 
-  it('예시 보기로 열면 예시 리포트라고 표시한다', async () => {
-    window.history.replaceState({}, '', '/report?example=1');
+  it('데모 예시로 열면 예시 리포트라고 표시한다', async () => {
+    window.history.replaceState({}, '', '/report?demo=mock-ogum-404');
     render(<ReportPage />);
-    expect(
-      await screen.findByText(
-        /예시 리포트예요\. 실제 상가를 분석한 결과가 아니에요\./
+    expect(await screen.findByText('예시 리포트 · 목업 데이터')).toBeTruthy();
+    expect(getAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('결과 없이 열면 목업 대신 안내를 보여 준다', async () => {
+    window.history.replaceState({}, '', '/report');
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.body.textContent).not.toContain(
+        '예시 리포트 · 목업 데이터'
       )
-    ).toBeTruthy();
+    );
+    expect(document.body.textContent).not.toContain('ANALYSIS REPORT');
     expect(getAnalysis).not.toHaveBeenCalled();
   });
 });

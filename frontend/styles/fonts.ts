@@ -1,13 +1,9 @@
-import localFont from 'next/font/local';
+// scripts/subset-pretendard.py가 만든 파일 — 직접 고치지 말고 스크립트를 다시 실행한다.
+// 첫 화면에 바로 필요한 Pretendard 묶음 주소(미리 받기용).
+export const PRETENDARD_LATIN_URL =
+  '/fonts/pretendard/pretendard-latin.5370ba1d.woff2';
+export const PRETENDARD_HERO_URL =
+  '/fonts/pretendard/pretendard-hero.da55a888.woff2';
 
-/**
- * 서비스 전체 글꼴 — Pretendard 가변 글꼴 하나로 한글·영문·숫자를 모두 그린다.
- * 글꼴 파일과 라이선스(SIL OFL 1.1)는 app/fonts/에 함께 둔다.
- * 예전에 섹션마다 따로 쓰던 Outfit·DM Mono 자리도 이 값을 그대로 쓴다.
- */
-export const pretendard = localFont({
-  src: '../app/fonts/PretendardVariable.woff2',
-  variable: '--font-pretendard',
-  weight: '45 920',
-  display: 'swap',
-});
+// 예전 next/font 객체와 같은 모양 — 컴포넌트의 `pretendard.className`이 그대로 동작한다.
+export const pretendard = { className: 'font-sans', variable: '' };

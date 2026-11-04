@@ -8,13 +8,13 @@ type SourceBadgeProps = {
   registryText: string | null;
 };
 
-/** 행별 값의 출처 — 건축물대장 / 건축물대장에 없음 / 직접 수정·입력. */
+/** 각 값이 어디에서 왔는지 표시한다. 입력 동작이 아니라 값의 출처를 설명한다. */
 export default function SourceBadge({
   source,
   registryText,
 }: SourceBadgeProps) {
   const base =
-    'inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium sm:whitespace-nowrap';
+    'inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md px-3 py-1.5 text-13 leading-snug break-keep';
 
   if (source === 'registry') {
     return (
@@ -47,16 +47,15 @@ export default function SourceBadge({
 
   return (
     <span
-      className={`${base} border`}
+      className="inline-flex max-w-full items-center rounded-md px-3 py-1.5 text-13 leading-snug break-keep"
       style={{
-        borderColor: colors.neutral.border,
-        backgroundColor: colors.neutral.white,
-        color: colors.text.secondary,
+        backgroundColor: colors.neutral.background,
+        color: colors.text.tertiary,
       }}
     >
       {registryText === null
         ? '직접 입력'
-        : `직접 수정 · 건축물대장: ${registryText}`}
+        : `직접 수정 · 대장 값 ${registryText}`}
     </span>
   );
 }

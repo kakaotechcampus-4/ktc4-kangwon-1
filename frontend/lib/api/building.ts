@@ -109,35 +109,9 @@ const MOCK_REGISTRY = {
 };
 const MOCK_STEP_MS = 700;
 
-function wait(ms: number, signal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('조회가 취소됐습니다.', 'AbortError'));
-    });
-  });
-}
-
-/**
- * 건축물대장 4개 항목을 차례로 조회한다. 한 항목이 실패해도 멈추지 않고,
- * 그 항목에서 오는 필드를 missing으로 채워 돌려준다.
- */
-async function fetchMockBuildingInfo(
-  address: string,
-  { onStepChange, signal, failLookups = [] }: FetchOptions = {}
-): Promise<BuildingInfo> {
-  void address; // mock 단계 — 실제 API에서는 이 주소로 조회한다.
-  const results: Partial<Record<LookupId, boolean>> = {};
-
-  for (const id of LOOKUP_ORDER) {
-    onStepChange?.(id, 'loading');
-    await wait(MOCK_STEP_MS, signal);
-    const ok = !failLookups.includes(id);
-    results[id] = ok;
-    onStepChange?.(id, ok ? 'done' : 'failed');
-  }
-
+function mockBuildingInfo(
+  results: Partial<Record<LookupId, boolean>>
+): BuildingInfo {
   const title = results.title ? MOCK_REGISTRY.title : null;
   const mainUse = title?.mainUse ?? null;
 
@@ -160,6 +134,48 @@ async function fetchMockBuildingInfo(
     facility: registryField(facilityFromMainUse(mainUse)),
     sewage: registryField(results.sewage ? MOCK_REGISTRY.sewage.sewage : null),
   };
+}
+
+/** 개발 화면에서 성공한 HUB 응답 예시를 바로 미리 본다. */
+export function mockBuildingRegistryPreview(): BuildingInfo {
+  return mockBuildingInfo({
+    title: true,
+    floor: true,
+    exclusiveArea: true,
+    sewage: true,
+  });
+}
+
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('조회가 취소됐습니다.', 'AbortError'));
+    });
+  });
+}
+
+/**
+ * 건축물대장 4개 항목을 차례로 조회한다. 한 항목이 실패해도 멈추지 않고,
+ * 그 항목에서 오는 필드를 missing으로 채워 돌려준다.
+ */
+export async function fetchMockBuildingInfo(
+  address: string,
+  { onStepChange, signal, failLookups = [] }: FetchOptions = {}
+): Promise<BuildingInfo> {
+  void address; // mock 단계 — 실제 API에서는 이 주소로 조회한다.
+  const results: Partial<Record<LookupId, boolean>> = {};
+
+  for (const id of LOOKUP_ORDER) {
+    onStepChange?.(id, 'loading');
+    await wait(MOCK_STEP_MS, signal);
+    const ok = !failLookups.includes(id);
+    results[id] = ok;
+    onStepChange?.(id, ok ? 'done' : 'failed');
+  }
+
+  return mockBuildingInfo(results);
 }
 
 export async function fetchBuildingInfo(
