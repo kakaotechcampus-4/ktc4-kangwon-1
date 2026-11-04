@@ -14,7 +14,10 @@ import {
   FactLifecycleSection,
 } from '@/components/report/FactSections';
 import EvaluatorReviews from '@/components/report/EvaluatorReviews';
-import KeyConclusion from '@/components/report/KeyConclusion';
+import KeyConclusion, {
+  getKeyConclusionItems,
+} from '@/components/report/KeyConclusion';
+import TenantMatchingProposal from '@/components/report/TenantMatchingProposal';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import './report.css';
@@ -61,6 +64,7 @@ const chapterEyebrows: Record<string, string> = {
   customers: 'FOOT TRAFFIC',
   competition: 'COMPETITION',
   lifecycle: 'OPEN · CLOSE',
+  listing: 'NEXT STEP',
 };
 
 const chapters = [
@@ -71,24 +75,28 @@ const chapters = [
   ['customers', '유동인구'],
   ['competition', '경쟁업체'],
   ['lifecycle', '개폐업 추이'],
+  ['listing', '임차인 찾기'],
 ] as const;
 
 function Chapter({
   id,
   title,
   aside,
+  screenOnly = false,
   children,
 }: {
   id: string;
   title: string;
   // 설명 문장과 같은 줄 오른쪽에 붙는 보조 정보
   aside?: ReactNode;
+  // 화면에서만 보이고 인쇄에서는 제외하는 다음 단계
+  screenOnly?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       id={id}
-      className="report-chapter scroll-mt-24 pb-16 pt-12"
+      className={`report-chapter scroll-mt-24 pb-16 pt-12${screenOnly ? ' report-screen-only' : ''}`}
       style={{ borderColor: colors.neutral.border }}
     >
       <header className="chapter-heading">
@@ -102,6 +110,9 @@ function Chapter({
           <span>
             {chapters.find(([chapterId]) => chapterId === id)?.[1] ?? title}
           </span>
+          {id === 'reviews' && aside && (
+            <span className="chapter-aside-inline-mobile">{aside}</span>
+          )}
         </h2>
         {/* 핵심 결론은 패널 자체가 설명이라 소개 문장을 두지 않는다 */}
         {id !== 'conclusion' && (
@@ -109,7 +120,9 @@ function Chapter({
             <p className="chapter-description">
               {id === 'space'
                 ? '분석 대상 상가의 기본 정보를 확인하세요.'
-                : title}
+                : id === 'listing'
+                  ? '추천 업종을 바탕으로 실제 임차인을 찾아보세요.'
+                  : title}
             </p>
             {aside && <span className="chapter-aside">{aside}</span>}
           </div>
@@ -166,6 +179,14 @@ function MissingData({
 export default function ReportPage() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen || !window.matchMedia('(max-width: 480px)').matches) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
   const [largeText, setLargeText] = useState(false);
   useEffect(() => {
     const update = () => {
@@ -327,6 +348,14 @@ export default function ReportPage() {
         .map((line) => line.trim())
         .filter(Boolean)
     : [];
+  const conclusionChecks = analysisResult
+    ? [...topChecks, ...resultChecks]
+    : [
+        '1층에서 출입구와 간판이 잘 보이는지 현장에서 확인하세요.',
+        '업종에 필요한 급·배수, 전력 용량과 공사 허용 범위를 확인하세요.',
+        '건축물 용도와 해당 공간에서 영업 가능한 업종을 확인하세요.',
+      ];
+  const conclusionCheckCount = getKeyConclusionItems(conclusionChecks).length;
   const reviewerList =
     analysisResult?.evaluator_reviews ?? mockReportData.evaluatorReviews;
   const limitations = analysisResult
@@ -428,19 +457,35 @@ export default function ReportPage() {
             onClick={() => setMenuOpen((v) => !v)}
             className="flex min-h-14 w-full items-center justify-between px-4 text-base font-semibold"
           >
-            <span>{chapters.find((item) => item[0] === active)?.[1]}</span>
+            <span className="report-mobile-toc-current">
+              <span className="report-mobile-toc-current-number">
+                {String(
+                  chapters.findIndex((item) => item[0] === active) + 1
+                ).padStart(2, '0')}
+              </span>
+              <span>{chapters.find((item) => item[0] === active)?.[1]}</span>
+            </span>
             <span className="flex items-center gap-2">
               <Menu size={18} />
               목차 보기
             </span>
           </button>
           {menuOpen && (
-            <div
-              id="mobile-report-menu"
-              className="report-mobile-toc-menu overflow-auto p-2"
-            >
-              {navigation}
-            </div>
+            <>
+              <button
+                type="button"
+                aria-label="목차 닫기"
+                className="report-mobile-toc-backdrop"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                id="mobile-report-menu"
+                className="report-mobile-toc-menu overflow-auto p-2"
+              >
+                <p className="report-mobile-toc-sheet-title">리포트 목차</p>
+                {navigation}
+              </div>
+            </>
           )}
         </div>
         <div
@@ -554,15 +599,7 @@ export default function ReportPage() {
                 name={topName}
                 industryCode={top?.industry_code}
                 badge={top?.badge}
-                checks={
-                  analysisResult
-                    ? [...topChecks, ...resultChecks]
-                    : [
-                        '4층까지의 엘리베이터 동선과 간판 노출을 확인하세요.',
-                        '급·배수, 전력 용량과 공사 허용 범위를 확인하세요.',
-                        '학교 주변 보호구역과 대상 업종의 제한 여부를 확인하세요.',
-                      ]
-                }
+                checks={conclusionChecks}
                 facts={factIndex}
               />
             </Chapter>
@@ -571,7 +608,9 @@ export default function ReportPage() {
               title="분석한 51개 업종을 검토 순서대로 정리했어요. 순위는 업종 간 비교를 돕는 참고 자료이며, 실제 입점 가능 여부와는 별도로 확인해야 합니다."
               aside={`${Object.keys(INDUSTRIES).length}개 업종`}
             >
-              <IndustryRankingList />
+              <IndustryRankingList
+                totalCount={Object.keys(INDUSTRIES).length}
+              />
             </Chapter>
             <Chapter
               id="reviews"
@@ -582,6 +621,7 @@ export default function ReportPage() {
             >
               <EvaluatorReviews
                 reviews={reviewerList}
+                checkCount={conclusionCheckCount}
                 resolutions={
                   analysisResult?.review_resolutions ??
                   mockReportData.reviewResolutions
@@ -647,6 +687,34 @@ export default function ReportPage() {
                   onRetry={retryFacts}
                 />
               )}
+            </Chapter>
+            <Chapter id="listing" title="임차인 찾기" screenOnly>
+              <TenantMatchingProposal
+                recommendations={
+                  analysisResult
+                    ? analysisResult.top5.slice(0, 3).map((item) => ({
+                        name: item.industry_name,
+                      }))
+                    : mockReportData.recommended.slice(0, 3).map((item) => ({
+                        name: item.name,
+                      }))
+                }
+                propertyInfo={{
+                  address: displayAddress,
+                  floor:
+                    demoReport?.floor ||
+                    vacancyInput?.floorUnit.trim() ||
+                    (isPropertyPreview
+                      ? mockReportData.floor
+                      : '층 정보 확인 필요'),
+                  area:
+                    areaValue !== null && areaValue !== undefined
+                      ? formatArea(areaValue)
+                      : isPropertyPreview
+                        ? mockReportData.area
+                        : '면적 확인 필요',
+                }}
+              />
             </Chapter>
           </main>
         </div>

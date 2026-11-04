@@ -10,7 +10,7 @@ import type { FactView } from '@/lib/api/types';
  * 02 핵심 결론.
  *
  * - 1행: 가장 먼저 검토할 업종 | 검토 방향 (카드·구분선 없이 같은 행)
- * - 계약 전에 확인할 N가지: 이 장의 중심. 결론 패널의 "N가지"에서 점선으로 이어진다. 후보의 위험·확인 조건 문장을 쟁점별로
+ * - 입점 전 확인할 N가지: 이 장의 중심. 결론 패널의 "N가지"에서 점선으로 이어진다. 후보의 위험·확인 조건 문장을 쟁점별로
  *   묶고, fact로 읽히는 근거를 붙이고, 번호 순서대로 읽게 한다.
  *
  * 백엔드 문장(risks·confirmation_conditions)에는 "점수표·신뢰도·법규 적합성" 같은
@@ -66,6 +66,40 @@ const TOPIC_ORDER: Exclude<Topic, 'other'>[] = [
   'regulation',
   'demand',
 ];
+
+export function getKeyConclusionItems(checks: string[]) {
+  const sentences = [
+    ...new Set(
+      checks
+        .flatMap((text) => text.split(/(?<=[.다요])\s*(?=[가-힣A-Z])/))
+        .map((text) => text.trim())
+        .filter(Boolean)
+    ),
+  ];
+
+  return [
+    ...TOPIC_ORDER.map((topic) => ({
+      key: topic,
+      topic,
+      ...TOPICS[topic],
+      sources: sentences.filter((sentence) =>
+        TOPICS[topic].test.test(sentence)
+      ),
+    })).filter((item) => item.sources.length > 0),
+    ...sentences
+      .filter(
+        (sentence) =>
+          !TOPIC_ORDER.some((topic) => TOPICS[topic].test.test(sentence))
+      )
+      .map((sentence, index) => ({
+        key: `other-${index}`,
+        topic: 'other' as const,
+        title: '추가로 확인할 것',
+        how: sentence,
+        sources: [] as string[],
+      })),
+  ];
+}
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj =>
@@ -152,39 +186,8 @@ export default function KeyConclusion({
           (isObj(f.value) && f.value.industry_code === code))
     );
 
-  // 문장을 쪼개 쟁점별로 나눈다. 한 문장이 여러 쟁점에 걸칠 수 있다.
-  const sentences = [
-    ...new Set(
-      checks
-        .flatMap((text) => text.split(/(?<=[.다요])\s*(?=[가-힣A-Z])/))
-        .map((text) => text.trim())
-        .filter(Boolean)
-    ),
-  ];
-  const items: {
-    key: string;
-    topic: Topic;
-    title: string;
-    how: string;
-    sources: string[];
-  }[] = [
-    ...TOPIC_ORDER.map((topic) => ({
-      key: topic,
-      topic,
-      ...TOPICS[topic],
-      sources: sentences.filter((s) => TOPICS[topic].test.test(s)),
-    })).filter((item) => item.sources.length > 0),
-    // 어느 쟁점에도 안 걸린 문장은 그대로 한 항목씩 보여 준다
-    ...sentences
-      .filter((s) => !TOPIC_ORDER.some((t) => TOPICS[t].test.test(s)))
-      .map((s, i) => ({
-        key: `other-${i}`,
-        topic: 'other' as const,
-        title: '추가로 확인할 것',
-        how: s,
-        sources: [],
-      })),
-  ];
+  // 문장을 쟁점별로 묶은 실제 표시 항목 수를 버튼 문구와 공유한다.
+  const items = getKeyConclusionItems(checks);
 
   const spaceFit = industryCode
     ? findFact('space_fit', industryCode)?.value
@@ -271,13 +274,13 @@ export default function KeyConclusion({
   const badgeText = badge ? BADGE_TEXT[badge] : undefined;
 
   return (
-    <div className="flex w-full flex-col overflow-hidden border border-[#E3E9F0]">
+    <div className="key-conclusion flex w-full flex-col overflow-hidden border border-[#E3E9F0]">
       {/* ① 결론 패널 — 리포트에서 가장 먼저 읽혀야 하는 곳이라 유일하게 짙은 면으로 띄운다 */}
-      <section className="relative overflow-hidden bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
+      <section className="key-conclusion-recommendation relative overflow-hidden bg-[#0C1936] px-6 py-8 text-white sm:px-10 sm:py-10">
         {/* 오로라 배경 — 모서리에만 빛이 은은하게 번진다 */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          className="key-conclusion-glow pointer-events-none absolute inset-0"
           style={{
             background: [
               'radial-gradient(60% 90% at 90% 0%, rgba(46,82,190,0.42) 0%, rgba(46,82,190,0) 60%)',
@@ -287,38 +290,58 @@ export default function KeyConclusion({
           }}
         />
         <div className="relative grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:gap-14">
-          <div className="flex flex-col gap-3">
-            <p className="flex items-center gap-2 text-sm font-bold text-[#9FB4D6]">
+          <div className="key-conclusion-recommendation-primary flex flex-col gap-3">
+            <p className="key-conclusion-recommendation-label flex items-center gap-2 text-sm font-bold text-[#9FB4D6]">
               <Building2 size={17} aria-hidden />
               가장 먼저 검토할 업종
             </p>
-            <h3 className="break-keep text-3xl leading-[1.2] font-extrabold tracking-[-0.03em] sm:text-32">
-              {name ?? '추천 결과 없음'}
-            </h3>
-            {badgeText && (
-              <span
-                className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold"
-                style={{
-                  color: '#10233A',
-                  backgroundColor: badgeText.onDark,
-                }}
-              >
-                {badgeText.text}
-              </span>
-            )}
+            <div className="key-conclusion-recommendation-title-row flex flex-wrap items-center gap-2">
+              <h3 className="break-keep text-3xl leading-[1.2] font-extrabold tracking-[-0.03em] sm:text-32">
+                {name ?? '추천 결과 없음'}
+              </h3>
+              {badgeText && (
+                <span
+                  className="key-conclusion-recommendation-badge mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold"
+                  style={{
+                    color: '#10233A',
+                    backgroundColor: badgeText.onDark,
+                  }}
+                >
+                  <span className="key-conclusion-badge-desktop">
+                    {badgeText.text}
+                  </span>
+                  <span className="key-conclusion-badge-mobile">
+                    {badgeText.text === '추천' ? '상위 추천' : badgeText.text}
+                  </span>
+                </span>
+              )}
+            </div>
           </div>
 
           {name && (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm font-bold text-[#9FB4D6]">검토 방향</p>
-              <p className="break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
-                {withObject(name)} 먼저 검토하되,{' '}
-                <span className="text-[#FFCF7A]">
-                  {items.length > 0
-                    ? `아래 ${items.length}가지를 직접 확인한 뒤`
-                    : '현장을 직접 확인한 뒤'}
-                </span>{' '}
-                결정하세요.
+            <div className="key-conclusion-direction flex flex-col gap-3">
+              <p className="key-conclusion-direction-label text-sm font-bold text-[#9FB4D6]">
+                검토 방향
+              </p>
+              <p className="key-conclusion-direction-copy break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
+                <span className="key-conclusion-direction-desktop">
+                  {withObject(name)} 먼저 검토하되,{' '}
+                  <span className="text-[#FFCF7A]">
+                    {items.length > 0
+                      ? `아래 ${items.length}가지를 직접 확인한 뒤`
+                      : '현장을 직접 확인한 뒤'}
+                  </span>{' '}
+                  결정하세요.
+                </span>
+                <span className="key-conclusion-direction-mobile">
+                  먼저 살펴보되,{' '}
+                  <span className="text-[#FFCF7A]">
+                    {items.length > 0
+                      ? `아래 ${items.length}가지를 확인한 뒤`
+                      : '현장을 직접 확인한 뒤'}
+                  </span>{' '}
+                  결정하세요.
+                </span>
               </p>
             </div>
           )}
@@ -327,7 +350,7 @@ export default function KeyConclusion({
         {items.length > 0 && (
           <span
             aria-hidden
-            className="absolute bottom-0 left-[calc(1.5rem+11px)] h-8 border-l-2 border-dashed border-[#FFCF7A]/70 sm:left-[calc(2.5rem+11px)]"
+            className="key-conclusion-connector absolute bottom-0 left-[calc(1.5rem+11px)] h-8 border-l-2 border-dashed border-[#FFCF7A]/70 sm:left-[calc(2.5rem+11px)]"
           />
         )}
       </section>
@@ -335,7 +358,7 @@ export default function KeyConclusion({
       {/* ② 입점 전 확인할 N가지 — 이 장의 중심 */}
       <section
         id="key-checks"
-        className="flex scroll-mt-28 flex-col gap-5 bg-white px-6 pb-8 sm:px-10 sm:pb-10"
+        className="key-conclusion-checks flex scroll-mt-28 flex-col gap-5 bg-white px-6 pb-8 sm:px-10 sm:pb-10"
       >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -348,13 +371,27 @@ export default function KeyConclusion({
               <span aria-hidden className="h-8" />
             )}
             <h3 className="flex items-center gap-2 text-xl font-extrabold tracking-[-0.02em] text-[#10233A] sm:text-2xl">
-              <TriangleAlert size={22} color={P.amber} aria-hidden />
+              <TriangleAlert
+                className="key-conclusion-warning-desktop"
+                size={22}
+                color={P.amber}
+                aria-hidden
+              />
+              <span
+                className="key-conclusion-warning-mobile"
+                aria-hidden="true"
+              >
+                !
+              </span>
               {items.length > 0
-                ? `계약 전에 확인할 ${items.length}가지`
-                : '계약 전에 직접 확인하세요'}
+                ? `입점 전 확인할 ${items.length}가지`
+                : '입점 전 직접 확인하세요'}
             </h3>
-            <p className="text-15 text-[#5B6470]">
+            <p className="key-conclusion-checks-intro text-15 text-[#5B6470]">
               분석 자료로는 알 수 없어 현장에서 봐야 하는 것들이에요.
+            </p>
+            <p className="key-conclusion-checks-intro-mobile text-15 text-[#5B6470]">
+              분석 자료로 알 수 없는 조건은 현장에서 확인하세요.
             </p>
           </div>
         </div>
@@ -370,13 +407,13 @@ export default function KeyConclusion({
               return (
                 <li
                   key={item.key}
-                  className="grid grid-cols-[40px_1fr] gap-x-4 gap-y-3 py-6 sm:grid-cols-[44px_1fr_minmax(0,400px)] sm:gap-x-6"
+                  className="key-conclusion-check-item grid grid-cols-[40px_1fr] gap-x-4 gap-y-3 py-6 sm:grid-cols-[44px_1fr_minmax(0,400px)] sm:gap-x-6"
                 >
-                  <span className="text-2xl leading-none font-extrabold tabular-nums text-[#2453D6] sm:pt-0.5">
+                  <span className="key-conclusion-check-number text-2xl leading-none font-extrabold tabular-nums text-[#2453D6] sm:pt-0.5">
                     {String(i + 1).padStart(2, '0')}
                   </span>
 
-                  <div className="flex min-w-0 flex-col gap-2">
+                  <div className="key-conclusion-check-copy flex min-w-0 flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-extrabold tracking-[-0.01em] text-[#10233A]">
                         {item.title}
@@ -392,7 +429,7 @@ export default function KeyConclusion({
                     </p>
                   </div>
 
-                  <div className="col-start-2 flex items-start sm:col-start-3 sm:justify-end sm:pt-1.5">
+                  <div className="key-conclusion-evidence col-start-2 flex items-start sm:col-start-3 sm:justify-end sm:pt-1.5">
                     <Evidence topic={item.topic} />
                   </div>
                 </li>

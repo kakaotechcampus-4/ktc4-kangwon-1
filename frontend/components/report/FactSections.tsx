@@ -105,15 +105,58 @@ export function FactFloatingPopulationSection({
   const busiest = peak(data.timeBands);
   const largestAge = peak(data.ageShares);
   const insights = [
-    largestAge &&
-      `가장 많이 오가는 연령대는 ${largestAge.label}로, 전체의 ${percent(largestAge.share)}예요.`,
-    data.weekendIndex !== null &&
-      (data.weekendIndex >= 1
-        ? `주말 유동인구가 서울 평균의 ${times(data.weekendIndex)}로, 주말에 더 붐비는 편이에요.`
-        : `주말 유동인구가 서울 평균의 ${times(data.weekendIndex)}로, 평일 중심 상권이에요.`),
-    data.yoyChange !== null &&
-      `전년 같은 분기보다 유동인구가 ${signed(data.yoyChange * 100)}% ${data.yoyChange >= 0 ? '늘었어요' : '줄었어요'}.`,
-  ].filter((line): line is string => Boolean(line));
+    largestAge
+      ? {
+          key: 'age',
+          content: (
+            <>
+              가장 많이 오가는 연령대는{' '}
+              <strong className="story-mobile-emphasis">
+                {largestAge.label}
+              </strong>
+              로, 전체의{' '}
+              <strong className="story-mobile-emphasis">
+                {percent(largestAge.share)}
+              </strong>
+              예요.
+            </>
+          ),
+        }
+      : null,
+    data.weekendIndex !== null
+      ? {
+          key: 'weekend',
+          content: (
+            <>
+              주말 유동인구가 서울 평균의{' '}
+              <strong className="story-mobile-emphasis">
+                {times(data.weekendIndex)}
+              </strong>
+              로,
+              {data.weekendIndex >= 1
+                ? ' 주말에 더 붐비는 편이에요.'
+                : ' 평일 중심 상권이에요.'}
+            </>
+          ),
+        }
+      : null,
+    data.yoyChange !== null
+      ? {
+          key: 'yoy',
+          content: (
+            <>
+              전년 같은 분기보다 유동인구가{' '}
+              <strong className="story-mobile-emphasis">
+                {signed(data.yoyChange * 100)}%
+              </strong>{' '}
+              {data.yoyChange >= 0 ? '늘었어요.' : '줄었어요.'}
+            </>
+          ),
+        }
+      : null,
+  ].filter(
+    (insight): insight is NonNullable<typeof insight> => insight !== null
+  );
 
   // 리포트용 읽기형 구성 — 결론 → 핵심 숫자 → 근거(질문별 행) → 각주.
   // 스타일은 app/report/report.css의 .story 블록을 목업 경로와 함께 쓴다.
@@ -121,6 +164,7 @@ export function FactFloatingPopulationSection({
     <div className="fp-root fp-root-story flex w-full flex-col">
       <div className="story">
         <header className="story-lead">
+          <p className="story-peak-label">가장 붐비는 시간</p>
           <h3>
             {busiest ? (
               <>
@@ -132,8 +176,8 @@ export function FactFloatingPopulationSection({
           </h3>
           {insights.length > 0 && (
             <ul className="story-insights">
-              {insights.map((line) => (
-                <li key={line}>{line}</li>
+              {insights.map((insight) => (
+                <li key={insight.key}>{insight.content}</li>
               ))}
             </ul>
           )}
@@ -197,6 +241,12 @@ export function FactFloatingPopulationSection({
                 </>
               )}
             </dd>
+            {data.yoyChange !== null && (
+              <p className="story-mobile-note">
+                전년 같은 분기보다 유동인구가{' '}
+                {data.yoyChange >= 0 ? '늘었어요' : '줄었어요'}
+              </p>
+            )}
           </div>
           {largestAge && (
             <div>
@@ -210,6 +260,9 @@ export function FactFloatingPopulationSection({
                 {largestAge.label}
                 <small>{percent(largestAge.share)}</small>
               </dd>
+              <p className="story-mobile-note">
+                주변 상권 방문객 중 가장 큰 비중
+              </p>
             </div>
           )}
         </dl>
@@ -291,6 +344,16 @@ function densityKindClass(kind: DensityKind) {
   return 'is-neutral';
 }
 
+// 표 숫자는 진하게, 단위(개·배)만 회색으로 보여준다.
+function WithUnit({ value, unit }: { value: string; unit: string }) {
+  return (
+    <>
+      {value}
+      <span className="competition-unit">{unit}</span>
+    </>
+  );
+}
+
 function CompetitionTable({
   rows,
   groupTitle,
@@ -300,9 +363,11 @@ function CompetitionTable({
   groupTitle: string;
   description: string;
 }) {
+  const isExcludedGroup = groupTitle.startsWith('제외 후보');
+
   return (
     <section
-      className={`competition-candidate-group${groupTitle === '제외 후보' ? ' is-excluded' : ''}`}
+      className={`competition-candidate-group${isExcludedGroup ? ' is-excluded' : ''}`}
     >
       <header className="competition-candidate-group-head">
         <div>
@@ -313,11 +378,18 @@ function CompetitionTable({
           {rows.length}개 업종
         </span>
       </header>
+      <p className="report-mobile-table-hint">
+        표를 좌우로 밀어 더 자세히 볼 수 있어요{' '}
+        <span aria-hidden="true">↔</span>
+      </p>
       <div className="competition-table-scroll">
         <table className="competition-table">
           <caption className="sr-only">{groupTitle} 경쟁 지표 비교</caption>
           <thead>
             <tr>
+              <th scope="col" className="competition-rank-column">
+                순위
+              </th>
               <th scope="col">업종</th>
               <th scope="col" className="is-numeric">
                 점포 수
@@ -334,8 +406,14 @@ function CompetitionTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <tr key={row.code} className="competition-table-row">
+                <td
+                  className="competition-rank-column"
+                  aria-label={`${index + 1}순위`}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </td>
                 <td>
                   <span className="competition-industry-cell">
                     <span>{row.name}</span>
@@ -349,9 +427,14 @@ function CompetitionTable({
                   </span>
                 </td>
                 <td className="is-numeric">
-                  {row.storeCount === null
-                    ? '자료 없음'
-                    : count(row.storeCount)}
+                  {row.storeCount === null ? (
+                    '자료 없음'
+                  ) : (
+                    <WithUnit
+                      value={Math.round(row.storeCount).toLocaleString('ko-KR')}
+                      unit="개"
+                    />
+                  )}
                 </td>
                 <td className="is-numeric">
                   {row.densityPerKm2 === null
@@ -359,14 +442,23 @@ function CompetitionTable({
                     : row.densityPerKm2.toFixed(1)}
                 </td>
                 <td className="is-numeric">
-                  {row.competitionIndex !== null
-                    ? times(row.competitionIndex)
-                    : row.densityKind === '무관'
-                      ? '—'
-                      : '자료 없음'}
+                  {row.competitionIndex !== null ? (
+                    <WithUnit
+                      value={row.competitionIndex.toFixed(2)}
+                      unit="배"
+                    />
+                  ) : row.densityKind === '무관' ? (
+                    '—'
+                  ) : (
+                    '자료 없음'
+                  )}
                 </td>
                 <td className="is-numeric">
-                  {row.lq === null ? '비교 불가' : times(row.lq)}
+                  {row.lq === null ? (
+                    '비교 불가'
+                  ) : (
+                    <WithUnit value={row.lq.toFixed(2)} unit="배" />
+                  )}
                 </td>
               </tr>
             ))}
@@ -436,6 +528,9 @@ export function FactCompetitionSection({
           </header>
           {densityKinds.length > 0 && (
             <aside className="competition-reading-guide competition-type-guide">
+              <p className="competition-type-guide-title">
+                업종 유형별 읽는 법
+              </p>
               <ul>
                 {densityKinds.map((kind) => (
                   <li key={kind}>
@@ -471,7 +566,7 @@ export function FactCompetitionSection({
               {excludedRows.length > 0 && (
                 <CompetitionTable
                   rows={excludedRows}
-                  groupTitle="제외 후보"
+                  groupTitle="제외 후보 업종"
                   description="추천 기준에 포함되지 않은 업종도 참고할 수 있도록 따로 모았습니다."
                 />
               )}
@@ -547,20 +642,43 @@ type LifecycleChartRow = {
   value: number | null;
 };
 
+// 0(가장 작은 값)이면 연한 파랑, 1(가장 큰 값)이면 남색 — 그 사이는 섞어서 칠한다.
+function shadeColor(strength: number) {
+  const light = [168, 190, 242]; // #A8BEF2
+  const dark = [16, 35, 58]; // #10233A
+  const mix = light.map((c, i) => Math.round(c + (dark[i] - c) * strength));
+  return `rgb(${mix.join(', ')})`;
+}
+
 function LifecycleMetricChart({
   rows,
   format,
   diverging = false,
+  shadeByValue = false,
+  lollipop = false,
+  renderValue,
 }: {
   rows: LifecycleChartRow[];
   format: (value: number) => string;
+  /** 0을 가운데 두고 양쪽으로 뻗는 막대. 늘면 빨강, 줄면 파랑. */
   diverging?: boolean;
+  /** 값이 클수록 막대를 진하게 칠한다(가장 큰 값 = 남색 그대로). */
+  shadeByValue?: boolean;
+  /** 막대 대신 가는 선 + 끝 점(롤리팝)으로 그린다. */
+  lollipop?: boolean;
+  /** 주면 줄 끝에 수치를 보여준다. 없으면 수치는 화면 낭독기용으로만 둔다. */
+  renderValue?: (value: number) => ReactNode;
 }) {
   const max = Math.max(0, ...rows.map((row) => Math.abs(row.value ?? 0)));
+  const showValues = renderValue !== undefined;
 
   return (
-    <div className="lifecycle-chart-wrap">
-      <ul className={`lifecycle-chart${diverging ? ' is-diverging' : ''}`}>
+    <div className={`lifecycle-chart-wrap${showValues ? ' has-values' : ''}`}>
+      <ul
+        className={`lifecycle-chart${diverging ? ' is-diverging' : ''}${
+          lollipop ? ' is-lollipop' : ''
+        }`}
+      >
         {rows.map((row) => {
           const value = row.value;
           const width =
@@ -590,24 +708,151 @@ function LifecycleMetricChart({
                     style={{
                       left: `${offset}%`,
                       width: `${width}%`,
-                      backgroundColor: reportPalette.navy,
+                      backgroundColor: shadeByValue
+                        ? shadeColor(Math.abs(value) / max)
+                        : diverging
+                          ? value >= 0
+                            ? '#d6383b'
+                            : '#2453d6'
+                          : reportPalette.navy,
                     }}
                   />
                 )}
+                {lollipop && value !== null && max > 0 && (
+                  <span
+                    className="lifecycle-chart-dot"
+                    style={{ left: `${width}%` }}
+                  />
+                )}
               </span>
-              <span className="lifecycle-chart-value sr-only">
-                {value === null ? '자료 없음' : format(value)}
+              <span
+                className={`lifecycle-chart-value${showValues ? '' : ' sr-only'}`}
+              >
+                {value === null
+                  ? '자료 없음'
+                  : renderValue
+                    ? renderValue(value)
+                    : format(value)}
               </span>
             </li>
           );
         })}
       </ul>
       {diverging && (
-        <div className="lifecycle-chart-legend" aria-hidden="true">
-          <span>감소</span>
-          <span>0</span>
-          <span>증가</span>
+        // 막대 줄과 같은 칸 나눔을 써서 '0'이 기준선 바로 아래에 오게 한다.
+        <div className="lifecycle-chart-legend-row" aria-hidden="true">
+          <span />
+          <div className="lifecycle-chart-legend">
+            <span>감소</span>
+            <span>0</span>
+            <span>증가</span>
+          </div>
+          {showValues && <span />}
         </div>
+      )}
+    </div>
+  );
+}
+
+// 순증감률: 늘면 빨간 ▲, 줄면 파란 ▼, 0이면 회색 –
+function NetChange({ value }: { value: number }) {
+  const rounded = Number(value.toFixed(1));
+  const kind = rounded > 0 ? 'is-up' : rounded < 0 ? 'is-down' : 'is-flat';
+  const mark = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '–';
+  return (
+    <span className={`lifecycle-net ${kind}`}>
+      <span aria-hidden="true">{mark}</span>
+      <span className="sr-only">
+        {rounded > 0 ? '증가' : rounded < 0 ? '감소' : '변화 없음'}
+      </span>
+      {Math.abs(rounded).toFixed(1)}%
+    </span>
+  );
+}
+
+// 폐업률과 서울 평균을 한 줄에 — 막대(이 지역) + 세로선(서울 같은 업종 평균).
+// 서울보다 높으면 빨강, 낮으면 파랑. 서울 대비가 높은 업종부터 보여준다.
+function CloseRateComparison({ rows }: { rows: FactLifecycle['rows'] }) {
+  const items = rows
+    .filter(
+      (row) =>
+        row.recentCloseRate !== null &&
+        row.closeRateRatio !== null &&
+        row.closeRateRatio > 0
+    )
+    .map((row) => {
+      const local = row.recentCloseRate as number;
+      const ratio = row.closeRateRatio as number;
+      return {
+        code: row.code,
+        name: row.name,
+        local,
+        ratio,
+        seoul: local / ratio,
+      };
+    })
+    .sort((a, b) => b.ratio - a.ratio);
+  const max =
+    Math.max(0, ...items.flatMap((item) => [item.local, item.seoul])) * 1.08;
+  const missing = rows.length - items.length;
+
+  return (
+    <div className="close-compare">
+      <div className="close-compare-legend" aria-hidden="true">
+        <span>
+          <i className="close-compare-swatch" /> 이 지역 폐업률
+        </span>
+        <span>
+          <i className="close-compare-swatch is-seoul" /> 서울 같은 업종 평균
+        </span>
+      </div>
+      <ul>
+        {items.map((item) => {
+          const tone =
+            item.ratio >= 1.005
+              ? 'is-high'
+              : item.ratio <= 0.995
+                ? 'is-low'
+                : 'is-even';
+          const verdict =
+            tone === 'is-high'
+              ? '서울보다 높음'
+              : tone === 'is-low'
+                ? '서울보다 낮음'
+                : '서울과 비슷';
+          return (
+            <li key={item.code} className={tone}>
+              <span className="close-compare-name" title={item.name}>
+                {item.name}
+              </span>
+              <span className="close-compare-track" aria-hidden="true">
+                <span
+                  className="close-compare-bar"
+                  style={{
+                    width: `${max > 0 ? (item.local / max) * 100 : 0}%`,
+                  }}
+                />
+                <span
+                  className="close-compare-seoul"
+                  style={{ left: `${max > 0 ? (item.seoul / max) * 100 : 0}%` }}
+                />
+              </span>
+              <span className="close-compare-value">
+                <strong>{rate(item.local)}</strong>
+                <small>서울 {rate(item.seoul)}</small>
+              </span>
+              <span className="close-compare-verdict">
+                {verdict} <b>{times(item.ratio)}</b>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {missing > 0 && (
+        <p className="close-compare-missing">
+          자료가 없어 비교하지 못한 업종 {missing}개는 위 표에서 확인할 수
+          있어요.
+        </p>
       )}
     </div>
   );
@@ -640,11 +885,20 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
           </p>
         </div>
         <div className="story-row-figure">
-          <div className="overflow-x-auto">
+          <p className="report-mobile-table-hint">
+            표를 좌우로 밀어 더 자세히 볼 수 있어요{' '}
+            <span aria-hidden="true">↔</span>
+          </p>
+          <div className="lifecycle-table-scroll overflow-x-auto">
             <table className="lifecycle-table w-full min-w-[38rem] text-left text-sm">
               <thead>
                 <tr>
-                  <th>업종</th>
+                  <th scope="col" className="lifecycle-rank-column">
+                    순위
+                  </th>
+                  <th scope="col" className="lifecycle-industry-column">
+                    업종
+                  </th>
                   <th>평균 점포 수</th>
                   <th>최근 1년 폐업률</th>
                   <th>서울 대비</th>
@@ -653,9 +907,15 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row) => (
+                {data.rows.map((row, index) => (
                   <tr key={row.code}>
-                    <td>{row.name}</td>
+                    <td
+                      className="lifecycle-rank-column"
+                      aria-label={`${index + 1}순위`}
+                    >
+                      {String(index + 1).padStart(2, '0')}
+                    </td>
+                    <td className="lifecycle-industry-column">{row.name}</td>
                     <td>
                       {row.avgStoreCount === null
                         ? '자료 없음'
@@ -677,9 +937,11 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
                         : rate(row.turnoverRate)}
                     </td>
                     <td>
-                      {row.netChangeRate === null
-                        ? '자료 없음'
-                        : `${signed(row.netChangeRate)}%`}
+                      {row.netChangeRate === null ? (
+                        '자료 없음'
+                      ) : (
+                        <NetChange value={row.netChangeRate} />
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -714,6 +976,7 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
             <LifecycleMetricChart
               rows={chartRows((row) => row.avgStoreCount)}
               format={(value) => value.toFixed(1)}
+              shadeByValue
             />
           </div>
         </section>
@@ -723,25 +986,13 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
             <p className="story-question">최근 1년</p>
             <h4>폐업률과 서울 평균 비교</h4>
             <p>
-              폐업률은 최근 1년 동안 문을 닫은 비율입니다. 서울 대비가 1.0배보다
-              높으면 같은 업종의 서울 평균보다 폐업률이 높은 편이에요.
+              막대는 이 지역의 최근 1년 폐업률, 세로선은 같은 업종의 서울
+              평균이에요. 막대가 선을 넘으면 서울보다 문을 닫는 가게가 많은
+              편이에요.
             </p>
           </div>
-          <div className="story-row-figure lifecycle-close-charts">
-            <div>
-              <h5>최근 1년 폐업률</h5>
-              <LifecycleMetricChart
-                rows={chartRows((row) => row.recentCloseRate)}
-                format={rate}
-              />
-            </div>
-            <div>
-              <h5>서울 같은 업종 대비</h5>
-              <LifecycleMetricChart
-                rows={chartRows((row) => row.closeRateRatio)}
-                format={times}
-              />
-            </div>
+          <div className="story-row-figure">
+            <CloseRateComparison rows={data.rows} />
           </div>
         </section>
 
@@ -758,6 +1009,8 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
             <LifecycleMetricChart
               rows={chartRows((row) => row.turnoverRate)}
               format={rate}
+              lollipop
+              renderValue={rate}
             />
           </div>
         </section>
@@ -768,7 +1021,7 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
             <h4>순증감률</h4>
             <p>
               관측 기간의 개업과 폐업을 반영한 점포 수 변화예요. 가운데 0을
-              기준으로 왼쪽은 감소, 오른쪽은 증가입니다.
+              기준으로 왼쪽(파랑)은 감소, 오른쪽(빨강)은 증가입니다.
             </p>
           </div>
           <div className="story-row-figure">
@@ -776,6 +1029,7 @@ export function FactLifecycleSection({ data }: { data: FactLifecycle }) {
               rows={chartRows((row) => row.netChangeRate)}
               format={(value) => `${signed(value)}%`}
               diverging
+              renderValue={(value) => <NetChange value={value} />}
             />
           </div>
         </section>

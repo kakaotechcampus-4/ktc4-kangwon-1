@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { reportPalette as P } from '@/styles/reportPalette';
 import { industryName } from '@/lib/api/industries';
@@ -19,12 +19,12 @@ import type {
  * 이렇게 고쳐라"라는 AI 내부 검수 메모라서 본문에 쓰지 않는다. 대신 구조화된 값으로
  * 화면 문장을 만든다.
  *  - verdict → 결론 한 줄과 판정 분포
- *  - 지적의 kind·industry_code + 핵심어 → 쟁점(면적·설비 / 공사 / 손님 수요 / 임대 조건)
+ *  - 지적의 kind·industry_code + 핵심어 → 쟁점(면적·설비 / 공사 / 손님 수요 / 수익성 판단)
  *  - resolution.disposition → 반영 여부
  *  - space_requirements·space_fit·exclusive_area·existing_facilities fact → 읽히는 근거
  * 평가자 원문은 내부 검수 기록이므로 본문에 노출하지 않는다.
  *
- * 확인할 조건은 02 핵심결론의 '입점 전 직접 확인'에 이미 반영돼 있어(처리 기록의
+ * 확인할 조건은 02 핵심결론의 '입점 전 확인'에 이미 반영돼 있어(처리 기록의
  * applied가 confirmation_conditions) 여기서는 반복하지 않고 그쪽으로 연결만 한다.
  *
  * 백엔드는 항상 네 자리를 채우고, 실패한 평가는 동의로 보지 않는다(docs/API_CONTRACT.md).
@@ -116,11 +116,11 @@ const THEMES: Record<
       '이번 분석 자료로는 후보 업종의 손님 수요를 충분히 확인하지 못했어요. 점수가 높아도 수요는 따로 확인해야 해요.',
   },
   lease: {
-    title: '임대 조건과 수익',
+    title: '수익성과 사업 조건',
     stance:
-      '임대료·공실 기간·공사비 자료가 없어 임대 수익은 판단할 수 없다고 봤어요.',
+      '월세·보증금·공사비를 분석하지 않아 매물 수익성은 판단할 수 없다고 봤어요.',
     meaning:
-      '이 리포트는 업종 적합도를 본 것이고, 임대 수익이나 임차인의 지급 능력은 판단하지 않았어요.',
+      '이 리포트는 업종 적합도를 살펴봅니다. 월세·보증금에 따른 임대 수익이나 임차인의 지급 능력은 분석하지 않아요.',
   },
   other: {
     title: '근거가 부족한 판단',
@@ -131,7 +131,7 @@ const THEMES: Record<
 
 function themeOf(issue: ReviewIssue): Theme {
   const text = issue.comment + issue.suggested_check;
-  // 업종을 특정하지 않은 임대 조건 지적은 '수요'라는 말이 섞여도 임대 조건으로 본다.
+  // 업종을 특정하지 않고 월세·보증금·공실 기간을 지적한 내용은 수익성 판단으로 분류한다.
   if (!issue.industry_code && /임대료|임대수익|임차|공실 기간/.test(text))
     return 'lease';
   if (/수요|손님/.test(text)) return 'demand';
@@ -202,7 +202,7 @@ function readableLimitations(raw: string): string[] {
       /수익성|임차인의 지급 능력|임대료|공실 기간|공사비|재무/.test(sentence)
     ) {
       items.add(
-        '임대 조건과 공사비 등이 확인되지 않아 수익성이나 임차인의 지급 능력은 판단할 수 없습니다.'
+        '월세·보증금과 공사비는 분석하지 않으므로 매물 수익성이나 임차인의 지급 능력은 판단할 수 없습니다.'
       );
       continue;
     }
@@ -423,15 +423,35 @@ export default function EvaluatorReviews({
   resolutions,
   facts,
   limitations,
+  checkCount,
 }: {
   reviews: EvaluatorReview[];
   resolutions: ReviewResolution[];
   facts: FactIndex;
   limitations?: string;
+  checkCount: number;
 }) {
+  const [showOtherMobileOpinions, setShowOtherMobileOpinions] = useState(false);
   const ordered = [...reviews].sort(
     (a, b) => ORDER.indexOf(a.actor) - ORDER.indexOf(b.actor)
   );
+  const mobileOrdered = [...ordered].sort((a, b) => {
+    const priority: Record<Verdict, number> = {
+      oppose: 0,
+      conditional: 1,
+      failed: 2,
+      agree: 3,
+    };
+    return priority[verdictOf(a)] - priority[verdictOf(b)];
+  });
+  const opinionFor = (review: EvaluatorReview) => {
+    const verdict = verdictOf(review);
+    return verdict === 'failed'
+      ? `이번에는 검토를 마치지 못했어요. ${failureReason(review.error_code)} 동의로 보지 않아요.`
+      : review.issues.length
+        ? THEMES[mainTheme(review)].stance
+        : '따로 지적한 점이 없어요.';
+  };
   const allFacts = [...facts.values()];
   const resolutionOf = new Map(resolutions.map((r) => [r.issue_id, r]));
   const issues = ordered.flatMap((review) =>
@@ -449,6 +469,8 @@ export default function EvaluatorReviews({
     >
   );
   const done = ordered.length - counts.failed;
+  const checkLinkLabel =
+    checkCount > 0 ? `입점 전 확인할 ${checkCount}가지` : '입점 전 확인 항목';
 
   if (done === 0) {
     // 네 명 모두 실패하면 빈 줄 네 개 대신 안내만 보인다.
@@ -540,16 +562,25 @@ export default function EvaluatorReviews({
           </div>
           {/* 확인할 것은 핵심결론 한 곳에서만 보여 준다 */}
           <a
-            href="#conclusion"
+            href="#key-checks"
+            onClick={(event) => {
+              const target = document.getElementById('key-checks');
+              if (!target) return;
+              event.preventDefault();
+              window.history.replaceState(null, '', '#key-checks');
+              target.scrollIntoView({
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+                  .matches
+                  ? 'auto'
+                  : 'smooth',
+                block: 'start',
+              });
+            }}
             className="group mt-1 flex w-fit items-center gap-2 rounded-full border bg-white py-2.5 pr-4 pl-5 text-15 font-semibold text-[#10233A] transition-colors hover:border-[#2453D6] hover:text-[#2453D6]"
             style={{ borderColor: P.line }}
           >
-            <span className="hidden sm:inline">
-              확인할 조건은 &lsquo;입점 전 직접 확인&rsquo;에 정리했어요
-            </span>
-            <span className="sm:hidden">
-              &lsquo;입점 전 직접 확인&rsquo; 보기
-            </span>
+            <span className="hidden sm:inline">{checkLinkLabel} 보기</span>
+            <span className="sm:hidden">{checkLinkLabel}</span>
             <ArrowRight
               size={18}
               className="transition-transform group-hover:translate-x-0.5"
@@ -599,17 +630,12 @@ export default function EvaluatorReviews({
       </section>
 
       {/* ② 네 사람의 의견 — 테두리·그림자 없이 옅은 바탕 면으로만 묶는다 */}
-      <section className="mt-14 flex flex-col gap-2 rounded-[24px] bg-[#EAF0F6] px-5 pt-6 pb-2 sm:px-8 sm:pt-7">
+      <section className="review-opinions-section mt-14 flex flex-col gap-2 rounded-[24px] bg-[#EAF0F6] px-5 pt-6 pb-2 sm:px-8 sm:pt-7">
         <BlockLabel>네 사람의 의견</BlockLabel>
-        <ul className="divide-y divide-[#D5DEE7]">
+        <ul className="review-opinions-desktop divide-y divide-[#D5DEE7]">
           {ordered.map((r) => {
             const v = verdictOf(r);
-            const opinion =
-              v === 'failed'
-                ? `이번에는 검토를 마치지 못했어요. ${failureReason(r.error_code)} 동의로 보지 않아요.`
-                : r.issues.length
-                  ? THEMES[mainTheme(r)].stance
-                  : '따로 지적한 점이 없어요.';
+            const opinion = opinionFor(r);
             return (
               <li
                 key={r.actor}
@@ -645,6 +671,56 @@ export default function EvaluatorReviews({
             );
           })}
         </ul>
+        <div className="review-opinions-mobile">
+          {mobileOrdered.slice(0, 1).map((r) => {
+            const v = verdictOf(r);
+            return (
+              <article className="review-opinion-card" key={r.actor}>
+                <div className="review-opinion-byline">
+                  <Avatar actor={r.actor} size={38} muted={v === 'failed'} />
+                  <div>
+                    <p>{ACTORS[r.actor].name}</p>
+                    <span>{ACTORS[r.actor].view}</span>
+                  </div>
+                  <strong style={{ color: VERDICT[v].color }}>
+                    {VERDICT[v].label}
+                  </strong>
+                </div>
+                <p className="review-opinion-text">{opinionFor(r)}</p>
+              </article>
+            );
+          })}
+          {showOtherMobileOpinions &&
+            mobileOrdered.slice(1).map((r) => {
+              const v = verdictOf(r);
+              return (
+                <article className="review-opinion-card" key={r.actor}>
+                  <div className="review-opinion-byline">
+                    <Avatar actor={r.actor} size={38} muted={v === 'failed'} />
+                    <div>
+                      <p>{ACTORS[r.actor].name}</p>
+                      <span>{ACTORS[r.actor].view}</span>
+                    </div>
+                    <strong style={{ color: VERDICT[v].color }}>
+                      {VERDICT[v].label}
+                    </strong>
+                  </div>
+                  <p className="review-opinion-text">{opinionFor(r)}</p>
+                </article>
+              );
+            })}
+          {mobileOrdered.length > 1 && (
+            <button
+              className="review-opinions-toggle"
+              type="button"
+              aria-expanded={showOtherMobileOpinions}
+              onClick={() => setShowOtherMobileOpinions((showing) => !showing)}
+            >
+              다른 평가자 의견 {mobileOrdered.length - 1}개{' '}
+              {showOtherMobileOpinions ? '접기' : '보기'}
+            </button>
+          )}
+        </div>
       </section>
 
       {/* ③ 평가자들이 짚은 점 — 근거가 필요한 사람만 읽는 층 */}
@@ -659,25 +735,25 @@ export default function EvaluatorReviews({
               return (
                 <li
                   key={t.theme}
-                  className="grid gap-3 border-b py-6 sm:grid-cols-[260px_1fr] sm:gap-8"
+                  className="review-theme-item grid gap-3 border-b py-6 sm:grid-cols-[260px_1fr] sm:gap-8"
                   style={{ borderColor: P.line }}
                 >
                   <div className="flex flex-col gap-2">
                     <p className="text-lg font-bold text-[#10233A]">
                       {meta.title}
                     </p>
-                    <span className="flex items-center gap-1.5">
-                      <span className="flex -space-x-1.5">
+                    <span className="review-theme-attribution flex items-center gap-1.5">
+                      <span className="review-theme-avatars flex -space-x-1.5">
                         {t.actors.map((a) => (
                           <Avatar key={a} actor={a} size={20} ring="#F5F8FB" />
                         ))}
                       </span>
-                      <span className="text-13 text-[#8A97A5]">
+                      <span className="review-theme-actor-names text-13 text-[#8A97A5]">
                         {t.actors.map((a) => ACTORS[a].name).join(' · ')}
                       </span>
                     </span>
                   </div>
-                  <div className="flex flex-col gap-3">
+                  <div className="review-theme-content flex flex-col gap-3">
                     <p className="break-keep text-17 leading-[1.7] text-[#3D4A5C]">
                       {meta.meaning}
                     </p>
@@ -688,12 +764,18 @@ export default function EvaluatorReviews({
                       </p>
                     )}
                     {areas.length === 0 && (
-                      <p className="text-sm text-[#8A97A5]">
-                        {t.industries.length
-                          ? t.industries.map(industryName).join(' · ')
-                          : '추천 결과 전체'}
-                        {!t.allReflected && ' · 일부만 반영'}
-                      </p>
+                      <div className="review-theme-metadata">
+                        <span className="review-theme-industry">
+                          {t.industries.length
+                            ? t.industries.map(industryName).join(' · ')
+                            : '추천 결과 전체'}
+                        </span>
+                        {!t.allReflected && (
+                          <span className="review-theme-status">
+                            일부만 반영
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </li>
