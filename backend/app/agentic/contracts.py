@@ -210,12 +210,47 @@ class FactView(Schema):
         return self
 
 
+class CodeItemCalculation(Schema):
+    """원래 관측 등급과 분리한 채점 기여입니다. 관측 근거로 인용하지 않습니다."""
+
+    method: Literal["S2_half-v1"]
+    weight: Annotated[float, Field(gt=0, le=30)]
+    points: Annotated[float, Field(ge=0, le=30)]
+    basis: Text
+    estimated: bool
+
+    @model_validator(mode="after")
+    def check_weight(self) -> Self:
+        if self.points > self.weight:
+            raise ValueError("보완 기여는 항목 배점을 초과할 수 없습니다.")
+        return self
+
+
+class CodeCalculation(Schema):
+    method: Literal["S2_half-v1"]
+    code_points: Annotated[float, Field(ge=0, le=90)]
+    ranking_points: Annotated[float, Field(ge=0, le=100)]
+    applicable_weight: Annotated[float, Field(ge=0, le=90)]
+    raw_points: Annotated[float, Field(ge=0, le=90)]
+    estimated_points: Annotated[float, Field(ge=0, le=90)]
+
+    @model_validator(mode="after")
+    def check_contributions(self) -> Self:
+        if not self.estimated_points <= self.raw_points <= self.applicable_weight + 1e-8:
+            raise ValueError("보완 추정·합계·적용 배점이 맞지 않습니다.")
+        expected = 90 * self.raw_points / self.applicable_weight if self.applicable_weight else 0
+        if abs(self.code_points - expected) > 1e-8:
+            raise ValueError("코드 점수의 90점 환산이 맞지 않습니다.")
+        return self
+
+
 class ScoreItem(Schema):
     item: ScoreItemId
     status: ItemStatus
     grade: Grade | None
     points: Annotated[float, Field(ge=0, le=15)] | None
     fact_ids: list[FactId] = Field(max_length=32)
+    scoring: CodeItemCalculation | None = None
 
     @model_validator(mode="after")
     def check_observation(self) -> Self:
@@ -224,6 +259,8 @@ class ScoreItem(Schema):
                 raise ValueError("관측 문항에는 등급·점수·근거가 필요합니다.")
         elif self.grade is not None or self.points is not None:
             raise ValueError("미확인·미적용 문항에는 등급·점수를 채우지 않습니다.")
+        if self.scoring and self.status == "not_applicable" and self.scoring.points != 0:
+            raise ValueError("미적용 항목에 보완 기여를 넣을 수 없습니다.")
         return self
 
 
@@ -243,9 +280,15 @@ class ScorecardSummary(Schema):
     G: RegulationStatus
     badge: Badge
     confirmation_conditions: list[Text] = Field(default_factory=list)
+    calculation: CodeCalculation | None = None
 
     @model_validator(mode="after")
     def check_intervals(self) -> Self:
+        if self.calculation and (
+            abs(self.calculation.code_points - self.code_points) > 1e-8
+            or abs(self.calculation.ranking_points - self.code_points - (self.L_points or 0)) > 1e-8
+        ):
+            raise ValueError("코드 점수·L·최종 순위 점수가 맞지 않습니다.")
         if not self.B <= self.H <= self.A:
             raise ValueError("하한 ≤ 상한 ≤ 적용 배점이어야 합니다.")
         if (self.L_status == "observed") != (self.L_points is not None):

@@ -37,9 +37,13 @@ from app.industries.catalog import SEOUL_TO_INDUSTRY
 from app.industries.lookup import service_code
 
 
-def to_float(value):
+def to_float(value, *, digits: int | None = 2):
     """pandas 결측을 없애고 기존 보고 자료의 소수 두 자리 규칙을 유지합니다."""
-    return None if pd.isna(value) else round(float(value), 2)
+    return (
+        None
+        if pd.isna(value)
+        else (float(value) if digits is None else round(float(value), digits))
+    )
 
 
 def load_raw(scope):
@@ -195,6 +199,11 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         series.setdefault(latest, [])
         quarters = sorted(series)
         records = series[latest]
+        data["score90_customer_population"] = (
+            {"유동": {q: {r.trdar_cd: r.by_age for r in rs} for q, rs in series.items()}}
+            if "floating_population" not in partial
+            else {}
+        )
         pop = aggregate(records, latest)
         warnings = []
         data["floating_population"] = {
@@ -218,9 +227,21 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
         ]:
             rows = raw[source]
             records = [PopulationRecord.from_api_row(r["row"], kind) for r in rows]
-            data["population_baselines"][kind] = age_share(records) if records else {}
+            population_latest = max((r.stdr_yyqu_cd for r in records), default=latest)
+            current_records = [r for r in records if r.stdr_yyqu_cd == population_latest]
+            data["population_baselines"][kind] = (
+                age_share(current_records) if current_records else {}
+            )
+            if source not in partial:
+                history = defaultdict(dict)
+                for record in records:
+                    if record.trdar_cd in codes:
+                        history[record.stdr_yyqu_cd][record.trdar_cd] = record.by_age
+                data["score90_customer_population"][{"resident": "상주", "worker": "직장"}[key]] = (
+                    dict(history)
+                )
             if records:
-                block = builder(records, records[0].stdr_yyqu_cd, codes)
+                block = builder(current_records, population_latest, codes)
                 data["floating_population"][key] = block.model_dump(mode="json") if block else None
                 lineage[source] = [r["raw_row_id"] for r in rows if r["raw_row_id"] is not None]
 
@@ -255,7 +276,10 @@ def format_inputs(task, raw, responses, partial, *, district_counts=None, period
                     "industry_id": r["service_id"],
                     "data_complete": bool(r["data_complete"]),
                     "zero_filled_sources": int(r["zero_filled_sources"]),
-                    "metrics": {key: to_float(r[key]) for key in metrics},
+                    "metrics": {
+                        key: to_float(r[key], digits=None if key == "avg_store_count" else 2)
+                        for key in metrics
+                    },
                 }
                 for r in frame.to_dict("records")
             ],

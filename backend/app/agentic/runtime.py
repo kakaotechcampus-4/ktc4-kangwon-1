@@ -59,6 +59,9 @@ from .tools import ToolExecutor, validation_message
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
 계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하세요.
+calculation이 있으면 code_points는 S2_half의 보완 추정을 포함한 90점 환산입니다.
+기존 B/H는 원래 관측 점수의 범위이며 추천 순위 점수와 구분합니다.
+보완 추정은 실제 관측 사실로 인용하거나 L에서 다시 채점하지 마세요.
 전체 카탈로그의 모든 업종을 같은 기준으로 검토합니다. 코드 순위로 검토 범위를 제한하지 마세요.
 순서는 초기 점수표 확인 → 필요한 공간 질문 한 번 → 공간 비교 근거 확인 → 필요한 추가 조사
 → submit_l → 재계산된 Top Five로 submit_draft입니다.
@@ -195,7 +198,14 @@ class DecisionLoop:
         )
         if not self.state["messages"]:
             summary = [
-                [i, r["code"], r["lower"], r["applicable_weight"], r["coverage"]]
+                [
+                    i,
+                    r["code"],
+                    r.get("code90", {}).get("code_points", r["lower"]),
+                    r["lower"],
+                    r["applicable_weight"],
+                    r["coverage"],
+                ]
                 for i, r in enumerate(base_rows, 1)
             ]
             self.state["messages"] = [
@@ -209,7 +219,7 @@ class DecisionLoop:
                             "snapshot_id": scope.snapshot_id,
                             "score_snapshot_id": base_id,
                             "score_summary": {
-                                "columns": ["rank", "code", "B", "A", "coverage"],
+                                "columns": ["rank", "code", "code_points", "B", "A", "coverage"],
                                 "rows": summary,
                             },
                             "L_industry_codes": list(INDUSTRIES),
@@ -607,10 +617,7 @@ class DecisionLoop:
                     "summary_segments": [
                         TextSegment(
                             type="text",
-                            text=(
-                                "확인된 코드 점수의 하한과 자료 충족도를 기준으로 "
-                                "검토 후보를 정렬했습니다."
-                            ),
+                            text=("코드 채점과 자료 충족도를 기준으로 검토 후보를 정렬했습니다."),
                         )
                     ]
                 }
