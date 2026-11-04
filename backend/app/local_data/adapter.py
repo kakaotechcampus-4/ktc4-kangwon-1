@@ -252,4 +252,7 @@ class LocalAdapter:
         )
 
         data["source_versions"] = [v["version_id"] for v in self.versions]
+        from app.local_data.score_reference import attach_reference
+
+        attach_reference(self, task, data)
         return data

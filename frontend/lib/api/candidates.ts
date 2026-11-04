@@ -1,11 +1,18 @@
 import type { FinalCandidate } from '@/lib/api/types';
 import { renderSegments, type FactIndex } from '@/lib/api/segments';
 
-/** 100점 환산 점수 구간. 적용 배점(A)이 0이면 점수를 매길 수 없다. */
+/** 새 결과는 코드 90점과 L을 합산한다. 구 결과는 기존 관측 점수 구간을 표시한다. */
 export function candidateScore(candidate: FinalCandidate): {
   low: number;
   high: number;
 } | null {
+  if (candidate.calculation) {
+    const low = candidate.calculation.ranking_points;
+    return {
+      low: Math.round(low),
+      high: Math.round(candidate.L_status === 'unknown' ? low + 10 : low),
+    };
+  }
   if (candidate.lower_ratio === null || candidate.upper_ratio === null) {
     return null;
   }

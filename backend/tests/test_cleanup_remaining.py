@@ -266,4 +266,5 @@ class RemainingPolicyTests(unittest.TestCase):
         ):
             data = adapter.analyze(task)
         self.assertEqual(data["comparison_radius_m"], 1000)
-        self.assertEqual(data["limitations"], ["서울 밖 점포 미반영"])
+        self.assertIn("서울 밖 점포 미반영", data["limitations"])
+        self.assertTrue(any("경쟁 참고 자료" in note for note in data["limitations"]))

@@ -18,8 +18,10 @@ from app.db.repository import raw as raw_db
 from app.db.repository import scores as score_db
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
+from app.local_data import score_reference
 from app.storage.raw import RawStorageError, current_capture
 
+from . import code90
 from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
 from .facts import CALC_VERSION, register_fact
 from .inputs import format_snapshot
@@ -52,6 +54,14 @@ def snapshot_config(scope, *, local=False):
         raise ValueError("승인된 51개 업종 프로필이 필요합니다.")
     configs = [
         (profile_path, profiles),
+        (
+            Path(code90.__file__),
+            [{"configuration": "code90", "method": code90.METHOD, "weights": code90.WEIGHTS}],
+        ),
+        (
+            Path(score_reference.__file__),
+            [{"configuration": "code90_reference", "method": code90.METHOD}],
+        ),
         (
             Path(population_baseline.__file__),
             [
@@ -306,7 +316,7 @@ def persist_report(scope, report, lineage, responses, version=None):
                 scope.snapshot_id,
                 scope.run_id,
                 "v0.8",
-                CALC_VERSION,
+                code90.METHOD if any("code90" in row for row in report["rows"]) else CALC_VERSION,
                 canonical_json(report["rows"]),
                 canonical_json([r["code"] for r in report["top5"]]),
                 "unreviewed",

@@ -26,6 +26,7 @@ from app.agents.floating_population.population import (
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 
+from . import code90
 from .space_rules import judge, load_requirements
 
 WEIGHTS = {
@@ -435,7 +436,7 @@ def summarize(
         conditions.append("손님 수요 근거 없음")
     if badge == "추천" and len(conditions) > 1:
         badge = "조건부"
-    return {
+    out = {
         "code": code,
         "name": INDUSTRIES[code],
         "items": items,
@@ -451,6 +452,13 @@ def summarize(
         "badge": badge,
         "confirmation_conditions": conditions,
     }
+    if all("scoring" in items.get(name, {}) for name in code90.WEIGHTS):
+        out["code90"] = code90.summary(items)
+        if out["code90"]["estimated_points"] > 0:
+            out["confirmation_conditions"].append(
+                "추천 점수에 자료 부족 보완 추정 포함: 관측된 사실과 구분하여 확인 필요"
+            )
+    return out
 
 
 AGGLOMERATION_TYPES = ("모임형", "근처형", "무관")
@@ -472,7 +480,8 @@ def profiles() -> dict:
 
 
 def adjusted_lower(row):
-    return row["lower"] + row.get("space", {}).get("adjustment", 0)
+    score = row.get("code90", {}).get("ranking_points", row["lower"])
+    return score + row.get("space", {}).get("adjustment", 0)
 
 
 def rank_key(row):
@@ -519,11 +528,39 @@ def evaluate(
 ) -> dict:
     rows = []
     requirements = load_requirements()
+    reference = sample.get("score90_reference", {})
+    reference_ok = reference.get("quarter") == sample.get("floating_population", {}).get(
+        "period_code"
+    )
+    eligible = reference.get("samples", []) if reference_ok else []
     for code, profile in (profiles() if profile_rows is None else profile_rows).items():
         items = {
             item: score_item(item, profile, code, sample, exposure_min, c1_alpha)
             for item in WEIGHTS
         }
+        components = {
+            category: score_item("C4", {**profile, "required_facilities": category}, code, sample)
+            for category in profile.get("required_facilities", "").split(";")
+            if category
+        }
+        floors = {}
+        medical_distance = sample.get("score90_medical_subset_distance")
+        if "HP8" in components and medical_distance is not None:
+            maximum = float(profile["max_distance_m"])
+            if medical_distance <= maximum:
+                ratio = math.ceil(medical_distance) / maximum
+                floors["HP8"] = 2.5 * (4 - sum(ratio > edge for edge in (0.25, 0.5, 0.75, 1)))
+        items = code90.calculate(
+            items,
+            profile,
+            code,
+            sample,
+            city=SEOUL_INDUSTRY_LIFECYCLE_BASELINE.get(code),
+            quarter=BASELINE_BASE_QUARTER,
+            reference=sorted(row["counts"][code] for row in eligible),
+            components=components,
+            facility_floors=floors,
+        )
         scored = summarize(
             code, items, regulation(code, sample.get("education_zones", {})), **thresholds
         )
@@ -533,6 +570,6 @@ def evaluate(
         "address": sample["address"],
         "rows": rows,
         "top5": top,
-        "top5_status": "v0.8 하한→coverage→코드 순 검토 후보",
+        "top5_status": "v0.8 관측 보존 · S2_half 90점+기존 L→coverage→코드 순 검토 후보",
         "badges": dict(Counter(r["badge"] for r in rows)),
     }

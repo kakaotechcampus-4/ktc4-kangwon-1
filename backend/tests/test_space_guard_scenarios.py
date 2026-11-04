@@ -97,7 +97,8 @@ class ServicePathScenarioTests(unittest.TestCase):
         self.assertEqual(excluded["S203"].score_rank, 1)
 
     def test_upper_floor_lowers_ground_preferred_by_floor(self):
-        self.enterContext(raised({"G202": 4}))
+        # 새 환산 배점에서 두 후보의 차이는 9점: 2층 -5점은 유지, 4층 -10점은 역전입니다.
+        self.enterContext(raised({"G202": 4, "L102": 4}))
         plain = DecisionResult.model_validate(self.run_analysis())
         self.assertEqual(self.codes(plain)[0], "G202")
         second = DecisionResult.model_validate(self.run_analysis(floor="2층"))
