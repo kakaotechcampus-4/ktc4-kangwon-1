@@ -7,7 +7,7 @@ import re
 import uuid
 from time import monotonic
 
-from app.address import resolve_site
+from app.address import ADDRESS_INPUT_ERRORS, GeocodeError, resolve_site
 from app.agentic.budget import RuntimeBudget
 from app.agentic.preflight import collect_preflight
 from app.agentic.questions import save_confirmed_space
@@ -19,6 +19,7 @@ from app.concurrency import run_in_thread
 from app.config import BACKEND_DIR
 from app.db import repository
 from app.db.connection import connect, initialize
+from app.db.repository.requests import INTERRUPTED_MESSAGE
 from app.errors import AnalysisConflictError
 from app.llm.session import with_client_session
 from app.local_data.adapter import LocalAdapter
@@ -33,6 +34,33 @@ logger = logging.getLogger(__name__)
 # 주소 해석부터 채점까지의 상한입니다. 측정 모드는 모델 호출을 전부 기록하느라 느립니다.
 COLLECT_TIMEOUT_SECONDS = 120
 MEASURING_COLLECT_TIMEOUT_SECONDS = 600
+
+
+FAILURE_MESSAGES = {
+    "ADDRESS_FAILED": "주소를 확인하지 못했어요. 주소를 다시 확인한 뒤 분석해 주세요.",
+    "AI_FAILED": "AI 분석이 끝나지 못했어요. 잠시 후 다시 분석해 주세요.",
+    "DATA_TIMEOUT": (
+        "주변 자료를 불러오는 데 시간이 너무 오래 걸렸어요. 잠시 후 다시 분석해 주세요."
+    ),
+    "DATA_FAILED": "주변 자료를 불러오지 못했어요. 잠시 후 다시 분석해 주세요.",
+    "AGENTIC_FAILED": "분석을 끝까지 마치지 못했어요. 잠시 후 다시 분석해 주세요.",
+}
+
+
+def public_failure(exc: BaseException, stage: str) -> AgentError:
+    if isinstance(exc, asyncio.CancelledError):
+        return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
+    if isinstance(exc, GeocodeError) and exc.code in ADDRESS_INPUT_ERRORS:
+        code = "ADDRESS_FAILED"
+    elif stage == "루프":
+        code = "AI_FAILED"
+    elif isinstance(exc, TimeoutError):
+        code = "DATA_TIMEOUT"
+    elif stage in {"조회·채점", "채점"}:
+        code = "DATA_FAILED"
+    else:
+        code = "AGENTIC_FAILED"
+    return AgentError(code=code, message=FAILURE_MESSAGES[code])
 
 
 async def _event(path, request_id, stage, event):
@@ -95,7 +123,7 @@ async def _failure(path, request_id, exc, stage, timings=None):
     logger.error("새 판단 실행 실패: %s", json.dumps(diagnostics, ensure_ascii=False))
 
     def save():
-        error = AgentError(code="AGENTIC_FAILED", message="새 판단 실행을 완료하지 못했습니다.")
+        error = public_failure(exc, stage)
         failed_at = utc_now_iso()
         with connect(path) as db:
             changed = db.execute(

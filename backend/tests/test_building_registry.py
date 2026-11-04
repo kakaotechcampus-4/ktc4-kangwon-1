@@ -1,7 +1,9 @@
 """건축물대장 조회의 응답 해석과 부분 실패를 외부 통신 없이 검증합니다."""
 
+import asyncio
 import os
 import tempfile
+import time
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -119,7 +121,75 @@ def sequence(*responses):
     return lambda request: queue.pop(0) if len(queue) > 1 else queue[0]
 
 
+def slow_transport(slow, failing=()):
+    async def handle(request: httpx.Request) -> httpx.Response:
+        name = (
+            "kakao" if request.url.host == "dapi.kakao.com" else request.url.path.rsplit("/", 1)[-1]
+        )
+        if name in slow:
+            await asyncio.sleep(5)
+        if name in failing:
+            return httpx.Response(401)
+        if name == "kakao":
+            return httpx.Response(200, json=KAKAO)
+        answer = answers()[name]
+        return httpx.Response(answer.status_code, content=answer.content, headers=answer.headers)
+
+    return httpx.MockTransport(handle)
+
+
 class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
+    async def slow_lookup(self, *slow, failing=()):
+        started = time.monotonic()
+        async with httpx.AsyncClient(transport=slow_transport(set(slow), failing)) as client:
+            try:
+                return await lookup_building(
+                    "서울 송파구 위례광장로 199 4층",
+                    BuildingRegistrySettings(api_key="fake", retry_delay=0, deadline=0.3),
+                    AddressSettings(api_key="fake"),
+                    client=client,
+                )
+            finally:
+                self.elapsed = time.monotonic() - started
+
+    async def test_slow_section_is_null_within_deadline(self):
+        result = await self.slow_lookup("getBrFlrOulnInfo")
+        self.assertIsNone(result.floors)
+        self.assertEqual((len(result.titles), len(result.units)), (1, 2))
+        self.assertLess(self.elapsed, 1)
+
+    async def test_all_sections_slow_raises_timeout(self):
+        with self.assertRaises(BuildingRegistryError) as caught:
+            await self.slow_lookup(*answers())
+        self.assertEqual(caught.exception.code, "UPSTREAM_TIMEOUT")
+        self.assertLess(self.elapsed, 1)
+
+    async def test_timeout_wins_when_every_section_fails(self):
+        with self.assertRaises(BuildingRegistryError) as caught:
+            await self.slow_lookup(
+                "getBrFlrOulnInfo",
+                "getBrExposPubuseAreaInfo",
+                "getBrWclfInfo",
+                failing=("getBrTitleInfo",),
+            )
+        self.assertEqual(caught.exception.code, "UPSTREAM_TIMEOUT")
+
+    async def test_cancelled_lookup_leaves_no_sections_running(self):
+        lookup = asyncio.create_task(self.slow_lookup(*answers()))
+        await asyncio.sleep(0.05)
+        lookup.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await lookup
+        await asyncio.sleep(0)
+        others = asyncio.all_tasks() - {asyncio.current_task()}
+        self.assertEqual([task for task in others if not task.done()], [])
+
+    async def test_slow_address_lookup_raises_timeout(self):
+        with self.assertRaises(BuildingRegistryError) as caught:
+            await self.slow_lookup("kakao")
+        self.assertEqual(caught.exception.code, "UPSTREAM_TIMEOUT")
+        self.assertLess(self.elapsed, 1)
+
     async def lookup(self, responses, *, key="fake"):
         mock, seen = transport(responses)
         async with httpx.AsyncClient(transport=mock) as client:
@@ -351,6 +421,18 @@ class BuildingRegistryApiTests(unittest.TestCase):
         response = self.get(BuildingRegistryError("RATE_LIMIT", "외부 원문"))
         self.assertEqual(response.status_code, 429)
         self.assertNotIn("외부 원문", response.text)
+
+    def test_timeout_is_504(self):
+        response = self.get(BuildingRegistryError("UPSTREAM_TIMEOUT", "x"))
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(
+            response.json()["detail"],
+            "건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.",
+        )
+
+    def test_too_long_address_is_400(self):
+        response = self.get(GeocodeError("ADDRESS_TOO_LONG", "x"))
+        self.assertEqual(response.status_code, 400)
 
     def test_mismatched_address_is_400(self):
         response = self.get(GeocodeError("ADDRESS_MISMATCH", "외부 원문"))
