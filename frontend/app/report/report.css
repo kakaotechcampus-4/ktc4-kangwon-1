@@ -4131,9 +4131,54 @@
   }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 12mm 10mm;
+}
+
 @media print {
-  .report-page .report-screen-only {
+  html {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .report-page .report-screen-only,
+  header:has(+ .report-page),
+  .report-page .report-top-actions,
+  .report-page .report-mobile-toc,
+  .report-page .report-toc,
+  .report-page button:not([aria-pressed]),
+  .report-page a[href^='#'] {
     display: none !important;
+  }
+  .report-page .sticky {
+    position: static !important;
+  }
+  .report-page {
+    padding-bottom: 0 !important;
+  }
+  .report-page .report-chapter {
+    break-before: page;
+    padding-bottom: 0;
+  }
+  .report-page #space {
+    break-before: auto;
+  }
+  .report-page .line-clamp-3 {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+  .report-page .regulation-industry-pending {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .report-page svg,
+  .report-page img,
+  .report-page table,
+  .report-page tr,
+  .report-page li,
+  .report-page .recharts-wrapper {
+    break-inside: avoid;
   }
 }
 

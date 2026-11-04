@@ -110,6 +110,21 @@ describe('리포트 화면', () => {
     expect(getAnalysis).toHaveBeenCalledWith('r1');
   });
 
+  it('PDF 다운로드를 누르면 예쁜 이름으로 인쇄 창을 연다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue(stored);
+    const titles: string[] = [];
+    vi.spyOn(window, 'print').mockImplementation(() =>
+      titles.push(document.title)
+    );
+    render(<ReportPage />);
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'PDF 다운로드' }));
+    expect(titles).toEqual([
+      '채움 업종분석 리포트 - 서울특별시 송파구 위례광장로 199 1층 (2026.11.03)',
+    ]);
+  });
+
   it('불러오지 못하면 안내와 다시 불러오기를 보여 준다', async () => {
     vi.mocked(getAnalysis)
       .mockRejectedValueOnce(new Error('리포트를 불러오지 못했어요.'))
