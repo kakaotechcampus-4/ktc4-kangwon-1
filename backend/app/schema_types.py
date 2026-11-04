@@ -19,6 +19,15 @@ AgentId = Literal["floating_population", "business_lifecycle", "commercial_area"
 AGENT_IDS = get_args(AgentId)
 
 
+# 분석 요청 한 건의 수명주기입니다. 평가자 검토 상태(contracts.EvaluatorReview)나
+# 진행 이벤트 이름과 같은 낱말을 쓰지만 서로 다른 값 집합이라 타입을 따로 둡니다.
+# schema.sql 의 CHECK 제약이 DB 쪽 짝입니다. 상태를 더하면 양쪽을 함께 고칩니다.
+RequestStatus = Literal["pending", "running", "waiting_for_input", "completed", "failed"]
+
+
+REQUEST_STATUSES = get_args(RequestStatus)
+
+
 Text = Annotated[str, Field(min_length=1)]
 
 

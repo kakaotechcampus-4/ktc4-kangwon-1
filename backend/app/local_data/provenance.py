@@ -24,7 +24,9 @@ def save_snapshot(scope, adapter, task, config_hashes=None, data=None):
         )
     with connect(scope.path) as db:
         db.execute(
-            "INSERT INTO local_snapshots VALUES(?,?,?,?,?)",
+            "INSERT INTO local_snapshots(snapshot_id,database_path,versions_json,"
+            "config_hashes_json,scope_json) "
+            "VALUES(?,?,?,?,?)",
             (
                 scope.snapshot_id,
                 str(adapter.path),

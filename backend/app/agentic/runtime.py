@@ -25,6 +25,8 @@ from . import advisor, questions
 from .aliases import encode, encode_messages, labels_periods
 from .budget import RuntimeBudget
 from .contracts import (
+    EVALUATOR_ACTORS,
+    EVALUATOR_COUNT,
     EvaluatorReview,
     LInput,
     LRecord,
@@ -225,11 +227,19 @@ class DecisionLoop:
         await run_in_thread(ensure_space_fits, scope)
         return cls(scope, site, base_id, rows, **kwargs)
 
+    def adopt_shared(self, shared):
+        """수집 단계에서 이미 부른 지도·규제 결과를 루프가 이어받습니다.
+
+        같은 곳을 두 번 조회하지 않으려는 것입니다. 바깥에서 tools.shared 를
+        직접 건드리면 도구 내부 구조가 서비스 계층으로 새어 나갑니다.
+        """
+        self.tools.shared.map_cache = shared.map_cache
+        self.tools.shared.map_keys = shared.map_keys
+        self.tools.shared.map_http = shared.map_http
+        self.tools.shared.regulation = shared.regulation
+
     def evaluator_executors(self):
-        return {
-            actor: self.tools.for_actor(actor)
-            for actor in ("examiner", "founder", "customer", "landlord_advocate")
-        }
+        return {actor: self.tools.for_actor(actor) for actor in EVALUATOR_ACTORS}
 
     async def _budget_changed(self, budget):
         self.state["budget"] = budget
@@ -287,7 +297,8 @@ class DecisionLoop:
             result = outcome.result.model_copy(
                 update={
                     "evaluator_reviews": reviews,
-                    "review_completeness": sum(r.status == "completed" for r in reviews) / 4,
+                    "review_completeness": sum(r.status == "completed" for r in reviews)
+                    / EVALUATOR_COUNT,
                     "limitations_segments": [
                         *outcome.result.limitations_segments,
                         TextSegment(type="text", text="피드백 최종 반영을 완료하지 못했습니다."),

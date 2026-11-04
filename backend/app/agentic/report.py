@@ -15,6 +15,8 @@ from app.schemas import DecisionResult
 from app.text import has_digit
 
 from .contracts import (
+    EVALUATOR_ACTORS,
+    EVALUATOR_COUNT,
     ConditionExcludedCandidate,
     FactView,
     FinalCandidate,
@@ -466,9 +468,11 @@ def finalize(
         if reviews is not None
         else [
             {"actor": actor, "status": "failed", "issues": [], "error_code": "SOURCE_UNAVAILABLE"}
-            for actor in ["examiner", "founder", "customer", "landlord_advocate"]
+            for actor in EVALUATOR_ACTORS
         ],
-        review_completeness=sum(r.status == "completed" for r in reviews) / 4 if reviews else 0,
+        review_completeness=sum(r.status == "completed" for r in reviews) / EVALUATOR_COUNT
+        if reviews
+        else 0,
         review_resolutions=list(resolutions),
         confirmation_conditions_segments=[],
         limitations_segments=proposal.limitations_segments

@@ -104,7 +104,9 @@ class LocalDataDB:
                 return existing[0]
             version = "dv_" + uuid4().hex
             con.execute(
-                "INSERT INTO data_versions VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO data_versions(version_id,source,quarter,file_hash,row_count,"
+                "loaded_at,state,mapping_version) "
+                "VALUES(?,?,?,?,?,?,?,?)",
                 (
                     version,
                     source,
@@ -125,7 +127,7 @@ class LocalDataDB:
                     if columns is None:
                         columns = sorted(row["payload"])
                         con.execute(
-                            "INSERT INTO source_fields VALUES(?,?)",
+                            "INSERT INTO source_fields(version_id,columns_json) VALUES(?,?)",
                             (version, json.dumps(columns, ensure_ascii=False)),
                         )
                     if set(row["payload"]) != set(columns):
@@ -309,7 +311,10 @@ class LocalDataDB:
             ).lastrowid
             con.execute("UPDATE data_versions SET state='retired' WHERE state='active'")
             for vid in versions:
-                con.execute("INSERT INTO release_versions VALUES(?,?)", (release, vid))
+                con.execute(
+                    "INSERT INTO release_versions(release_id,version_id) VALUES(?,?)",
+                    (release, vid),
+                )
                 con.execute("UPDATE data_versions SET state='active' WHERE version_id=?", (vid,))
             con.execute(
                 "DELETE FROM release_versions WHERE release_id NOT IN "
@@ -356,7 +361,7 @@ class LocalDataDB:
     def save_page(self, key: str, start: int, body: dict) -> None:
         with self.connection() as con:
             con.execute(
-                "INSERT OR REPLACE INTO api_pages VALUES(?,?,?)",
+                "INSERT OR REPLACE INTO api_pages(collection_key,start,body) VALUES(?,?,?)",
                 (
                     key,
                     start,

@@ -18,19 +18,28 @@ def fact_id_by_identity(db, snapshot_id, identity_hash):
 
 
 def insert_fact(db, values):
-    db.execute("INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO facts(fact_id,request_id,snapshot_id,industry_code,source,"
+        "metric,value_json,unit,period,spatial_scope_json,comparison_json,status,"
+        "citable,calc_version,lineage_hash,identity_hash,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def insert_local_fact_lineage(db, fact_id, ref, row_key, column):
-    db.execute("INSERT INTO local_fact_lineage VALUES(?,?,?,?)", (fact_id, ref, row_key, column))
+    db.execute(
+        "INSERT INTO local_fact_lineage(fact_id,provenance_id,row_key,column_name) VALUES(?,?,?,?)",
+        (fact_id, ref, row_key, column),
+    )
 
 
 def insert_fact_sources(db, rows):
-    db.executemany("INSERT INTO fact_sources VALUES(?,?,?)", rows)
+    db.executemany("INSERT INTO fact_sources(fact_id,raw_row_id,field_pointer) VALUES(?,?,?)", rows)
 
 
 def insert_fact_parents(db, rows):
-    db.executemany("INSERT INTO fact_parents VALUES(?,?)", rows)
+    db.executemany("INSERT INTO fact_parents(fact_id,parent_fact_id) VALUES(?,?)", rows)
 
 
 def fact_value_json(db, fact_id, request_id, snapshot_id):
@@ -92,7 +101,10 @@ def alias_of_fact(db, request_id, fact_id):
 
 
 def insert_alias(db, request_id, alias, fact_id):
-    db.execute("INSERT INTO fact_aliases VALUES(?,?,?)", (request_id, alias, fact_id))
+    db.execute(
+        "INSERT INTO fact_aliases(request_id,alias,fact_id) VALUES(?,?,?)",
+        (request_id, alias, fact_id),
+    )
 
 
 def fact_id_by_reference(db, request_id, snapshot_id, reference):
@@ -181,9 +193,10 @@ def space_fit_inputs(db, request_id, snapshot_id):
 
 def point_space_fit(db, request_id, snapshot_id, industry_code, fact_id):
     db.execute(
-        "INSERT INTO space_fit_current VALUES(?,?,?,?) "
-        "ON CONFLICT(request_id,snapshot_id,industry_code) DO UPDATE "
-        "SET fact_id=excluded.fact_id WHERE fact_id!=excluded.fact_id",
+        "INSERT INTO space_fit_current(request_id,snapshot_id,industry_code,"
+        "fact_id) "
+        "VALUES(?,?,?,?) ON CONFLICT(request_id,snapshot_id,industry_code) "
+        "DO UPDATE SET fact_id=excluded.fact_id WHERE fact_id!=excluded.fact_id",
         (request_id, snapshot_id, industry_code, fact_id),
     )
 
