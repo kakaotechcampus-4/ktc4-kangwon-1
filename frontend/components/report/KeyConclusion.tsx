@@ -71,11 +71,16 @@ export function getKeyConclusionItems(checks: string[]) {
   const sentences = [
     ...new Set(
       checks
-        .flatMap((text) => text.split(/(?<=[.다요])\s*(?=[가-힣A-Z])/))
+        .flatMap((text) => text.split(/(?<=[.!?])\s+/))
         .map((text) => text.trim())
         .filter(Boolean)
     ),
   ];
+
+  const others = sentences.filter(
+    (sentence) =>
+      !TOPIC_ORDER.some((topic) => TOPICS[topic].test.test(sentence))
+  );
 
   return [
     ...TOPIC_ORDER.map((topic) => ({
@@ -86,18 +91,17 @@ export function getKeyConclusionItems(checks: string[]) {
         TOPICS[topic].test.test(sentence)
       ),
     })).filter((item) => item.sources.length > 0),
-    ...sentences
-      .filter(
-        (sentence) =>
-          !TOPIC_ORDER.some((topic) => TOPICS[topic].test.test(sentence))
-      )
-      .map((sentence, index) => ({
-        key: `other-${index}`,
-        topic: 'other' as const,
-        title: '추가로 확인할 것',
-        how: sentence,
-        sources: [] as string[],
-      })),
+    ...(others.length
+      ? [
+          {
+            key: 'other',
+            topic: 'other' as const,
+            title: '추가로 확인할 것',
+            how: others.join(' '),
+            sources: [] as string[],
+          },
+        ]
+      : []),
   ];
 }
 
