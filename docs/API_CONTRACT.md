@@ -35,6 +35,9 @@ POST wait=false는 요청 행을 pending으로 저장한 뒤202를 반환한다.
 확보하며 상한 초과는429이고 요청 행을 만들지 않는다. 202의 status는 pending이다.
 접수된 ID의 GET은 pending/running/waiting_for_input/completed/failed 상태를200으로 반환한다.
 자료가 아직 없으면 site/result/error/rendered/questions는 null이다. 미존재 ID만404다.
+조회 응답은 request_id·input_address·catalog_version·radius_m·status·created_at·completed_at·
+site·result·error·questions·rendered 열두 칸이다(`StoredAnalysis`). DB 행을 그대로 흘려보내지
+않으므로 칸을 더하거나 빼려면 이 모델을 고쳐야 한다.
 답변 뒤 같은 요청 ID로 재개하며 자료 버전·모델 예산·이전 대화를 유지한다.
 wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를 오류 추적에 쓴다.
 
@@ -208,6 +211,11 @@ Set-Cookie: chaeum_session=<난수>; HttpOnly; Secure; SameSite=Lax; Path=/; Max
 | 502 | 네 항목 모두 실패, 건축HUB 키 미설정 | `{"detail": "건축물대장 조회에 실패했습니다."}` |
 | 502 | 건축HUB 인증·권한 오류로 전체 실패 | `{"detail": "건축물대장 인증키 또는 사용 권한을 확인해 주세요."}` |
 | 429 | 건축HUB 호출 한도 오류로 전체 실패 | `{"detail": "건축물대장 조회 한도를 초과했습니다."}` |
+| 504 | 전체 20초 상한 안에 한 항목도 받지 못함 | `{"detail": "건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요."}` |
+
+- 조회 전체는 20초에서 끊습니다. 그 안에 온 항목은 돌려주고, 늦은 항목만 `null`(진행 표시 `failed`)로 둡니다.
+- 네 항목이 모두 실패했고 그중 시간 초과가 하나라도 있으면 504입니다. 화면은 '다시 조회'와 '직접 입력하고 계속'을 보여 주고, 다시 조회도 504면 직접 입력 화면으로 넘깁니다.
+- 주소 조회(카카오)는 요청 하나에 15초 상한이 따로 있습니다. 카카오가 느리면 보통 이 상한이 먼저 걸려 502(주소 조회 서비스 실패)로 끝나고, 화면은 바로 직접 입력으로 넘어갑니다.
 
 실제 조회에는 `.env`의 `BUILDING_REGISTRY_API_KEY`(공공데이터포털 「국토교통부_건축HUB_건축물대장정보 서비스」 활용신청 후 받은 일반 인증키,
 Encoding·Decoding 두 개가 보이면 Decoding)와 주소 검색용 `GEOCODING_API_KEY`가 필요합니다.
@@ -242,6 +250,7 @@ MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성
       "industry_code": "I201",
       "industry_name": "한식 음식점업",
       "code_points": 50.0,
+      "calculation": null,
       "L_points": null,
       "L_status": "unknown",
       "A": 65.0,
@@ -1127,8 +1136,9 @@ MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성
 | --- | --- |
 | schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 3. 모델 이름에 V2를 붙이지 않음 |
 | request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
-| top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지 제외·B 내림차순→coverage→코드 정렬, 부족하면 미충원 |
+| top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지·공간 제외 후 calculation.ranking_points(구 결과는 B)→coverage→코드 정렬, 공간 규칙 조정도 적용 |
 | code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
+| calculation | 선택 필드. S2_half-v1의 code_points·ranking_points·applicable_weight·raw_points·estimated_points. 90×raw_points/applicable_weight로 코드 점수를 환산한 뒤 기존 L을 더함. estimated_points는 환산 전 보완 추정 기여이며 관측 사실이 아님 |
 | A / B / H | 적용 배점(n.a. 제외·unknown 포함)·하한·상한 |
 | lower_ratio / upper_ratio / coverage | B/A·H/A·observed 배점/A. A=0이면 null. D/C 묶음 coverage는 별도 제공 |
 | G / badge | 규제 금지/조건부/해당 없음/unknown, 추천/조건부/보류/비추천. 규제 금지는 점수로 상쇄 불가 |
@@ -1137,6 +1147,12 @@ MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성
 | evaluator_reviews / review_completeness | 항상 4명 실행. completed 수/4, 실패는 동의로 간주하지 않음 |
 | review_resolutions | 지적별 수용·일부·기각과 근거/이유 |
 | confirmation_conditions_segments / limitations_segments | 영업 전 확인 조건·시점/공간/예산/평가 한계. 건축물 용도는 확인 조건 |
+
+S2_half의 배점은 D35·C1 30·S15·C4 10입니다. 기존 A/B/H·coverage와 상세 문항의
+grade/points는 원래 관측 채점으로 보존합니다. 새 상세 문항의 선택 필드 `scoring`은
+method·weight·points·basis·estimated를 담으며 실제 순위 계산에 반영한 기여를 구분합니다.
+unknown 문항의 원래 grade/points는 계속 null입니다. 화면은 calculation이 있는 경우
+새 추천 점수를 표시하며 L 미확인은 그 10점 범위만 남깁니다. 이 구간은 통계적 신뢰구간이 아닙니다.
 
 ### 진행 이벤트 stage 변경
 

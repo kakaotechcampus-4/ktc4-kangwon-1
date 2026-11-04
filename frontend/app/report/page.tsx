@@ -2,34 +2,34 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
-import {
-  Menu,
-  ChevronRight,
-  ArrowDownRight,
-  TriangleAlert,
-  MapPin,
-  Building2,
-} from 'lucide-react';
+import { Menu, MapPin, TriangleAlert, Download } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import RequireAuth from '@/components/auth/RequireAuth';
 import PropertyMap from '@/components/report/PropertyMap';
-import IndustryReview, {
-  candidateChecks,
-} from '@/components/report/IndustryReview';
-import FloatingPopulationSection from '@/components/report/FloatingPopulationSection';
-import CompetitorAnalysisSection from '@/components/report/CompetitorAnalysisSection';
-import OpenCloseTrendSection from '@/components/report/OpenCloseTrendSection';
+import { candidateChecks } from '@/lib/api/candidates';
+import IndustryRankingList from '@/components/report/IndustryRankingList';
+import { INDUSTRIES } from '@/lib/api/industries';
 import {
   FactCompetitionSection,
   FactFloatingPopulationSection,
   FactLifecycleSection,
 } from '@/components/report/FactSections';
 import EvaluatorReviews from '@/components/report/EvaluatorReviews';
+import KeyConclusion, {
+  getKeyConclusionItems,
+} from '@/components/report/KeyConclusion';
 import TenantMatchingProposal from '@/components/report/TenantMatchingProposal';
 import { colors } from '@/styles/tokens';
 import { reportPalette } from '@/styles/reportPalette';
 import './report.css';
 import { mockReportData } from '@/lib/mockData/report';
+import {
+  mockCompetitionFacts,
+  mockFloatingPopulationFacts,
+  mockLifecycleFacts,
+  mockRecommendedIndustryCodes,
+} from '@/lib/mockData/reportPresentation';
+import { mockReports, type ReportSummary } from '@/lib/mockData/reports';
 import { mockProperty } from '@/lib/mockData/property';
 import {
   loadAnalysisResult,
@@ -62,6 +62,8 @@ import {
   type Coordinates,
 } from '@/lib/api/reportSource';
 import { formatDay } from '@/lib/api/analysisStatus';
+import { reportPdfTitle } from '@/lib/api/reportPdf';
+import { printReport } from '@/lib/api/reportPrint';
 import StateNotice from '@/components/ui/StateNotice';
 import {
   fetchFailed,
@@ -108,6 +110,7 @@ function Chapter({
   title: string;
   // 설명 문장과 같은 줄 오른쪽에 붙는 보조 정보
   aside?: ReactNode;
+  // 화면에서만 보이고 인쇄에서는 제외하는 다음 단계
   screenOnly?: boolean;
   children: ReactNode;
 }) {
@@ -128,19 +131,23 @@ function Chapter({
           <span>
             {chapters.find(([chapterId]) => chapterId === id)?.[1] ?? title}
           </span>
+          {id === 'reviews' && aside && (
+            <span className="chapter-aside-inline-mobile">{aside}</span>
+          )}
         </h2>
-        <div className="chapter-description-row">
-          <p className="chapter-description">
-            {id === 'space'
-              ? '분석 대상 상가의 기본 정보를 확인하세요.'
-              : id === 'conclusion'
-                ? '추천 업종과 주요 판단 근거를 확인하세요.'
+        {/* 핵심 결론은 패널 자체가 설명이라 소개 문장을 두지 않는다 */}
+        {id !== 'conclusion' && (
+          <div className="chapter-description-row">
+            <p className="chapter-description">
+              {id === 'space'
+                ? '분석 대상 상가의 기본 정보를 확인하세요.'
                 : id === 'listing'
                   ? '추천 업종을 바탕으로 실제 임차인을 찾아보세요.'
                   : title}
-          </p>
-          {aside && <span className="chapter-aside">{aside}</span>}
-        </div>
+            </p>
+            {aside && <span className="chapter-aside">{aside}</span>}
+          </div>
+        )}
       </header>
       <div
         className={`original-report-content${id === 'space' ? ' space-info-content' : ''}`}
@@ -190,31 +197,6 @@ function MissingData({
 }
 
 /** 문장 속 추천 업종 이름을 파란 강조로 감싼다. */
-function highlightName(text: string, name?: string | null) {
-  if (!name || !text.includes(name)) return text;
-  return text.split(name).flatMap((part, i) =>
-    i === 0
-      ? [part]
-      : [
-          <em key={i} className="dcs-highlight">
-            {name}
-          </em>,
-          part,
-        ]
-  );
-}
-
-/** 근거 문장이 어느 분석에서 왔는지 한 줄로 알려 준다(근거 보기 링크 대상과 같은 기준). */
-function reasonDescription(reason: string, target: string) {
-  if (target === '#lifecycle') {
-    return /폐업|개업/.test(reason)
-      ? '최근 업종 운영 흐름을 검토했습니다.'
-      : '업종 점포 수의 장기 변화를 살펴봤습니다.';
-  }
-  if (target === '#customers') return '주변 유동인구 구성을 함께 살펴봤습니다.';
-  return '주변 경쟁 점포 수를 함께 고려했습니다.';
-}
-
 export default function ReportPage() {
   const [example, setExample] = useState<boolean>();
   useEffect(() => {
@@ -236,6 +218,14 @@ export default function ReportPage() {
 function ReportContent() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen || !window.matchMedia('(max-width: 480px)').matches) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
   const [largeText, setLargeText] = useState(false);
   useEffect(() => {
     const update = () => {
@@ -252,21 +242,22 @@ function ReportContent() {
   const [analysisResult, setAnalysisResult] = useState<DecisionResult | null>(
     null
   );
-  // 앞 단계(주소 입력·상가 정보 확인)에서 받은 값. mock 모드처럼 분석 결과가
-  // 없을 때도 리포트 머리말이 입력한 상가를 가리키게 한다.
+  const [demoReport, setDemoReport] = useState<ReportSummary | null>(null);
+  const [isDemoReport, setIsDemoReport] = useState(false);
+  // 분석 결과와 함께 입력한 주소 정보를 불러온다.
   const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
   // 분석이 쓴 좌표. 지도 중심이자 반경 원의 중심이다. 없으면 지도가 주소로 찾는다.
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+
   const [notice, setNotice] = useState<ReportNoticeState | null | undefined>();
   const [analyzedDay, setAnalyzedDay] = useState('');
-  const [isExample, setIsExample] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     // sessionStorage는 브라우저 전용이라 서버 렌더에서는 접근할 수 없다.
-    // 마운트 후 한 번만 읽어 온다 — 이 첫 렌더 이후의 추가 렌더 한 번은
-    // 페이지 진입 시 결과를 채워 넣는 데 불가피하다.
+    // 예시 리포트는 카드에서 전달한 고정 목업 데이터만 사용해, 이전 입력 주소와
+    // 섞이지 않도록 한다. 실제 리포트에서만 sessionStorage의 최신 결과를 읽는다.
     const params = new URLSearchParams(window.location.search);
     const source = reportSource({
       urlId: params.get('id'),
@@ -276,23 +267,29 @@ function ReportContent() {
       example: isExampleReport(window.location.search),
     });
     if (source.kind !== 'fetch') {
-      const fromSession = source.kind === 'saved' || source.kind === 'preview';
+      const demoId = params.get('demo');
+      const isDemo = source.kind === 'example' || source.kind === 'preview';
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsDemoReport(isDemo);
+      setDemoReport(
+        isDemo && demoId !== null
+          ? (mockReports.find((report) => report.id === demoId) ?? null)
+          : null
+      );
       setAnalysisResult(source.kind === 'saved' ? source.result : null);
-      setVacancyInput(fromSession ? loadVacancyInput() : null);
-      setBuilding(fromSession ? loadConfirmedBuilding() : null);
+      setVacancyInput(source.kind === 'saved' ? loadVacancyInput() : null);
+      setBuilding(source.kind === 'saved' ? loadConfirmedBuilding() : null);
       // 미리보기·예시는 목업 상가를 가리킨다. 주소에 건물 이름이 붙어 있어
       // 좌표 없이 주소로만 찾으면 못 찾는다.
       // 저장된 결과(saved)에는 좌표가 없어 주소로 찾는다.
       setCoordinates(
-        source.kind === 'preview' || source.kind === 'example'
+        isDemo
           ? {
               latitude: mockProperty.latitude,
               longitude: mockProperty.longitude,
             }
           : null
       );
-      setIsExample(source.kind === 'example');
       setNotice(source.kind === 'empty' ? { kind: 'empty' } : null);
       return;
     }
@@ -377,39 +374,42 @@ function ReportContent() {
     : [];
   const floatingPopulationData = allFacts
     ? floatingPopulationFromFacts(allFacts)
-    : null;
+    : isDemoReport
+      ? mockFloatingPopulationFacts
+      : null;
   const competitorData = allFacts
     ? competitionFromFacts(allFacts, candidateCodes)
-    : null;
+    : isDemoReport
+      ? mockCompetitionFacts
+      : null;
   const businessLifecycleData = allFacts
     ? lifecycleFromFacts(allFacts, candidateCodes)
-    : null;
+    : isDemoReport
+      ? mockLifecycleFacts
+      : null;
 
-  const analyzedDate = analysisResult
-    ? analyzedDay || formatDay(new Date().toISOString())
-    : mockReportData.analyzedDate;
+  const analyzedDate =
+    demoReport?.analyzedDate ??
+    (analysisResult
+      ? analyzedDay || formatDay(new Date().toISOString())
+      : mockReportData.analyzedDate);
   const inputAddress = vacancyInput
     ? [vacancyInput.roadAddress, vacancyInput.floorUnit.trim()]
         .filter(Boolean)
         .join(' ')
     : undefined;
-  const address = inputAddress ?? mockReportData.address;
+  const address = isDemoReport
+    ? (demoReport?.address ?? mockReportData.address)
+    : (inputAddress ?? mockReportData.address);
+  const pdfTitle = reportPdfTitle({
+    example: isDemoReport,
+    address,
+    analyzedDate,
+  });
   const displayAddress = address.replace(/\s+\d+층(?:\s+\d+호)?$/, '');
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
   const isPropertyPreview = !vacancyInput && !analysisResult && !building;
-  const matchingPropertyInfo = {
-    address: displayAddress,
-    floor:
-      vacancyInput?.floorUnit.trim() ||
-      (isPropertyPreview ? mockReportData.floor : '층 정보 확인 필요'),
-    area:
-      areaValue !== null && areaValue !== undefined
-        ? formatArea(areaValue)
-        : isPropertyPreview
-          ? mockReportData.area
-          : '면적 확인 필요',
-  };
   const facilityValue = building?.facility.value;
   const facilityLabel = facilityValue
     ? FACILITY_LABELS[facilityValue]
@@ -420,8 +420,6 @@ function ReportContent() {
     building?.sewage.value ??
     (isPropertyPreview ? mockProperty.sewage : '조회 필요');
   const radiusLabel = `${ANALYSIS_RADIUS_M}m`;
-
-  // 입점 규제(금지·조건부)가 걸린 후보 업종 — 따로 장을 두지 않고 주소 아래에 짧게 표시한다.
   const regulatedCandidates = analysisResult
     ? [...analysisResult.top5, ...analysisResult.excluded_candidates].filter(
         (item) => item.G === '금지' || item.G === '조건부'
@@ -436,24 +434,6 @@ function ReportContent() {
   const topName = analysisResult
     ? top?.industry_name
     : mockReportData.recommended[0]?.name;
-  const summaryText = analysisResult
-    ? renderSegments(analysisResult.summary_segments, factIndex)
-    : mockReportData.aiAnalysisSummary.recommendationReason;
-  const topReason = top
-    ? renderSegments(top.reasons_segments, factIndex).trim()
-    : '';
-  const primaryReasons = analysisResult
-    ? topReason
-      ? [topReason]
-      : []
-    : (mockReportData.recommended[0]?.tags ?? []);
-  const matchingRecommendations = analysisResult
-    ? analysisResult.top5.slice(0, 3).map((candidate) => ({
-        name: candidate.industry_name,
-      }))
-    : mockReportData.recommended.slice(0, 3).map((candidate) => ({
-        name: candidate.name,
-      }));
   const topChecks = top ? candidateChecks(top, factIndex) : [];
   // 결과 전체에 걸린 확인 조건과 한계(평가 미완료 등)
   const resultChecks = analysisResult
@@ -462,6 +442,14 @@ function ReportContent() {
         .map((line) => line.trim())
         .filter(Boolean)
     : [];
+  const conclusionChecks = analysisResult
+    ? [...topChecks, ...resultChecks]
+    : [
+        '1층에서 출입구와 간판이 잘 보이는지 현장에서 확인하세요.',
+        '업종에 필요한 급·배수, 전력 용량과 공사 허용 범위를 확인하세요.',
+        '건축물 용도와 해당 공간에서 영업 가능한 업종을 확인하세요.',
+      ];
+  const conclusionCheckCount = getKeyConclusionItems(conclusionChecks).length;
   const reviewerList =
     analysisResult?.evaluator_reviews ?? mockReportData.evaluatorReviews;
   const limitations = analysisResult
@@ -475,7 +463,7 @@ function ReportContent() {
           href={`#${id}`}
           onClick={() => setMenuOpen(false)}
           aria-current={active === id ? 'location' : undefined}
-          className={`flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base${id === 'listing' ? ' report-screen-only' : ''}`}
+          className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-base"
           style={{
             color: active === id ? reportPalette.brand : colors.text.secondary,
             fontWeight: active === id ? 700 : 400,
@@ -533,42 +521,45 @@ function ReportContent() {
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
             <Link
-              href={MOCK_MODE ? '/reports' : '/my/reports'}
+              href={isDemoReport || MOCK_MODE ? '/reports' : '/my/reports'}
               className="inline-flex min-h-11 items-center text-sm"
             >
               ← 리포트 목록 보기
             </Link>
-            <button
-              type="button"
-              aria-pressed={largeText}
-              onClick={() => setLargeText((v) => !v)}
-              className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
-              style={{ borderColor: colors.neutral.border }}
-            >
-              <span className="mr-2 text-[#1E44B8]" aria-hidden="true">
-                Aa
-              </span>
-              {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => printReport(pdfTitle)}
+                className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
+                style={{ borderColor: colors.neutral.border }}
+              >
+                <Download
+                  size={16}
+                  className="mr-2 text-[#1E44B8]"
+                  aria-hidden="true"
+                />
+                PDF 다운로드
+              </button>
+              <button
+                type="button"
+                aria-pressed={largeText}
+                onClick={() => setLargeText((v) => !v)}
+                className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
+                style={{ borderColor: colors.neutral.border }}
+              >
+                <span className="mr-2 text-[#1E44B8]" aria-hidden="true">
+                  Aa
+                </span>
+                {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}
+              </button>
+            </div>
           </div>
-          {isExample ? (
-            <p
-              role="note"
-              className="mb-6 rounded-xl border px-5 py-4 text-base font-semibold"
-              style={{
-                borderColor: colors.accent.orange,
-                backgroundColor: `${colors.accent.orange}14`,
-                color: colors.text.primary,
-              }}
-            >
-              예시 리포트예요. 실제 상가를 분석한 결과가 아니에요.
-            </p>
-          ) : null}
           <header className="report-masthead">
             <div>
               <p className="report-masthead-eyebrow">ANALYSIS REPORT</p>
               <h1 className="report-cover-title">상가 업종 분석 리포트</h1>
               <ul className="report-masthead-meta">
+                {isDemoReport && <li>예시 리포트 · 목업 데이터</li>}
                 <li>
                   <MapPin size={16} aria-hidden="true" />
                   {displayAddress}
@@ -590,19 +581,35 @@ function ReportContent() {
             onClick={() => setMenuOpen((v) => !v)}
             className="flex min-h-14 w-full items-center justify-between px-4 text-base font-semibold"
           >
-            <span>{chapters.find((item) => item[0] === active)?.[1]}</span>
+            <span className="report-mobile-toc-current">
+              <span className="report-mobile-toc-current-number">
+                {String(
+                  chapters.findIndex((item) => item[0] === active) + 1
+                ).padStart(2, '0')}
+              </span>
+              <span>{chapters.find((item) => item[0] === active)?.[1]}</span>
+            </span>
             <span className="flex items-center gap-2">
               <Menu size={18} />
               목차 보기
             </span>
           </button>
           {menuOpen && (
-            <div
-              id="mobile-report-menu"
-              className="report-mobile-toc-menu overflow-auto p-2"
-            >
-              {navigation}
-            </div>
+            <>
+              <button
+                type="button"
+                aria-label="목차 닫기"
+                className="report-mobile-toc-backdrop"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                id="mobile-report-menu"
+                className="report-mobile-toc-menu overflow-auto p-2"
+              >
+                <p className="report-mobile-toc-sheet-title">리포트 목차</p>
+                {navigation}
+              </div>
+            </>
           )}
         </div>
         <div
@@ -622,16 +629,12 @@ function ReportContent() {
             {navigation}
           </aside>
           <main className="min-w-0">
-            <Chapter
-              id="space"
-
-              title="분석할 상가 정보"
-            >
+            <Chapter id="space" title="상가 정보">
               <div className="space-info">
                 <header className="property-card-address space-address-heading">
                   <p className="property-address-label">분석 대상 주소</p>
-                  <h3 className="property-address">{displayAddress}</h3>
-                  {regulatedNames.length > 0 && (
+                  <h2 className="property-address">{displayAddress}</h2>
+                  {analysisResult && regulatedNames.length > 0 && (
                     <p className="property-regulation-note">
                       <TriangleAlert size={16} aria-hidden="true" />
                       <span>
@@ -656,30 +659,32 @@ function ReportContent() {
                       <div>
                         <dt>전용면적</dt>
                         <dd>
-                          {/* 실제 흐름에서 값이 없으면 목업 대신 "조회 필요"로 둔다.
-                            목업 값은 입력·결과가 전혀 없는 미리보기에서만 쓴다. */}
-                          {areaValue !== null && areaValue !== undefined
-                            ? formatArea(areaValue)
-                            : isPropertyPreview
-                              ? mockReportData.area.replace(/^전용\s*/, '')
-                              : '조회 필요'}
-                          {(isPropertyPreview ||
-                            (areaValue !== null &&
-                              areaValue !== undefined)) && (
-                            <span className="property-fact-note">
-                              (약{' '}
-                              {areaValue !== null && areaValue !== undefined
-                                ? (Number(areaValue) / 3.305785).toFixed(1)
-                                : '83.3'}
-                              평)
-                            </span>
-                          )}
+                          {demoReport
+                            ? `${demoReport.areaPyeong}평`
+                            : areaValue !== null && areaValue !== undefined
+                              ? formatArea(areaValue)
+                              : isPropertyPreview
+                                ? mockReportData.area.replace(/^전용\s*/, '')
+                                : '조회 필요'}
+                          {!demoReport &&
+                            (isPropertyPreview ||
+                              (areaValue !== null &&
+                                areaValue !== undefined)) && (
+                              <span className="property-fact-note">
+                                (약{' '}
+                                {areaValue !== null && areaValue !== undefined
+                                  ? (Number(areaValue) / 3.305785).toFixed(1)
+                                  : '83.3'}
+                                평)
+                              </span>
+                            )}
                         </dd>
                       </div>
                       <div>
                         <dt>층 / 호수</dt>
                         <dd>
-                          {vacancyInput?.floorUnit.trim() ||
+                          {demoReport?.floor ||
+                            vacancyInput?.floorUnit.trim() ||
                             (isPropertyPreview
                               ? mockReportData.floor
                               : '미입력')}
@@ -727,147 +732,21 @@ function ReportContent() {
               </div>
             </Chapter>
             <Chapter id="conclusion" title="이 상가의 핵심 결론">
-              <div className="dcs">
-                <div className="dcs-main">
-                  <section className="dcs-feature" aria-label="추천 업종 요약">
-                    <div className="dcs-feature-top">
-                      <span className="dcs-feature-icon" aria-hidden="true">
-                        <Building2 size={23} strokeWidth={1.8} />
-                      </span>
-                      <p className="dcs-label">가장 먼저 검토할 업종</p>
-                    </div>
-                    <h3 className="dcs-feature-name">
-                      {topName ?? '추천 결과 없음'}
-                    </h3>
-                    <p className="dcs-feature-sub">
-                      공간 조건과 주변 상권 분석 결과
-                    </p>
-                    <div className="dcs-direction">
-                      <p className="dcs-direction-label">검토 방향</p>
-                      <p className="dcs-direction-text">
-                        {highlightName(
-                          analysisResult
-                            ? summaryText
-                            : `${topName}를 우선 검토하되, 4층 접근성과 급·배수 조건을 확인하세요.`,
-                          topName
-                        )}
-                      </p>
-                    </div>
-                  </section>
-
-                  <div className="dcs-evidence">
-                    <div className="dcs-block-head">
-                      <div>
-                        <p className="dcs-eyebrow">WHY THIS INDUSTRY</p>
-                        <h3>추천 근거</h3>
-                      </div>
-                      {primaryReasons.length > 0 && (
-                        <p>주요 판단 기준 {primaryReasons.length}개</p>
-                      )}
-                    </div>
-                    {primaryReasons.length === 0 ? (
-                      <p className="dcs-empty">제공된 추천 근거가 없습니다.</p>
-                    ) : (
-                      <ol className="dcs-reasons">
-                        {primaryReasons.map((reason, i) => {
-                          const target = /폐업|개업|증가|감소|추이/.test(reason)
-                            ? '#lifecycle'
-                            : /인구|연령|통행/.test(reason)
-                              ? '#customers'
-                              : '#competition';
-                          return (
-                            <li key={i}>
-                              <span className="dcs-num">
-                                {String(i + 1).padStart(2, '0')}
-                              </span>
-                              <div>
-                                <p className="dcs-reason-title">{reason}</p>
-                                <p className="dcs-reason-desc">
-                                  {reasonDescription(reason, target)}
-                                </p>
-                              </div>
-                              <a
-                                className="dcs-link"
-                                href={target}
-                                aria-label={`${reason} 분석 근거 보기`}
-                              >
-                                근거 보기 <ChevronRight size={16} />
-                              </a>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    )}
-                  </div>
-                </div>
-
-                <div className="dcs-block dcs-checks">
-                  <div className="dcs-block-head">
-                    <h3>
-                      <TriangleAlert size={22} aria-hidden="true" />
-                      입점 전 직접 확인
-                    </h3>
-                  </div>
-                  {analysisResult ? (
-                    topChecks.length || resultChecks.length ? (
-                      <div className="dcs-check-grid">
-                        {[...topChecks, ...resultChecks].map((text, i) => (
-                          <div key={i}>
-                            <p className="dcs-check-eyebrow">
-                              {String(i + 1).padStart(2, '0')}
-                            </p>
-                            <p className="dcs-check-desc">{text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="dcs-empty">
-                        분석 결과에 별도 조건이 기재되지 않았습니다. 현장에서
-                        입점 조건을 확인하세요.
-                      </p>
-                    )
-                  ) : (
-                    <div className="dcs-check-grid">
-                      <div>
-                        <p className="dcs-check-eyebrow">01 · 접근성</p>
-                        <h4>접근성과 노출</h4>
-                        <p className="dcs-check-desc">
-                          4층까지의 엘리베이터 동선과 간판 노출을 확인하세요.
-                        </p>
-                      </div>
-                      <div>
-                        <p className="dcs-check-eyebrow">02 · 설비</p>
-                        <h4>설비와 공사 조건</h4>
-                        <p className="dcs-check-desc">
-                          급·배수, 전력 용량과 공사 허용 범위를 확인하세요.
-                        </p>
-                      </div>
-                      <div>
-                        <p className="dcs-check-eyebrow">03 · 규제</p>
-                        <h4>입점 규제</h4>
-                        <p className="dcs-check-desc">
-                          학교 주변 보호구역과 대상 업종의 제한 여부를
-                          확인하세요.
-                        </p>
-                        <a className="dcs-link" href="#space">
-                          규제 표시 보기 <ChevronRight size={16} />
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <a className="dcs-compare" href="#compare">
-                  업종 순위 비교하기 <ArrowDownRight size={20} />
-                </a>
-              </div>
-            </Chapter>
-            <Chapter id="compare" title="이 상가에 맞는 업종 순위">
-              <IndustryReview
-                top5={analysisResult?.top5}
-                excluded={analysisResult?.excluded_candidates}
-                conditionExcluded={analysisResult?.condition_excluded}
+              <KeyConclusion
+                name={topName}
+                industryCode={top?.industry_code}
+                badge={top?.badge}
+                checks={conclusionChecks}
                 facts={factIndex}
+              />
+            </Chapter>
+            <Chapter
+              id="compare"
+              title="분석한 51개 업종을 검토 순서대로 정리했어요. 순위는 업종 간 비교를 돕는 참고 자료이며, 실제 입점 가능 여부와는 별도로 확인해야 합니다."
+              aside={`${Object.keys(INDUSTRIES).length}개 업종`}
+            >
+              <IndustryRankingList
+                totalCount={Object.keys(INDUSTRIES).length}
               />
             </Chapter>
             <Chapter
@@ -879,6 +758,7 @@ function ReportContent() {
             >
               <EvaluatorReviews
                 reviews={reviewerList}
+                checkCount={conclusionCheckCount}
                 resolutions={
                   analysisResult?.review_resolutions ??
                   mockReportData.reviewResolutions
@@ -896,20 +776,14 @@ function ReportContent() {
 
               title="주변에는 어떤 사람들이 오갈까요?"
             >
-              {analysisResult ? (
-                floatingPopulationData ? (
-                  <FactFloatingPopulationSection
-                    data={floatingPopulationData}
-                  />
-                ) : (
-                  <MissingData
-                    label="유동인구"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {floatingPopulationData ? (
+                <FactFloatingPopulationSection data={floatingPopulationData} />
               ) : (
-                <FloatingPopulationSection reportLayout compactReference />
+                <MissingData
+                  label="유동인구"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
             </Chapter>
             <Chapter
@@ -917,18 +791,23 @@ function ReportContent() {
 
               title="같은 업종은 얼마나 있을까요?"
             >
-              {analysisResult ? (
-                competitorData ? (
-                  <FactCompetitionSection data={competitorData} />
-                ) : (
-                  <MissingData
-                    label="경쟁업체"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {competitorData ? (
+                <FactCompetitionSection
+                  data={competitorData}
+                  recommendedCodes={
+                    analysisResult
+                      ? new Set(
+                          analysisResult.top5.map((item) => item.industry_code)
+                        )
+                      : mockRecommendedIndustryCodes
+                  }
+                />
               ) : (
-                <CompetitorAnalysisSection reportLayout />
+                <MissingData
+                  label="경쟁업체"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
             </Chapter>
             <Chapter
@@ -936,24 +815,42 @@ function ReportContent() {
 
               title="새로 열고, 문을 닫는 흐름은?"
             >
-              {analysisResult ? (
-                businessLifecycleData ? (
-                  <FactLifecycleSection data={businessLifecycleData} />
-                ) : (
-                  <MissingData
-                    label="개폐업"
-                    state={factsState}
-                    onRetry={retryFacts}
-                  />
-                )
+              {businessLifecycleData ? (
+                <FactLifecycleSection data={businessLifecycleData} />
               ) : (
-                <OpenCloseTrendSection reportLayout compactReference />
+                <MissingData
+                  label="개폐업"
+                  state={factsState}
+                  onRetry={retryFacts}
+                />
               )}
             </Chapter>
             <Chapter id="listing" title="임차인 찾기" screenOnly>
               <TenantMatchingProposal
-                recommendations={matchingRecommendations}
-                propertyInfo={matchingPropertyInfo}
+                recommendations={
+                  analysisResult
+                    ? analysisResult.top5.slice(0, 3).map((item) => ({
+                        name: item.industry_name,
+                      }))
+                    : mockReportData.recommended.slice(0, 3).map((item) => ({
+                        name: item.name,
+                      }))
+                }
+                propertyInfo={{
+                  address: displayAddress,
+                  floor:
+                    demoReport?.floor ||
+                    vacancyInput?.floorUnit.trim() ||
+                    (isPropertyPreview
+                      ? mockReportData.floor
+                      : '층 정보 확인 필요'),
+                  area:
+                    areaValue !== null && areaValue !== undefined
+                      ? formatArea(areaValue)
+                      : isPropertyPreview
+                        ? mockReportData.area
+                        : '면적 확인 필요',
+                }}
               />
             </Chapter>
           </main>

@@ -11,6 +11,20 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
+    projects: [
+      {
+        extends: true,
+        test: { name: 'logic', include: ['**/*.test.ts'], environment: 'node' },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'pages',
+          include: ['**/*.test.tsx'],
+          environment: 'jsdom',
+          setupFiles: ['./vitest.setup.ts'],
+        },
+      },
+    ],
   },
 });

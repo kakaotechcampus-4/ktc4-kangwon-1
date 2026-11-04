@@ -17,13 +17,13 @@ from app.db.repository import facts as fact_db
 from app.storage.scrub import env_secrets, scrub
 
 from .aliases import decode, decode_report
-from .contracts import TOOL_INPUTS, Actor, ToolReply, tool_definitions
+from .contracts import EVALUATOR_ACTORS, TOOL_INPUTS, Actor, ToolReply, tool_definitions
 from .map_regulation import check_regulation, map_search
 from .read_tools import InvalidCursor, get_facts, get_scorecard
 from .sql_tool import error, query_raw
 
 READS = {"get_scorecard", "get_facts", "query_raw", "map_search", "check_regulation"}
-EVALUATORS = {"examiner", "founder", "customer", "landlord_advocate"}
+EVALUATORS = set(EVALUATOR_ACTORS)
 EVALUATOR_READS = {"get_scorecard", "get_facts", "query_raw"}
 
 

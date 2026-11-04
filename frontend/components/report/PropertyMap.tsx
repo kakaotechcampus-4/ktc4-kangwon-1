@@ -113,7 +113,7 @@ export default function PropertyMap({
     map: MapInstance;
     center: LatLng;
   } | null>(null);
-  const kakaoLink = `https://map.kakao.com/?q=${encodeURIComponent(address)}`;
+  const kakaoLink = `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
 
   useEffect(() => {
     if (!ready || !container.current) return;

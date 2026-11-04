@@ -6,6 +6,20 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // 나눈 Pretendard 파일은 이름에 내용 해시가 들어 있어 내용이 바뀌면 주소도 바뀐다 → 1년 캐시해도 안전하다.
+  async headers() {
+    return [
+      {
+        source: '/fonts/pretendard/:file*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

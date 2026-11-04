@@ -70,7 +70,7 @@ function coordinatesFromStored(detail: StoredAnalysis): Coordinates | null {
     : { latitude, longitude };
 }
 
-function vacancyFromStored(detail: StoredAnalysis): VacancyInput | null {
+export function vacancyFromStored(detail: StoredAnalysis): VacancyInput | null {
   const site = detail.site;
   const address =
     text(site?.road_address) ??
@@ -106,5 +106,6 @@ export function storedReport(detail: StoredAnalysis): StoredReport {
 }
 
 export function isExampleReport(search: string): boolean {
-  return new URLSearchParams(search).has('example');
+  const params = new URLSearchParams(search);
+  return params.has('example') || params.has('demo');
 }

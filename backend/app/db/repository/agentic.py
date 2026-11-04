@@ -23,7 +23,12 @@ def tool_call_history(db, request_id, snapshot_id, actor, tool_name):
 
 
 def insert_tool_call(db, values):
-    db.execute("INSERT INTO tool_calls VALUES(?,?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO tool_calls(tool_call_id,request_id,snapshot_id,run_id,actor,"
+        "tool_name,input_json,reply_json,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def advisor_consult_ids(db, request_id, snapshot_id):
@@ -34,14 +39,21 @@ def advisor_consult_ids(db, request_id, snapshot_id):
 
 
 def insert_report(db, values):
-    db.execute("INSERT INTO agentic_reports VALUES(?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO agentic_reports(report_id,request_id,snapshot_id,"
+        "proposal_json,result_json,rendered_json,phase,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def save_run(db, values):
     db.execute(
-        "INSERT INTO agentic_runs VALUES(?,?,?,?,?,?,?) ON "
-        "CONFLICT(request_id) DO UPDATE SET "
-        "status=excluded.status,state_json=excluded.state_json,result_json=excluded.result_json,updated_at=excluded.updated_at",
+        "INSERT INTO agentic_runs(request_id,snapshot_id,run_id,status,state_json,"
+        "result_json,updated_at) "
+        "VALUES(?,?,?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET "
+        "status=excluded.status,state_json=excluded.state_json,"
+        "result_json=excluded.result_json,updated_at=excluded.updated_at",
         values,
     )
 
@@ -70,7 +82,12 @@ def resume_request(db, request_id):
 
 
 def insert_question(db, values):
-    db.execute("INSERT INTO agentic_questions VALUES(?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO agentic_questions(question_session_id,request_id,snapshot_id,"
+        "questions_json,answers_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?,?)",
+        values,
+    )
 
 
 def question_session(db, request_id, snapshot_id):
@@ -111,8 +128,18 @@ def finalize_report(db, report_id, result_json):
 
 
 def insert_review(db, values):
-    db.execute("INSERT INTO agentic_reviews VALUES(?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO agentic_reviews(request_id,snapshot_id,actor,review_json,"
+        "created_at) "
+        "VALUES(?,?,?,?,?)",
+        values,
+    )
 
 
 def insert_advisor_consult(db, values):
-    db.execute("INSERT INTO advisor_consults VALUES(?,?,?,?,?,?,?,?,?,?,?)", values)
+    db.execute(
+        "INSERT INTO advisor_consults(consult_id,request_id,snapshot_id,question,"
+        "fact_ids_json,model,family,usage_json,answer_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        values,
+    )

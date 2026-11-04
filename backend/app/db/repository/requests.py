@@ -95,8 +95,11 @@ def get_request(request_id, *, db_path=None):
         return dict(row) if row else None
 
 
+INTERRUPTED_MESSAGE = "서비스 점검으로 분석이 멈췄어요. 다시 분석해 주세요."
+
+
 def fail_interrupted(*, db_path=None):
-    error = AgentError(code="INTERRUPTED", message="서버가 다시 시작되어 분석이 중단되었습니다.")
+    error = AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
     with connect(db_path) as db:
         changed = db.execute(
             "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
