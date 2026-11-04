@@ -161,7 +161,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.budget.used, 2)
         self.assertEqual(len(output.result.top5), 5)
         self.assertIn(
-            "서울 밖 점포 미반영",
+            "서울 밖 점포 미반영.",
             [s.text for s in output.result.limitations_segments if s.type == "text"],
         )
         self.assertFalse(any("analyses" in str(m) or "digest" in str(m) for m in names[0]))
@@ -197,7 +197,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.state["no_progress"], 3)
         self.assertTrue(output.result.summary_segments)
         self.assertIn(
-            "미제출 L 판단은 unknown으로 남기고 이미 확인한 판단은 보존했습니다",
+            "미제출 L 판단은 unknown으로 남기고 이미 확인한 판단은 보존했습니다.",
             [s.text for s in output.result.limitations_segments if s.type == "text"],
         )
         self.assertTrue(output.result.limitations_segments)

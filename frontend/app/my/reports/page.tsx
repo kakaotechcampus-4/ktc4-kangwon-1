@@ -13,6 +13,7 @@ import {
   type MyAnalysis,
 } from '@/lib/api/auth';
 import {
+  analysisLink,
   formatDay,
   statusLabel,
   type StatusTone,
@@ -156,11 +157,7 @@ function MyReports() {
 function AnalysisRow({ item }: { item: MyAnalysis }) {
   const router = useRouter();
   const status = statusLabel(item.status);
-  const openable = item.status === 'completed';
-
-  function open() {
-    router.push(`/report?id=${encodeURIComponent(item.request_id)}`);
-  }
+  const link = analysisLink(item.request_id, item.status);
 
   return (
     <li>
@@ -179,14 +176,14 @@ function AnalysisRow({ item }: { item: MyAnalysis }) {
             <span className="text-[#6B7886]">{formatDay(item.created_at)}</span>
           </div>
         </div>
-        {openable ? (
+        {link ? (
           <Button
             type="button"
             variant="outline"
             className="shrink-0"
-            onClick={open}
+            onClick={() => router.push(link.href)}
           >
-            리포트 열기
+            {link.label}
           </Button>
         ) : null}
       </Card>

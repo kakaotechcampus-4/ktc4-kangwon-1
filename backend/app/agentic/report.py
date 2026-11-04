@@ -3,6 +3,7 @@
 import json
 import uuid
 from copy import deepcopy
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.clock import utc_now_iso
 from app.db.connection import connect
@@ -346,6 +347,42 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
     return score_id, rows
 
 
+SPACE_FIT_NAMES = {"floor": "층", "area": "면적", **FACILITY_NAMES}
+CONFIDENCE_TEXT = {"low": "낮음", "medium": "보통", "high": "높음"}
+
+
+def space_fit_text(value):
+    parts = [
+        f"{name} {value[key]}"
+        for key, name in SPACE_FIT_NAMES.items()
+        if isinstance(value.get(key), str) and value[key] != "해당 없음"
+    ]
+    text = " · ".join(parts) if parts else "비교할 공간 조건 없음"
+    confidence = CONFIDENCE_TEXT.get(value.get("confidence"))
+    return f"{text} (비교 신뢰도 {confidence})" if confidence else text
+
+
+def text_value(value):
+    if isinstance(value, bool):
+        return "예" if value else "아니요"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e21 else repr(value)
+    return None
+
+
+def fixed(value, digits):
+    exponent = Decimal(1).scaleb(-digits)
+    return format(Decimal(value).quantize(exponent, rounding=ROUND_HALF_UP), "f")
+
+
+def grouped(value):
+    return format(Decimal(value).quantize(Decimal(1), rounding=ROUND_HALF_UP), ",f")
+
+
 def render_segment(segment, facts):
     if segment.type == "text":
         return segment.text
@@ -358,18 +395,56 @@ def render_segment(segment, facts):
                 for key, name in FACILITY_NAMES.items()
                 if value.get(key) in FACILITY_STATE_TEXT
             )
-        return str(value)
+        if isinstance(value, dict):
+            return space_fit_text(value) if fact["metric"] == "space_fit" else "확인 불가"
+        if isinstance(value, list):
+            items = [text_value(item) for item in value]
+            return ", ".join(items) if items and None not in items else "확인 불가"
+        text = text_value(value)
+        return "확인 불가" if text is None else text
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
     if segment.format == "percent":
         if fact["unit"] not in {"%", "비율"}:
             raise ReportInvalid("백분율 단위가 아닙니다.")
-        return f"{value * 100 if fact['unit'] == '비율' else value:.1f}%"
+        return fixed(value * 100 if fact["unit"] == "비율" else value, 1) + "%"
     if segment.format == "count":
-        return f"{value:,.0f}"
+        return grouped(value)
     if segment.format == "distance":
-        return f"{value:,.0f}m"
-    return f"{value:.2f}"
+        return grouped(value) + "m"
+    return fixed(value, 2)
+
+
+def join_segments(segments, facts):
+    joined = ""
+    previous = None
+    for segment in segments:
+        piece = render_segment(segment, facts)
+        kind = segment.type
+        if kind == "fact" and facts[segment.fact_id]["metric"] == "space_fit":
+            kind = "space_fit"
+        touching = joined[-1:].strip() and piece[:1].strip() and piece[0] not in ".,!?;:)]…"
+        gap = (
+            joined[-1:] in (".", "!", "?")
+            or previous == "space_fit"
+            or (previous == "text" and joined[-1:] not in "([{'\"“‘~-/·")
+            or (previous not in (None, "text") and kind != "text")
+        )
+        if touching and gap:
+            joined += " "
+        joined += piece
+        if piece:
+            previous = kind
+    return joined
+
+
+def limitation_segments(model_segments, texts):
+    from .contracts import TextSegment
+
+    added = [
+        TextSegment(type="text", text=t if t.endswith((".", "!", "?")) else t + ".") for t in texts
+    ]
+    return [*model_segments, *added]
 
 
 def finalize(
@@ -450,7 +525,6 @@ def finalize(
         )
         for f in facts.values()
     ]
-    from .contracts import TextSegment
 
     result_model = DecisionResult(
         request_id=scope.request_id,
@@ -475,25 +549,24 @@ def finalize(
         else 0,
         review_resolutions=list(resolutions),
         confirmation_conditions_segments=[],
-        limitations_segments=proposal.limitations_segments
-        + [
-            TextSegment(type="text", text=t)
-            for t in [
+        limitations_segments=limitation_segments(
+            proposal.limitations_segments,
+            [
                 *limitations,
                 *(
                     ["평가 미완료: 실패한 평가를 동의로 간주하지 않습니다."]
                     if reviews and any(r.status == "failed" for r in reviews)
                     else []
                 ),
-            ]
-        ],
+            ],
+        ),
     )
     rendered = {
-        "summary": "".join(render_segment(s, facts) for s in proposal.summary_segments),
+        "summary": join_segments(proposal.summary_segments, facts),
         "top5": [
             {
                 "industry_code": c.industry_code,
-                "reasons": "".join(render_segment(s, facts) for s in c.reasons_segments),
+                "reasons": join_segments(c.reasons_segments, facts),
             }
             for c in top
         ],
