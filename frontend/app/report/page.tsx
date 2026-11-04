@@ -9,6 +9,7 @@ import {
   TriangleAlert,
   MapPin,
   Building2,
+  Download,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import RequireAuth from '@/components/auth/RequireAuth';
@@ -57,6 +58,8 @@ import {
   storedReport,
 } from '@/lib/api/reportSource';
 import { formatDay } from '@/lib/api/analysisStatus';
+import { reportPdfTitle } from '@/lib/api/reportPdf';
+import { printReport } from '@/lib/api/reportPrint';
 import StateNotice from '@/components/ui/StateNotice';
 import {
   fetchFailed,
@@ -375,6 +378,11 @@ function ReportContent() {
         .join(' ')
     : undefined;
   const address = inputAddress ?? mockReportData.address;
+  const pdfTitle = reportPdfTitle({
+    example: isExample,
+    address,
+    analyzedDate,
+  });
   const displayAddress = address.replace(/\s+\d+층(?:\s+\d+호)?$/, '');
   const parkingValue = building?.parking.value;
   const areaValue = building?.exclusiveAreaM2.value;
@@ -519,18 +527,33 @@ function ReportContent() {
             >
               ← 리포트 목록 보기
             </Link>
-            <button
-              type="button"
-              aria-pressed={largeText}
-              onClick={() => setLargeText((v) => !v)}
-              className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
-              style={{ borderColor: colors.neutral.border }}
-            >
-              <span className="mr-2 text-[#1E44B8]" aria-hidden="true">
-                Aa
-              </span>
-              {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => printReport(pdfTitle)}
+                className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
+                style={{ borderColor: colors.neutral.border }}
+              >
+                <Download
+                  size={16}
+                  className="mr-2 text-[#1E44B8]"
+                  aria-hidden="true"
+                />
+                PDF 다운로드
+              </button>
+              <button
+                type="button"
+                aria-pressed={largeText}
+                onClick={() => setLargeText((v) => !v)}
+                className="inline-flex h-11 shrink-0 items-center rounded-md border bg-white px-4 text-sm font-semibold"
+                style={{ borderColor: colors.neutral.border }}
+              >
+                <span className="mr-2 text-[#1E44B8]" aria-hidden="true">
+                  Aa
+                </span>
+                {largeText ? '기본 글씨로 보기' : '글씨 크게 보기'}
+              </button>
+            </div>
           </div>
           {isExample ? (
             <p
