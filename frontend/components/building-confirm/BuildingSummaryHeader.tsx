@@ -59,6 +59,14 @@ export default function BuildingSummaryHeader({
             건축물대장 HUB
           </span>
         </div>
+        {building.sourceNote && (
+          <p
+            className="text-sm break-keep"
+            style={{ color: `${colors.neutral.white}CC` }}
+          >
+            {building.sourceNote}
+          </p>
+        )}
       </div>
 
       <dl

@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/http';
+import { ApiError, apiFetch, readDetail } from '@/lib/api/http';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import { mockProperty } from '@/lib/mockData/property';
 import {
@@ -191,20 +191,26 @@ export async function fetchBuildingInfo(
   }
   let registry: BuildingRegistryResponse | null = null;
   let note = LOOKUP_ERROR_NOTE;
+  let timedOut: ApiError | null = null;
   try {
     const response = await apiFetch(
       `/api/v1/building-registry?address=${encodeURIComponent(address)}`,
       { signal }
     );
-    if (response.ok) {
+    if (response.status === 504) {
+      timedOut = new ApiError(504, await readDetail(response));
+    } else if (response.ok) {
       registry = (await response.json()) as BuildingRegistryResponse;
     } else if (response.status === 400) {
       note = ADDRESS_ERROR_NOTE;
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if ((error as { name?: unknown } | null)?.name === 'AbortError') {
       throw error;
     }
+  }
+  if (timedOut) {
+    throw timedOut;
   }
   if (registry) {
     registry = { ...registry };

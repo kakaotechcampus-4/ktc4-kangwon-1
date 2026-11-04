@@ -2,9 +2,12 @@ import type {
   AnalysisEvent,
   AnswerSubmission,
   QuestionField,
+  StoredAnalysis,
   StoredQuestions,
   WaitingForInput,
 } from '@/lib/api/types';
+import type { VacancyInput } from '@/lib/api/resultStore';
+import { vacancyFromStored } from '@/lib/api/reportSource';
 import type {
   ClarifyingAnswers,
   ClarifyingQuestion,
@@ -263,4 +266,84 @@ export function answerFailureAction(
     return 'retry';
   }
   return 'fail';
+}
+
+export type ProgressSite = {
+  address: string;
+  floorUnit: string;
+  areaM2: number | null;
+  parking: string | null;
+  fromSession: boolean;
+};
+
+export function progressSite(
+  requestId: string | null,
+  session: {
+    requestId: string | null;
+    input: VacancyInput | null;
+    areaM2: number | null;
+    parking: string | null;
+  },
+  stored: StoredAnalysis | null
+): ProgressSite | null {
+  if (session.input && session.requestId === requestId) {
+    return {
+      address: session.input.roadAddress,
+      floorUnit: session.input.floorUnit,
+      areaM2: session.areaM2,
+      parking: session.parking,
+      fromSession: true,
+    };
+  }
+  const site =
+    stored && stored.request_id === requestId
+      ? vacancyFromStored(stored)
+      : null;
+  return site
+    ? {
+        address: site.roadAddress,
+        floorUnit: site.floorUnit,
+        areaM2: null,
+        parking: null,
+        fromSession: false,
+      }
+    : null;
+}
+
+export function progressReportPath(
+  requestId: string,
+  fromSession: boolean
+): string {
+  return fromSession
+    ? '/report'
+    : `/report?id=${encodeURIComponent(requestId)}`;
+}
+
+export function siteOrUnknown(site: ProgressSite | null): ProgressSite {
+  return (
+    site ?? {
+      address: '확인 안 됨',
+      floorUnit: '',
+      areaM2: null,
+      parking: null,
+      fromSession: false,
+    }
+  );
+}
+
+export function progressRestartPath(fromSession: boolean): string {
+  return fromSession ? '/building-confirm' : '/vacancy-input';
+}
+
+export function liveProgressSite(
+  requestId: string,
+  session: Parameters<typeof progressSite>[1],
+  detail: StoredAnalysis | null,
+  failed: boolean
+): ProgressSite | null {
+  const site = progressSite(requestId, session, detail);
+  if (site) {
+    return site;
+  }
+  return detail || failed ? siteOrUnknown(null) : null;
 }

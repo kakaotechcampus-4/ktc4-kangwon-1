@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Menu, MapPin, TriangleAlert } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import RequireAuth from '@/components/auth/RequireAuth';
 import PropertyMap from '@/components/report/PropertyMap';
 import { candidateChecks } from '@/lib/api/candidates';
 import IndustryRankingList from '@/components/report/IndustryRankingList';
@@ -47,8 +48,21 @@ import {
   formatArea,
 } from '@/components/building-confirm/labels';
 import type { DecisionResult, FactView } from '@/lib/api/types';
-import { getAnalysisFacts } from '@/lib/api/analyses';
+import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
 import { indexFacts, renderSegments } from '@/lib/api/segments';
+import { MOCK_MODE } from '@/lib/api/mockMode';
+import {
+  isExampleReport,
+  reportSource,
+  storedReport,
+} from '@/lib/api/reportSource';
+import { formatDay } from '@/lib/api/analysisStatus';
+import StateNotice from '@/components/ui/StateNotice';
+import {
+  fetchFailed,
+  reportNotice,
+  type ReportNoticeState,
+} from '@/components/report/reportNotice';
 import {
   competitionFromFacts,
   floatingPopulationFromFacts,
@@ -177,6 +191,24 @@ function MissingData({
 
 /** 문장 속 추천 업종 이름을 파란 강조로 감싼다. */
 export default function ReportPage() {
+  const [example, setExample] = useState<boolean>();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExample(isExampleReport(window.location.search));
+  }, []);
+  if (example === undefined) {
+    return null;
+  }
+  return example ? (
+    <ReportContent />
+  ) : (
+    <RequireAuth>
+      <ReportContent />
+    </RequireAuth>
+  );
+}
+
+function ReportContent() {
   const [active, setActive] = useState<string>('space');
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -209,28 +241,64 @@ export default function ReportPage() {
   const [vacancyInput, setVacancyInput] = useState<VacancyInput | null>(null);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
 
+  const [notice, setNotice] = useState<ReportNoticeState | null | undefined>();
+  const [analyzedDay, setAnalyzedDay] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
   useEffect(() => {
     // sessionStorage는 브라우저 전용이라 서버 렌더에서는 접근할 수 없다.
     // 예시 리포트는 카드에서 전달한 고정 목업 데이터만 사용해, 이전 입력 주소와
     // 섞이지 않도록 한다. 실제 리포트에서만 sessionStorage의 최신 결과를 읽는다.
-    const demoId = new URLSearchParams(window.location.search).get('demo');
-    if (demoId !== null) {
+    const params = new URLSearchParams(window.location.search);
+    const source = reportSource({
+      urlId: params.get('id'),
+      savedRequestId: loadRequestId(),
+      saved: loadAnalysisResult(),
+      mockMode: MOCK_MODE,
+      example: isExampleReport(window.location.search),
+    });
+    if (source.kind !== 'fetch') {
+      const demoId = params.get('demo');
+      const isDemo = source.kind === 'example' || source.kind === 'preview';
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsDemoReport(true);
-      setDemoReport(mockReports.find((report) => report.id === demoId) ?? null);
+      setIsDemoReport(isDemo);
+      setDemoReport(
+        isDemo && demoId !== null
+          ? (mockReports.find((report) => report.id === demoId) ?? null)
+          : null
+      );
+      setAnalysisResult(source.kind === 'saved' ? source.result : null);
+      setVacancyInput(source.kind === 'saved' ? loadVacancyInput() : null);
+      setBuilding(source.kind === 'saved' ? loadConfirmedBuilding() : null);
+      setNotice(source.kind === 'empty' ? { kind: 'empty' } : null);
       return;
     }
-    const savedResult = loadAnalysisResult();
-    if (!savedResult) {
-      // 결과가 없는 직접 진입은 예시 리포트로 보여준다. 이전에 입력한 주소만
-      // 가져와 목업 분석 내용과 섞이지 않게 한다.
-      setIsDemoReport(true);
-      return;
-    }
-    setAnalysisResult(savedResult);
-    setVacancyInput(loadVacancyInput());
-    setBuilding(loadConfirmedBuilding());
-  }, []);
+    let cancelled = false;
+    setNotice({ kind: 'loading' });
+    getAnalysis(source.requestId)
+      .then((detail) => {
+        if (cancelled) return;
+        const report = storedReport(detail);
+        if (report.kind !== 'ready') {
+          setNotice(report);
+          return;
+        }
+        setAnalysisResult(report.result);
+        setVacancyInput(report.vacancyInput);
+        setBuilding(null);
+        setAnalyzedDay(report.analyzedDate);
+        setNotice(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setNotice(
+          fetchFailed(error, () => setLoadAttempt((attempt) => attempt + 1))
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAttempt]);
 
   // 차트용 전체 fact. 결과의 facts는 보고서가 인용한 것만 담아 따로 받는다.
   // undefined = 받는 중, null = 받지 못함
@@ -241,7 +309,7 @@ export default function ReportPage() {
     if (!analysisResult) {
       return;
     }
-    const requestId = loadRequestId() ?? analysisResult.request_id;
+    const requestId = analysisResult.request_id;
     // 이미 받아 둔 fact가 있으면 서버를 다시 부르지 않는다.
     const saved = loadAnalysisFacts(requestId);
     if (saved) {
@@ -302,7 +370,7 @@ export default function ReportPage() {
   const analyzedDate =
     demoReport?.analyzedDate ??
     (analysisResult
-      ? new Date().toLocaleDateString('ko-KR')
+      ? analyzedDay || formatDay(new Date().toISOString())
       : mockReportData.analyzedDate);
   const inputAddress = vacancyInput
     ? [vacancyInput.roadAddress, vacancyInput.floorUnit.trim()]
@@ -383,6 +451,21 @@ export default function ReportPage() {
       ))}
     </nav>
   );
+  const shownNotice: ReportNoticeState | null =
+    notice === undefined ? { kind: 'loading' } : notice;
+  if (shownNotice) {
+    return (
+      <div
+        className="flex min-h-screen flex-col"
+        style={{ backgroundColor: colors.neutral.background }}
+      >
+        <Header />
+        <main className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 pt-14 pb-24 sm:px-8">
+          <StateNotice {...reportNotice(shownNotice)} />
+        </main>
+      </div>
+    );
+  }
   return (
     <div
       className="min-h-screen"
@@ -412,7 +495,7 @@ export default function ReportPage() {
         <div className="report-intro">
           <div className="report-top-actions mb-6 flex flex-wrap items-center justify-between gap-4">
             <Link
-              href="/reports"
+              href={isDemoReport || MOCK_MODE ? '/reports' : '/my/reports'}
               className="inline-flex min-h-11 items-center text-sm"
             >
               ← 리포트 목록 보기

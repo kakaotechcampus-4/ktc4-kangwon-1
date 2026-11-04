@@ -1,4 +1,4 @@
-import type { FactSegment, FactView } from '@/lib/api/types';
+import type { FactSegment, FactView, JsonValue } from '@/lib/api/types';
 
 /**
  * 문장 조각을 화면 문장으로 이어 붙인다.
@@ -27,16 +27,44 @@ const FACILITY_STATE_TEXT: Record<string, string> = {
   installable: '설치 가능',
   unavailable: '설치 불가',
 };
-
-// 업종 공간 요건과 임대인 답변을 비교한 결과(backend space.compare_space).
-// '해당 없음'은 이 업종에 필요 없는 조건이라 문장에서 뺀다.
 const SPACE_FIT_TEXT: [string, string][] = [
-  ['area', '면적'],
   ['floor', '층'],
-  ['kitchen', '주방'],
-  ['ventilation', '배기(덕트)'],
-  ['water_supply', '급배수'],
+  ['area', '면적'],
+  ...FACILITY_TEXT,
 ];
+const CONFIDENCE_TEXT: Record<string, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+};
+
+function spaceFitText(value: Record<string, JsonValue>): string {
+  const parts = SPACE_FIT_TEXT.flatMap(([key, name]) => {
+    const state = value[key];
+    return typeof state === 'string' && state !== '해당 없음'
+      ? [`${name} ${state}`]
+      : [];
+  });
+  const confidence =
+    typeof value.confidence === 'string'
+      ? CONFIDENCE_TEXT[value.confidence]
+      : undefined;
+  const text = parts.length ? parts.join(' · ') : '비교할 공간 조건 없음';
+  return confidence ? `${text} (비교 신뢰도 ${confidence})` : text;
+}
+
+function textValue(value: JsonValue): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? '예' : '아니요';
+  }
+  return null;
+}
 
 function grouped(value: number): string {
   return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -64,20 +92,16 @@ export function formatFact(
           : [];
       }).join(' · ');
     }
-    if (
-      fact.metric === 'space_fit' &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    ) {
-      return SPACE_FIT_TEXT.flatMap(([key, name]) => {
-        const state = value[key];
-        return typeof state === 'string' && state !== '해당 없음'
-          ? [`${name} ${state}`]
-          : [];
-      }).join(' · ');
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      return fact.metric === 'space_fit' ? spaceFitText(value) : null;
     }
-    // 읽는 법을 모르는 객체·배열은 JSON을 그대로 보여주지 않고 문장에서 뺀다.
-    return typeof value === 'string' ? value : '';
+    if (Array.isArray(value)) {
+      const items = value.map(textValue);
+      return items.length && items.every((item) => item !== null)
+        ? items.join(', ')
+        : null;
+    }
+    return textValue(value);
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;
@@ -99,14 +123,32 @@ export function renderSegments(
   segments: readonly FactSegment[],
   facts: FactIndex
 ): string {
-  return segments.reduce((sentence, segment) => {
+  let joined = '';
+  let previous: 'text' | 'fact' | 'spaceFit' | null = null;
+  for (const segment of segments) {
+    let piece: string;
+    let kind: 'text' | 'fact' | 'spaceFit' = 'text';
     if (segment.type === 'text') {
-      return sentence + segment.text;
+      piece = segment.text;
+    } else {
+      const fact = facts.get(segment.fact_id);
+      kind = fact?.metric === 'space_fit' ? 'spaceFit' : 'fact';
+      piece = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
     }
-    const fact = facts.get(segment.fact_id);
-    const text = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
-    // 문장이 끝난 바로 뒤에 붙는 값은 띄어서 이어 쓴다.
-    const gap = text && /[.!?]$/.test(sentence) ? ' ' : '';
-    return sentence + gap + text;
-  }, '');
+    const touching =
+      /\S$/.test(joined) && /^\S/.test(piece) && !/^[.,!?;:)\]…]/.test(piece);
+    const gap =
+      /[.!?]$/.test(joined) ||
+      previous === 'spaceFit' ||
+      (previous === 'text' && !/[([{'"“‘~\-/·]$/.test(joined)) ||
+      (previous !== null && previous !== 'text' && kind !== 'text');
+    if (touching && gap) {
+      joined += ' ';
+    }
+    joined += piece;
+    if (piece) {
+      previous = kind;
+    }
+  }
+  return joined;
 }

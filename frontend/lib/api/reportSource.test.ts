@@ -164,6 +164,10 @@ describe('isExampleReport', () => {
     expect(isExampleReport('?id=a&example=1')).toBe(true);
   });
 
+  it('랜딩·목록의 데모 예시 번호(demo)도 예시 리포트다', () => {
+    expect(isExampleReport('?demo=oegeum-404')).toBe(true);
+  });
+
   it('example이 없으면 예시가 아니다', () => {
     expect(isExampleReport('?id=a')).toBe(false);
     expect(isExampleReport('')).toBe(false);

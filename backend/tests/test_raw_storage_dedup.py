@@ -114,7 +114,10 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
             diagnostic = json.loads(details)[0]
             self.assertEqual(diagnostic["exception_class"], "OSError")
             self.assertEqual(diagnostic["stage"], "수집")
-            self.assertEqual(json.loads(error)["message"], "새 판단 실행을 완료하지 못했습니다.")
+            self.assertEqual(
+                json.loads(error)["message"],
+                "분석을 끝까지 마치지 못했어요. 잠시 후 다시 분석해 주세요.",
+            )
 
     async def test_failed_page_rolls_back_body_rows_and_links(self):
         from app.storage.raw import RawStorageError

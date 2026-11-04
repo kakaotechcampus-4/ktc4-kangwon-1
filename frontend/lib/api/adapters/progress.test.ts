@@ -6,6 +6,11 @@ import {
   answerFailureAction,
   applyProgressEvent,
   prefillAnswers,
+  liveProgressSite,
+  progressReportPath,
+  progressRestartPath,
+  progressSite,
+  siteOrUnknown,
   progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
@@ -216,5 +221,129 @@ describe('answerFailureAction', () => {
     for (const status of [400, 401, 403, 404, 422]) {
       expect(answerFailureAction(status)).toBe('fail');
     }
+  });
+});
+
+describe('progressSite', () => {
+  const session = {
+    requestId: 'r1',
+    input: { roadAddress: '서울 마포구 양화로 1', floorUnit: '2층' },
+    areaM2: 50,
+    parking: 'possible',
+  };
+  const stored = {
+    request_id: 'r2',
+    status: 'waiting_for_input' as const,
+    site: { road_address: '서울 송파구 위례광장로 199', detail_address: '1층' },
+    result: null,
+    error: null,
+    questions: null,
+    rendered: null,
+  };
+
+  it('이 탭에서 시작한 분석이면 입력값을 그대로 쓴다', () => {
+    expect(progressSite('r1', session, null)).toEqual({
+      address: '서울 마포구 양화로 1',
+      floorUnit: '2층',
+      areaM2: 50,
+      parking: 'possible',
+      fromSession: true,
+    });
+  });
+
+  it('다른 분석이면 서버에 저장된 주소를 쓰고 입력값은 쓰지 않는다', () => {
+    expect(progressSite('r2', session, stored)).toEqual({
+      address: '서울 송파구 위례광장로 199',
+      floorUnit: '1층',
+      areaM2: null,
+      parking: null,
+      fromSession: false,
+    });
+  });
+
+  it('서버 정보가 아직 없거나 다른 분석 것이면 모른다', () => {
+    expect(progressSite('r2', session, null)).toBeNull();
+    expect(progressSite('r3', session, stored)).toBeNull();
+  });
+
+  it('목업 진행 화면은 이 탭의 입력값을 쓴다', () => {
+    expect(
+      progressSite(null, { ...session, requestId: null }, null)?.address
+    ).toBe('서울 마포구 양화로 1');
+  });
+});
+
+describe('progressReportPath', () => {
+  it('이 탭에서 시작한 분석은 탭에 둔 결과로 리포트를 연다', () => {
+    expect(progressReportPath('r1', true)).toBe('/report');
+  });
+
+  it('기록에서 다시 연 분석은 분석 번호로 리포트를 연다', () => {
+    expect(progressReportPath('a b', false)).toBe('/report?id=a%20b');
+  });
+});
+
+describe('siteOrUnknown', () => {
+  it('주소를 못 받으면 확인 안 됨으로 둔다', () => {
+    expect(siteOrUnknown(null)).toEqual({
+      address: '확인 안 됨',
+      floorUnit: '',
+      areaM2: null,
+      parking: null,
+      fromSession: false,
+    });
+  });
+});
+
+describe('progressRestartPath', () => {
+  it('이 탭에서 시작한 분석은 확인 화면부터 다시 한다', () => {
+    expect(progressRestartPath(true)).toBe('/building-confirm');
+  });
+
+  it('기록에서 다시 연 분석은 주소 입력부터 다시 한다', () => {
+    expect(progressRestartPath(false)).toBe('/vacancy-input');
+  });
+});
+
+describe('liveProgressSite', () => {
+  const session = {
+    requestId: 'r1',
+    input: { roadAddress: '서울 마포구 양화로 1', floorUnit: '2층' },
+    areaM2: null,
+    parking: null,
+  };
+  const detail = {
+    request_id: 'r2',
+    status: 'waiting_for_input' as const,
+    site: { road_address: '서울 송파구 위례광장로 199', detail_address: '1층' },
+    result: null,
+    error: null,
+    questions: null,
+    rendered: null,
+  };
+
+  it('이 탭 분석이면 분석 정보 없이도 입력값을 쓴다', () => {
+    expect(liveProgressSite('r1', session, null, false)?.address).toBe(
+      '서울 마포구 양화로 1'
+    );
+  });
+
+  it('받아 온 분석 정보가 있으면 그 주소를 쓴다', () => {
+    expect(liveProgressSite('r2', session, detail, false)?.floorUnit).toBe(
+      '1층'
+    );
+  });
+
+  it('아직 분석 정보가 없으면 불러오는 중이다', () => {
+    expect(liveProgressSite('r2', session, null, false)).toBeNull();
+  });
+
+  it('실패했거나 주소가 없으면 확인 안 됨이다', () => {
+    expect(liveProgressSite('r2', session, null, true)?.address).toBe(
+      '확인 안 됨'
+    );
+    expect(
+      liveProgressSite('r2', session, { ...detail, site: null }, false)?.address
+    ).toBe('확인 안 됨');
   });
 });
