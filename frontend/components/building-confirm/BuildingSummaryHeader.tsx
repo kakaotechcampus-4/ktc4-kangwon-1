@@ -22,6 +22,13 @@ export default function BuildingSummaryHeader({
     { label: '층수', field: building.floors },
     { label: `${building.floorLabel} 용도`, field: building.floorUse },
   ];
+  const title = address || building.address;
+  const registryLine = [
+    building.buildingName.trim(),
+    building.address.trim() === title.trim() ? '' : building.address.trim(),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="flex flex-col">
@@ -37,8 +44,16 @@ export default function BuildingSummaryHeader({
             overflowWrap: 'normal',
           }}
         >
-          {address || building.address}
+          {title}
         </h2>
+        {registryLine && (
+          <p
+            className="text-sm break-keep"
+            style={{ color: `${colors.neutral.white}CC` }}
+          >
+            {`건축물대장: ${registryLine}`}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span
             className="rounded-md px-3 py-1.5 text-13 font-semibold"
