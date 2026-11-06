@@ -1,5 +1,3 @@
-"""파일을 옮겨도 경로·자료·전역 상태가 조용히 어긋나지 않게 막는 규칙입니다."""
-
 import ast
 import importlib
 import re

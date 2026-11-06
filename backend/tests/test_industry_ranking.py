@@ -1,5 +1,3 @@
-"""리포트에 보여 줄 전체 업종 순위와 규제 제외 목록을 검증합니다."""
-
 import unittest
 
 from pydantic import ValidationError

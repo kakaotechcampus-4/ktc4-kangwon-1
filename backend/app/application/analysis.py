@@ -20,6 +20,7 @@ from app.infrastructure.config import BACKEND_DIR
 from app.infrastructure.llm.recording import CallRecording
 from app.infrastructure.llm.session import with_client_session
 from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.mock import dependencies, generators
 from app.infrastructure.persistence import repository
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.provenance import validate_snapshot
@@ -301,3 +302,11 @@ async def resume_agentic_analysis(
     except (Exception, asyncio.CancelledError) as exc:
         await _failure(path, request_id, exc, "루프")
         raise
+
+
+def mock_run_options(*, ask):
+    return dependencies(ask=ask)
+
+
+def mock_resume_options():
+    return generators()

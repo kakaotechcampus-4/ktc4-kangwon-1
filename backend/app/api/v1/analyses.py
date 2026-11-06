@@ -24,16 +24,14 @@ from app.api.v1.jobs import (
     start_task,
 )
 from app.api.v1.responses import AcceptedAnalysis, AnalysisEvents, RequestFacts, StoredAnalysis
-from app.application.analysis import execute_agentic_analysis, resume_agentic_analysis
-from app.domain.schemas import DecisionResult, Schema, Text
-from app.infrastructure.mock import dependencies, generators
-from app.infrastructure.persistence.repository import (
-    create_request,
-    get_analysis_detail,
-    get_answer_gate,
-    list_snapshot_facts,
-    owner_of,
+from app.application import requests as analysis_requests
+from app.application.analysis import (
+    execute_agentic_analysis,
+    mock_resume_options,
+    mock_run_options,
+    resume_agentic_analysis,
 )
+from app.domain.schemas import DecisionResult, Schema, Text
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
@@ -48,7 +46,7 @@ async def require_owner(
 ) -> None:
     """남의 요청은 404로 가립니다. 403이면 그 ID가 있다는 사실이 새 나갑니다."""
     owner = await asyncio.to_thread(
-        owner_of, request_id, db_path=request.app.state.execution_settings.db_path
+        analysis_requests.owner, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if owner is None:
         raise HTTPException(404, NOT_FOUND)
@@ -152,7 +150,7 @@ async def create_analysis(
             confirmed_space=space_answers(body),
             request_prepared=True,
             **options(request, request_id),
-            **(dependencies(ask=body.allow_questions) if is_mock(mock) else {}),
+            **(mock_run_options(ask=body.allow_questions) if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
 
@@ -160,7 +158,7 @@ async def create_analysis(
     task = start_task(request, request_id, work())
     try:
         await asyncio.to_thread(
-            create_request,
+            analysis_requests.create,
             request_id,
             body.address,
             radius_m=body.radius_m,
@@ -188,7 +186,7 @@ async def create_analysis(
 )
 async def get_analysis(request_id: str, request: Request):
     stored = await asyncio.to_thread(
-        get_analysis_detail, request_id, db_path=request.app.state.execution_settings.db_path
+        analysis_requests.detail, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if stored is None:
         raise HTTPException(404, NOT_FOUND)
@@ -202,7 +200,7 @@ async def get_analysis(request_id: str, request: Request):
 )
 async def get_analysis_facts(request_id: str, request: Request):
     found = await asyncio.to_thread(
-        list_snapshot_facts, request_id, db_path=request.app.state.execution_settings.db_path
+        analysis_requests.facts, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if found is None:
         raise HTTPException(404, NOT_FOUND)
@@ -225,7 +223,9 @@ async def answers(
     wait: bool = WAIT_QUERY,
 ):
     gate = await asyncio.to_thread(
-        get_answer_gate, request_id, db_path=request.app.state.execution_settings.db_path
+        analysis_requests.answer_gate,
+        request_id,
+        db_path=request.app.state.execution_settings.db_path,
     )
     if gate is None:
         raise HTTPException(404, NOT_FOUND)
@@ -244,7 +244,7 @@ async def answers(
             request_id,
             body.answers,
             **options(request, request_id),
-            **(generators() if is_mock(mock) else {}),
+            **(mock_resume_options() if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
 

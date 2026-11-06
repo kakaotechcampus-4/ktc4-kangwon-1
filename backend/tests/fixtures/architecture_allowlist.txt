@@ -54,16 +54,6 @@ app.ai.tools -> app.infrastructure.market_data.map_analysis.client
 app.ai.tools -> app.infrastructure.persistence.connection
 app.ai.tools -> app.infrastructure.persistence.repository.agentic
 app.ai.tools -> app.infrastructure.persistence.repository.facts
-app.api.v1.analyses -> app.infrastructure.mock
-app.api.v1.analyses -> app.infrastructure.persistence.repository
-app.api.v1.auth -> app.infrastructure.clients.kakao_oauth
-app.api.v1.auth -> app.infrastructure.persistence.repository
-app.api.v1.auth -> app.infrastructure.persistence.repository.sessions
-app.api.v1.building -> app.infrastructure.clients.address
-app.api.v1.building -> app.infrastructure.clients.building_registry
-app.api.v1.building -> app.infrastructure.mock
-app.api.v1.errors -> app.infrastructure.clients.address
-app.api.v1.jobs -> app.infrastructure.persistence.repository
 app.application.analysis -> app.ai.budget
 app.application.analysis -> app.ai.preflight
 app.application.analysis -> app.ai.questions
@@ -73,6 +63,7 @@ app.application.analysis -> app.infrastructure.config
 app.application.analysis -> app.infrastructure.llm.recording
 app.application.analysis -> app.infrastructure.llm.session
 app.application.analysis -> app.infrastructure.market_data.local.adapter
+app.application.analysis -> app.infrastructure.mock
 app.application.analysis -> app.infrastructure.persistence.connection
 app.application.analysis -> app.infrastructure.persistence.provenance
 app.application.analysis -> app.infrastructure.persistence.raw_capture
@@ -83,6 +74,8 @@ app.application.auth -> app.infrastructure.clients.mailer
 app.application.auth -> app.infrastructure.config
 app.application.auth -> app.infrastructure.persistence.repository.sessions
 app.application.auth -> app.infrastructure.persistence.repository.users
+app.application.building -> app.infrastructure.clients.building_registry
+app.application.building -> app.infrastructure.mock
 app.application.facts -> app.infrastructure.persistence.connection
 app.application.facts -> app.infrastructure.persistence.provenance
 app.application.facts -> app.infrastructure.persistence.repository.agentic
@@ -109,6 +102,7 @@ app.application.report -> app.infrastructure.persistence.provenance
 app.application.report -> app.infrastructure.persistence.repository.agentic
 app.application.report -> app.infrastructure.persistence.repository.facts
 app.application.report -> app.infrastructure.persistence.repository.scores
+app.application.requests -> app.infrastructure.persistence.repository
 app.application.snapshot -> app.infrastructure.market_data.local.score_reference
 app.application.snapshot -> app.infrastructure.persistence.connection
 app.application.snapshot -> app.infrastructure.persistence.raw_capture

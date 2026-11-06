@@ -13,17 +13,18 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.api.v1.deps import current_user, db_path, require_origin
 from app.application import auth as service
+from app.application import requests as analysis_requests
 from app.application.auth import (
     SESSION_COOKIE_NAME,
     SESSION_COOKIE_SAMESITE,
+    SESSION_TTL,
     AuthError,
+    KakaoOAuthError,
+    authorize_url,
     public_user,
     safe_next,
 )
 from app.domain.passwords import PasswordPolicyError
-from app.infrastructure.clients.kakao_oauth import KakaoOAuthError, authorize_url
-from app.infrastructure.persistence.repository import list_user_requests
-from app.infrastructure.persistence.repository import sessions as session_repo
 
 EmailText = Annotated[str, AfterValidator(service.normalize_email)]
 
@@ -79,7 +80,7 @@ def _set_session(response: Response, token: str, request: Request) -> None:
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
-        max_age=int(session_repo.SESSION_TTL.total_seconds()),
+        max_age=int(SESSION_TTL.total_seconds()),
         httponly=True,
         secure=auth.cookie_secure,
         samesite=SESSION_COOKIE_SAMESITE,
@@ -235,6 +236,10 @@ async def my_analyses(
     offset: int = 0,
 ):
     items, total = await asyncio.to_thread(
-        list_user_requests, user["user_id"], limit=limit, offset=offset, db_path=db_path(request)
+        analysis_requests.mine,
+        user["user_id"],
+        limit=limit,
+        offset=offset,
+        db_path=db_path(request),
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}

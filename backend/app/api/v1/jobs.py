@@ -9,9 +9,9 @@ from fastapi import HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from app.application import requests as analysis_requests
 from app.application.jobs import JobClosedError, JobConflictError, JobLimitError
 from app.domain.schemas import DEFAULT_RADIUS_M, RadiusMeters, RequestStatus
-from app.infrastructure.persistence import repository
 
 # 더 기다려도 바뀌지 않는 상태입니다. 타입을 붙여 오타가 mypy 에서 걸리게 합니다.
 FINISHED: set[RequestStatus] = {"completed", "failed", "waiting_for_input"}
@@ -85,7 +85,7 @@ async def list_analysis_events(
     request_id: str, request: Request, after: int = Query(default=0, ge=0)
 ):
     row, events = await asyncio.to_thread(
-        repository.get_request_events,
+        analysis_requests.events,
         request_id,
         after=after,
         db_path=request.app.state.execution_settings.db_path,

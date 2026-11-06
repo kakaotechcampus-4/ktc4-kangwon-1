@@ -15,11 +15,13 @@ from app.infrastructure.clients.kakao_oauth import (
     exchange_token,
     fetch_profile,
 )
+from app.infrastructure.clients.kakao_oauth import authorize_url as authorize_url
 from app.infrastructure.clients.mailer import MailError, reset_mail, send_mail, verification_mail
 from app.infrastructure.config import AuthSettings, KakaoOAuthSettings, MailSettings
 from app.infrastructure.persistence.repository import sessions as session_repo
 from app.infrastructure.persistence.repository import users as user_repo
 
+SESSION_TTL = session_repo.SESSION_TTL
 PROVIDER_KAKAO = "kakao"
 MAX_EMAIL_LENGTH = 254
 # 주소 형식을 엄밀히 따지지 않습니다. 진짜 검증은 "메일을 받아 링크를 눌렀는가"이고,

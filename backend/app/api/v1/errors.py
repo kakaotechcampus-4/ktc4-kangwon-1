@@ -5,8 +5,8 @@ import logging
 from fastapi import HTTPException
 
 from app.api.v1.jobs import request_headers
+from app.application.errors import ADDRESS_INPUT_ERRORS, AddressError
 from app.application.errors import AnalysisConflictError as AnalysisConflictError
-from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeError
 from app.shared.logging import log_exception
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ async def run_or_http(work, request_id, *, kind):
         return await work
     except HTTPException:
         raise
-    except GeocodeError as exc:
+    except AddressError as exc:
         invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise HTTPException(
             400 if invalid else 502,

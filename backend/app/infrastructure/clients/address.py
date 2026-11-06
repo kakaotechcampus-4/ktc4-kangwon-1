@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from app.application.errors import ADDRESS_INPUT_ERRORS as ADDRESS_INPUT_ERRORS
+from app.application.errors import AddressError
 from app.domain.schemas import Site
 from app.infrastructure.config import AddressSettings
 
@@ -42,16 +44,8 @@ REGION_ALIASES = {
 }
 
 
-ADDRESS_INPUT_ERRORS = frozenset(
-    {"EMPTY_ADDRESS", "NOT_FOUND", "ADDRESS_AMBIGUOUS", "ADDRESS_MISMATCH", "ADDRESS_TOO_LONG"}
-)
-
-
-class GeocodeError(Exception):
-    def __init__(self, code: str, message: str):
-        super().__init__(f"[{code}] {message}")
-        self.code = code
-        self.message = message
+class GeocodeError(AddressError):
+    pass
 
 
 def split_detail(address: str) -> tuple[str, str | None]:

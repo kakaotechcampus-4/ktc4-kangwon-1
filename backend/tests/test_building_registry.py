@@ -394,7 +394,7 @@ def _logged_in_client(path):
 
 class BuildingRegistryApiTests(unittest.TestCase):
     def get(self, error=None, **params):
-        target = "app.api.v1.building.lookup_building"
+        target = "app.application.building.lookup_building"
         with (
             tempfile.TemporaryDirectory() as folder,
             patch.dict(os.environ, {"MOCK_MODE": ""}),

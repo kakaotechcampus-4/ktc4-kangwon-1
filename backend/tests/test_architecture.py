@@ -1,5 +1,3 @@
-"""계층 사이 import 방향, SQL 문장 위치, 목업 구성의 독립성을 검사합니다."""
-
 import ast
 import re
 import subprocess

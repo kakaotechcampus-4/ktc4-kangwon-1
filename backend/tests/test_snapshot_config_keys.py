@@ -1,5 +1,3 @@
-"""설정 해시가 파일 위치·import 줄이 아니라 계산 내용과 버전에만 묶이는지 확인합니다."""
-
 import ast
 import hashlib
 import unittest

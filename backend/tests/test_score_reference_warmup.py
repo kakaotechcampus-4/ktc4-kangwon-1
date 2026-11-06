@@ -1,5 +1,3 @@
-"""경쟁 참고 분포의 첫 계산이 한 번만 돌고 서버 시작 때 미리 준비되는지 확인합니다."""
-
 import os
 import tempfile
 import threading
