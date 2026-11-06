@@ -12,14 +12,13 @@ from pydantic import ValidationError
 from app.ai import customer_rubric, examiner, founder, landlord
 from app.ai.aliases import encode, label_periods, labels_periods
 from app.ai.sql_tool import error
+from app.application.ports.storage import open_stores
 from app.application.report import ReportInvalid, fact_rows
 from app.domain.contracts import EvaluatorReview, ReviewRef, ToolReply
 from app.domain.text import has_digit
 from app.infrastructure.llm.budget import BudgetExceeded
 from app.infrastructure.llm.client import LLMHTTPError, LLMResponseError
 from app.infrastructure.llm.config import LLMSettings
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -61,9 +60,8 @@ def _without_fit_checks(definitions):
 
 
 def save_review(scope, review):
-    with connect(scope.path) as db:
-        agentic_db.insert_review(
-            db,
+    with open_stores(scope.path) as st:
+        st.agentic.insert_review(
             (
                 scope.request_id,
                 scope.snapshot_id,

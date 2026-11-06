@@ -71,6 +71,16 @@ class LocalAdapter:
     def connection(self):
         return readonly(self.path)
 
+    def cell_row(self, source: str, version_id: str, row_key: str):
+        if source not in SOURCE_NAMES:
+            raise DataValidationError("허용되지 않은 원천")
+        with self.connection() as db:
+            return db.execute(
+                f"SELECT payload,columns_json,industry_code FROM {source} JOIN source_fields "
+                "USING(version_id) WHERE version_id=? AND row_key=?",
+                (version_id, row_key),
+            ).fetchone()
+
     def rows(self, source: str, *, area_codes=None, bounds=None) -> list[dict]:
         if source not in SOURCE_NAMES:
             raise DataValidationError("허용되지 않은 원천")

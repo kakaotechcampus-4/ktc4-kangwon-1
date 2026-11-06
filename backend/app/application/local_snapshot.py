@@ -3,6 +3,7 @@
 import json
 
 from app.application.facts import register_fact
+from app.application.ports.storage import open_stores, storage
 from app.application.snapshot import (
     persist_input_facts,
     persist_report,
@@ -11,8 +12,6 @@ from app.application.snapshot import (
 )
 from app.domain.scoring import evaluate
 from app.infrastructure.market_data.local.adapter import SOURCE_NAMES
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.provenance import save_snapshot, validate_snapshot
 
 YEAR_QUARTERS = 4
 
@@ -41,7 +40,7 @@ def persist_local(task, scope, adapter, data=None, observations=None):
             | observations
             | {"limitations": data.get("limitations", []) + observations.get("limitations", [])}
         )
-    save_snapshot(scope, adapter, task, hashes, data)
+    storage().provenance.save_snapshot(scope, adapter, task, hashes, data)
     periods = {}
     for version in adapter.versions:
         periods.setdefault(SOURCE_NAMES[version["source"]], []).append(version["quarter"])
@@ -55,13 +54,8 @@ def persist_local(task, scope, adapter, data=None, observations=None):
     }
     persist_input_facts(scope, data, {}, [], metadata)
     report = evaluate(data, profile_rows=profiles)
-    with connect(scope.path) as db:
-        map_rows = db.execute(
-            "SELECT DISTINCT r.raw_row_id FROM raw_response_rows r "
-            "JOIN raw_responses p USING(response_id) WHERE p.request_id=? "
-            "AND p.snapshot_id=? AND p.source='map'",
-            (scope.request_id, scope.snapshot_id),
-        ).fetchall()
+    with open_stores(scope.path) as st:
+        map_rows = st.raw.map_row_ids(scope.request_id, scope.snapshot_id)
     score_id = persist_report(scope, report, {"map": [row[0] for row in map_rows]}, [], metadata)
     return data, report, score_id
 
@@ -77,19 +71,14 @@ def register_cell(
     unit,
     expected_value=None,
     adapter=None,
-    connection=None,
+    stores=None,
 ):
-    adapter = adapter if adapter is not None else validate_snapshot(scope)
+    adapter = adapter if adapter is not None else storage().provenance.validate_snapshot(scope)
     if adapter is None:
         raise ValueError("로컬 스냅샷 없음")
     if not any(v["source"] == source and v["version_id"] == version_id for v in adapter.versions):
         raise ValueError("다른 버전의 직접 셀")
-    with adapter.connection() as db:
-        row = db.execute(
-            f"SELECT payload,columns_json,industry_code FROM {source} JOIN source_fields "
-            "USING(version_id) WHERE version_id=? AND row_key=?",
-            (version_id, row_key),
-        ).fetchone()
+    row = adapter.cell_row(source, version_id, row_key)
     if row is None:
         raise ValueError("원문 행 없음")
     raw = dict(zip(json.loads(row[1]), json.loads(row[0]), strict=True))
@@ -112,5 +101,5 @@ def register_cell(
         row_ids=[],
         comparison={"input_versions": {"local_snapshot": scope.snapshot_id}},
         local_cell={"version_id": version_id, "row_key": row_key, "column": column},
-        connection=connection,
+        stores=stores,
     )

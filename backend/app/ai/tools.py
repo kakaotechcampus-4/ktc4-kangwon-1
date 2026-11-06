@@ -11,11 +11,9 @@ from app.ai.aliases import decode, decode_report
 from app.ai.map_regulation import check_regulation, map_search
 from app.ai.read_tools import InvalidCursor, get_facts, get_scorecard
 from app.ai.sql_tool import error, query_raw
+from app.application.ports.storage import open_stores
 from app.domain.contracts import EVALUATOR_ACTORS, TOOL_INPUTS, Actor, ToolReply, tool_definitions
 from app.infrastructure.market_data.map_analysis.client import MapApiError
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
-from app.infrastructure.persistence.repository import facts as fact_db
 from app.shared.canonical import canonical_hash, canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -74,9 +72,8 @@ class SharedTools:
 
 
 def _audit(scope, call_id, actor, name, arguments, reply):
-    with connect(scope.path) as db:
-        agentic_db.insert_tool_call(
-            db,
+    with open_stores(scope.path) as st:
+        st.agentic.insert_tool_call(
             (
                 call_id,
                 scope.request_id,
@@ -92,8 +89,8 @@ def _audit(scope, call_id, actor, name, arguments, reply):
 
 
 def previous_reply(scope, actor, name, signature):
-    with connect(scope.path) as db:
-        rows = agentic_db.tool_call_history(db, scope.request_id, scope.snapshot_id, actor, name)
+    with open_stores(scope.path) as st:
+        rows = st.agentic.tool_call_history(scope.request_id, scope.snapshot_id, actor, name)
     for arguments, reply in rows:
         try:
             validated = TOOL_INPUTS[name].model_validate_json(arguments)
@@ -108,8 +105,8 @@ def previous_reply(scope, actor, name, signature):
 
 
 def space_revision(scope):
-    with connect(scope.path) as db:
-        rows = fact_db.current_space_fit_ids(db, scope.request_id, scope.snapshot_id)
+    with open_stores(scope.path) as st:
+        rows = st.facts.current_space_fit_ids(scope.request_id, scope.snapshot_id)
     return canonical_hash([row[0] for row in rows])
 
 

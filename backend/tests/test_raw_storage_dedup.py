@@ -10,6 +10,7 @@ from unittest.mock import patch
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.raw_capture import capture_scope, scoped_reader
 from app.infrastructure.persistence.repository import create_request, mark_running
+from app.infrastructure.persistence.stores import SqliteStores
 
 
 class DedupTests(unittest.IsolatedAsyncioTestCase):
@@ -165,7 +166,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                     unit="개",
                     status="observed",
                     row_ids=refs,
-                    connection=db,
+                    stores=SqliteStores(db),
                 )
                 self.assertLessEqual(len(queries), 2)
 

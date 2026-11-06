@@ -19,6 +19,7 @@ from app.ai.questions import LoopOutcome
 from app.ai.read_tools import score_summary
 from app.ai.sql_tool import error
 from app.ai.tools import ToolExecutor, validation_message
+from app.application.ports.storage import open_stores, storage
 from app.application.report import (
     ReportInvalid,
     complete_l_records,
@@ -54,9 +55,6 @@ from app.infrastructure.llm.client import (
     complete_tools,
 )
 from app.infrastructure.llm.config import LLMSettings
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
-from app.infrastructure.persistence.repository import append_event
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -107,9 +105,8 @@ submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출
 
 
 def _save(scope, state, status, result_model=None):
-    with connect(scope.path) as db:
-        agentic_db.save_run(
-            db,
+    with open_stores(scope.path) as st:
+        st.agentic.save_run(
             (
                 scope.request_id,
                 scope.snapshot_id,
@@ -262,7 +259,7 @@ class DecisionLoop:
     async def event(self, stage, event, detail):
         try:
             await run_in_thread(
-                lambda: append_event(
+                lambda: storage().requests.append_event(
                     self.scope.request_id, stage, event, detail, db_path=self.scope.path
                 )
             )
@@ -332,8 +329,8 @@ class DecisionLoop:
         return outcome
 
     def _save_final_result(self, result):
-        with connect(self.scope.path) as db:
-            agentic_db.finalize_report(db, result.report_id, result.model_dump_json())
+        with open_stores(self.scope.path) as st:
+            st.agentic.finalize_report(result.report_id, result.model_dump_json())
 
     async def save(self, status="running", result_model=None):
         shared = self.tools.shared

@@ -17,6 +17,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
 from app.application.jobs import AnalysisJobRegistry
+from app.bootstrap import wire
 from app.infrastructure.config import (
     AuthSettings,
     KakaoOAuthSettings,
@@ -73,6 +74,7 @@ def create_app(
 ) -> FastAPI:
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
     protect_http_query_logs()
+    wire()
     if load_env:
         load_environment()
     app = FastAPI(

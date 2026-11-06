@@ -3,21 +3,20 @@
 import json
 
 from app.ai.aliases import decode
+from app.application.ports.storage import open_stores
 from app.application.report import RULE_SPACE_MESSAGE, fact_rows, l_grade, rule_scored_space
 from app.domain.contracts import LInput, LRecord
 from app.domain.text import has_digit
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
 
 
 def build_record(scope, raw, base_id, base_rows):
     item = LInput.model_validate(decode(scope, raw))
     ids = {factor.fact_id for factor in item.factors} | set(item.fact_ids)
     facts = fact_rows(scope, ids)
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         calls = [
             row[0]
-            for row in agentic_db.decision_tool_calls(db, scope.request_id, scope.snapshot_id)
+            for row in st.agentic.decision_tool_calls(scope.request_id, scope.snapshot_id)
             if json.loads(row[1])["status"] in {"ok", "partial"}
             and any(fid in row[1] for fid in ids)
         ]

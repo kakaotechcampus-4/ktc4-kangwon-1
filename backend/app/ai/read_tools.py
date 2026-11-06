@@ -3,6 +3,7 @@
 import json
 
 from app.ai.sql_tool import error
+from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
 from app.domain.contracts import (
     FactsResult,
@@ -14,10 +15,6 @@ from app.domain.contracts import (
 )
 from app.domain.scoring import apply_space, rank_key, summarize
 from app.domain.space_rules import judge, load_requirements
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.provenance import expand_spatial_scope, validate_snapshot
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.concurrency import run_in_thread
 
 
@@ -34,11 +31,11 @@ def _cursor(value):
 
 
 def _scorecards(scope, input):
-    with connect(scope.path) as db:
-        snapshot = score_db.latest_score_snapshot(db, scope.request_id, scope.snapshot_id)
+    with open_stores(scope.path) as st:
+        snapshot = st.scores.latest_score_snapshot(scope.request_id, scope.snapshot_id)
         if snapshot is None:
             return error("SOURCE_UNAVAILABLE", "저장된 코드 점수가 없습니다.")
-        answers = rule_answers(scope, connection=db)
+        answers = rule_answers(scope, stores=st)
         requirements = load_requirements()
         rows = [
             apply_space(
@@ -67,7 +64,7 @@ def _scorecards(scope, input):
                         fact_ids=json.loads(r[4]),
                         scoring=row["items"][r[0]].get("scoring"),
                     )
-                    for r in score_db.industry_scores(db, snapshot[0], row["code"])
+                    for r in st.scores.industry_scores(snapshot[0], row["code"])
                 ]
                 details.append(Scorecard(**fields, items=items))
     return ScorecardResult(
@@ -78,10 +75,9 @@ def _scorecards(scope, input):
 
 
 def _facts(scope, input):
-    validate_snapshot(scope)
-    with connect(scope.path) as db:
-        records = fact_db.find_facts(
-            db,
+    storage().provenance.validate_snapshot(scope)
+    with open_stores(scope.path) as st:
+        records = st.facts.find_facts(
             scope.request_id,
             scope.snapshot_id,
             fact_ids=input.fact_ids,
@@ -90,7 +86,7 @@ def _facts(scope, input):
             metrics=input.metrics,
             current_space_fit=input.source == "industry_profile" and input.metrics == ["space_fit"],
         )
-        expand_spatial_scope(scope, records)
+        storage().provenance.expand_spatial_scope(scope, records)
         if input.fact_ids and len(records) != len(set(input.fact_ids)):
             return error("UNKNOWN_FACT", "현재 스냅샷에 없는 fact_id입니다.")
         offset = _cursor(input.cursor)

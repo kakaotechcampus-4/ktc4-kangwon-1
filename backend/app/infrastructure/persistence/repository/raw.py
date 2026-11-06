@@ -94,3 +94,22 @@ def latest_regulation_rows(db, request_id, snapshot_id):
         "ORDER BY p.collected_at DESC LIMIT 1",
         (request_id, snapshot_id),
     ).fetchall()
+
+
+def map_row_ids(db, request_id, snapshot_id):
+    return db.execute(
+        "SELECT DISTINCT r.raw_row_id FROM raw_response_rows r "
+        "JOIN raw_responses p USING(response_id) WHERE p.request_id=? "
+        "AND p.snapshot_id=? AND p.source='map'",
+        (request_id, snapshot_id),
+    ).fetchall()
+
+
+def raw_row_with_source(db, raw_row_id, request_id, snapshot_id):
+    return db.execute(
+        "SELECT r.raw_json,p.source FROM raw_rows r "
+        "JOIN raw_response_rows e USING(raw_row_id) "
+        "JOIN raw_responses p USING(response_id) "
+        "WHERE r.raw_row_id=? AND p.request_id=? AND p.snapshot_id=?",
+        (raw_row_id, request_id, snapshot_id),
+    ).fetchone()

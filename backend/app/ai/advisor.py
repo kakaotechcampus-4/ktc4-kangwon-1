@@ -7,13 +7,12 @@ import uuid
 from pydantic import ValidationError
 
 from app.ai.sql_tool import error
+from app.application.ports.storage import open_stores
 from app.application.report import ReportInvalid, fact_rows
 from app.domain.contracts import AdvisorAnswer, ToolReply
 from app.infrastructure.llm.budget import BudgetExceeded
 from app.infrastructure.llm.client import LLMHTTPError, LLMResponseError
 from app.infrastructure.llm.config import LLMSettings
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -106,9 +105,8 @@ def save_advisor(loop, input, answer, receipt, settings):
         if "gpt" in (actual or settings.model or "").lower()
         else "unknown"
     )
-    with connect(loop.scope.path) as db:
-        agentic_db.insert_advisor_consult(
-            db,
+    with open_stores(loop.scope.path) as st:
+        st.agentic.insert_advisor_consult(
             (
                 answer.consult_id,
                 loop.scope.request_id,

@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import pandas as pd
 
+from app.application.ports.storage import open_stores
 from app.domain.geo import to_epsg5181
 from app.domain.industries.catalog import SEOUL_TO_INDUSTRY
 from app.domain.industries.lookup import service_code
@@ -45,8 +46,6 @@ from app.infrastructure.market_data.floating_population.population import (
     resident_block,
     worker_block,
 )
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import raw as raw_db
 
 
 def to_float(value, *, digits: int | None = 2):
@@ -59,9 +58,9 @@ def to_float(value, *, digits: int | None = 2):
 
 
 def load_raw(scope):
-    with connect(scope.path) as db:
-        responses = [dict(r) for r in raw_db.snapshot_responses(db, scope.snapshot_id)]
-        rows = [dict(r) for r in raw_db.snapshot_rows(db, scope.snapshot_id)]
+    with open_stores(scope.path) as st:
+        responses = [dict(r) for r in st.raw.snapshot_responses(scope.snapshot_id)]
+        rows = [dict(r) for r in st.raw.snapshot_rows(scope.snapshot_id)]
     # 큰 원문 BLOB을 SQL에서 정렬하면 불필요한 임시 파일이 생깁니다.
     responses.sort(key=lambda r: (r["collected_at"], r["response_id"]))
     # 같은 원천의 재수집을 이전 관측과 섞지 않고 원천별 최신 run을 선택합니다.

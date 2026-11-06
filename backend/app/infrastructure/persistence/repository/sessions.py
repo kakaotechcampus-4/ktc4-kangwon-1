@@ -12,10 +12,10 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.domain.sessions import SESSION_TTL as SESSION_TTL
 from app.infrastructure.persistence.connection import connect
 from app.shared.clock import utc_now_iso
 
-SESSION_TTL = timedelta(days=14)
 OAUTH_STATE_TTL = timedelta(minutes=5)
 VERIFY_TOKEN_TTL = timedelta(hours=24)
 RESET_TOKEN_TTL = timedelta(minutes=30)

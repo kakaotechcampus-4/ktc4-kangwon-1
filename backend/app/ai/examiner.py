@@ -4,9 +4,8 @@ import json
 import re
 
 from app.ai.aliases import encode, label_periods
+from app.application.ports.storage import open_stores
 from app.application.report import fact_rows
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.canonical import canonical_json
 
 PERSONA = (
@@ -75,9 +74,9 @@ def _table(rows, columns):
 
 
 def _score_items(scope, score_snapshot_id, codes):
-    with connect(scope.path) as db:
-        rows = score_db.scores_for_industries(db, score_snapshot_id, codes)
-        snapshot = score_db.snapshot_summary_json(db, score_snapshot_id)
+    with open_stores(scope.path) as st:
+        rows = st.scores.scores_for_industries(score_snapshot_id, codes)
+        snapshot = st.scores.snapshot_summary_json(score_snapshot_id)
     calculations = {r["code"]: r["items"] for r in json.loads(snapshot or "[]")}
     found = {code: {} for code in codes}
     for code, item, status, grade, points, fact_ids in rows:

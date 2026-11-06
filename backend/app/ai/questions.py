@@ -7,12 +7,9 @@ from dataclasses import dataclass
 from app.ai.sql_tool import error
 from app.application.errors import AnalysisConflictError
 from app.application.facts import register_fact
+from app.application.ports.storage import open_stores
 from app.application.space import CONFIRMED_UNIT, ensure_space_fits
 from app.domain.contracts import QuestionSessionRef, ToolReply
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import agentic as agentic_db
-from app.infrastructure.persistence.repository import raw as raw_db
-from app.infrastructure.persistence.repository.agentic import begin_immediate
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -47,9 +44,8 @@ async def ask_user(loop, input):
 
 
 def save_question(loop, session_id, input):
-    with connect(loop.scope.path) as db:
-        agentic_db.insert_question(
-            db,
+    with open_stores(loop.scope.path) as st:
+        st.agentic.insert_question(
             (
                 session_id,
                 loop.scope.request_id,
@@ -64,9 +60,9 @@ def save_question(loop, session_id, input):
 
 async def validate_resume(scope, answers):
     def load():
-        with connect(scope.path) as db:
-            row = agentic_db.run_state(db, scope.request_id, scope.snapshot_id)
-            question = agentic_db.question_session(db, scope.request_id, scope.snapshot_id)
+        with open_stores(scope.path) as st:
+            row = st.agentic.run_state(scope.request_id, scope.snapshot_id)
+            question = st.agentic.question_session(scope.request_id, scope.snapshot_id)
             if (
                 row is None
                 or row[1] != "waiting_for_input"
@@ -91,8 +87,8 @@ async def resume(loop_type, scope, site, answers, *, resume_state=None, **kwargs
 
 
 def save_confirmed_space(scope, values):
-    with connect(scope.path) as db:
-        begin_immediate(db)
+    with open_stores(scope.path) as st:
+        st.begin_immediate()
         response = scope.record_sync(
             source="user",
             source_type="api",
@@ -100,9 +96,9 @@ def save_confirmed_space(scope, values):
             page="1",
             status=200,
             payload={"rows": [values]},
-            connection=db,
+            stores=st,
         )
-        ref = raw_db.first_row_id(db, response)
+        ref = st.raw.first_row_id(response)
         ids = {
             field: register_fact(
                 scope,
@@ -114,7 +110,7 @@ def save_confirmed_space(scope, values):
                 status="observed",
                 row_ids=[ref],
                 field_pointer="/" + field,
-                connection=db,
+                stores=st,
             )
             for field, value in values.items()
         }
@@ -122,9 +118,9 @@ def save_confirmed_space(scope, values):
 
 
 def save_user_facts(scope, answers, question_id, saved):
-    with connect(scope.path) as db:
-        begin_immediate(db)
-        question = agentic_db.question_status(db, question_id)
+    with open_stores(scope.path) as st:
+        st.begin_immediate()
+        question = st.agentic.question_status(question_id)
         if question is None or question[0] != "waiting":
             raise AnalysisConflictError("이미 답변한 질문입니다.")
         response = scope.record_sync(
@@ -134,9 +130,9 @@ def save_user_facts(scope, answers, question_id, saved):
             page="1",
             status=200,
             payload={"rows": [answers]},
-            connection=db,
+            stores=st,
         )
-        ref = raw_db.first_row_id(db, response)
+        ref = st.raw.first_row_id(response)
         ids = {}
         for field, value in answers.items():
             metric = (
@@ -155,9 +151,9 @@ def save_user_facts(scope, answers, question_id, saved):
                 status="observed",
                 row_ids=[ref],
                 field_pointer="/" + field,
-                connection=db,
+                stores=st,
             )
-        ensure_space_fits(scope, connection=db)
+        ensure_space_fits(scope, stores=st)
         saved["user_answers"] = {"answers": answers, "fact_ids": ids}
         for message in reversed(saved["messages"]):
             if message["role"] != "tool":
@@ -178,14 +174,13 @@ def save_user_facts(scope, answers, question_id, saved):
         saved["known_fact_ids"] = list(
             dict.fromkeys([*saved.get("known_fact_ids", []), *ids.values()])
         )
-        agentic_db.replace_ask_user_reply(
-            db,
+        st.agentic.replace_ask_user_reply(
             scope.request_id,
             scope.snapshot_id,
             question_id,
             canonical_json({k: v for k, v in body.items() if k != "tool_call_id"}),
         )
-        agentic_db.mark_question_answered(db, question_id, canonical_json(answers))
-        agentic_db.resume_run(db, scope.request_id, scope.snapshot_id, canonical_json(saved))
-        agentic_db.resume_request(db, scope.request_id)
+        st.agentic.mark_question_answered(question_id, canonical_json(answers))
+        st.agentic.resume_run(scope.request_id, scope.snapshot_id, canonical_json(saved))
+        st.agentic.resume_request(scope.request_id)
     return saved

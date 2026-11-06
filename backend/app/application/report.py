@@ -6,6 +6,7 @@ from copy import deepcopy
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.ai.read_tools import score_summary
+from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
 from app.domain.code90 import METHOD
 from app.domain.contracts import (
@@ -24,11 +25,6 @@ from app.domain.schemas import DecisionResult
 from app.domain.scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
 from app.domain.space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
 from app.domain.text import has_digit
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.provenance import expand_spatial_scope, validate_snapshot
-from app.infrastructure.persistence.repository import agentic as agentic_db
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.clock import utc_now_iso
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
@@ -65,8 +61,8 @@ def l_grade(factors):
 
 
 def load_base(scope):
-    with connect(scope.path) as db:
-        row = score_db.first_score_snapshot(db, scope.request_id, scope.snapshot_id)
+    with open_stores(scope.path) as st:
+        row = st.scores.first_score_snapshot(scope.request_id, scope.snapshot_id)
     if row is None:
         raise ValueError("코드 점수가 없습니다.")
     rows = json.loads(row[1])
@@ -124,15 +120,14 @@ def condition_excluded(rows):
 
 
 def fact_rows(scope, ids):
-    validate_snapshot(scope)
+    storage().provenance.validate_snapshot(scope)
     if not ids:
         return {}
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         rows = {
-            r["fact_id"]: r
-            for r in fact_db.facts_by_ids(db, scope.request_id, scope.snapshot_id, ids)
+            r["fact_id"]: r for r in st.facts.facts_by_ids(scope.request_id, scope.snapshot_id, ids)
         }
-    expand_spatial_scope(scope, rows.values())
+    storage().provenance.expand_spatial_scope(scope, rows.values())
     if set(rows) != set(ids):
         raise ReportInvalid("현재 스냅샷에 없는 fact_id입니다.")
     return rows
@@ -187,16 +182,16 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
     for fact in facts.values():
         if fact["status"] != "observed" or not fact["citable"]:
             raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")
-    with connect(scope.path) as db:
-        code_ids = {f for r in score_db.code_item_fact_ids(db, base_id) for f in json.loads(r[0])}
+    with open_stores(scope.path) as st:
+        code_ids = {f for r in st.scores.code_item_fact_ids(base_id) for f in json.loads(r[0])}
         space_values = {
             row[0]: json.loads(row[1])
-            for row in fact_db.current_space_fit_values(db, scope.request_id, scope.snapshot_id)
+            for row in st.facts.current_space_fit_values(scope.request_id, scope.snapshot_id)
         }
         for record in records:
             if record.status != "observed":
                 continue
-            calls = agentic_db.decision_tool_calls(db, scope.request_id, scope.snapshot_id)
+            calls = st.agentic.decision_tool_calls(scope.request_id, scope.snapshot_id)
             calls = {r[0]: json.loads(r[1]) for r in calls}
             valid_calls = {k for k, v in calls.items() if v["status"] in {"ok", "partial"}}
             if not set(record.tool_call_ids) <= valid_calls:
@@ -273,7 +268,7 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
             if record.grade != l_grade([factor.model_dump() for factor in record.new_factors]):
                 raise ReportInvalid("L 등급과 새 유리·불리 요인 개수가 맞지 않습니다.")
             if record.advisor_consult_ids:
-                found = agentic_db.advisor_consult_ids(db, scope.request_id, scope.snapshot_id)
+                found = st.agentic.advisor_consult_ids(scope.request_id, scope.snapshot_id)
                 if not set(record.advisor_consult_ids) <= {r[0] for r in found}:
                     raise ReportInvalid("자문 기록이 현재 요청에 없습니다.")
             record.advisor_unavailable = record.advisor_unavailable or advisor_unavailable
@@ -339,9 +334,8 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         )
         rows.append(apply_space(scored, judge(requirements.get(original["code"], {}), answers)))
     score_id = "ss_" + str(uuid.uuid4())
-    with connect(scope.path) as db:
-        score_db.insert_score_snapshot(
-            db,
+    with open_stores(scope.path) as st:
+        st.scores.insert_score_snapshot(
             (
                 score_id,
                 scope.request_id,
@@ -360,10 +354,9 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
                 ids = (
                     [f for factor in indexed[row["code"]].new_factors for f in factor.fact_ids]
                     if item == "L"
-                    else json.loads(score_db.item_fact_ids_json(db, base_id, row["code"], item))
+                    else json.loads(st.scores.item_fact_ids_json(base_id, row["code"], item))
                 )
-                score_db.insert_score(
-                    db,
+                st.scores.insert_score(
                     (
                         score_id,
                         row["code"],
@@ -604,9 +597,8 @@ def finalize(
             for c in top
         ],
     }
-    with connect(scope.path) as db:
-        agentic_db.insert_report(
-            db,
+    with open_stores(scope.path) as st:
+        st.agentic.insert_report(
             (
                 report_id,
                 scope.request_id,

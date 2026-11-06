@@ -9,11 +9,9 @@ SQLite 읽기는 호출자가 스레드로 격리합니다.
 
 import json
 
+from app.application.ports.storage import open_stores
 from app.domain.contracts import CustomerCandidateScore, CustomerCheck, CustomerRubric, ReviewIssue
 from app.domain.scoring import WEIGHTS
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.canonical import canonical_json
 
 DEMAND = ("D1", "D2", "D3", "D4")
@@ -124,15 +122,15 @@ def _cited(segments):
 
 def load(scope, draft):
     """점수표 문항·문항별 fact·인용 가능 여부를 한 번에 읽습니다."""
-    with connect(scope.path) as db:
-        summary = score_db.snapshot_summary_json(db, draft.score_snapshot_id)
+    with open_stores(scope.path) as st:
+        summary = st.scores.snapshot_summary_json(draft.score_snapshot_id)
         if summary is None:
             raise ValueError("초안의 점수표가 없습니다.")
         item_facts = {
             (code, item): json.loads(ids)
-            for code, item, ids in score_db.item_fact_ids(db, draft.score_snapshot_id)
+            for code, item, ids in st.scores.item_fact_ids(draft.score_snapshot_id)
         }
-        citable = fact_db.citable_fact_ids(db, scope.request_id, scope.snapshot_id)
+        citable = st.facts.citable_fact_ids(scope.request_id, scope.snapshot_id)
     rows = {row["code"]: row for row in json.loads(summary)}
     return rows, item_facts, citable
 

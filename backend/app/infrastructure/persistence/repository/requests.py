@@ -1,5 +1,6 @@
 """단일 분석 요청의 상태와 위치를 저장합니다."""
 
+from app.application.errors import INTERRUPTED_MESSAGE as INTERRUPTED_MESSAGE
 from app.domain.industries.catalog import CATALOG_VERSION
 from app.domain.schemas import AgentError, AnalysisTask, validate_radius
 from app.infrastructure.persistence.connection import connect
@@ -94,9 +95,6 @@ def get_request(request_id, *, db_path=None):
         return dict(row) if row else None
 
 
-INTERRUPTED_MESSAGE = "서비스 점검으로 분석이 멈췄어요. 다시 분석해 주세요."
-
-
 def fail_interrupted(*, db_path=None):
     error = AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
     with connect(db_path) as db:
@@ -106,3 +104,36 @@ def fail_interrupted(*, db_path=None):
             (error.model_dump_json(), utc_now_iso()),
         )
     return changed.rowcount
+
+
+def save_outcome(request_id, *, result_json=None, completed_at=None, db_path=None):
+    with connect(db_path) as db:
+        if result_json is None:
+            db.execute(
+                "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id=?",
+                (request_id,),
+            )
+        else:
+            db.execute(
+                "UPDATE analysis_requests SET "
+                "status='completed',result_json=?,completed_at=? WHERE "
+                "request_id=?",
+                (result_json, completed_at, request_id),
+            )
+
+
+def record_failure(request_id, *, error_json, diagnostics_json, failed_at, db_path=None):
+    with connect(db_path) as db:
+        changed = db.execute(
+            "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
+            "WHERE request_id=? AND status IN ('pending','running','waiting_for_input')",
+            (error_json, failed_at, request_id),
+        )
+        if changed.rowcount != 1:
+            raise ValueError("종료할 수 있는 요청이 없습니다.")
+        db.execute(
+            "INSERT INTO decision_failures(request_id,failed_at,error_json,"
+            "diagnostics_json) "
+            "VALUES(?,?,?,?)",
+            (request_id, failed_at, error_json, diagnostics_json),
+        )

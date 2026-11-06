@@ -7,6 +7,7 @@ import uuid
 from dataclasses import replace
 
 from app.application.facts import register_fact
+from app.application.ports.storage import open_stores
 from app.domain.contracts import (
     IndustryRestriction,
     MapPlace,
@@ -23,15 +24,13 @@ from app.infrastructure.market_data.business_lifecycle.area_resolver import poly
 from app.infrastructure.market_data.map_analysis.client import PlaceClient
 from app.infrastructure.market_data.map_analysis.config import Settings
 from app.infrastructure.market_data.map_analysis.matching import distance_m, match_place
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import raw as raw_db
 from app.shared.canonical import canonical_json
 from app.shared.concurrency import run_in_thread
 
 
 def _place_facts(scope, response_id, documents):
-    with connect(scope.path) as db:
-        rows = raw_db.response_rows(db, response_id)
+    with open_stores(scope.path) as st:
+        rows = st.raw.response_rows(response_id)
 
         refs = {canonical_json(json.loads(r[1])): r[0] for r in rows}
         facts = {}
@@ -54,7 +53,7 @@ def _place_facts(scope, response_id, documents):
                         row_ids=[refs[canonical_json(doc)]],
                         field_pointer="/" + key,
                         period="지도 조회 시점",
-                        connection=db,
+                        stores=st,
                     )
                 )
             facts[doc["id"]] = fields
@@ -214,8 +213,8 @@ def _regulation(scope, site, scan):
         payload={"rows": [raw]},
         secrets=[os.getenv("VWORLD_API_KEY", "")],
     )
-    with connect(scope.path) as db:
-        ref = raw_db.first_row_id(db, response)
+    with open_stores(scope.path) as st:
+        ref = st.raw.first_row_id(response)
     fact = register_fact(
         scope,
         industry_code=None,
@@ -254,8 +253,8 @@ def _regulation(scope, site, scan):
 
 
 def _stored_regulation(scope):
-    with connect(scope.path) as db:
-        rows = raw_db.latest_regulation_rows(db, scope.request_id, scope.snapshot_id)
+    with open_stores(scope.path) as st:
+        rows = st.raw.latest_regulation_rows(scope.request_id, scope.snapshot_id)
     if rows:
         raw = json.loads(rows[0][0])
         if raw.get("status") in {"ok", "error"} and "queried_at" in raw:

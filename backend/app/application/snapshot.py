@@ -6,8 +6,10 @@ import json
 import os
 import uuid
 
+from app.application.errors import RawStorageError
 from app.application.facts import CALC_VERSION, register_fact
 from app.application.inputs import format_snapshot
+from app.application.ports.storage import open_stores, storage
 from app.domain import code90
 from app.domain.baselines import business_lifecycle as lifecycle_baseline
 from app.domain.baselines import commercial_area as density_baseline
@@ -18,10 +20,6 @@ from app.domain.industries.catalog import INDUSTRIES
 from app.domain.scoring import WEIGHTS, evaluate
 from app.domain.space_values import FACILITY_LEVELS, FLOOR_LEVELS
 from app.infrastructure.market_data.local import score_reference
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.raw_capture import RawStorageError, current_capture
-from app.infrastructure.persistence.repository import raw as raw_db
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.canonical import canonical_hash, canonical_json, file_sha256
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -110,8 +108,8 @@ def snapshot_config(scope, *, local=False):
         hashes[name] = digest
         if local:
             continue
-        with connect(scope.path) as db:
-            old = raw_db.baseline_response_id(db, scope.snapshot_id, digest)
+        with open_stores(scope.path) as st:
+            old = st.raw.baseline_response_id(scope.snapshot_id, digest)
         if not old:
             scope.record_sync(
                 source="baseline",
@@ -123,10 +121,10 @@ def snapshot_config(scope, *, local=False):
             )
     if local:
         return {r["industry_code"]: r for r in profiles}, hashes, ([], {})
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         profile_refs = {}
         shared = []
-        for row in raw_db.baseline_rows(db, scope.snapshot_id):
+        for row in st.raw.baseline_rows(scope.snapshot_id):
             value = json.loads(row[1])
             if value.get("industry_code"):
                 profile_refs[value["industry_code"]] = row[0]
@@ -172,8 +170,8 @@ def persist_space_requirements(scope):
     ):
         raise ValueError("검토한 51업종 공간 요건 표가 필요합니다.")
     digest = file_sha256(path)
-    with connect(scope.path) as db:
-        existing = raw_db.profile_response_id(db, scope.request_id, scope.snapshot_id, digest)
+    with open_stores(scope.path) as st:
+        existing = st.raw.profile_response_id(scope.request_id, scope.snapshot_id, digest)
     response_id = (
         existing
         if existing
@@ -186,10 +184,9 @@ def persist_space_requirements(scope):
             payload={"rows": rows},
         )
     )
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         references = {
-            json.loads(row[1])["industry_code"]: row[0]
-            for row in raw_db.response_rows(db, response_id)
+            json.loads(row[1])["industry_code"]: row[0] for row in st.raw.response_rows(response_id)
         }
         for row in rows:
             register_fact(
@@ -204,7 +201,7 @@ def persist_space_requirements(scope):
                 row_ids=[references[row["industry_code"]]],
                 response_ids=[response_id],
                 comparison={"file_hash": digest, "reviewed": True},
-                connection=db,
+                stores=st,
             )
 
 
@@ -215,7 +212,7 @@ def persist_report(scope, report, lineage, responses, version=None):
     response_refs = {}
     for response in responses:
         response_refs.setdefault(response["source"], []).append(response["response_id"])
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         for row in report["rows"]:
             for item, score in row["items"].items():
                 if item == "L":
@@ -294,7 +291,7 @@ def persist_report(scope, report, lineage, responses, version=None):
                     response_ids=response_ids,
                     comparison=comparison,
                     period=fact_period(version or {}, source, metric, "승인 기준선·프로필"),
-                    connection=db,
+                    stores=st,
                 )
                 facts_by_item[(row["code"], item)] = [fact]
                 if item == "D1" and score["status"] == "observed" and isinstance(value, dict):
@@ -309,11 +306,10 @@ def persist_report(scope, report, lineage, responses, version=None):
                         row_ids=refs,
                         response_ids=response_ids,
                         comparison=comparison,
-                        connection=db,
+                        stores=st,
                     )
                     facts_by_item[(row["code"], item)].append(scale)
-        score_db.insert_score_snapshot(
-            db,
+        st.scores.insert_score_snapshot(
             (
                 score_id,
                 scope.request_id,
@@ -329,8 +325,7 @@ def persist_report(scope, report, lineage, responses, version=None):
         )
         for row in report["rows"]:
             for item, score in row["items"].items():
-                score_db.insert_score(
-                    db,
+                st.scores.insert_score(
                     (
                         score_id,
                         row["code"],
@@ -416,7 +411,7 @@ def persist_input_facts(scope, data, lineage, responses, version):
             ),
         ]
     )
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         for code, source, metric, value, unit in operands:
             known = value is not None and source not in data.get("runtime_partial_sources", [])
             refs = (
@@ -445,7 +440,7 @@ def persist_input_facts(scope, data, lineage, responses, version):
                 response_ids=response_ids,
                 comparison={"input_versions": version, "calculation": "기존 분석 함수 출력"},
                 period=fact_period(version, source, metric, "원문 시점"),
-                connection=db,
+                stores=st,
             )
 
 
@@ -494,7 +489,7 @@ def _persist(task, scope, education_scan=None):
 
 
 async def persist_snapshot_scores(task, education_scan=None):
-    scope = current_capture()
+    scope = storage().current_capture()
     if scope is None:
         return None
     try:

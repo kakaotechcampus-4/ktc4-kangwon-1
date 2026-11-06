@@ -9,6 +9,7 @@ import httpx
 from app.ai.map_regulation import check_regulation, map_search
 from app.ai.sql_tool import error
 from app.ai.tools import SharedTools
+from app.application.ports.storage import open_stores
 from app.domain.contracts import MapSearchInput
 from app.domain.industries import DATA_DIR
 from app.infrastructure.clients.education_zone import (
@@ -17,8 +18,6 @@ from app.infrastructure.clients.education_zone import (
     find_education_zones,
 )
 from app.infrastructure.market_data.map_analysis.client import MapApiError
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import facts as fact_db
 from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -46,10 +45,10 @@ async def _education_lookup(latitude, longitude, **kwargs):
 
 def _facility_places(scope, reply, category):
     places = {}
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         for place in reply.data.places:
-            row = fact_db.fact_value_json(
-                db, place.distance_fact_id, scope.request_id, scope.snapshot_id
+            row = st.facts.fact_value_json(
+                place.distance_fact_id, scope.request_id, scope.snapshot_id
             )
             if row is None:
                 raise ValueError("시설 거리 fact가 현재 요청에 없습니다.")

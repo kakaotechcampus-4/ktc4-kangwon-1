@@ -4,9 +4,8 @@ import json
 
 from app.ai.aliases import encode
 from app.ai.landlord import _facts
+from app.application.ports.storage import open_stores
 from app.application.report import ReportInvalid, fact_rows
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import scores as score_db
 from app.shared.canonical import canonical_json
 
 PERSONA = (
@@ -55,9 +54,9 @@ def review_packet(scope, draft):
     codes = [c["industry_code"] for c in candidates]
     # 요청·스냅샷 격리와 현재 공간 비교 선택은 기존 읽기 경로를 재사용합니다.
     rows = _facts(scope, codes)
-    with connect(scope.path) as db:
-        stored = score_db.scoped_snapshot_summary(
-            db, payload["score_snapshot_id"], scope.request_id, scope.snapshot_id
+    with open_stores(scope.path) as st:
+        stored = st.scores.scoped_snapshot_summary(
+            payload["score_snapshot_id"], scope.request_id, scope.snapshot_id
         )
     if stored is None:
         raise ValueError("초안의 점수표가 없습니다.")

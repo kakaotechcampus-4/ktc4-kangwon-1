@@ -3,10 +3,8 @@
 import json
 
 from app.ai.aliases import encode
+from app.application.ports.storage import open_stores, storage
 from app.domain.industries.catalog import INDUSTRIES
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.provenance import expand_spatial_scope, validate_snapshot
-from app.infrastructure.persistence.repository import facts as fact_db
 from app.shared.canonical import canonical_json
 
 PERSONA = (
@@ -41,12 +39,10 @@ GROUPS = {
 
 
 def _facts(scope, codes):
-    validate_snapshot(scope)
-    with connect(scope.path) as db:
-        rows = [
-            dict(r) for r in fact_db.review_facts(db, scope.request_id, scope.snapshot_id, codes)
-        ]
-    expand_spatial_scope(scope, rows)
+    storage().provenance.validate_snapshot(scope)
+    with open_stores(scope.path) as st:
+        rows = [dict(r) for r in st.facts.review_facts(scope.request_id, scope.snapshot_id, codes)]
+    storage().provenance.expand_spatial_scope(scope, rows)
     return rows
 
 

@@ -8,10 +8,10 @@ from time import monotonic
 
 from app.application.facts import register_fact
 from app.application.local_snapshot import register_cell
+from app.application.ports.storage import open_stores, storage
 from app.domain.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolError, ToolReply
 from app.domain.geo import haversine_m
-from app.infrastructure.persistence.connection import connect, readonly
-from app.infrastructure.persistence.provenance import load_snapshot, validate_snapshot
+from app.infrastructure.persistence.connection import readonly
 from app.shared.concurrency import run_in_thread
 
 VIEWS = {
@@ -235,8 +235,8 @@ def _query(scope, input):
     if not re.match(r"^SELECT\b", sql, re.I) or re.search(r";|--|/\*|\bWITH\b", sql, re.I):
         return error("SQL_DENIED", "승인된 뷰의 단일 SELECT만 허용합니다.")
     view, projection = _projection(sql)
-    snapshot = load_snapshot(scope)
-    adapter = validate_snapshot(scope) if snapshot else None
+    snapshot = storage().provenance.load_snapshot(scope)
+    adapter = storage().provenance.validate_snapshot(scope) if snapshot else None
     is_local = snapshot is not None and view in {
         "v_raw_stores",
         "v_raw_lifecycle",
@@ -305,7 +305,7 @@ def _query(scope, input):
     output = []
     truncated = len(rows) > input.max_rows
     output_bytes = len(json.dumps(public_columns, ensure_ascii=False).encode()) + 1024
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         for values in rows[: input.max_rows]:
             value_map = dict(zip(columns, values, strict=True))
             ref = value_map.get(raw_alias) if raw_alias else None
@@ -339,20 +339,14 @@ def _query(scope, input):
                             unit=unit,
                             expected_value=value_map[output_alias],
                             adapter=adapter,
-                            connection=db,
+                            stores=st,
                         )
                         facts.append(fact)
                         citable.add(output_alias)
                 output.append(RawQueryRow(raw_row_refs=[ref], values=value_map, fact_ids=facts))
                 continue
             original = (
-                db.execute(
-                    "SELECT r.raw_json,p.source FROM raw_rows r "
-                    "JOIN raw_response_rows e USING(raw_row_id) "
-                    "JOIN raw_responses p USING(response_id) "
-                    "WHERE r.raw_row_id=? AND p.request_id=? AND p.snapshot_id=?",
-                    (ref, scope.request_id, scope.snapshot_id),
-                ).fetchone()
+                st.raw.raw_row_with_source(ref, scope.request_id, scope.snapshot_id)
                 if ref
                 else None
             )
@@ -377,7 +371,7 @@ def _query(scope, input):
                         row_ids=[ref],
                         field_pointer="/" + key,
                         period=str(raw.get("STDR_YYQU_CD") or "조회 시점"),
-                        connection=db,
+                        stores=st,
                     )
                     facts.append(fact)
                     citable.add(alias)

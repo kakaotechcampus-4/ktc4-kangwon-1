@@ -1,7 +1,6 @@
 """요청 범위 원문 수집·보안 정제·SQLite 저장입니다. 모델 호출은 없습니다."""
 
 import json
-import sqlite3
 import uuid
 from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
@@ -9,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
 
+from app.application.errors import RawStorageError as RawStorageError
 from app.infrastructure.persistence.connection import connect, readonly
 from app.shared.canonical import canonical_hash, canonical_json
 from app.shared.clock import utc_now_iso
@@ -16,10 +16,6 @@ from app.shared.concurrency import run_in_thread
 from app.shared.scrub import _AUTH_KEYS as _AUTH_KEYS
 from app.shared.scrub import _auth as _auth
 from app.shared.scrub import scrub as scrub
-
-
-class RawStorageError(sqlite3.DatabaseError):
-    """원문 저장 실패는 에이전트 실패로 변환하지 않고 서비스까지 전파합니다."""
 
 
 def raise_storage_error(error: BaseException) -> None:
@@ -250,7 +246,9 @@ class CaptureScope:
         self.finished = False
         self.reasons.add(reason)
 
-    def record_sync(self, **kwargs):
+    def record_sync(self, *, stores=None, **kwargs):
+        if stores is not None:
+            kwargs["connection"] = stores.db
         try:
             with self.write_lock:
                 response_id = _save_response(self, **kwargs)

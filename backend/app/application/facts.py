@@ -4,11 +4,7 @@ import asyncio
 import uuid
 from contextlib import nullcontext
 
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.provenance import pin_provenance
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository import raw as raw_db
-from app.infrastructure.persistence.repository.agentic import begin_immediate
+from app.application.ports.storage import open_stores
 from app.shared.canonical import canonical_hash, canonical_json
 from app.shared.clock import utc_now_iso
 
@@ -29,7 +25,7 @@ def register_fact(
     period="기준선별 시점",
     response_ids=(),
     field_pointer="/",
-    connection=None,
+    stores=None,
     local_cell=None,
     parent_fact_ids=(),
     retain_unknown_value=False,
@@ -66,22 +62,22 @@ def register_fact(
     if parent_fact_ids:
         identity["parents"] = parent_fact_ids
     identity_hash = canonical_hash(identity)
-    with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        begin_immediate(db)
+    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
+        st.begin_immediate()
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
             batch = row_ids[offset : offset + 400]
-            found = raw_db.raw_rows_in_scope(db, batch, scope.request_id, scope.snapshot_id)
+            found = st.raw.raw_rows_in_scope(batch, scope.request_id, scope.snapshot_id)
             if set(batch) != found:
                 raise ValueError("다른 요청·스냅샷의 원문을 fact 근거로 사용할 수 없습니다.")
         for response in response_ids:
-            if not raw_db.response_in_scope(db, response, scope.request_id, scope.snapshot_id):
+            if not st.raw.response_in_scope(response, scope.request_id, scope.snapshot_id):
                 raise ValueError("응답 계보의 요청 범위가 다릅니다.")
         for parent_id in parent_fact_ids:
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            parent = fact_db.fact_scope_row(db, parent_id, scope.request_id, scope.snapshot_id)
+            parent = st.facts.fact_scope_row(parent_id, scope.request_id, scope.snapshot_id)
             if parent is None or parent[0] not in (None, industry_code):
                 raise ValueError("부모 fact의 요청·스냅샷·업종이 다릅니다.")
             if status == "observed" and (parent[1] != "observed" or not parent[2]):
@@ -89,12 +85,11 @@ def register_fact(
         citable = status == "observed" and bool(row_ids or response_ids or local or parent_fact_ids)
         if status == "observed" and not citable:
             raise ValueError("관측 fact에는 검증 가능한 원문 계보가 필요합니다.")
-        old = fact_db.fact_id_by_identity(db, scope.snapshot_id, identity_hash)
+        old = st.facts.fact_id_by_identity(scope.snapshot_id, identity_hash)
         if old:
             return old
         fact_id = "f_" + str(uuid.uuid4())
-        fact_db.insert_fact(
-            db,
+        st.facts.insert_fact(
             (
                 fact_id,
                 scope.request_id,
@@ -129,11 +124,10 @@ def register_fact(
             ),
         )
         if local:
-            ref = pin_provenance(
-                db, scope, source, metric, industry_code, CALC_VERSION, local_cell, unit
+            ref = st.pin_provenance(
+                scope, source, metric, industry_code, CALC_VERSION, local_cell, unit
             )
-            fact_db.insert_local_fact_lineage(
-                db,
+            st.facts.insert_local_fact_lineage(
                 fact_id,
                 ref,
                 local_cell["row_key"] if local_cell else None,
@@ -142,9 +136,9 @@ def register_fact(
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            fact_db.insert_fact_sources(
-                db, [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]]
+            st.facts.insert_fact_sources(
+                [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]]
             )
         if parent_fact_ids:
-            fact_db.insert_fact_parents(db, [(fact_id, parent_id) for parent_id in parent_fact_ids])
+            st.facts.insert_fact_parents([(fact_id, parent_id) for parent_id in parent_fact_ids])
     return fact_id

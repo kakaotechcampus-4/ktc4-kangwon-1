@@ -42,6 +42,7 @@ main.py          조립 지점. 설정·DB·라우터를 연결한다
 - 수집 패키지(`infrastructure/market_data/*`) 안에서도 `client.py`는 외부 호출만, `metrics.py`는 순수 계산만 둡니다.
 - 방향 규칙은 `tests/test_architecture.py`가 검사합니다. 아직 남은 예외는 `tests/fixtures/architecture_allowlist.txt`에 있고, 고치면 목록에서 지웁니다(줄어들기만 함).
 - 상대 import는 쓰지 않습니다(ruff TID252).
+- application·ai는 DB를 직접 열지 않고 `application/ports/storage.py`의 저장 창구(`open_stores(path)`, `storage().requests` 등)를 씁니다. sqlite 구현은 `infrastructure/persistence/stores.py`, 연결은 `app/bootstrap.py`가 합니다. 창구 정의는 저장소 함수 서명과 1:1입니다.
 
 **계산 함수는 순수하게 둡니다.** `metrics.py`가 네트워크를 모르기 때문에 시험이 빠르고 안정적입니다.
 

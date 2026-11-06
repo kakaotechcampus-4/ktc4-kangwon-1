@@ -5,6 +5,7 @@ import re
 from contextlib import nullcontext
 
 from app.application.facts import register_fact
+from app.application.ports.storage import open_stores
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.space_values import (
     CONFIRMED_STATES,
@@ -14,9 +15,6 @@ from app.domain.space_values import (
     floor_number,
     readable_answer,
 )
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository.agentic import begin_immediate
 
 CONFIRMED_UNIT = "확인 화면 확정값"
 
@@ -91,9 +89,9 @@ def _chosen_answer(metric, rows):
     return next((row for row in rows if readable_answer(metric, row[1])), rows[0])
 
 
-def rule_answers(scope, *, connection=None):
-    with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        rows = fact_db.user_space_answers(db, scope.request_id, scope.snapshot_id)
+def rule_answers(scope, *, stores=None):
+    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
+        rows = st.facts.user_space_answers(scope.request_id, scope.snapshot_id)
     answers, candidates = {}, {}
     for fact_id, metric, raw, unit in rows:
         value = json.loads(raw)
@@ -109,12 +107,12 @@ def rule_answers(scope, *, connection=None):
     return answers
 
 
-def ensure_space_fits(scope, *, connection=None):
+def ensure_space_fits(scope, *, stores=None):
     """비교 값·부모 계보가 바뀌면 새 fact를 만들고 현재 포인터만 갱신합니다."""
-    with connect(scope.path) if connection is None else nullcontext(connection) as db:
-        begin_immediate(db)
+    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
+        st.begin_immediate()
         profiles, answers, answer_ids, candidates = {}, {}, {}, {}
-        for row in fact_db.space_fit_inputs(db, scope.request_id, scope.snapshot_id):
+        for row in st.facts.space_fit_inputs(scope.request_id, scope.snapshot_id):
             if row[2] == "industry_profile" and row[3] == "space_requirements":
                 profiles.setdefault(row[1], (row[0], json.loads(row[4])))
             elif row[2] == "user" and row[3] in {
@@ -164,8 +162,8 @@ def ensure_space_fits(scope, *, connection=None):
                     "user_fact_ids": answer_ids,
                 },
                 period="현재 임대인 답변과 업종 공간 요건",
-                connection=db,
+                stores=st,
             )
-            fact_db.point_space_fit(db, scope.request_id, scope.snapshot_id, code, fact_id)
+            st.facts.point_space_fit(scope.request_id, scope.snapshot_id, code, fact_id)
             current[code] = fact_id
         return current

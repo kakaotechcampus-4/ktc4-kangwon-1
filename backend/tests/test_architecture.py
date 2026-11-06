@@ -28,11 +28,7 @@ SQL = re.compile(
     r"RELEASE|WITH|CREATE|DROP|ALTER|PRAGMA)\b\s+\S",
     re.IGNORECASE,
 )
-SQL_OUTSIDE_INFRASTRUCTURE = {
-    "app/ai/sql_tool.py",
-    "app/application/analysis.py",
-    "app/application/local_snapshot.py",
-}
+SQL_OUTSIDE_INFRASTRUCTURE = {"app/ai/sql_tool.py"}
 
 
 def module_of(path):
@@ -103,7 +99,7 @@ class ArchitectureTests(unittest.TestCase):
             for path in APP.rglob("*.py")
             if "__pycache__" not in path.parts
             and layer(module_of(path)) is None
-            and module_of(path) not in {"app", "app.main"}
+            and module_of(path) not in {"app", "app.main", "app.bootstrap"}
         ]
         self.assertEqual(loose, [])
 

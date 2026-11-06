@@ -5,9 +5,7 @@ import re
 import sqlite3
 from hashlib import sha256
 
-from app.infrastructure.persistence.connection import connect
-from app.infrastructure.persistence.repository import facts as fact_db
-from app.infrastructure.persistence.repository.agentic import begin_immediate
+from app.application.ports.storage import open_stores
 
 SINGLES = {"fact_id", "distance_fact_id"}
 LISTS = {"fact_ids", "reason_fact_ids", "selection_fact_ids"}
@@ -59,30 +57,30 @@ def encode(scope, value):
     references = set()
     _walk(value, lambda fid: references.add(fid) or fid)
     resolved = {}
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
         # 먼저 쓰기 권한을 잡아 조회-삽입 사이의 동시 생성 경합을 막습니다.
-        begin_immediate(db)
+        st.begin_immediate()
 
         def alias(fid):
-            existing = fact_db.alias_named(db, scope.request_id, fid)
+            existing = st.facts.alias_named(scope.request_id, fid)
             if existing:
                 return existing
-            row = fact_db.alias_of_fact(db, scope.request_id, fid)
+            row = st.facts.alias_of_fact(scope.request_id, fid)
             if row:
                 return row
-            if not fact_db.fact_in_snapshot(db, scope.request_id, scope.snapshot_id, fid):
+            if not st.facts.fact_in_snapshot(scope.request_id, scope.snapshot_id, fid):
                 raise ValueError("요청에 없는 fact를 별칭으로 내보낼 수 없습니다.")
             for counter in range(8):
                 short = sha256(f"{fid}:{counter}".encode()).hexdigest()[:8]
                 try:
-                    fact_db.insert_alias(db, scope.request_id, short, fid)
+                    st.facts.insert_alias(scope.request_id, short, fid)
                 except sqlite3.IntegrityError as exc:
                     if exc.sqlite_errorcode not in {
                         sqlite3.SQLITE_CONSTRAINT_UNIQUE,
                         sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
                     }:
                         raise
-                    row = fact_db.alias_of_fact(db, scope.request_id, fid)
+                    row = st.facts.alias_of_fact(scope.request_id, fid)
                     if row:
                         return row
                 else:
@@ -113,12 +111,12 @@ def encode_messages(scope, messages, label=False):
 
 
 def decode(scope, value):
-    with connect(scope.path) as db:
+    with open_stores(scope.path) as st:
 
         def original(reference):
             if not isinstance(reference, str):
                 raise ValueError("fact 별칭은 문자열이어야 합니다.")
-            row = fact_db.fact_id_by_reference(db, scope.request_id, scope.snapshot_id, reference)
+            row = st.facts.fact_id_by_reference(scope.request_id, scope.snapshot_id, reference)
             if not row:
                 visible = (
                     reference if len(reference) == 8 and reference.isalnum() else "미등록 식별자"

@@ -11,8 +11,9 @@ from app.ai.budget import RuntimeBudget
 from app.ai.preflight import collect_preflight
 from app.ai.questions import save_confirmed_space
 from app.ai.runtime import DecisionLoop
-from app.application.errors import AnalysisConflictError
+from app.application.errors import INTERRUPTED_MESSAGE, AnalysisConflictError
 from app.application.local_snapshot import persist_local
+from app.application.ports.storage import storage
 from app.application.snapshot import persist_snapshot_scores
 from app.domain.schemas import AgentError, AnalysisTask
 from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeError, resolve_site
@@ -21,11 +22,6 @@ from app.infrastructure.llm.recording import CallRecording
 from app.infrastructure.llm.session import with_client_session
 from app.infrastructure.market_data.local.adapter import LocalAdapter
 from app.infrastructure.mock import dependencies, generators
-from app.infrastructure.persistence import repository
-from app.infrastructure.persistence.connection import connect, initialize
-from app.infrastructure.persistence.provenance import validate_snapshot
-from app.infrastructure.persistence.raw_capture import CaptureScope, capture_scope
-from app.infrastructure.persistence.repository.requests import INTERRUPTED_MESSAGE
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
 from app.shared.scrub import env_secrets, scrub_text
@@ -67,26 +63,22 @@ def public_failure(exc: BaseException, stage: str) -> AgentError:
 async def _event(path, request_id, stage, event):
     try:
         await run_in_thread(
-            lambda: repository.append_event(request_id, stage, event, {}, db_path=path)
+            lambda: storage().requests.append_event(request_id, stage, event, {}, db_path=path)
         )
     except Exception as exc:
         logger.warning("진행 이벤트 저장 실패: %s", type(exc).__name__)
 
 
 def _persist_outcome(path, request_id, outcome):
-    with connect(path) as db:
-        if outcome.status == "waiting_for_input":
-            db.execute(
-                "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id=?",
-                (request_id,),
-            )
-        else:
-            db.execute(
-                "UPDATE analysis_requests SET "
-                "status='completed',result_json=?,completed_at=? WHERE "
-                "request_id=?",
-                (outcome.result.model_dump_json(), utc_now_iso(), request_id),
-            )
+    if outcome.status == "waiting_for_input":
+        storage().requests.save_outcome(request_id, db_path=path)
+    else:
+        storage().requests.save_outcome(
+            request_id,
+            result_json=outcome.result.model_dump_json(),
+            completed_at=utc_now_iso(),
+            db_path=path,
+        )
 
 
 async def _failure(path, request_id, exc, stage, timings=None):
@@ -126,25 +118,13 @@ async def _failure(path, request_id, exc, stage, timings=None):
     def save():
         error = public_failure(exc, stage)
         failed_at = utc_now_iso()
-        with connect(path) as db:
-            changed = db.execute(
-                "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
-                "WHERE request_id=? AND status IN ('pending','running','waiting_for_input')",
-                (error.model_dump_json(), failed_at, request_id),
-            )
-            if changed.rowcount != 1:
-                raise ValueError("종료할 수 있는 요청이 없습니다.")
-            db.execute(
-                "INSERT INTO decision_failures(request_id,failed_at,error_json,"
-                "diagnostics_json) "
-                "VALUES(?,?,?,?)",
-                (
-                    request_id,
-                    failed_at,
-                    error.model_dump_json(),
-                    json.dumps(diagnostics, ensure_ascii=False),
-                ),
-            )
+        storage().requests.record_failure(
+            request_id,
+            error_json=error.model_dump_json(),
+            diagnostics_json=json.dumps(diagnostics, ensure_ascii=False),
+            failed_at=failed_at,
+            db_path=path,
+        )
 
     await run_in_thread(save)
 
@@ -160,7 +140,7 @@ async def _resolve_and_save_site(path, request_id, address, radius_m, resolve):
     """주소를 좌표로 바꿔 저장하고, 이어지는 단계가 쓸 작업 단위를 돌려줍니다."""
     site = await (resolve or resolve_site)(address)
     task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
-    await run_in_thread(lambda: repository.save_site(task, db_path=path))
+    await run_in_thread(lambda: storage().requests.save_site(task, db_path=path))
     await _event(path, request_id, "address", "completed")
     await _event(path, request_id, "local_data", "started")
     return task
@@ -204,19 +184,21 @@ async def execute_agentic_analysis(
     confirmed_space=None,
 ):
     request_id = request_id or uuid.uuid4().hex
-    path = await run_in_thread(initialize, db_path)
+    path = await run_in_thread(storage().initialize, db_path)
     if not request_prepared:
         await run_in_thread(
-            lambda: repository.create_request(request_id, address, radius_m=radius_m, db_path=path)
+            lambda: storage().requests.create_request(
+                request_id, address, radius_m=radius_m, db_path=path
+            )
         )
     budget = RuntimeBudget(measurement=measurement)
     recorder = _make_recorder(request_id, recording_path, measurement)
     limit = MEASURING_COLLECT_TIMEOUT_SECONDS if measurement else COLLECT_TIMEOUT_SECONDS
     stage, started, timings = "수집", monotonic(), {}
     try:
-        await run_in_thread(lambda: repository.mark_running(request_id, db_path=path))
+        await run_in_thread(lambda: storage().requests.mark_running(request_id, db_path=path))
         await _event(path, request_id, "address", "started")
-        async with capture_scope(request_id, path) as scope:
+        async with storage().capture(request_id, path) as scope:
             adapter = await run_in_thread(LocalAdapter, local_data_path) if not mock else None
             async with asyncio.timeout(limit):
                 task = await _resolve_and_save_site(path, request_id, address, radius_m, resolve)
@@ -272,16 +254,18 @@ async def resume_agentic_analysis(
     measurement=False,
     recording_path=None,
 ):
-    path = await run_in_thread(initialize, db_path)
-    context = await run_in_thread(lambda: repository.get_resume_context(request_id, db_path=path))
-    scope = CaptureScope(request_id, path, context.run_id, context.snapshot_id)
+    path = await run_in_thread(storage().initialize, db_path)
+    context = await run_in_thread(
+        lambda: storage().requests.get_resume_context(request_id, db_path=path)
+    )
+    scope = storage().resume_scope(request_id, path, context.run_id, context.snapshot_id)
     try:
         resume_state = await DecisionLoop.validate_resume(scope, answers)
     except ValueError as exc:
         raise AnalysisConflictError(str(exc)) from None
     recorder = _make_recorder(request_id, recording_path, measurement)
     try:
-        await run_in_thread(validate_snapshot, scope)
+        await run_in_thread(storage().provenance.validate_snapshot, scope)
         loop = await DecisionLoop.resume(
             scope,
             context.site,
