@@ -18,6 +18,7 @@ from app.agentic.read_tools import get_scorecard
 from app.agentic.report import code90_uses_metric, complete_l_records, load_base, recompute_l_scores
 from app.agentic.scoring import profiles, rank_candidates, result, summarize
 from app.agentic.snapshot import persist_snapshot_scores
+from app.agents.business_lifecycle.preprocess import calculate_rate
 from app.db.connection import connect, initialize
 from app.db.repository import create_request
 from app.geo import to_epsg5181
@@ -97,6 +98,25 @@ class Code90RuntimeTests(unittest.TestCase):
             reversed_items = dict(reversed(list(items.items())))
             self.assertEqual(code90.summary(items), code90.summary(restored))
             self.assertEqual(code90.summary(items), code90.summary(reversed_items))
+
+    def test_saved_rates_on_rounding_boundary_are_accepted(self):
+        fixture = deepcopy(self.cases["complete_full_period_S2_half"])
+        quarterly = fixture["data"]["lifecycle_quarterly"]["industries"][0]
+        quarterly["store_counts"] = [40] * 12
+        quarterly["opened_counts"] = [0] * 12
+        quarterly["closed_counts"] = [0] * 8 + [5, 6, 6, 6]
+        stores, opened, closed = (
+            quarterly[k] for k in ("store_counts", "opened_counts", "closed_counts")
+        )
+        fixture["data"]["business_lifecycle"]["industries"][0]["metrics"] = {
+            "avg_store_count": sum(stores) / 12,
+            "recent_year_close_rate": calculate_rate(sum(closed[-4:]), sum(stores[-4:])),
+            "oldest_year_close_rate": calculate_rate(sum(closed[:4]), sum(stores[:4])),
+            "net_change_rate": calculate_rate(sum(opened) - sum(closed), sum(stores)),
+            "turnover_rate": calculate_rate(sum(opened) + sum(closed), sum(stores)),
+        }
+        self.assertNotEqual(round(100 * 23 / 160, 2), calculate_rate(23, 160))
+        self.calculate(fixture)
 
     def test_conflicting_raw_counts_are_rejected(self):
         fixture = deepcopy(self.cases["complete_full_period_S2_half"])
@@ -223,7 +243,7 @@ class Code90RuntimeTests(unittest.TestCase):
     def test_reference_cache_is_invalidated_by_source_version_and_corruption(self):
         with (
             tempfile.TemporaryDirectory() as folder,
-            patch("app.local_data.score_reference.tempfile.gettempdir", return_value=folder),
+            patch("app.local_data.score_reference.CACHE_DIR", Path(folder)),
             patch(
                 "app.local_data.score_reference._build_reference",
                 return_value=([{"area": "a", "counts": {}}], []),

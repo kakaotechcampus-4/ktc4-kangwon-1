@@ -5,6 +5,7 @@ from copy import deepcopy
 from statistics import mean
 
 from app.agents.business_lifecycle.client import get_recent_quarters
+from app.agents.business_lifecycle.preprocess import calculate_rate
 from app.agents.floating_population.models import quarter_days
 
 METHOD = "S2_half-v1"
@@ -115,16 +116,12 @@ def lifecycle_counts(code, data, baseline, quarter):
         return None
     stores, opened, closed = columns
     total, old, recent = sum(stores), sum(stores[:4]), sum(stores[-4:])
-
-    def rate(numerator, denominator):
-        return round(100 * numerator / denominator, 2) if denominator else None
-
     metrics = {
         "avg_store_count": total / 12,
-        "recent_year_close_rate": rate(sum(closed[-4:]), recent),
-        "oldest_year_close_rate": rate(sum(closed[:4]), old),
-        "net_change_rate": rate(sum(opened) - sum(closed), total),
-        "turnover_rate": rate(sum(opened) + sum(closed), total),
+        "recent_year_close_rate": calculate_rate(sum(closed[-4:]), recent),
+        "oldest_year_close_rate": calculate_rate(sum(closed[:4]), old),
+        "net_change_rate": calculate_rate(sum(opened) - sum(closed), total),
+        "turnover_rate": calculate_rate(sum(opened) + sum(closed), total),
     }
     for field, value in metrics.items():
         saved = row.get("metrics", {}).get(field)
