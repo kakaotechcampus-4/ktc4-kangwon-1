@@ -6,7 +6,17 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BACKEND_DIR = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
+
+def backend_dir(start: Path) -> Path:
+    for parent in start.resolve().parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    raise RuntimeError(
+        "backend/pyproject.toml을 찾지 못했습니다. backend에서 pip install -e 로 설치하세요."
+    )
+
+
+BACKEND_DIR = backend_dir(Path(__file__))
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@
 import ast
 import importlib
 import re
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -23,6 +24,12 @@ class LayoutGuardTests(unittest.TestCase):
         self.assertEqual(config.BACKEND_DIR, BACKEND)
         self.assertTrue((config.BACKEND_DIR / "pyproject.toml").exists())
         self.assertIs(connection.BACKEND_DIR, config.BACKEND_DIR)
+
+    def test_missing_pyproject_explains_install(self):
+        with tempfile.TemporaryDirectory() as folder:
+            start = Path(folder) / "app" / "infrastructure" / "config.py"
+            with self.assertRaisesRegex(RuntimeError, "pyproject.toml"):
+                config.backend_dir(start)
 
     def test_paths_do_not_depend_on_module_depth(self):
         pattern = re.compile(r"__file__\)?(?:\.resolve\(\))?\.parents\[\d+\]")

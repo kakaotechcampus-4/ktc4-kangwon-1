@@ -4,7 +4,7 @@
 
 Founder(임차인·창업자) 검토 기준은 [전용 평가표](founder-evaluator-rubric.md)를 따른다. 별도 점수·순위를 만들지 않으며 다른 세 평가자와 본 채점표의 배점·판정은 변경하지 않는다.
 
-이 절이 v0.8의 유일한 현재 규칙이다. 뒤의 v0.2~v0.7 기록에 다른 배점·식·권고가 있어도 이 절을 우선한다. 대상은 service-51의 [생성 카탈로그](../backend/app/industries/catalog.py) 51업종과 승인된 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)다. 현재 단일 decision 경로의 코드 채점·보고서 검증에 적용하며 실행 구조는 [백엔드 README](../backend/README.md)를 따른다. 성공 확률·매출·수익을 예측하는 점수가 아니다.
+이 절이 v0.8의 유일한 현재 규칙이다. 뒤의 v0.2~v0.7 기록에 다른 배점·식·권고가 있어도 이 절을 우선한다. 대상은 service-51의 [생성 카탈로그](../backend/app/domain/industries/catalog.py) 51업종과 승인된 [industry_profile.csv](../backend/app/domain/industries/data/industry_profile.csv)다. 현재 단일 decision 경로의 코드 채점·보고서 검증에 적용하며 실행 구조는 [백엔드 README](../backend/README.md)를 따른다. 성공 확률·매출·수익을 예측하는 점수가 아니다.
 
 ### 문항·배점·입력·식
 
@@ -18,7 +18,7 @@ Founder(임차인·창업자) 검토 기준은 [전용 평가표](founder-evalua
 | D2 | 10 | floating_population: `/benchmark/weekend_index`; 승인 day_pattern | 주말형 r=weekend_index, 평일형 r=1/weekend_index. 공통 r 등급 | 무관=n.a. 지수 결측·0·프로필 결측=unknown |
 | D3 | 10 | floating_population: `/population/age_share/{age}`, `/resident/age_share/{age}`, `/worker/age_share/{age}`, 해당 period_code; 승인 target_population·target_age_bands | r=대상 연령 비중 합/서울 같은 모집단·연령 비중 합. 공통 r 등급 | 모집단 공란=n.a. 상주·직장 연령 또는 서울 분모 결측이면 유동 연령 대체를 표시. 대체도 불가·분모 0=unknown. 모집단 합산 금지 |
 | D4 | 5 | floating_population: `/trend/yoy_change`, `/trend/quarters/{j}/period_code`, 관측 상권 코드 집합 | 전년 동기 일평균 변화율의 g 등급. 최신과 전년 같은 상권 집합, 5분기 자료 필요 | 전년 동기 없음·상권 집합 다름=unknown. 전분기 변화 대체 금지 |
-| C1 | 15 | commercial_area: `/by_middle/{i}/density_per_km2`, `/radius_m`; floating_population: `/benchmark/mean_daily_per_trade_area`(근처형만); 서울 기준선; 업종 유형은 [industry_profile.csv](../backend/app/industries/data/industry_profile.csv)의 `agglomeration` | **유형별 방향.** 근처형: q=(업종 밀도/서울 같은 업종 중앙 밀도)/(유동 규모/5,920.2)^0.5, 역방향 q 등급. 모임형: q=업종 밀도/서울 같은 업종 중앙 밀도, 정방향 q 등급(<0.5→0, [0.5,0.8)→1, [0.8,1.2)→2, [1.2,1.5)→3, ≥1.5→4)이며 밀도가 서울 같은 업종 상위 5%(p95)를 넘으면 한 단계 감점(최저 0). 무관: 자료를 쓰지 않고 2등급 고정(관측값 아님) | 반경 500m·완전 수집·소분류 매핑 필요. 서울 중앙 밀도<0.01, 밀도 결측=unknown. 근처형은 유동 결측·0도 unknown, 모임형은 유동을 보지 않는다. 무관은 항상 observed. 밀도 0은 기준선 유효 시 observed |
+| C1 | 15 | commercial_area: `/by_middle/{i}/density_per_km2`, `/radius_m`; floating_population: `/benchmark/mean_daily_per_trade_area`(근처형만); 서울 기준선; 업종 유형은 [industry_profile.csv](../backend/app/domain/industries/data/industry_profile.csv)의 `agglomeration` | **유형별 방향.** 근처형: q=(업종 밀도/서울 같은 업종 중앙 밀도)/(유동 규모/5,920.2)^0.5, 역방향 q 등급. 모임형: q=업종 밀도/서울 같은 업종 중앙 밀도, 정방향 q 등급(<0.5→0, [0.5,0.8)→1, [0.8,1.2)→2, [1.2,1.5)→3, ≥1.5→4)이며 밀도가 서울 같은 업종 상위 5%(p95)를 넘으면 한 단계 감점(최저 0). 무관: 자료를 쓰지 않고 2등급 고정(관측값 아님) | 반경 500m·완전 수집·소분류 매핑 필요. 서울 중앙 밀도<0.01, 밀도 결측=unknown. 근처형은 유동 결측·0도 unknown, 모임형은 유동을 보지 않는다. 무관은 항상 observed. 밀도 0은 기준선 유효 시 observed |
 | C2 | — | — | C1에 통합(v0.8 개정, 2026-10-19). LQ는 설명용으로만 | 점수 없음 |
 | C4 | 10 | MapObservation.data: `/queries/{id}/request/facility_code`, `/queries/{id}/status`, `/queries/{id}/place_ids`, `/places/{id}/category_code`, `/places/{id}/distance_m`; 승인 required_facilities·max_distance_m | t=확인된 최근접 거리/허용 거리. t≤0.25→4, ≤0.50→3, ≤0.75→2, ≤1→1, >1→0. 시설 여러 개는 최저 등급 | 시설 공란=n.a. 조회 실패·거리 없음·검색 범위 부족=unknown. 검색 0건을 시설 부재로 확정하지 않음 |
 | S1 | 7.5 | business_lifecycle: `/industries/{i}/metrics/recent_year_close_rate` | r=상권 최근 폐업률/서울 같은 업종 최근 폐업률. 역방향 r 등급 | S 공통 조건·서울 분모 0=unknown |
@@ -141,7 +141,7 @@ L의 근거는 fact_id로 인용한 새 근거여야 한다. 이미 코드가 �
 
 빈 상가의 임대인이 업종 후보의 수요·경쟁·안정성·규제 조건을 같은 기준으로 비교하도록 채점표를 고정한다. 성공 확률·매출·수익률의 예측 모델이 아니다.
 
-업종은 [생성 카탈로그](../backend/app/industries/catalog.py)의 **51개 서비스 업종(service-51)**과 코드·명칭을 사용한다. v0.3은 **scripts/rubric_dryrun.py 시험 채점에 적용**하며 운영 decision 채점은 미적용이다. 현재 실행 프롬프트·schemas.py·규제 조회 코드는 변경하지 않는다. v0.3에서는 business_lifecycle/area_resolver.py의 상권 선택만 변경하고 시험 스크립트·프로필·문서를 갱신한다. 프로필의 `reviewed=true`는 사용자 승인이지 실측 검증을 뜻하지 않는다.
+업종은 [생성 카탈로그](../backend/app/domain/industries/catalog.py)의 **51개 서비스 업종(service-51)**과 코드·명칭을 사용한다. v0.3은 **scripts/rubric_dryrun.py 시험 채점에 적용**하며 운영 decision 채점은 미적용이다. 현재 실행 프롬프트·schemas.py·규제 조회 코드는 변경하지 않는다. v0.3에서는 business_lifecycle/area_resolver.py의 상권 선택만 변경하고 시험 스크립트·프로필·문서를 갱신한다. 프로필의 `reviewed=true`는 사용자 승인이지 실측 검증을 뜻하지 않는다.
 
 현재 decision 점수는 모델이 생성한다. 개폐업 내부 35%·25%·20%·20%를 최종판단 가중치로 쓰지 않는다. SQLite·도구·fact_id·평가자 구조 개편은 별도 구현 범위다.
 
@@ -203,7 +203,7 @@ L의 근거는 fact_id로 인용한 새 근거여야 한다. 이미 코드가 �
 
 ## D1 시간대 프로필과 기준선
 
-[industry_profile.csv](../backend/app/industries/data/industry_profile.csv)는 51행 모두 `reviewed=true`다. 방문 행동에 대한 confidence는 실측 검증을 의미하지 않는다.
+[industry_profile.csv](../backend/app/domain/industries/data/industry_profile.csv)는 51행 모두 `reviewed=true`다. 방문 행동에 대한 confidence는 실측 검증을 의미하지 않는다.
 
 | 패턴 | primary_bands | 업종 수 |
 | --- | --- | ---: |
@@ -225,7 +225,7 @@ L의 근거는 fact_id로 인용한 새 근거여야 한다. 이미 코드가 �
 
 단일 시간대 규모는 `/population/by_time/{band} ÷ 해당 시간대의 유효 관측 상권 수 ÷ quarter_days(period_code)`다. 한 행이 상권 1곳인 서울 기준 분포와 비교한다. 현재 `/reliability/covered_trade_areas`가 그 원값의 실제 유효 상권 집합과 같은지도 검증한다.
 
-종일형 입력은 실제 경로 `/benchmark/mean_daily_per_trade_area`이며 [baseline.py](../backend/app/agents/floating_population/baseline.py)의 **`DAILY_TOTAL_PERCENTILES`·`daily_total_percentile(value)`**로 등급용 p를 구한다. 기존 `/benchmark/scale_percentile`은 사용하지 않는다.
+종일형 입력은 실제 경로 `/benchmark/mean_daily_per_trade_area`이며 [baseline.py](../backend/app/domain/baselines/floating_population.py)의 **`DAILY_TOTAL_PERCENTILES`·`daily_total_percentile(value)`**로 등급용 p를 구한다. 기존 `/benchmark/scale_percentile`은 사용하지 않는다.
 
 ### 0단계 기준선 측정 기록
 
@@ -363,7 +363,7 @@ S4는 처음 4분기와 최근 4분기가 겹치면 unknown이다. **최소 8분
 
 ## G — 교육환경보호구역 규칙
 
-[education_zone.py](../backend/app/education_zone.py)는 다른 팀원 소유이며 수정하지 않는다. 이 표는 사용자 확정 서비스 판단 규칙이며 현재 조회 출력만 읽는다. 모든 인허가·건축 용도 검토를 완료했다는 뜻이 아니다.
+[education_zone.py](../backend/app/infrastructure/clients/education_zone.py)는 다른 팀원 소유이며 수정하지 않는다. 이 표는 사용자 확정 서비스 판단 규칙이며 현재 조회 출력만 읽는다. 모든 인허가·건축 용도 검토를 완료했다는 뜻이 아니다.
 
 | 서비스 업종 | 해당 범위 |
 | --- | --- |

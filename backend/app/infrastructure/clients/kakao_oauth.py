@@ -1,4 +1,4 @@
-"""카카오 로그인의 외부 호출만 담당합니다. 판단·저장은 services/auth.py가 합니다."""
+"""카카오 로그인의 외부 호출만 담당합니다. 판단·저장은 application/auth.py가 합니다."""
 
 from __future__ import annotations
 

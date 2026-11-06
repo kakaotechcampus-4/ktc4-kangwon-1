@@ -30,21 +30,24 @@ PR마다 CI가 같은 명령을 돌립니다. **로컬에서 먼저 돌리고 �
 ### 계층
 
 ```
-app/*.py     팀 공통 (schemas.py · address.py · config.py · geo.py)
-schemas.py   팀 공통 계약 (여기를 바꾸면 남의 코드가 깨진다)
-agentic/     단일 decision·자문·질문·평가·채점·fact·보고서
-local_data/  자료 버전·어댑터·계보, 일반 요청은 고정된 자료를 읽는다
-client.py    외부 API 호출만. 계산하지 않는다
-metrics.py   순수 계산만. 네트워크·파일을 모른다
-llm/         모델 호출·응답 파싱·예산
-schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
+domain/          순수 규칙과 공개 계약. 네트워크·DB·파일 쓰기를 모른다 (schemas·contracts·scoring·code90·업종·기준값)
+application/     요청 흐름(분석 실행·재개·인증·작업·리포트 확정). domain을 쓰고 저장은 포트로 한다
+ai/              decision·자문·질문·평가자·도구 실행. application과 domain을 쓴다
+infrastructure/  요청 DB·원문 보관(persistence), 시장 자료(market_data), 외부 API(clients), LLM, 설정
+shared/          어디서나 쓰는 작은 도구(canonical JSON·시각·스레드 격리·마스킹·로그 정제)
+api/v1/          HTTP 경계. application만 부른다
+main.py          조립 지점. 설정·DB·라우터를 연결한다
 ```
+
+- 수집 패키지(`infrastructure/market_data/*`) 안에서도 `client.py`는 외부 호출만, `metrics.py`는 순수 계산만 둡니다.
+- 방향 규칙은 `tests/test_architecture.py`가 검사합니다. 아직 남은 예외는 `tests/fixtures/architecture_allowlist.txt`에 있고, 고치면 목록에서 지웁니다(줄어들기만 함).
+- 상대 import는 쓰지 않습니다(ruff TID252).
 
 **계산 함수는 순수하게 둡니다.** `metrics.py`가 네트워크를 모르기 때문에 시험이 빠르고 안정적입니다.
 
-**에이전트는 다른 에이전트를 import 하지 않습니다.** 다만 둘 이상이 쓰는 코드를 복사하지는
-않습니다. 그 규칙이 막는 것은 에이전트 **사이의** 의존이지 공통 모듈이 아닙니다. 파일·네트워크를
-모르는 순수 계산이면 `app/` 루트로 올리고(`geo.py`), 요청 흐름을 다루면 `app/services/`에 둡니다.
+**수집 패키지는 다른 수집 패키지를 import 하지 않습니다.** 다만 둘 이상이 쓰는 코드를 복사하지는
+않습니다. 파일·네트워크를 모르는 순수 계산이면 `domain/`으로 올리고(`domain/geo.py`), 요청 흐름을
+다루면 `application/`에 둡니다.
 
 ### 비동기
 
@@ -60,10 +63,10 @@ schemas.py   (에이전트 안쪽) 그 에이전트의 data 구조
 | 위치 | 정책 |
 | --- | --- |
 | `client.py` | 외부 실패를 `SbizApiError`로 바꿔 올린다. 재시도는 여기서 한다 |
-| `local_data/` | 자료 불완전·버전 없음은 `DataValidationError`. 검증 실패 시 활성 자료를 바꾸지 않는다 |
-| `agentic/` | 도구 오류는 구조화된 결과, 계약·저장 오류는 요청 경계로 전파한다. 병렬 평가 실패를 수집한다 |
-| `llm/` | 모델 실패를 임의의 판단으로 대체하지 않고 올린다 |
-| `services/analysis.py` | 저장 오류를 에이전트 실패로 숨기지 않고 전파한다 |
+| `infrastructure/market_data/local/` | 자료 불완전·버전 없음은 `DataValidationError`. 검증 실패 시 활성 자료를 바꾸지 않는다 |
+| `ai/` · `application/` | 도구 오류는 구조화된 결과, 계약·저장 오류는 요청 경계로 전파한다. 병렬 평가 실패를 수집한다 |
+| `infrastructure/llm/` | 모델 실패를 임의의 판단으로 대체하지 않고 올린다 |
+| `application/analysis.py` | 저장 오류를 에이전트 실패로 숨기지 않고 전파한다 |
 | `api/v1/analyses.py` | 입력·외부 실패·계약·저장 실패를 API 계약의 HTTP 오류로 변환한다 |
 
 수집·계산 자료의 `AgentAnalysis.status` 네 가지 뜻은 다음과 같습니다.

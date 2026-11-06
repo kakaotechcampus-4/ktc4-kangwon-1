@@ -47,14 +47,17 @@ def is_module(dotted):
     return path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()
 
 
-def targets(path):
+def targets(path, module):
+    package = module.split(".")[:-1]
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
             yield from (alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        elif isinstance(node, ast.ImportFrom):
+            base = package[: len(package) - node.level + 1] if node.level else []
+            source = ".".join([*base, *([node.module] if node.module else [])])
             for alias in node.names:
-                full = f"{node.module}.{alias.name}"
-                yield full if is_module(full) else node.module
+                full = f"{source}.{alias.name}"
+                yield full if is_module(full) or not node.module else source
 
 
 def layer(dotted):
@@ -75,7 +78,7 @@ def violations():
         source = module_of(path)
         if layer(source) is None:
             continue
-        for target in targets(path):
+        for target in targets(path, source):
             if layer(target) is not None and not allowed(source, target):
                 found.add(f"{source} -> {target}")
     return found
@@ -130,6 +133,18 @@ class ArchitectureTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([line for line, _ in sql_strings(path)], [1, 2, 3, 4])
+
+    def test_relative_imports_are_resolved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "probe.py"
+            path.write_text(
+                "from ..infrastructure.persistence.connection import connect\nfrom . import text\n",
+                encoding="utf-8",
+            )
+            found = set(targets(path, "app.domain.probe"))
+        self.assertIn("app.infrastructure.persistence.connection", found)
+        self.assertIn("app.domain.text", found)
+        self.assertFalse(allowed("app.domain.probe", "app.infrastructure.persistence.connection"))
 
     def test_space_rules_use_public_helpers(self):
         tree = ast.parse((APP / "domain" / "space_rules.py").read_text(encoding="utf-8"))

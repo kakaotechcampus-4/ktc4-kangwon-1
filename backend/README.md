@@ -66,20 +66,18 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
 ```text
 app/
-  main.py · config.py · schemas.py · errors.py · address.py · geo.py · seoul.py
-  api/v1/        분석·질문·답변·이벤트 HTTP 경계와 작업 슬롯
-  services/      실행·재개·mock과 실패 저장
-  agentic/       decision, 자문, 질문, 평가자, 채점·fact·SQL·보고서 (최종 판단 코드는 여기에 모읍니다)
-  local_data/    자료 적재·활성화·버전 고정·계산 어댑터·계보
-  agents/        인구·개폐업·상권 계산과 수집 클라이언트, 지도 일치 규칙
-  industries/    공통 51업종·프로필·공간 요건·매핑·밀도 기준선 CSV
-  llm/           모델 호출, 예산, 역할별 설정
-  db/            요청 DB 연결·스키마·저장소
-  storage/       요청별 원문 보관과 비밀값 마스킹
-  education_zone.py   교육환경보호구역 조회 (다른 팀원 담당, 호출만 합니다)
-scripts/         자료 갱신, 기준선 생성, 재현 검증
-tests/           임시 DB와 API·모델 대역으로 도는 회귀 시험
+  main.py          앱 조립(설정·DB·작업 슬롯·라우터)
+  api/v1/          HTTP 경계와 작업 슬롯. application만 부릅니다
+  application/     분석 실행·재개·인증·작업, fact·스냅숏·리포트 확정, 로컬 자료 채점
+  ai/              decision 도구 루프, 자문, 질문, 평가자 4명, 도구 실행
+  domain/          공개 계약(schemas·contracts), 채점(scoring·code90·공간 규칙), 51업종·기준값
+  infrastructure/  요청 DB(persistence), 시장 자료(market_data), 외부 API(clients), LLM, 설정·mock
+  shared/          canonical JSON·시각·스레드 격리·비밀값 마스킹·로그 정제
+scripts/           자료 갱신, 기준선 생성, 재현 검증
+tests/             임시 DB와 API·모델 대역으로 도는 회귀 시험
 ```
+
+계층 방향은 `tests/test_architecture.py`가 검사합니다(domain → shared만, application → domain·shared, ai → application·domain·shared, infrastructure → domain·shared·application.ports, api → application·domain·shared). 아직 남은 예외는 `tests/fixtures/architecture_allowlist.txt`에 있고 줄어들기만 합니다.
 
 수집 클라이언트(`app/infrastructure/market_data/*/client.py`)는 자료 갱신과 기준선 연구에만 쓰며, 일반 분석 요청은 기본 자료 API를 다시 호출하지 않습니다.
 업종 체계와 매핑은 [업종 README](app/domain/industries/README.md), 인구·상권·지도 계산은 각 폴더의 README를 참고하세요.

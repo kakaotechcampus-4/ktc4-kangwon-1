@@ -1,7 +1,7 @@
 # 경쟁업체 분석 지표 명세
 
 이 문서는 2026-09의 기존 상권 출력과 연구 해석을 보존합니다. 현재 공개 분석은 고정 로컬 자료와
-51업종 코드 채점을 사용합니다. 현재 구조·자료 범위는 [상권 README](../backend/app/agents/commercial_area/README.md),
+51업종 코드 채점을 사용합니다. 현재 구조·자료 범위는 [상권 README](../backend/app/infrastructure/market_data/commercial_area/README.md),
 배점·등급은 [채점표 v0.8](decision-prompt-rubric.md)을 따르며 아래의 옛 업종 수·출력 경로를 현재 계약으로 사용하지 않습니다.
 
 `commercial_area` 에이전트가 결정 에이전트에 넘기는 지표 전부의 **정의·수식·단위·해석 방향**입니다.
@@ -9,7 +9,7 @@
 결정 에이전트 프롬프트가 "필드 이름, 설명, 단위와 실제 값을 함께 읽습니다"로 동작하므로,
 **이 문서에 적힌 이름과 단위가 곧 인터페이스**입니다. 필드명을 바꿀 때는 결정 에이전트 담당과 함께 바꿉니다.
 
-- 자료 구조 전체: [`backend/app/agents/commercial_area/README.md`](../backend/app/agents/commercial_area/README.md)
+- 자료 구조 전체: [`backend/app/agents/commercial_area/README.md`](../backend/app/infrastructure/market_data/commercial_area/README.md)
 - 수식 구현: `backend/app/agents/commercial_area/metrics.py`
 - 논문 근거 상세: `부동산 agent/논문근거_경쟁지표.md` (팀 문서)
 
