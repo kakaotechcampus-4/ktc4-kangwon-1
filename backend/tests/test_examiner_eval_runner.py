@@ -16,16 +16,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from openai.types.chat import ChatCompletionMessage
 
-from app.agentic import evaluators, examiner
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.agentic.runtime import DecisionLoop
-from app.agentic.scoring import WEIGHTS, result, summarize
-from app.agentic.snapshot import persist_report
-from app.db.connection import initialize
-from app.db.repository import create_request
-from app.industries.catalog import INDUSTRIES
-from app.schemas import Site
-from app.storage.raw import capture_scope
+from app.ai import evaluators, examiner
+from app.ai.runtime import DecisionLoop
+from app.application.snapshot import persist_report
+from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.schemas import Site
+from app.domain.scoring import WEIGHTS, result, summarize
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 from examiner_eval import cli, runner, store
 from examiner_eval.cases import dump_cases, load_cases
 from examiner_eval.generator import build_cases
@@ -120,7 +120,7 @@ def real_model(request):
     with (
         patch.dict(os.environ, REAL_ENV),
         patch.object(cli, "load_environment", Mock()) as load,
-        patch("app.llm.client._request", request),
+        patch("app.infrastructure.llm.client._request", request),
     ):
         yield load
 

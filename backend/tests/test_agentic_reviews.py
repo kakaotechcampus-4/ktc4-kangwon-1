@@ -6,9 +6,9 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.agentic.evaluators import PERSONAS
-from app.db.connection import connect
+from app.ai.evaluators import PERSONAS
+from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
 
 
@@ -18,7 +18,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def test_invalid_issue_does_not_discard_valid_issue(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         replies = []
 
@@ -62,17 +62,17 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        from app.agentic.evaluators import review
+        from app.ai.evaluators import review
 
         with connect(self.scope.path) as db:
             fid = db.execute("SELECT fact_id FROM facts LIMIT 1").fetchone()[0]
         with (
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value={"draft_id": loop.done.report_id, "facts": [{"fact_id": fid}]},
             ),
             patch(
-                "app.agentic.evaluators.fact_rows",
+                "app.ai.evaluators.fact_rows",
                 return_value={fid: {"citable": True, "status": "observed"}},
             ),
         ):
@@ -85,9 +85,9 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replies[0]["data"]["rejected"][0]["issue_id"], "invalid")
 
     async def run_truncated_review(self, truncations):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
-        from app.llm.client import LLMResponseError
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
+        from app.infrastructure.llm.client import LLMResponseError
 
         seen = []
 
@@ -110,7 +110,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
         with patch(
-            "app.agentic.examiner.review_packet",
+            "app.ai.examiner.review_packet",
             return_value={"draft_id": loop.done.report_id, "facts": []},
         ):
             result = await review(
@@ -132,8 +132,8 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(seen), 3)
 
     async def periods_seen(self, actor):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
 
         db = sqlite3.connect(self.path)
         db.row_factory = sqlite3.Row
@@ -176,8 +176,8 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
             ],
         }
         target = {
-            "examiner": "app.agentic.examiner.review_packet",
-            "founder": "app.agentic.founder.review_packet",
+            "examiner": "app.ai.examiner.review_packet",
+            "founder": "app.ai.founder.review_packet",
         }[actor]
         with patch(target, return_value=packet):
             await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
@@ -197,7 +197,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("2023년", reply)
 
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         entered = set()
         ready = asyncio.Event()

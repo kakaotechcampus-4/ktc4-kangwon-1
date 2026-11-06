@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.address import GeocodeError
-from app.industries.catalog import INDUSTRIES
-from app.schemas import Site
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.schemas import Site
+from app.infrastructure.clients.address import GeocodeError
 from backtest.run import STATE, SUMMARY, check_resume_inputs, file_sha256, main, parse, run_rows
 
 CODES = list(INDUSTRIES)[:3]

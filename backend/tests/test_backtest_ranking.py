@@ -1,6 +1,6 @@
 import unittest
 
-from app.agentic import scoring
+from app.domain import scoring
 from backtest.ranking import G_INDUSTRIES, ITEMS, count_ranks, rank_rows, score_rows, target_summary
 
 

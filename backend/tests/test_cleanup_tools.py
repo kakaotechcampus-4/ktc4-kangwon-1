@@ -10,21 +10,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.agentic.budget import RuntimeBudget
-from app.agentic.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
-from app.agentic.report import ReportInvalid, finalize, validate_l_records
-from app.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
-from app.agentic.tools import ToolExecutor, _audit
-from app.db.connection import connect, initialize
-from app.llm.budget import BudgetExceeded
-from app.local_data.adapter import LocalAdapter
-from app.local_data.database import LocalDataDB
-from app.local_data.persistence import register_cell
-from app.local_data.provenance import save_snapshot
-from app.schemas import Site
-from app.storage.raw import capture_scope
-from app.storage.scrub import env_secrets, scrub, scrub_text
-from app.text import has_digit
+from app.ai.budget import RuntimeBudget
+from app.ai.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
+from app.ai.tools import ToolExecutor, _audit
+from app.application.local_snapshot import register_cell
+from app.application.report import ReportInvalid, finalize, validate_l_records
+from app.domain.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
+from app.domain.schemas import Site
+from app.domain.text import has_digit
+from app.infrastructure.llm.budget import BudgetExceeded
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.provenance import save_snapshot
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.shared.scrub import env_secrets, scrub, scrub_text
 
 
 class BudgetBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -158,7 +158,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
         }
 
     def validate(self, proposal, facts):
-        with patch("app.agentic.report.fact_rows", return_value=facts):
+        with patch("app.application.report.fact_rows", return_value=facts):
             return validate_l_records(
                 self.scope,
                 [LRecord.model_validate(r) for r in proposal["L_records"]],

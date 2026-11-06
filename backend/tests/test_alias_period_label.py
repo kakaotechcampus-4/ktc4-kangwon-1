@@ -3,13 +3,7 @@
 import json
 import unittest
 
-from app.agentic.aliases import (
-    decode,
-    encode,
-    encode_messages,
-    label_periods,
-    labels_periods,
-)
+from app.ai.aliases import decode, encode, encode_messages, label_periods, labels_periods
 from tests import test_simple_l_inputs as fixtures
 
 

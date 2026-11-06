@@ -11,19 +11,24 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.agents.business_lifecycle.area_resolver import (
+from app.infrastructure.market_data.business_lifecycle.area_resolver import (
     BusinessAreaResolverError,
     _read_polygon_record,
     load_shape_features,
     read_dbf,
     read_polygon_shapes,
 )
-from app.agents.commercial_area.client import SbizApiError, StoreClient
-from app.agents.commercial_area.config import Settings as CommercialSettings
-from app.agents.commercial_area.metrics import build_radius_slices
-from app.agents.commercial_area.schemas import MiddleCode, Store
-from app.agents.floating_population.metrics import trend
-from app.agents.floating_population.models import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
+from app.infrastructure.market_data.commercial_area.client import SbizApiError, StoreClient
+from app.infrastructure.market_data.commercial_area.config import Settings as CommercialSettings
+from app.infrastructure.market_data.commercial_area.metrics import build_radius_slices
+from app.infrastructure.market_data.commercial_area.schemas import MiddleCode, Store
+from app.infrastructure.market_data.floating_population.metrics import trend
+from app.infrastructure.market_data.floating_population.models import (
+    AGE_BANDS,
+    DAYS,
+    TIME_BANDS,
+    FlpopRecord,
+)
 
 
 def _flpop(quarter: str, total: float) -> FlpopRecord:
@@ -41,7 +46,7 @@ def _flpop(quarter: str, total: float) -> FlpopRecord:
 
 class ShapePairingTests(unittest.TestCase):
     def test_shape_cache_reuses_parsing_and_refreshes_changed_files(self):
-        module = "app.agents.business_lifecycle.area_resolver"
+        module = "app.infrastructure.market_data.business_lifecycle.area_resolver"
         with tempfile.TemporaryDirectory() as directory:
             shp = Path(directory) / "cache.shp"
             for suffix in (".shp", ".shx", ".dbf", ".prj"):
@@ -67,10 +72,15 @@ class ShapePairingTests(unittest.TestCase):
             for suffix in (".shp", ".shx", ".dbf", ".prj"):
                 shp.with_suffix(suffix).write_bytes(b"x")
             with (
-                patch("app.agents.business_lifecycle.area_resolver._validate_projection"),
-                patch("app.agents.business_lifecycle.area_resolver.read_dbf", return_value=attrs),
                 patch(
-                    "app.agents.business_lifecycle.area_resolver.read_polygon_shapes",
+                    "app.infrastructure.market_data.business_lifecycle.area_resolver._validate_projection"
+                ),
+                patch(
+                    "app.infrastructure.market_data.business_lifecycle.area_resolver.read_dbf",
+                    return_value=attrs,
+                ),
+                patch(
+                    "app.infrastructure.market_data.business_lifecycle.area_resolver.read_polygon_shapes",
                     return_value=shapes,
                 ),
             ):
@@ -181,7 +191,9 @@ class CommercialClientTests(unittest.IsolatedAsyncioTestCase):
 
         settings = CommercialSettings(sbiz_service_key="key", max_retries=2, retry_backoff_s=40)
         client = StoreClient(settings, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-        with patch("app.agents.commercial_area.client.asyncio.sleep", new=AsyncMock()) as sleep:
+        with patch(
+            "app.infrastructure.market_data.commercial_area.client.asyncio.sleep", new=AsyncMock()
+        ) as sleep:
             await client._request_page(37.5, 127.0, 500, 1)
         self.assertEqual([call.args[0] for call in sleep.await_args_list], [30.0, 30.0])
 
@@ -199,7 +211,9 @@ class CommercialClientTests(unittest.IsolatedAsyncioTestCase):
             sbiz_service_key="key", max_retries=1, retry_backoff_s=float("nan")
         )
         client = StoreClient(settings, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-        with patch("app.agents.commercial_area.client.asyncio.sleep", new=AsyncMock()) as sleep:
+        with patch(
+            "app.infrastructure.market_data.commercial_area.client.asyncio.sleep", new=AsyncMock()
+        ) as sleep:
             await client._request_page(37.5, 127.0, 500, 1)
         sleep.assert_awaited_once_with(1.5)
 

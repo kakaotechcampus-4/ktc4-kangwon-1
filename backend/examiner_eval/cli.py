@@ -9,8 +9,8 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
-from app.config import load_environment
-from app.llm.config import LLMSettings
+from app.infrastructure.config import load_environment
+from app.infrastructure.llm.config import LLMSettings
 from examiner_eval.cases import dump_cases, load_cases
 from examiner_eval.generator import build_cases
 from examiner_eval.runner import (

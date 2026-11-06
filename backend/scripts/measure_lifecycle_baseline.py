@@ -14,15 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402
 
-from app.agents.business_lifecycle.client import (  # noqa: E402
+from app.domain.industries.catalog import INDUSTRIES_WITHOUT_SEOUL  # noqa: E402
+from app.infrastructure.config import load_environment  # noqa: E402
+from app.infrastructure.market_data.business_lifecycle.client import (  # noqa: E402
     get_api_key,
     get_recent_quarters,
     normalize_row,
 )
-from app.agents.business_lifecycle.preprocess import aggregate_rows  # noqa: E402
-from app.config import load_environment  # noqa: E402
-from app.industries.catalog import INDUSTRIES_WITHOUT_SEOUL  # noqa: E402
-from app.seoul import request_json  # noqa: E402
+from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows  # noqa: E402
+from app.infrastructure.market_data.seoul import request_json  # noqa: E402
 
 SERVICE = "VwsmMegaStorW"  # OA-22174 서울시 상권분석서비스(점포-서울시)
 PAGE_SIZE = 1000

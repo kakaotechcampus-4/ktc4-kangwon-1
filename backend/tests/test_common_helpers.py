@@ -8,12 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
-from app.agents.commercial_area import baseline as density
-from app.agents.floating_population import baseline as floating
-from app.canonical import canonical_hash, canonical_json, file_sha256
-from app.clock import utc_now_iso
-from app.concurrency import run_in_thread
-from app.stats import percentile_rank
+from app.domain.baselines import commercial_area as density
+from app.domain.baselines import floating_population as floating
+from app.domain.stats import percentile_rank
+from app.shared.canonical import canonical_hash, canonical_json, file_sha256
+from app.shared.clock import utc_now_iso
+from app.shared.concurrency import run_in_thread
 
 
 class CommonHelperTests(unittest.TestCase):

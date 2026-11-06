@@ -76,7 +76,7 @@ class HttpLogProtectionTests(unittest.IsolatedAsyncioTestCase):
     def test_uvicorn_access_format_survives_query_redaction(self):
         from uvicorn.logging import AccessFormatter
 
-        from app.logging import _ACCESS_QUERY_FILTER
+        from app.shared.logging import _ACCESS_QUERY_FILTER
 
         record = logging.LogRecord(
             "uvicorn.access",
@@ -101,7 +101,7 @@ class HttpLogProtectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("307", line)
 
     def test_access_template_with_args_is_also_redacted(self):
-        from app.logging import _ACCESS_QUERY_FILTER
+        from app.shared.logging import _ACCESS_QUERY_FILTER
 
         record = logging.LogRecord(
             "uvicorn.access",

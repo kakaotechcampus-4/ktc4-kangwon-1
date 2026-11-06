@@ -4,8 +4,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.agentic.contracts import ConditionExcludedCandidate
-from app.agentic.report import condition_excluded
+from app.application.report import condition_excluded
+from app.domain.contracts import ConditionExcludedCandidate
 
 
 def row(code, name, lower, *, excluded=False, regulation="해당 없음", reasons=()):

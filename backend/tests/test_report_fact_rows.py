@@ -2,11 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.agentic.facts import register_fact
-from app.agentic.report import fact_rows
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.storage.raw import capture_scope
+from app.application.facts import register_fact
+from app.application.report import fact_rows
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class ReportFactRowsTests(unittest.IsolatedAsyncioTestCase):

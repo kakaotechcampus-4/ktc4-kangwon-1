@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic import aliases, evaluators, examiner
-from app.agentic.tools import ToolExecutor
+from app.ai import aliases, evaluators, examiner
+from app.ai.tools import ToolExecutor
 from examiner_eval import frozen_v1
 from examiner_eval.variants import VARIANTS, use_variant
 

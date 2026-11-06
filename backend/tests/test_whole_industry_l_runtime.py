@@ -6,15 +6,15 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.agentic.facts import register_fact
-from app.agentic.runtime import DecisionLoop
-from app.agentic.scoring import WEIGHTS, result, summarize
-from app.agentic.snapshot import persist_report
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.industries.catalog import INDUSTRIES
-from app.schemas import Site
-from app.storage.raw import capture_scope
+from app.ai.runtime import DecisionLoop
+from app.application.facts import register_fact
+from app.application.snapshot import persist_report
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.schemas import Site
+from app.domain.scoring import WEIGHTS, result, summarize
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class WholeIndustryLTests(unittest.IsolatedAsyncioTestCase):

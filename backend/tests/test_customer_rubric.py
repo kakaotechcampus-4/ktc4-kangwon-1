@@ -11,16 +11,16 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from app.agentic import customer_rubric
-from app.agentic.contracts import (
+from app.ai import customer_rubric
+from app.ai.evaluators import PERSONAS
+from app.domain.contracts import (
     CustomerCheck,
     FactReferenceSegment,
     FitCheck,
     SubmitDraftInput,
     SubmitLInput,
 )
-from app.agentic.evaluators import PERSONAS
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
 from tests import test_agentic_runtime as fixtures
 
 CODES = list(INDUSTRIES)[:5]
@@ -241,8 +241,8 @@ class ReviewIntegrationTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def observed_fact(self):
-        from app.agentic.facts import register_fact
-        from app.db.connection import connect
+        from app.application.facts import register_fact
+        from app.infrastructure.persistence.connection import connect
 
         response = await self.scope.record(
             source="floating_population",
@@ -268,8 +268,8 @@ class ReviewIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_customer_review_merges_model_points_and_limits_slots(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
 
         fact = await self.observed_fact()
         packets, replies = [], []
@@ -334,8 +334,8 @@ class ReviewIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rubric.model_status, "completed")
 
     async def test_rejected_submissions_keep_fit_points(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
 
         fact = await self.observed_fact()
         replies = []
@@ -385,8 +385,8 @@ class ReviewIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((k6.points, k6.fact_ids), (20, [fact]))
 
     async def test_other_evaluators_do_not_see_fit_field(self):
-        from app.agentic.evaluators import review
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
 
         seen = []
 
@@ -416,7 +416,7 @@ class RealDbTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown = fixtures.RuntimeTests.asyncTearDown
 
     async def draft_loop(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.submit_l(SubmitLInput(finish=True))

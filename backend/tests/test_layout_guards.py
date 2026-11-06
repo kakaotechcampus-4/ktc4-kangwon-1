@@ -7,8 +7,8 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from app import config
-from app.db import connection
+from app.infrastructure import config
+from app.infrastructure.persistence import connection
 
 BACKEND = Path(__file__).resolve().parents[1]
 APP = BACKEND / "app"

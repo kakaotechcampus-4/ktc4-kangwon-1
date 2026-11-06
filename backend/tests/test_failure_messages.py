@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.address import GeocodeError
-from app.db.connection import connect, initialize
-from app.db.repository import create_request, fail_interrupted, mark_running
-from app.services.analysis import public_failure
+from app.application.analysis import public_failure
+from app.infrastructure.clients.address import GeocodeError
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.repository import create_request, fail_interrupted, mark_running
 
 INTERRUPTED = "서비스 점검으로 분석이 멈췄어요. 다시 분석해 주세요."
 

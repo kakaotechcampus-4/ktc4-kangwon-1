@@ -21,11 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.industries import (  # noqa: E402
-    LEGACY70_LINK_PATH,
-    MASTER_PATH,
-    SEOUL_LINK_PATH,
-)
+from app.domain.industries import LEGACY70_LINK_PATH, MASTER_PATH, SEOUL_LINK_PATH  # noqa: E402
 
 MATCH_SOURCE = (
     Path(__file__).resolve().parents[1] / "examples" / "schema_compare" / "업종매칭_소분류근거.csv"
@@ -101,8 +97,8 @@ def build_seoul_links(master: dict[str, dict[str, str]]) -> list[dict]:
 
 def build_legacy_links(seoul_rows: list[dict], master: dict[str, dict[str, str]]) -> list[dict]:
     """개폐업 업종 → 중분류. business_lifecycle은 읽기만 한다."""
-    from app.industries.catalog import INDUSTRIES as service_industries
-    from app.industries.catalog import SEOUL_TO_INDUSTRY as seoul_to_service
+    from app.domain.industries.catalog import INDUSTRIES as service_industries
+    from app.domain.industries.catalog import SEOUL_TO_INDUSTRY as seoul_to_service
 
     seoul_to_middle = {r["seoul_code"]: r["middle_code"] for r in seoul_rows}
     by_legacy: dict[int, dict[str, str]] = {}

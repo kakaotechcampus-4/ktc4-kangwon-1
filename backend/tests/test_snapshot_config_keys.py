@@ -5,14 +5,14 @@ import hashlib
 import unittest
 from pathlib import Path
 
-from app.agentic import code90
-from app.agentic.snapshot import snapshot_config
-from app.agents.commercial_area import baseline as density_baseline
-from app.canonical import canonical_hash
-from app.local_data import score_reference
+from app.application.snapshot import snapshot_config
+from app.domain import code90
+from app.domain.baselines import commercial_area as density_baseline
+from app.infrastructure.market_data.local import score_reference
+from app.shared.canonical import canonical_hash
 
 CODE90_LOGIC = "92394464"
-REFERENCE_LOGIC = "68d23072"
+REFERENCE_LOGIC = "ca2260a8"
 
 
 def logic_fingerprint(module):
@@ -28,6 +28,9 @@ def logic_fingerprint(module):
             first = node.body[0] if node.body else None
             if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
                 node.body = node.body[1:] or [ast.Pass()]
+            node.body = [
+                child for child in node.body if not isinstance(child, (ast.Import, ast.ImportFrom))
+            ] or [ast.Pass()]
     dump = ast.dump(ast.Module(body=body, type_ignores=[]))
     return hashlib.sha256(dump.encode("utf-8")).hexdigest()[:8]
 

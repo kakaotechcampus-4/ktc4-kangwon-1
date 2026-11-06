@@ -2,8 +2,8 @@
 
 import unittest
 
-from app.agentic.space_rules import FACILITY_NAMES, SpaceJudgement, judge, load_requirements
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.space_rules import FACILITY_NAMES, SpaceJudgement, judge, load_requirements
 
 
 def profile(**levels):

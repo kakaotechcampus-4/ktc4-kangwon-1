@@ -28,7 +28,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.commercial_area.config import (  # noqa: E402
+from app.infrastructure.market_data.commercial_area.config import (  # noqa: E402
     PACKAGE_DIR,
     load_dotenv_if_present,
 )

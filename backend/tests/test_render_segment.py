@@ -4,7 +4,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from app.agentic.report import join_segments, limitation_segments, render_segment
+from app.application.report import join_segments, limitation_segments, render_segment
 
 
 def fact(metric, value, unit=""):
@@ -95,7 +95,7 @@ class JoinSegmentsTests(unittest.TestCase):
 
 class LimitationSegmentsTests(unittest.TestCase):
     def test_server_sentences_do_not_stick_to_model_text(self):
-        from app.agentic.contracts import TextSegment
+        from app.domain.contracts import TextSegment
 
         model = [TextSegment(type="text", text="표본이 작음")]
         segments = limitation_segments(model, ["서울 밖 점포 미반영", "검토를 마쳤습니다."])

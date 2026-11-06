@@ -12,14 +12,14 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.concurrency import run_in_thread  # noqa: E402
-from app.config import load_environment  # noqa: E402
-from app.db import repository  # noqa: E402
-from app.db.connection import connect, initialize  # noqa: E402
-from app.local_data.adapter import LocalAdapter  # noqa: E402
-from app.local_data.persistence import persist_local  # noqa: E402
-from app.schemas import AnalysisTask, Site  # noqa: E402
-from app.storage.raw import capture_scope  # noqa: E402
+from app.application.local_snapshot import persist_local  # noqa: E402
+from app.domain.schemas import AnalysisTask, Site  # noqa: E402
+from app.infrastructure.config import load_environment  # noqa: E402
+from app.infrastructure.market_data.local.adapter import LocalAdapter  # noqa: E402
+from app.infrastructure.persistence import repository  # noqa: E402
+from app.infrastructure.persistence.connection import connect, initialize  # noqa: E402
+from app.infrastructure.persistence.raw_capture import capture_scope  # noqa: E402
+from app.shared.concurrency import run_in_thread  # noqa: E402
 from scripts.verify_rubric_reproduction import verify  # noqa: E402
 
 

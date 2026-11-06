@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.db.connection import connect, initialize
-from app.db.repository import create_request, mark_running
-from app.storage.raw import capture_scope, scoped_reader
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope, scoped_reader
+from app.infrastructure.persistence.repository import create_request, mark_running
 
 
 class DedupTests(unittest.IsolatedAsyncioTestCase):
@@ -33,7 +33,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_shared_body_rows_views_and_lineage(self):
-        from app.agentic.facts import register_fact
+        from app.application.facts import register_fact
 
         scopes = []
         for name in ("one", "two"):
@@ -77,7 +77,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_parallel_writes_are_serialized_and_each_page_atomic(self):
-        import app.storage.raw as raw
+        import app.infrastructure.persistence.raw_capture as raw
 
         original = raw._save_response
         active = 0
@@ -100,7 +100,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 12)
 
     async def test_failure_diagnostics_scrub_secrets_and_keep_public_message(self):
-        from app.services.analysis import _failure
+        from app.application.analysis import _failure
 
         mark_running("one", db_path=self.path)
         with patch.dict("os.environ", {"ELICE_API_KEY": "private-key"}):
@@ -120,10 +120,13 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_failed_page_rolls_back_body_rows_and_links(self):
-        from app.storage.raw import RawStorageError
+        from app.infrastructure.persistence.raw_capture import RawStorageError
 
         async with capture_scope("one", self.path) as scope:
-            with patch("app.storage.raw._natural", side_effect=ValueError("행 오류")):
+            with patch(
+                "app.infrastructure.persistence.raw_capture._natural",
+                side_effect=ValueError("행 오류"),
+            ):
                 with self.assertRaises(RawStorageError) as error:
                     await self.record(scope)
             self.assertIsInstance(error.exception.__cause__, ValueError)
@@ -132,7 +135,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(db.execute("SELECT count(*) FROM " + table).fetchone()[0], 0)
 
     async def test_lineage_validation_reads_references_in_batches(self):
-        from app.agentic.facts import register_fact
+        from app.application.facts import register_fact
 
         async with capture_scope("one", self.path) as scope:
             await scope.record(
@@ -169,7 +172,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancelled_write_notifies_worker_and_waits_for_exit(self):
         from threading import Event
 
-        from app.concurrency import run_in_thread
+        from app.shared.concurrency import run_in_thread
 
         started, stop, finished = Event(), Event(), Event()
 
@@ -189,8 +192,8 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
     async def test_service_failure_records_scoring_and_loop_stage(self):
         from contextlib import nullcontext
 
-        from app.services.analysis import execute_agentic_analysis
-        from app.services.mock import dependencies
+        from app.application.analysis import execute_agentic_analysis
+        from app.infrastructure.mock import dependencies
 
         async def generate(*args):
             raise OSError("모델 대역 오류")
@@ -198,7 +201,7 @@ class DedupTests(unittest.IsolatedAsyncioTestCase):
         for stage in ("채점", "루프"):
             mocked = (
                 patch(
-                    "app.services.analysis.persist_snapshot_scores",
+                    "app.application.analysis.persist_snapshot_scores",
                     side_effect=OSError("채점 오류"),
                 )
                 if stage == "채점"

@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.schemas import Site
-from app.storage.raw import capture_scope
+from app.domain.schemas import Site
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class RawToolTests(unittest.IsolatedAsyncioTestCase):
@@ -48,7 +48,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def test_direct_field_registered_and_request_isolation(self):
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
         reply = await query_raw(
             self.scope, "SELECT raw_row_id, store_count FROM v_raw_lifecycle WHERE store_count=5"
@@ -65,7 +65,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(foreign.data.rows, [])
 
     async def test_aggregate_uncitable_and_row_limit(self):
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
         aggregate = await query_raw(
             self.scope, "SELECT sum(store_count) AS total FROM v_raw_lifecycle"
@@ -77,7 +77,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(limited.truncated)
 
     async def test_denied_statements_and_functions(self):
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
         for sql in [
             "DELETE FROM raw_rows",
@@ -97,9 +97,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(reply.error.code, "SQL_DENIED")
 
     async def test_sql_timeout(self):
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
-        with patch("app.agentic.sql_tool.monotonic", side_effect=[0, 0, 3, 3, 3]):
+        with patch("app.ai.sql_tool.monotonic", side_effect=[0, 0, 3, 3, 3]):
             reply = await query_raw(
                 self.scope,
                 "SELECT sum(a.store_count*b.store_count) "
@@ -108,7 +108,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.error.code, "SQL_TIMEOUT")
 
     async def test_implicit_lineage_alias_and_expression_not_citable(self):
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
         reply = await query_raw(
             self.scope, "SELECT store_count AS amount FROM v_raw_lifecycle WHERE store_count=5"
@@ -126,10 +126,10 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_fact_storage_error_is_not_tool_error(self):
         import sqlite3
 
-        from app.agentic.sql_tool import query_raw
+        from app.ai.sql_tool import query_raw
 
         with patch(
-            "app.agentic.sql_tool.register_fact",
+            "app.ai.sql_tool.register_fact",
             side_effect=sqlite3.OperationalError("저장 실패"),
         ):
             with self.assertRaises(sqlite3.OperationalError):
@@ -138,7 +138,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_actor_permission_and_budget(self):
-        from app.agentic.tools import ToolExecutor
+        from app.ai.tools import ToolExecutor
 
         tool = ToolExecutor(
             self.scope,
@@ -156,7 +156,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def executor(self):
-        from app.agentic.tools import ToolExecutor
+        from app.ai.tools import ToolExecutor
 
         return ToolExecutor(
             self.scope,
@@ -172,7 +172,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_all_views_are_request_scoped(self):
-        from app.agentic.sql_tool import VIEWS, query_raw
+        from app.ai.sql_tool import VIEWS, query_raw
 
         for view, source in VIEWS.items():
             await self.scope.record(
@@ -214,9 +214,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(reply.data.contains_verified)
 
     async def test_stored_score_and_facts_are_typed(self):
-        from app.agentic.contracts import FactsResult, ScorecardResult
-        from app.agentic.scoring import WEIGHTS, result, summarize
-        from app.agentic.snapshot import persist_report
+        from app.application.snapshot import persist_report
+        from app.domain.contracts import FactsResult, ScorecardResult
+        from app.domain.scoring import WEIGHTS, result, summarize
 
         items = {key: result(key) for key in WEIGHTS}
         row = summarize("I201", items, "unknown")
@@ -236,9 +236,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(unknown.error.code, "INVALID_ARGUMENT")
 
     async def test_scorecard_exposes_source_limits_without_inventing_scores(self):
-        from app.agentic.contracts import ScorecardResult
-        from app.agentic.scoring import WEIGHTS, result, summarize
-        from app.agentic.snapshot import persist_report
+        from app.application.snapshot import persist_report
+        from app.domain.contracts import ScorecardResult
+        from app.domain.scoring import WEIGHTS, result, summarize
 
         rows = [
             summarize(code, {key: result(key) for key in WEIGHTS}, "unknown")
@@ -263,11 +263,11 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(item.points)
 
     async def test_scorecard_follows_confirmed_space(self):
-        from app.agentic.contracts import ScorecardResult
-        from app.agentic.questions import save_confirmed_space
-        from app.agentic.scoring import WEIGHTS, apply_space, result, summarize
-        from app.agentic.snapshot import persist_report
-        from app.agentic.space_rules import judge, load_requirements
+        from app.ai.questions import save_confirmed_space
+        from app.application.snapshot import persist_report
+        from app.domain.contracts import ScorecardResult
+        from app.domain.scoring import WEIGHTS, apply_space, result, summarize
+        from app.domain.space_rules import judge, load_requirements
 
         requirements = load_requirements()
         rows = [
@@ -301,7 +301,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated.status, "ok")
 
     async def test_map_no_llm_statuses_and_shared_cache(self):
-        from app.agentic.contracts import MapResult
+        from app.domain.contracts import MapResult
 
         class Places:
             calls = 0
@@ -336,7 +336,10 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         tool = self.executor()
         client = Places()
         tool.shared.map_client = client
-        with patch("app.llm.session._new_client", side_effect=AssertionError("모델 생성 금지")):
+        with patch(
+            "app.infrastructure.llm.session._new_client",
+            side_effect=AssertionError("모델 생성 금지"),
+        ):
             reply = await tool.execute("map_search", {"industry_code": "I202", "radius_m": 500})
             second = await tool.for_actor("decision").execute(
                 "map_search", {"industry_code": "I202", "radius_m": 500}
@@ -378,8 +381,8 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool.shared.map_client.calls, 0)
 
     async def test_regulation_shared_original_output_and_unverified(self):
-        from app.agentic.contracts import RegulationResult
-        from app.education_zone import EducationZoneScan
+        from app.domain.contracts import RegulationResult
+        from app.infrastructure.clients.education_zone import EducationZoneScan
 
         scan = EducationZoneScan(
             status="ok",

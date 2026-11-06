@@ -7,16 +7,21 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agents.commercial_area.client import CSV_FIELDS
-from app.agents.floating_population.models import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
-from app.db import repository
-from app.db.connection import connect, initialize
-from app.geo import to_epsg5181
-from app.local_data.adapter import LocalAdapter
-from app.local_data.database import LocalDataDB
-from app.local_data.persistence import metric_periods, persist_local, register_cell
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import capture_scope
+from app.application.local_snapshot import metric_periods, persist_local, register_cell
+from app.domain.geo import to_epsg5181
+from app.domain.schemas import AnalysisTask, Site
+from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS
+from app.infrastructure.market_data.floating_population.models import (
+    _AGE_KEYS,
+    _DAY_KEYS,
+    TIME_BANDS,
+    PopulationRecord,
+)
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
 from tests.local_data_fixture import complete_versions
 
 
@@ -149,11 +154,11 @@ class LocalAdapterTests(unittest.TestCase):
                 with (
                     patch("httpx.AsyncClient", side_effect=AssertionError("API 금지")),
                     patch(
-                        "app.agents.commercial_area.client.StoreClient",
+                        "app.infrastructure.market_data.commercial_area.client.StoreClient",
                         side_effect=AssertionError("점포 API 금지"),
                     ),
                     patch(
-                        "app.agents.floating_population.client.SeoulOpenDataClient",
+                        "app.infrastructure.market_data.floating_population.client.SeoulOpenDataClient",
                         side_effect=AssertionError("서울 API 금지"),
                     ),
                 ):
@@ -174,8 +179,8 @@ class LocalAdapterTests(unittest.TestCase):
                             metric="place_name",
                             unit="텍스트",
                         )
-                        from app.agentic.contracts import GetFactsInput
-                        from app.agentic.read_tools import get_facts
+                        from app.ai.read_tools import get_facts
+                        from app.domain.contracts import GetFactsInput
 
                         reply = await get_facts(scope, GetFactsInput(fact_ids=[fact]))
                         self.assertEqual(reply.facts[0].spatial_scope["radius_m"], 500)
@@ -263,7 +268,7 @@ class LocalAdapterTests(unittest.TestCase):
                     from types import SimpleNamespace
                     from unittest.mock import AsyncMock
 
-                    from app.services.analysis import execute_agentic_analysis
+                    from app.application.analysis import execute_agentic_analysis
 
                     outcome = SimpleNamespace(
                         status="draft_available",
@@ -279,11 +284,11 @@ class LocalAdapterTests(unittest.TestCase):
                     )
                     with (
                         patch(
-                            "app.services.analysis.DecisionLoop.create",
+                            "app.application.analysis.DecisionLoop.create",
                             AsyncMock(return_value=loop),
                         ),
                         patch(
-                            "app.services.analysis.collect_preflight",
+                            "app.application.analysis.collect_preflight",
                             AsyncMock(return_value=({}, None)),
                         ),
                     ):

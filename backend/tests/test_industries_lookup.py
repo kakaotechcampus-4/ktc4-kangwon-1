@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.industries import lookup
+from app.domain.industries import lookup
 
 
 class NameNormalizationTests(unittest.TestCase):

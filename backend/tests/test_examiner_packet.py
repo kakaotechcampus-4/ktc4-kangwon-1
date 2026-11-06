@@ -6,11 +6,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.agentic import evaluators, examiner
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.canonical import canonical_json
-from app.db.connection import connect
-from app.text import has_digit
+from app.ai import evaluators, examiner
+from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.domain.text import has_digit
+from app.infrastructure.persistence.connection import connect
+from app.shared.canonical import canonical_json
 from tests import test_agentic_runtime as fixtures
 
 ALIAS = re.compile(r"^[0-9a-f]{8}$")
@@ -80,9 +80,9 @@ class ExaminerPacketLimitTests(unittest.TestCase):
             {"type": "fact", "fact_id": ids[-1], "format": "count"},
         ]
         with (
-            patch("app.agentic.examiner._score_items", return_value=items),
-            patch("app.agentic.examiner.fact_rows", return_value=rows),
-            patch("app.agentic.examiner.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.examiner._score_items", return_value=items),
+            patch("app.ai.examiner.fact_rows", return_value=rows),
+            patch("app.ai.examiner.encode", side_effect=lambda scope, value: value),
         ):
             return ids, segments, examiner.review_packet(None, draft(segments))
 
@@ -143,9 +143,9 @@ class ExaminerPacketLimitTests(unittest.TestCase):
 class ExaminerChecksTests(unittest.TestCase):
     def build(self, items, rows, reasons):
         with (
-            patch("app.agentic.examiner._score_items", return_value={"I201": items}),
-            patch("app.agentic.examiner.fact_rows", return_value=rows),
-            patch("app.agentic.examiner.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.examiner._score_items", return_value={"I201": items}),
+            patch("app.ai.examiner.fact_rows", return_value=rows),
+            patch("app.ai.examiner.encode", side_effect=lambda scope, value: value),
         ):
             return examiner.review_packet(None, draft(reasons))
 
@@ -248,7 +248,7 @@ class ExaminerPacketStoreTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown = fixtures.RuntimeTests.asyncTearDown
 
     async def test_packet_from_saved_draft_cites_only_observed_aliases(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site)
         await loop.submit_l(SubmitLInput(finish=True))
@@ -274,7 +274,7 @@ class ExaminerPacketStoreTests(unittest.IsolatedAsyncioTestCase):
             found[industry_codes[0]][0]["fact_ids"] += [observed, unknown]
             return found
 
-        with patch("app.agentic.examiner._score_items", side_effect=linked):
+        with patch("app.ai.examiner._score_items", side_effect=linked):
             packet = examiner.review_packet(self.scope, loop.done)
         self.assertEqual(packet["draft_id"], loop.done.report_id)
         self.assertEqual([c["industry_code"] for c in packet["candidates"]], codes)

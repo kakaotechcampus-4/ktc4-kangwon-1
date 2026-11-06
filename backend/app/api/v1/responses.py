@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from app.schemas import AgentError, DecisionResult, FactView, RequestStatus, Schema, Text
+from app.domain.schemas import AgentError, DecisionResult, FactView, RequestStatus, Schema, Text
 
 
 class AcceptedAnalysis(BaseModel):

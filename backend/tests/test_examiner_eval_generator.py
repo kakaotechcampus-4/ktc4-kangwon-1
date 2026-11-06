@@ -4,8 +4,8 @@ import random
 import re
 import unittest
 
-from app.schemas import Site
-from app.text import has_digit
+from app.domain.schemas import Site
+from app.domain.text import has_digit
 from examiner_eval.generator import (
     BARE_PHRASES,
     COMPARE_PHRASES,

@@ -8,14 +8,14 @@ from unittest.mock import patch
 import httpx
 from openai import AsyncOpenAI
 
-from app.llm import client
-from app.llm.config import LLMSettings
+from app.infrastructure.llm import client
+from app.infrastructure.llm.config import LLMSettings
 
 
 class BudgetTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.assertIsNotNone(importlib.util.find_spec("app.llm.budget"))
-        from app.llm.budget import BudgetExceeded, LLMBudget, llm_scope
+        self.assertIsNotNone(importlib.util.find_spec("app.infrastructure.llm.budget"))
+        from app.infrastructure.llm.budget import BudgetExceeded, LLMBudget, llm_scope
 
         self.budget_class, self.exceeded, self.scope = LLMBudget, BudgetExceeded, llm_scope
 
@@ -70,7 +70,7 @@ class BudgetTests(unittest.IsolatedAsyncioTestCase):
             raise OSError("저장 실패")
 
         budget = self.budget_class(on_change=fail)
-        from app.llm.budget import BudgetStorageError
+        from app.infrastructure.llm.budget import BudgetStorageError
 
         with self.assertRaises(BudgetStorageError):
             await budget.reserve("decision", final=True)

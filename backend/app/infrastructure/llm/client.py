@@ -1,0 +1,282 @@
+"""HTTP 재시도·응답 종료 검증을 한 경계에 둡니다."""
+
+import asyncio
+import json
+import time
+from copy import deepcopy
+from typing import Any
+
+import httpx
+import openai
+from openai.lib.streaming.chat import AsyncChatCompletionStream
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
+from openai.types.chat.chat_completion import Choice
+
+from app.infrastructure.llm.budget import current_scope
+from app.infrastructure.llm.config import LLMSettings
+from app.infrastructure.llm.session import acquire_client
+
+RETRY_DELAYS = (1.0, 2.0)
+RETRY_HTTP_STATUSES = frozenset({429, 502, 503, 504})
+
+
+class LLMResponseError(RuntimeError):
+    """원문 대신 코드와 호출자가 정제한 진단 정보만 보존합니다."""
+
+    MESSAGES = {
+        "LLM_TIMEOUT": "모델 요청 시간이 초과됐습니다.",
+        "LLM_CONNECTION_ERROR": "모델 서버에 연결하지 못했습니다.",
+        "LLM_REQUEST_ERROR": "모델 요청 처리에 실패했습니다.",
+        "LLM_INVALID_RESPONSE": "모델이 유효한 응답을 반환하지 않았습니다.",
+        "LLM_OUTPUT_LIMIT": "모델 응답이 길이 제한으로 중단됐습니다.",
+        "LLM_REFUSED": "모델 응답이 거절되거나 필터링됐습니다.",
+        "LLM_INCOMPLETE": "모델이 예상한 종료 형식으로 응답을 완료하지 못했습니다.",
+        "LLM_INVALID_JSON": "모델 응답 형식이 올바른 JSON 객체가 아닙니다.",
+        "LLM_SCHEMA_INVALID": "모델 응답 형식이 올바르지 않습니다. 필드 검증에 실패했습니다.",
+    }
+
+    def __init__(self, code: str, **diagnostics: Any):
+        self.code = code
+        self.diagnostics = diagnostics
+        message = self.MESSAGES[code]
+        if code == "LLM_SCHEMA_INVALID":
+            message += " 확인 항목: " + ", ".join(diagnostics.get("fields", []))
+        super().__init__(message)
+
+
+class _DuplicateKey(ValueError):
+    def __init__(self, key: str):
+        super().__init__(key)
+        self.key = key
+
+
+class LLMHTTPError(RuntimeError):
+    """서버 원문 대신 허용된 진단 항목만 전달합니다."""
+
+    def __init__(self, status: int, body: Any):
+        super().__init__(f"모델 요청이 HTTP {status}로 거절되었습니다.")
+        error = body.get("error", body) if isinstance(body, dict) else {}
+        error = error if isinstance(error, dict) else {}
+        codes = {
+            "unsupported_value",
+            "unsupported_parameter",
+            "invalid_value",
+            "invalid_parameter",
+            "invalid_request_error",
+            "missing_required_parameter",
+            "model_not_found",
+            "invalid_api_key",
+            "insufficient_quota",
+            "rate_limit_exceeded",
+            "context_length_exceeded",
+            "permission_denied",
+        }
+        parameters = {
+            "reasoning_effort",
+            "model",
+            "messages",
+            "tools",
+            "tool_choice",
+            "parallel_tool_calls",
+            "response_format",
+            "max_tokens",
+            "max_completion_tokens",
+            "temperature",
+            "top_p",
+        }
+        code, parameter = error.get("code"), error.get("param")
+        self.diagnostics = {
+            "http_status": status,
+            "provider_code": code if isinstance(code, str) and code in codes else "unknown",
+            "parameter": parameter
+            if isinstance(parameter, str) and parameter in parameters
+            else "unknown",
+        }
+
+
+async def _complete(
+    messages: list[Any],
+    settings: LLMSettings,
+    *,
+    tools: list[Any] | None = None,
+    receipt: dict[str, Any] | None = None,
+) -> ChatCompletionMessage:
+    settings.require_credentials()
+    if receipt is not None and receipt.get("_record_raw"):
+        receipt["sent_messages"] = deepcopy(messages)
+    budget, role, final = current_scope()
+    metadata: dict[str, Any] = receipt if receipt is not None else {}
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            return await _attempt(messages, settings, tools, metadata, budget, role, final)
+        except (LLMResponseError, LLMHTTPError) as exc:
+            if delay is None or budget is None or not _transient(exc):
+                raise
+        await asyncio.sleep(delay)
+    raise AssertionError("unreachable")
+
+
+def _transient(exc: LLMResponseError | LLMHTTPError) -> bool:
+    if isinstance(exc, LLMHTTPError):
+        return (
+            exc.diagnostics["http_status"] in RETRY_HTTP_STATUSES
+            and exc.diagnostics["provider_code"] != "insufficient_quota"
+        )
+    return exc.code == "LLM_CONNECTION_ERROR"
+
+
+async def _attempt(
+    messages, settings, tools, metadata, budget, role, final
+) -> ChatCompletionMessage:
+    attempt = (
+        await budget.reserve(
+            role, final=final, input_chars=len(json.dumps(messages, ensure_ascii=False))
+        )
+        if budget is not None
+        else None
+    )
+    started = time.monotonic()
+    usage: list[Any] = []
+    status = "error"
+    try:
+        result = await _request(messages, settings, tools=tools, usage=usage, receipt=metadata)
+        status = "ok"
+        return result
+    finally:
+        if budget is not None and attempt is not None:
+            await budget.finish(
+                attempt,
+                status=status,
+                elapsed_ms=int((time.monotonic() - started) * 1000),
+                usage=usage[0] if usage else None,
+                model=metadata.get("model"),
+            )
+
+
+async def _request(messages, settings, *, tools, usage, receipt=None) -> ChatCompletionMessage:
+    options: dict[str, Any] = {}
+    if settings.max_tokens is not None:
+        options["max_completion_tokens"] = settings.max_tokens
+    if settings.reasoning_effort is not None:
+        options["reasoning_effort"] = settings.reasoning_effort
+    if tools is None:
+        options["response_format"] = {"type": "json_object"}
+    else:
+        options.update(tools=tools, tool_choice="required", parallel_tool_calls=False)
+    try:
+        async with acquire_client(
+            settings,
+            max_retries=0 if current_scope()[0] is not None else 1,
+        ) as client:
+            raw_stream = await client.chat.completions.create(
+                model=settings.model or "",
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
+                **options,
+            )
+            # SDK로 본문·도구 인자를 조립하고 기존 종료·JSON 검증을 그대로 적용합니다.
+            async with AsyncChatCompletionStream(
+                raw_stream=raw_stream, response_format=openai.omit, input_tools=openai.omit
+            ) as stream:
+                await stream.until_done()
+                response = stream.current_completion_snapshot
+    except openai.APIStatusError as exc:
+        raise LLMHTTPError(exc.status_code, exc.body) from None
+    except (openai.APITimeoutError, httpx.TimeoutException):
+        raise LLMResponseError("LLM_TIMEOUT") from None
+    except (openai.APIConnectionError, httpx.TransportError):
+        raise LLMResponseError("LLM_CONNECTION_ERROR") from None
+    except (openai.APIError, ValueError, TypeError):
+        raise LLMResponseError("LLM_REQUEST_ERROR") from None
+    except (AssertionError, AttributeError, IndexError, KeyError):
+        raise LLMResponseError("LLM_INVALID_RESPONSE") from None
+    if (
+        not isinstance(response, ChatCompletion)
+        or not isinstance(response.choices, list)
+        or not response.choices
+    ):
+        raise LLMResponseError("LLM_INVALID_RESPONSE")
+    usage.append(response.usage)
+    if receipt is not None:
+        if receipt.get("_record_raw"):
+            receipt["raw_response"] = response.model_dump(mode="json")
+        receipt.update(
+            model=response.model,
+            http_status=200,
+            usage=response.usage.model_dump() if response.usage is not None else None,
+        )
+    choice = response.choices[0]
+    if not isinstance(choice, Choice) or not isinstance(choice.message, ChatCompletionMessage):
+        raise LLMResponseError("LLM_INVALID_RESPONSE")
+    finish = choice.finish_reason
+    safe_finish = (
+        finish
+        if finish in {"stop", "length", "tool_calls", "content_filter", "function_call"}
+        else "unknown"
+    )
+    if choice.message.refusal or finish == "content_filter":
+        raise LLMResponseError("LLM_REFUSED", finish_reason=safe_finish)
+    if finish == "length":
+        raise LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason=safe_finish)
+    if finish != ("stop" if tools is None else "tool_calls"):
+        raise LLMResponseError("LLM_INCOMPLETE", finish_reason=safe_finish)
+    return choice.message
+
+
+async def complete_json(
+    system_prompt: str,
+    input_json: str,
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    message = await _complete(
+        [
+            {"role": "system", "content": system_prompt + "\n반드시 JSON 객체만 출력하세요."},
+            {"role": "user", "content": input_json},
+        ],
+        settings,
+        receipt=receipt,
+    )
+    try:
+        # 표준 JSON에 없는 NaN·Infinity도 모델의 잘못된 응답입니다.
+        def invalid_constant(_value: str) -> None:
+            raise ValueError
+
+        def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result = dict(pairs)
+            if len(result) != len(pairs):
+                seen: dict[str, Any] = {}
+                for key, value in pairs:
+                    if key in seen and not (
+                        isinstance(seen[key], list)
+                        and isinstance(value, list)
+                        and value[: len(seen[key])] == seen[key]
+                    ):
+                        raise _DuplicateKey(key)
+                    seen[key] = value
+            return result
+
+        result = json.loads(
+            message.content or "",
+            parse_constant=invalid_constant,
+            object_pairs_hook=unique_object,
+        )
+        if not isinstance(result, dict):
+            raise ValueError
+    except _DuplicateKey as error:
+        raise LLMResponseError("LLM_INVALID_JSON", duplicate_key=error.key[:50]) from None
+    except (ValueError, TypeError):
+        raise LLMResponseError("LLM_INVALID_JSON") from None
+    return result
+
+
+async def complete_tools(
+    messages: list[Any],
+    definitions: list[Any],
+    settings: LLMSettings,
+    *,
+    receipt: dict[str, Any] | None = None,
+) -> ChatCompletionMessage:
+    return await _complete(messages, settings, tools=definitions, receipt=receipt)

@@ -3,16 +3,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.agentic.facts import register_fact
-from app.agentic.questions import save_confirmed_space
-from app.agentic.scoring import WEIGHTS, result, summarize
-from app.agentic.snapshot import persist_report, persist_space_requirements
-from app.agentic.space import ensure_space_fits
-from app.db.connection import SCHEMA_VERSION, connect, initialize
-from app.db.repository import create_request
-from app.industries.catalog import INDUSTRIES
-from app.schemas import Site
-from app.storage.raw import capture_scope
+from app.ai.questions import save_confirmed_space
+from app.application.facts import register_fact
+from app.application.snapshot import persist_report, persist_space_requirements
+from app.application.space import ensure_space_fits
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.schemas import Site
+from app.domain.scoring import WEIGHTS, result, summarize
+from app.infrastructure.persistence.connection import SCHEMA_VERSION, connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
@@ -145,8 +145,8 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((value["floor"], value["area"]), ("미확인", "미확인"))
 
     async def test_loop_first_message_carries_confirmed_values(self):
-        from app.agentic.aliases import decode
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.aliases import decode
+        from app.ai.runtime import DecisionLoop
 
         saved = save_confirmed_space(self.scope, {"floor": "4층"})
         seen = []
@@ -171,7 +171,7 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.state["known_fact_ids"], [saved["fact_ids"]["floor"]])
 
     async def test_loop_without_values_keeps_first_message(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site)
         body = json.loads(loop.state["messages"][1]["content"])
@@ -179,7 +179,7 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.state["known_fact_ids"], [])
 
     async def test_confirmed_fields_rejected_without_consuming_question(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         saved = save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "85㎡"})
         loop = await DecisionLoop.create(self.scope, self.site, confirmed_space=saved)
@@ -204,7 +204,7 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loop.waiting.questions[0].field, "existing_facilities")
 
     async def test_question_candidates_exclude_only_confirmed_floor_and_area(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         saved = save_confirmed_space(
             self.scope,
@@ -234,8 +234,8 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("floor", fields)
 
     async def test_mock_asks_only_unconfirmed_field(self):
-        from app.agentic.runtime import DecisionLoop
-        from app.services.mock import generators
+        from app.ai.runtime import DecisionLoop
+        from app.infrastructure.mock import generators
 
         saved = save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "85㎡"})
         loop = await DecisionLoop.create(
@@ -271,8 +271,8 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.space_fit("G202")["area"], "일치")
 
     async def test_unconfirmed_area_can_be_answered_without_changing_floor(self):
-        from app.agentic.runtime import DecisionLoop
-        from app.services.mock import generators
+        from app.ai.runtime import DecisionLoop
+        from app.infrastructure.mock import generators
 
         saved = save_confirmed_space(self.scope, {"floor": "1층"})
         loop = await DecisionLoop.create(
@@ -294,7 +294,7 @@ class ConfirmedSpaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.space_fit("G202")["floor"], "미확인")
 
     async def test_service_registers_values_before_loop(self):
-        from app.services.analysis import execute_agentic_analysis
+        from app.application.analysis import execute_agentic_analysis
 
         async def resolve(address):
             return self.site

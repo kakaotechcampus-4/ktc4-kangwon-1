@@ -2,8 +2,8 @@
 
 import unittest
 
-import app.schemas as schemas
-from app.schemas import AgentAnalysis
+import app.domain.schemas as schemas
+from app.domain.schemas import AgentAnalysis
 
 
 class SchemaTests(unittest.TestCase):

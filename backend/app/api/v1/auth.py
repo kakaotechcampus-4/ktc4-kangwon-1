@@ -12,18 +12,18 @@ from fastapi.responses import RedirectResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from app.api.v1.deps import current_user, db_path, require_origin
-from app.db.repository import list_user_requests
-from app.db.repository import sessions as session_repo
-from app.kakao_oauth import KakaoOAuthError, authorize_url
-from app.passwords import PasswordPolicyError
-from app.services import auth as service
-from app.services.auth import (
+from app.application import auth as service
+from app.application.auth import (
     SESSION_COOKIE_NAME,
     SESSION_COOKIE_SAMESITE,
     AuthError,
     public_user,
     safe_next,
 )
+from app.domain.passwords import PasswordPolicyError
+from app.infrastructure.clients.kakao_oauth import KakaoOAuthError, authorize_url
+from app.infrastructure.persistence.repository import list_user_requests
+from app.infrastructure.persistence.repository import sessions as session_repo
 
 EmailText = Annotated[str, AfterValidator(service.normalize_email)]
 

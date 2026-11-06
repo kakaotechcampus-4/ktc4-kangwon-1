@@ -9,9 +9,9 @@ import httpx
 import openai
 from llm_stream_fixture import sse_response
 
-from app.llm import client
-from app.llm.budget import LLMBudget, llm_scope
-from app.llm.config import LLMSettings
+from app.infrastructure.llm import client
+from app.infrastructure.llm.budget import LLMBudget, llm_scope
+from app.infrastructure.llm.config import LLMSettings
 
 
 class StreamingTests(unittest.IsolatedAsyncioTestCase):
@@ -49,7 +49,7 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
 
         constructor = openai.AsyncOpenAI
         return patch(
-            "app.llm.client.openai.AsyncOpenAI",
+            "app.infrastructure.llm.client.openai.AsyncOpenAI",
             side_effect=lambda **kwargs: constructor(
                 **kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
             ),
@@ -133,7 +133,7 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
             )
             budget = LLMBudget()
             with (
-                patch("app.llm.client.openai.AsyncOpenAI", return_value=sdk),
+                patch("app.infrastructure.llm.client.openai.AsyncOpenAI", return_value=sdk),
                 llm_scope(budget, "decision", final=True),
             ):
                 with self.assertRaises(
@@ -184,7 +184,7 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
 
         constructor = openai.AsyncOpenAI
         return attempts, patch(
-            "app.llm.client.openai.AsyncOpenAI",
+            "app.infrastructure.llm.client.openai.AsyncOpenAI",
             side_effect=lambda **kwargs: constructor(
                 **kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
             ),

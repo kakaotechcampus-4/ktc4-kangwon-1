@@ -6,14 +6,14 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.business_lifecycle.client import request_page
-from app.agents.floating_population.client import SeoulOpenDataClient
-from app.agents.floating_population.config import Settings
+from app.infrastructure.market_data.business_lifecycle.client import request_page
+from app.infrastructure.market_data.floating_population.client import SeoulOpenDataClient
+from app.infrastructure.market_data.floating_population.config import Settings
 
 
 class SeoulTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_lifecycle_quarters_are_bounded_parallel_and_keep_order(self):
-        from app.agents.business_lifecycle.client import (
+        from app.infrastructure.market_data.business_lifecycle.client import (
             fetch_store_data_for_quarters,
             get_recent_quarters,
         )
@@ -31,7 +31,10 @@ class SeoulTransportTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 active -= 1
 
-        with patch("app.agents.business_lifecycle.client.fetch_store_data", side_effect=fetch):
+        with patch(
+            "app.infrastructure.market_data.business_lifecycle.client.fetch_store_data",
+            side_effect=fetch,
+        ):
             rows = await fetch_store_data_for_quarters("test", quarters)
         self.assertGreater(peak, 1)
         self.assertLessEqual(peak, 4)
@@ -39,7 +42,7 @@ class SeoulTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(active, 0)
 
     async def test_failed_quarter_cancels_other_fetches_before_return(self):
-        from app.agents.business_lifecycle.client import (
+        from app.infrastructure.market_data.business_lifecycle.client import (
             SeoulOpenAPIError,
             fetch_store_data_for_quarters,
         )
@@ -57,13 +60,16 @@ class SeoulTransportTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 active -= 1
 
-        with patch("app.agents.business_lifecycle.client.fetch_store_data", side_effect=fetch):
+        with patch(
+            "app.infrastructure.market_data.business_lifecycle.client.fetch_store_data",
+            side_effect=fetch,
+        ):
             with self.assertRaises(SeoulOpenAPIError):
                 await fetch_store_data_for_quarters("test", ["20241", "20242", "20243"])
         self.assertEqual(active, 0)
 
     async def test_lifecycle_probe_page_is_reused_only_inside_request(self):
-        from app.agents.business_lifecycle.client import page_session
+        from app.infrastructure.market_data.business_lifecycle.client import page_session
 
         requests = []
 

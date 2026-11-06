@@ -3,9 +3,9 @@
 import copy
 import unittest
 
-from app.agentic.availability import classify_item, coverage_notes
-from app.agentic.scoring import WEIGHTS, result, summarize
-from app.industries.catalog import INDUSTRIES_WITHOUT_SEOUL
+from app.domain.availability import classify_item, coverage_notes
+from app.domain.industries.catalog import INDUSTRIES_WITHOUT_SEOUL
+from app.domain.scoring import WEIGHTS, result, summarize
 
 
 class AvailabilityTests(unittest.TestCase):

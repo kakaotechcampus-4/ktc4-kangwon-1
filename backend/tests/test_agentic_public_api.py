@@ -11,13 +11,13 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.address import GeocodeError
 from app.api.v1.analyses import analysis_runner
-from app.db import repository
-from app.db.connection import initialize
+from app.domain.schemas import DecisionResult
+from app.infrastructure.clients.address import GeocodeError
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.schemas import DecisionResult
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 

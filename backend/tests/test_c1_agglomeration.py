@@ -5,9 +5,9 @@ from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic import scoring
-from app.agentic.scoring import profiles, score_item
-from app.agents.floating_population import baseline as population_baseline
+from app.domain import scoring
+from app.domain.baselines import floating_population as population_baseline
+from app.domain.scoring import profiles, score_item
 
 
 class AgglomerationProfileTests(unittest.TestCase):
@@ -92,7 +92,7 @@ class C1AgglomerationTests(unittest.TestCase):
         profile = {"agglomeration": kind} if kind else {}
         data = sample if sample is not None else self.sample(density)
         with patch(
-            "app.agentic.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES",
+            "app.domain.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES",
             percentiles or {"I201": {50: 10, 95: 30}},
         ):
             return score_item("C1", profile, "I201", data)

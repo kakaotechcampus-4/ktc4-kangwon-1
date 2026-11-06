@@ -24,16 +24,16 @@ from app.api.v1.jobs import (
     start_task,
 )
 from app.api.v1.responses import AcceptedAnalysis, AnalysisEvents, RequestFacts, StoredAnalysis
-from app.db.repository import (
+from app.application.analysis import execute_agentic_analysis, resume_agentic_analysis
+from app.domain.schemas import DecisionResult, Schema, Text
+from app.infrastructure.mock import dependencies, generators
+from app.infrastructure.persistence.repository import (
     create_request,
     get_analysis_detail,
     get_answer_gate,
     list_snapshot_facts,
     owner_of,
 )
-from app.schemas import DecisionResult, Schema, Text
-from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
-from app.services.mock import dependencies, generators
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])

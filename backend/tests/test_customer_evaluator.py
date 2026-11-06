@@ -4,9 +4,9 @@ import json
 import unittest
 from unittest.mock import patch
 
-from app.agentic.contracts import ReviewIssue, SubmitDraftInput, SubmitLInput
-from app.agentic.evaluators import review
-from app.db.connection import connect
+from app.ai.evaluators import review
+from app.domain.contracts import ReviewIssue, SubmitDraftInput, SubmitLInput
+from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
 
 
@@ -43,7 +43,7 @@ class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
         self, submissions, citable=True, code_issues=(), actor="customer", fail=None
     ):
         """submissions를 차례로 제출하고 (결과, 제출별 도구 응답, 도구 정의)를 돌려줍니다."""
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         replies, seen, queue = [], [], list(submissions)
 
@@ -72,12 +72,12 @@ class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
         rows = {self.fid: {"citable": citable, "status": "observed"}}
         with (
             patch(
-                "app.agentic.customer_rubric.code_checks",
+                "app.ai.customer_rubric.code_checks",
                 return_value=([], list(code_issues), set()),
             ),
-            patch("app.agentic.customer_rubric.packet", return_value=packet),
-            patch("app.agentic.evaluators.review_packet", return_value=packet),
-            patch("app.agentic.evaluators.fact_rows", return_value=rows),
+            patch("app.ai.customer_rubric.packet", return_value=packet),
+            patch("app.ai.evaluators.review_packet", return_value=packet),
+            patch("app.ai.evaluators.fact_rows", return_value=rows),
         ):
             result = await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
         return result, replies, seen[0] if seen else []

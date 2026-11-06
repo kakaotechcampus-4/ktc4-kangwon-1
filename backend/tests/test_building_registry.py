@@ -13,14 +13,14 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app import main
-from app.address import GeocodeError
-from app.building_registry import (
+from app.infrastructure.clients.address import GeocodeError
+from app.infrastructure.clients.building_registry import (
     BuildingRegistryError,
     BuildingRegistrySettings,
     lookup_building,
 )
-from app.config import AddressSettings
-from app.services.settings import ExecutionSettings
+from app.infrastructure.config import AddressSettings
+from app.infrastructure.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 KAKAO = {

@@ -28,7 +28,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 
 ## 반드시 지킬 것
 
-1. **공개 결과는 `backend/app/schemas.py`, 도구 입력·응답은 `backend/app/agentic/contracts.py`가 기준이다.**
+1. **공개 결과는 `backend/app/domain/schemas.py`, 도구 입력·응답은 `backend/app/domain/contracts.py`가 기준이다.**
    `AnalysisTask`·`AgentAnalysis`는 수집·계산 경계에도 사용합니다. HTTP 요청·응답 모델은
    `app/api/v1/`에 있습니다. 계약 변경은 호출자·화면에 영향을 주므로 PR에서 합의합니다.
    자료 DB는 수집·활성화용이며 요청 DB에는 버전 참조·근거·판단·질문 이력을 저장합니다.
@@ -36,7 +36,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 2. **외부 호출은 전부 비동기다.** `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
    `httpx.Client`, `time.sleep`을 새로 넣지 마세요 — 분석 한 번이 100회 넘는 HTTP 요청을 만들고,
    동기 호출은 FastAPI 이벤트 루프를 통째로 멈춥니다.
-   파일·SQLite·SHP 읽기는 `asyncio.to_thread()`로 격리합니다. 서울 API 전송은 `app/seoul.py`에서 공유합니다.
+   파일·SQLite·SHP 읽기는 `asyncio.to_thread()`로 격리합니다. 서울 API 전송은 `app/infrastructure/market_data/seoul.py`에서 공유합니다.
 
 3. **일반 분석 실패는 에이전트 결과로 수집한다.** 외부 API 실패는 `status="error"`와 `error`,
    부분 실패는 `status="partial"` + `warnings`로 표현해 다른 에이전트를 계속 실행합니다.

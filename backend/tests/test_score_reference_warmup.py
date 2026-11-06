@@ -11,10 +11,10 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.local_data import score_reference
-from app.local_data.score_reference import city_reference, warm_reference
+from app.infrastructure.market_data.local import score_reference
+from app.infrastructure.market_data.local.score_reference import city_reference, warm_reference
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.settings import ExecutionSettings
 
 VERSIONS = [
     {"source": "stores", "version_id": "s", "file_hash": "hs", "quarter": "20262"},
@@ -49,7 +49,9 @@ class ReferenceBuildTests(unittest.TestCase):
     def test_warm_reference_uses_request_arguments(self):
         adapter = SimpleNamespace(path=Path("market.sqlite3").resolve(), versions=VERSIONS)
         with (
-            patch("app.local_data.adapter.LocalAdapter", return_value=adapter) as make,
+            patch(
+                "app.infrastructure.market_data.local.adapter.LocalAdapter", return_value=adapter
+            ) as make,
             patch.object(score_reference, "city_reference") as build,
         ):
             self.assertTrue(warm_reference("given.sqlite3"))
@@ -59,7 +61,9 @@ class ReferenceBuildTests(unittest.TestCase):
     def test_warm_reference_skips_without_single_pair(self):
         adapter = SimpleNamespace(path=Path("market.sqlite3"), versions=VERSIONS[:1])
         with (
-            patch("app.local_data.adapter.LocalAdapter", return_value=adapter),
+            patch(
+                "app.infrastructure.market_data.local.adapter.LocalAdapter", return_value=adapter
+            ),
             patch.object(score_reference, "city_reference") as build,
         ):
             self.assertFalse(warm_reference())

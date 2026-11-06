@@ -8,8 +8,8 @@ import openai
 from llm_stream_fixture import stream_response
 from openai.types.chat import ChatCompletionMessage
 
-from app.llm.client import LLMResponseError, complete_json
-from app.llm.config import LLMSettings
+from app.infrastructure.llm.client import LLMResponseError, complete_json
+from app.infrastructure.llm.config import LLMSettings
 
 
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
@@ -84,7 +84,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_json_is_distinct(self):
         with patch(
-            "app.llm.client._complete",
+            "app.infrastructure.llm.client._complete",
             return_value=ChatCompletionMessage(role="assistant", content="SECRET"),
         ):
             with self.assertRaises(LLMResponseError) as caught:
@@ -95,7 +95,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
     async def test_duplicate_key_is_named_without_the_reply(self):
         reply = '{"items": [{"evidence": [1], "risks": ["SECRET"], "evidence": [2]}]}'
         with patch(
-            "app.llm.client._complete",
+            "app.infrastructure.llm.client._complete",
             return_value=ChatCompletionMessage(role="assistant", content=reply),
         ):
             with self.assertRaises(LLMResponseError) as caught:
@@ -107,7 +107,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
     async def test_repeated_list_that_extends_the_first_keeps_the_longer_list(self):
         reply = '{"items": [{"evidence": [1, 2], "risks": ["{2}"], "evidence": [1, 2, 3]}]}'
         with patch(
-            "app.llm.client._complete",
+            "app.infrastructure.llm.client._complete",
             return_value=ChatCompletionMessage(role="assistant", content=reply),
         ):
             result = await complete_json("", "{}", LLMSettings())
@@ -121,7 +121,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.subTest(reply=reply):
                 with patch(
-                    "app.llm.client._complete",
+                    "app.infrastructure.llm.client._complete",
                     return_value=ChatCompletionMessage(role="assistant", content=reply),
                 ):
                     with self.assertRaises(LLMResponseError) as caught:

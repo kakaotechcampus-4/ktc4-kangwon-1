@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 import httpx
 
-from app import address, config
+from app.infrastructure import config
+from app.infrastructure.clients import address
 
 ROAD = "서울 송파구 위례광장로 120"
 HIT = {

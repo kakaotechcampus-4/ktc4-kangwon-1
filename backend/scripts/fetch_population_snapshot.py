@@ -26,20 +26,20 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.floating_population.client import SeoulOpenDataClient  # noqa: E402
-from app.agents.floating_population.config import (  # noqa: E402
+from app.infrastructure.config import load_environment  # noqa: E402
+from app.infrastructure.market_data.floating_population.client import SeoulOpenDataClient  # noqa: E402
+from app.infrastructure.market_data.floating_population.config import (  # noqa: E402
     RESIDENT_SERVICE,
     WORKER_SERVICE,
     Settings,
 )
-from app.agents.floating_population.population import (  # noqa: E402
+from app.infrastructure.market_data.floating_population.population import (  # noqa: E402
     RESIDENT_KIND,
     SNAPSHOT_PATHS,
     WORKER_KIND,
     write_snapshot,
 )
-from app.config import load_environment  # noqa: E402
-from app.seoul import SeoulOpenApiError  # noqa: E402
+from app.infrastructure.market_data.seoul import SeoulOpenApiError  # noqa: E402
 
 
 class SnapshotClient(SeoulOpenDataClient):

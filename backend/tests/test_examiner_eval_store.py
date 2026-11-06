@@ -4,9 +4,9 @@ import sqlite3
 import unittest
 from pathlib import Path
 
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.agentic.runtime import DecisionLoop
-from app.schemas import Site
+from app.ai.runtime import DecisionLoop
+from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.domain.schemas import Site
 from examiner_eval import store
 from tests import test_agentic_runtime as fixtures
 

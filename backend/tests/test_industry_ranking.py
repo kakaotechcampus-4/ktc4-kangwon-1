@@ -4,9 +4,9 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.agentic.contracts import RankedIndustry, RegulationExcludedIndustry
-from app.agentic.report import industry_ranking, regulation_excluded
-from app.agentic.scoring import rank_candidates
+from app.application.report import industry_ranking, regulation_excluded
+from app.domain.contracts import RankedIndustry, RegulationExcludedIndustry
+from app.domain.scoring import rank_candidates
 
 
 def row(code, name, lower, *, excluded=False, regulation="해당 없음"):

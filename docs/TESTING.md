@@ -52,20 +52,20 @@ AST의 함수 시작~끝 물리 행 수(주석·빈 줄 포함), 100줄 초과 �
 
 | 파일 (`backend/`) | 함수 | 시작 행 | 길이 |
 | --- | --- | ---: | ---: |
-| app/agentic/scoring.py | score_item | 78 | 282 |
-| app/agents/business_lifecycle/preprocess.py | aggregate_rows | 67 | 189 |
-| app/agentic/inputs.py | format_inputs | 106 | 188 |
-| app/agentic/sql_tool.py | _query | 234 | 173 |
-| app/agentic/facts.py | register_fact | 15 | 162 |
-| app/agentic/evaluators.py | review | 156 | 155 |
-| app/agentic/report.py | finalize | 403 | 139 |
-| app/agentic/report.py | validate_l_records | 133 | 138 |
-| app/agentic/snapshot.py | persist_report | 213 | 137 |
-| app/local_data/adapter.py | analyze | 125 | 131 |
-| app/agentic/landlord.py | review_packet | 63 | 115 |
-| app/storage/raw.py | _save_response | 82 | 113 |
-| app/agentic/runtime.py | submit_l | 428 | 110 |
-| app/agentic/sql_tool.py | local_views | 124 | 108 |
-| app/agentic/runtime.py | __init__ | 118 | 103 |
+| app/domain/scoring.py | score_item | 78 | 282 |
+| app/infrastructure/market_data/business_lifecycle/preprocess.py | aggregate_rows | 67 | 189 |
+| app/application/inputs.py | format_inputs | 106 | 188 |
+| app/ai/sql_tool.py | _query | 234 | 173 |
+| app/application/facts.py | register_fact | 15 | 162 |
+| app/ai/evaluators.py | review | 156 | 155 |
+| app/application/report.py | finalize | 403 | 139 |
+| app/application/report.py | validate_l_records | 133 | 138 |
+| app/application/snapshot.py | persist_report | 213 | 137 |
+| app/infrastructure/market_data/local/adapter.py | analyze | 125 | 131 |
+| app/ai/landlord.py | review_packet | 63 | 115 |
+| app/infrastructure/persistence/raw_capture.py | _save_response | 82 | 113 |
+| app/ai/runtime.py | submit_l | 428 | 110 |
+| app/ai/sql_tool.py | local_views | 124 | 108 |
+| app/ai/runtime.py | __init__ | 118 | 103 |
 
 함수 분해·모듈 삭제는 이번 범위가 아니다. 채점·보고서·평가·스냅샷 담당자와 동작 보존 기준을 합의한 뒤 진행한다.

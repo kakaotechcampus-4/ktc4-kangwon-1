@@ -7,8 +7,8 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.schemas import Site
-from app.storage.raw import CaptureScope
+from app.domain.schemas import Site
+from app.infrastructure.persistence.raw_capture import CaptureScope
 
 LOGGER = logging.getLogger(__name__)
 

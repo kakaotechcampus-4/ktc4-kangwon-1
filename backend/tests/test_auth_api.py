@@ -12,9 +12,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 
+from app.application.auth import SESSION_COOKIE_NAME
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.auth import SESSION_COOKIE_NAME
-from app.services.settings import ExecutionSettings
 
 ORIGIN = {"Origin": "http://localhost:3000"}
 EMAIL = "owner@example.com"
@@ -30,7 +30,7 @@ class AuthApiTests(unittest.TestCase):
         # 메일은 보내지 않고 링크만 가로챕니다. 토큰은 해시로만 저장돼 DB에서 못 읽습니다.
         self.sent: list[tuple[str, str]] = []
         sender = self.enterContext(
-            patch("app.services.auth.send_mail", new=AsyncMock(side_effect=self._capture))
+            patch("app.application.auth.send_mail", new=AsyncMock(side_effect=self._capture))
         )
         self.sender = sender
         # 세션 쿠키는 Secure 라 http 로는 전송되지 않습니다. 운영과 같은 https 로 띄웁니다.

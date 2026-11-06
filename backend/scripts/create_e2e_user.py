@@ -1,8 +1,8 @@
 import sys
 
-from app.db.connection import initialize
-from app.db.repository import users
-from app.passwords import hash_password
+from app.domain.passwords import hash_password
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.persistence.repository import users
 
 
 def main(db_path: str, email: str, password: str) -> None:

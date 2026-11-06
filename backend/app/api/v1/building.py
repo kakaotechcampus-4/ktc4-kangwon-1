@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.address import ADDRESS_INPUT_ERRORS, GeocodeError
 from app.api.v1.deps import current_user
 from app.api.v1.jobs import is_mock
-from app.building_registry import BuildingRegistry, BuildingRegistryError, lookup_building
-from app.services.mock import building_registry as mock_building_registry
+from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeError
+from app.infrastructure.clients.building_registry import (
+    BuildingRegistry,
+    BuildingRegistryError,
+    lookup_building,
+)
+from app.infrastructure.mock import building_registry as mock_building_registry
 
 router = APIRouter(prefix="/api/v1", tags=["building"])
 

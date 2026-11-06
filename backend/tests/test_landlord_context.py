@@ -5,16 +5,16 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.agentic.aliases import decode
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput, TextSegment
-from app.agentic.evaluators import PERSONAS, review
-from app.agentic.facts import register_fact
-from app.agentic.landlord import MAX_PACKET_CHARS, review_packet
-from app.agentic.runtime import DecisionLoop
-from app.canonical import canonical_json
-from app.db.connection import connect
-from app.db.repository import create_request
-from app.storage.raw import capture_scope
+from app.ai.aliases import decode
+from app.ai.evaluators import PERSONAS, review
+from app.ai.landlord import MAX_PACKET_CHARS, review_packet
+from app.ai.runtime import DecisionLoop
+from app.application.facts import register_fact
+from app.domain.contracts import SubmitDraftInput, SubmitLInput, TextSegment
+from app.infrastructure.persistence.connection import connect
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
+from app.shared.canonical import canonical_json
 from tests import test_agentic_runtime as fixtures
 
 
@@ -149,11 +149,11 @@ class ContextTests(unittest.IsolatedAsyncioTestCase):
             "submit_review", {"draft_id": draft.report_id, "verdict": "agree", "issues": []}
         )
         with (
-            patch("app.agentic.evaluators.review_packet", return_value=packet) as common,
-            patch("app.agentic.landlord.review_packet", return_value=packet) as landlord,
-            patch("app.agentic.examiner.review_packet", return_value=packet) as examiner_packet,
-            patch("app.agentic.customer_rubric.packet", return_value=packet) as customer,
-            patch("app.agentic.founder.review_packet", return_value=packet) as founder_packet,
+            patch("app.ai.evaluators.review_packet", return_value=packet) as common,
+            patch("app.ai.landlord.review_packet", return_value=packet) as landlord,
+            patch("app.ai.examiner.review_packet", return_value=packet) as examiner_packet,
+            patch("app.ai.customer_rubric.packet", return_value=packet) as customer,
+            patch("app.ai.founder.review_packet", return_value=packet) as founder_packet,
             patch.object(loop, "_model", new=AsyncMock(return_value=(message, {}))),
         ):
             for actor in PERSONAS:

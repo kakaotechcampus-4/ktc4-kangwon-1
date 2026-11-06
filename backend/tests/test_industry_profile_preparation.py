@@ -10,11 +10,11 @@ from typing import get_args
 
 from test_commercial_area_metrics import sample_stores
 
-from app.agents.commercial_area.trade_areas import SeoulTradeArea
-from app.geo import to_epsg5181
-from app.industries import DATA_DIR
-from app.industries.catalog import INDUSTRIES
-from app.schemas import FacilityCode
+from app.domain.geo import to_epsg5181
+from app.domain.industries import DATA_DIR
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.schemas import FacilityCode
+from app.infrastructure.market_data.commercial_area.trade_areas import SeoulTradeArea
 from scripts.build_density_baseline import area_km2, industry_counts, percentile_table, sample_csv
 
 
@@ -90,7 +90,7 @@ class IndustryProfilePreparationTests(unittest.TestCase):
         self.assertEqual(json.loads(rows[0]["counts"])["G215"], 0)
 
     def test_industry_density_baseline_reuses_interpolation(self):
-        from app.agents.commercial_area.baseline import (
+        from app.domain.baselines.commercial_area import (
             SEOUL_INDUSTRY_DENSITY_PERCENTILES,
             industry_percentile,
         )

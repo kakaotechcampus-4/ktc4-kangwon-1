@@ -3,9 +3,9 @@
 import csv
 import unittest
 
-from app.agentic.space import compare_space
-from app.industries import DATA_DIR
-from app.industries.catalog import INDUSTRIES
+from app.application.space import compare_space
+from app.domain.industries import DATA_DIR
+from app.domain.industries.catalog import INDUSTRIES
 
 
 class SpaceEstimatesTests(unittest.TestCase):

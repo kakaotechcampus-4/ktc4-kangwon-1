@@ -34,17 +34,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.commercial_area.baseline import DENSITY_PERCENTILES_PATH  # noqa: E402
-from app.agents.commercial_area.client import SbizApiError, StoreClient, to_store  # noqa: E402
-from app.agents.commercial_area.config import (  # noqa: E402
+from app.domain.baselines.commercial_area import DENSITY_PERCENTILES_PATH  # noqa: E402
+from app.domain.geo import haversine_m  # noqa: E402
+from app.domain.industries.catalog import CATALOG_VERSION, INDUSTRIES  # noqa: E402
+from app.infrastructure.market_data.commercial_area.client import (  # noqa: E402
+    SbizApiError,
+    StoreClient,
+    to_store,
+)
+from app.infrastructure.market_data.commercial_area.config import (  # noqa: E402
     RESTAURANT_MAJOR_NAMES,
     Settings,
     load_dotenv_if_present,
 )
-from app.agents.commercial_area.industries import incomplete_split_codes, map_stores  # noqa: E402
-from app.agents.commercial_area.trade_areas import SeoulTradeArea, load_trade_areas  # noqa: E402
-from app.geo import haversine_m  # noqa: E402
-from app.industries.catalog import CATALOG_VERSION, INDUSTRIES  # noqa: E402
+from app.infrastructure.market_data.commercial_area.industries import (  # noqa: E402
+    incomplete_split_codes,
+    map_stores,
+)
+from app.infrastructure.market_data.commercial_area.trade_areas import (  # noqa: E402
+    SeoulTradeArea,
+    load_trade_areas,
+)
 
 SAMPLE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -143,7 +153,7 @@ def _to_wgs84(x: float, y: float) -> tuple[float, float]:
 
     상권 중심점 하나당 몇 번 반복이면 1cm 아래로 수렴한다.
     """
-    from app.geo import to_epsg5181
+    from app.domain.geo import to_epsg5181
 
     lat, lon = 37.5, 127.0
     for _ in range(12):
@@ -225,7 +235,7 @@ def load_industry_done() -> dict[str, dict[str, str]]:
     return result
 
 
-from app.agents.commercial_area.client import CSV_FIELDS  # noqa: E402
+from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS  # noqa: E402
 
 
 def sample_csv(path: Path, quarter: str, areas: tuple[SeoulTradeArea, ...]) -> list[dict]:

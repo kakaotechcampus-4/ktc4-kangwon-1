@@ -11,20 +11,29 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from app.agentic import code90
-from app.agentic.contracts import GetScorecardInput, LRecord, NewFactor, ScoreItem
-from app.agentic.facts import register_fact
-from app.agentic.read_tools import get_scorecard
-from app.agentic.report import code90_uses_metric, complete_l_records, load_base, recompute_l_scores
-from app.agentic.scoring import profiles, rank_candidates, result, summarize
-from app.agentic.snapshot import persist_snapshot_scores
-from app.agents.business_lifecycle.preprocess import calculate_rate
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.geo import to_epsg5181
-from app.local_data.score_reference import attach_reference, city_reference, inverse_center
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import capture_scope
+from app.ai.read_tools import get_scorecard
+from app.application.facts import register_fact
+from app.application.report import (
+    code90_uses_metric,
+    complete_l_records,
+    load_base,
+    recompute_l_scores,
+)
+from app.application.snapshot import persist_snapshot_scores
+from app.domain import code90
+from app.domain.contracts import GetScorecardInput, LRecord, NewFactor, ScoreItem
+from app.domain.geo import to_epsg5181
+from app.domain.schemas import AnalysisTask, Site
+from app.domain.scoring import profiles, rank_candidates, result, summarize
+from app.infrastructure.market_data.business_lifecycle.preprocess import calculate_rate
+from app.infrastructure.market_data.local.score_reference import (
+    attach_reference,
+    city_reference,
+    inverse_center,
+)
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class Code90RuntimeTests(unittest.TestCase):
@@ -230,7 +239,8 @@ class Code90RuntimeTests(unittest.TestCase):
             for code, lat in (("same", 37.7), ("near", 37.50001), ("far", 37.7))
         ]
         with patch(
-            "app.local_data.score_reference.city_reference", return_value=(samples, [])
+            "app.infrastructure.market_data.local.score_reference.city_reference",
+            return_value=(samples, []),
         ) as build:
             attach_reference(adapter, task, data)
             self.assertEqual([r["area"] for r in data["score90_reference"]["samples"]], ["far"])
@@ -243,9 +253,9 @@ class Code90RuntimeTests(unittest.TestCase):
     def test_reference_cache_is_invalidated_by_source_version_and_corruption(self):
         with (
             tempfile.TemporaryDirectory() as folder,
-            patch("app.local_data.score_reference.CACHE_DIR", Path(folder)),
+            patch("app.infrastructure.market_data.local.score_reference.CACHE_DIR", Path(folder)),
             patch(
-                "app.local_data.score_reference._build_reference",
+                "app.infrastructure.market_data.local.score_reference._build_reference",
                 return_value=([{"area": "a", "counts": {}}], []),
             ) as build,
         ):

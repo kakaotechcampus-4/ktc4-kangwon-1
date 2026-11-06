@@ -12,9 +12,9 @@ import asyncio
 import json
 import sys
 
-from app.address import GeocodeError, resolve_site
-from app.config import load_environment
-from app.education_zone import EducationZoneError, find_education_zones
+from app.infrastructure.clients.address import GeocodeError, resolve_site
+from app.infrastructure.clients.education_zone import EducationZoneError, find_education_zones
+from app.infrastructure.config import load_environment
 
 
 async def run(address: str, *, with_geometry: bool) -> int:

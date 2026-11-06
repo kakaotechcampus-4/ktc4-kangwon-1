@@ -4,7 +4,7 @@ from contextlib import ExitStack, contextmanager
 from typing import Any
 from unittest.mock import patch
 
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
 
 FLOATING = (
     "AGE_SHARE_AVG",
@@ -17,21 +17,21 @@ FLOATING = (
     "SCALE_PERCENTILES",
 )
 LIFECYCLE = "SEOUL_INDUSTRY_LIFECYCLE_BASELINE"
-FLOATING_MODULE = "app.agents.floating_population.baseline"
+FLOATING_MODULE = "app.domain.baselines.floating_population"
 TARGETS: dict[str, dict[str, tuple[str, ...]]] = {
-    "app.agentic.scoring": {
+    "app.domain.scoring": {
         "BASELINE_BASE_QUARTER": ("quarter",),
         "SEOUL_INDUSTRY_LIFECYCLE_BASELINE": ("lifecycle",),
         "SEOUL_INDUSTRY_DENSITY_PERCENTILES": ("density",),
     },
-    "app.agents.business_lifecycle.baseline": {
+    "app.domain.baselines.business_lifecycle": {
         "BASELINE_BASE_QUARTER": ("quarter",),
         "SEOUL_INDUSTRY_LIFECYCLE_BASELINE": ("lifecycle",),
     },
-    "app.agents.commercial_area.baseline": {
+    "app.domain.baselines.commercial_area": {
         "SEOUL_INDUSTRY_DENSITY_PERCENTILES": ("density",),
     },
-    "app.agents.floating_population.baseline": {name: ("floating", name) for name in FLOATING},
+    "app.domain.baselines.floating_population": {name: ("floating", name) for name in FLOATING},
 }
 
 

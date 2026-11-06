@@ -8,9 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
-from app.db import repository as repo
-from app.db.connection import BACKEND_DIR, connect, initialize, resolve_path
-from app.schemas import AnalysisTask, Site
+from app.domain.schemas import AnalysisTask, Site
+from app.infrastructure.persistence import repository as repo
+from app.infrastructure.persistence.connection import BACKEND_DIR, connect, initialize, resolve_path
 
 
 class RepositoryTests(unittest.TestCase):

@@ -10,9 +10,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from app.local_data.database import DataValidationError, LocalDataDB
-from app.local_data.refresh import collect_pages
-from app.seoul import previous_quarter
+from app.infrastructure.market_data.local.database import DataValidationError, LocalDataDB
+from app.infrastructure.market_data.local.refresh import collect_pages
+from app.infrastructure.market_data.seoul import previous_quarter
 from scripts.refresh_local_data import parser, refresh
 
 

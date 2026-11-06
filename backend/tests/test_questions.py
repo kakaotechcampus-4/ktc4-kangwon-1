@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.agentic.contracts import AskUserInput, UserQuestion
+from app.domain.contracts import AskUserInput, UserQuestion
 
 
 class QuestionTests(unittest.TestCase):

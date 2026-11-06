@@ -3,7 +3,7 @@
 from contextlib import ExitStack, contextmanager
 from unittest.mock import patch
 
-from app.agentic import aliases, evaluators, examiner, tools
+from app.ai import aliases, evaluators, examiner, tools
 from examiner_eval import frozen_v1
 
 VARIANTS = ("V0", "V1", "V2")

@@ -3,7 +3,8 @@
 import inspect
 import unittest
 
-from app.agentic import evaluators, examiner, landlord, runtime, space
+from app.ai import evaluators, examiner, landlord, runtime
+from app.application import space
 
 STALE = ("공간 초안", "검토 전", "초안을 확정", "초안과 미확인", "초안이나 결측")
 

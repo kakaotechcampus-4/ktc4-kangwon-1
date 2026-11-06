@@ -4,8 +4,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.agentic import contracts as c
-from app.schemas import DecisionRequest
+from app.domain import contracts as c
+from app.domain.schemas import DecisionRequest
 
 
 class LStageContractTests(unittest.TestCase):

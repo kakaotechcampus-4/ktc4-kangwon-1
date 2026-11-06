@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from app.agentic.report import rule_scored_space
+from app.application.report import rule_scored_space
 
 
 def fact(metric, source="industry_profile", value=None):

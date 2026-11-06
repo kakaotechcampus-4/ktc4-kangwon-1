@@ -18,7 +18,7 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
 ![decision 도구 루프와 평가자](../docs/images/decision-tool-loop.png)
 
-채점 규칙은 [채점표](../docs/decision-prompt-rubric.md)가 기준이고, 코드에서는 `app/agentic/scoring.py`가 계산합니다.
+채점 규칙은 [채점표](../docs/decision-prompt-rubric.md)가 기준이고, 코드에서는 `app/domain/scoring.py`가 계산합니다.
 
 ### 분기·예외·재개 코드 찾기
 
@@ -26,14 +26,14 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
 | 상황 | 처리 | 코드 (`backend/` 기준) |
 | --- | --- | --- |
-| 도구 호출이 없거나 여러 개 | 모델 문장을 결과로 쓰지 않고 검증된 코드 점수로 대체 초안 생성 | `app/agentic/runtime.py:697` run, `:578` fallback |
-| 호출·시간·토큰 예산 소진 | 미제출 L은 unknown, 기존 판단 보존 후 대체 초안 | `app/agentic/budget.py` RuntimeBudget, `runtime.py` run/fallback |
+| 도구 호출이 없거나 여러 개 | 모델 문장을 결과로 쓰지 않고 검증된 코드 점수로 대체 초안 생성 | `app/ai/runtime.py:697` run, `:578` fallback |
+| 호출·시간·토큰 예산 소진 | 미제출 L은 unknown, 기존 판단 보존 후 대체 초안 | `app/ai/budget.py` RuntimeBudget, `runtime.py` run/fallback |
 | 일시적 모델 오류 | 연결·시간 초과 및 지정 HTTP 오류만 상태에 기록하고 한 번 재시도 | `runtime.py` run의 model_retried 분기 |
 | 새 정보 없는 호출 | 중복 또는 오류가 연속 세 번이면 대체 초안(일반 모드) | `runtime.py` run의 no_progress 분기 |
-| 질문·재개 | 질문은 한 번, 확정 층·면적 재질문 차단. 같은 요청·자료 버전·예산으로 재개 | `app/agentic/questions.py:28` ask_user, `:67` validate_resume, `:92` resume |
-| 평가자 검토 | 네 평가자를 병렬 실행하고 지적을 한 번 반영. 실패 슬롯도 결과에 남김 | `runtime.py:250` review_and_finalize, `app/agentic/evaluators.py:156` review |
+| 질문·재개 | 질문은 한 번, 확정 층·면적 재질문 차단. 같은 요청·자료 버전·예산으로 재개 | `app/ai/questions.py:28` ask_user, `:67` validate_resume, `:92` resume |
+| 평가자 검토 | 네 평가자를 병렬 실행하고 지적을 한 번 반영. 실패 슬롯도 결과에 남김 | `runtime.py:250` review_and_finalize, `app/ai/evaluators.py:156` review |
 | 최종 반영 실패 | 유효 초안과 완료된 평가를 보존하고 반영 미완료 한계 표시 | `runtime.py` review_and_finalize |
-| 상태 저장·종료 | 요청 DB에 진행·질문·결과 저장. 계약·저장 실패는 failed로 기록 | `runtime.py:99` _save, `app/services/analysis.py` execute_agentic_analysis/resume_agentic_analysis |
+| 상태 저장·종료 | 요청 DB에 진행·질문·결과 저장. 계약·저장 실패는 failed로 기록 | `runtime.py:99` _save, `app/application/analysis.py` execute_agentic_analysis/resume_agentic_analysis |
 
 대체 초안(`draft_available`)은 성공한 모델 판단과 다릅니다. 서비스는 이후 평가·최종 단계를 실행하며 결과 한계와 평가 완료율을 함께 봐야 합니다. 역할별 40k 입력 예산에는 제출 전용 예외가 있어 엄격한 누적 상한은 아닙니다([실측](../docs/founder-live-report.md)).
 
@@ -52,7 +52,7 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 | `submit_draft` | 보고서 초안 제출 |
 
 평가자는 `get_scorecard`, `get_facts`, `query_raw`와 `submit_review`만 씁니다.
-도구 입력은 `app/agentic/contracts.py`의 모델이 검증합니다. 모델은 요청 안에서만 유일한 8자 fact 별칭으로 근거를 가리키고, 저장과 결과에는 원래 `fact_id`가 남습니다.
+도구 입력은 `app/domain/contracts.py`의 모델이 검증합니다. 모델은 요청 안에서만 유일한 8자 fact 별칭으로 근거를 가리키고, 저장과 결과에는 원래 `fact_id`가 남습니다.
 
 ### 모델이 지켜야 하는 규칙 (서버가 검증)
 
@@ -81,8 +81,8 @@ scripts/         자료 갱신, 기준선 생성, 재현 검증
 tests/           임시 DB와 API·모델 대역으로 도는 회귀 시험
 ```
 
-수집 클라이언트(`app/agents/*/client.py`)는 자료 갱신과 기준선 연구에만 쓰며, 일반 분석 요청은 기본 자료 API를 다시 호출하지 않습니다.
-업종 체계와 매핑은 [업종 README](app/industries/README.md), 인구·상권·지도 계산은 각 폴더의 README를 참고하세요.
+수집 클라이언트(`app/infrastructure/market_data/*/client.py`)는 자료 갱신과 기준선 연구에만 쓰며, 일반 분석 요청은 기본 자료 API를 다시 호출하지 않습니다.
+업종 체계와 매핑은 [업종 README](app/domain/industries/README.md), 인구·상권·지도 계산은 각 폴더의 README를 참고하세요.
 
 ## 설치·실행
 
@@ -171,7 +171,7 @@ python scripts/refresh_local_data.py --source floating --quarter 20262 --reset-c
 - API 페이지는 하루 동안 이어받기에 재사용하며, 총 행 수가 바뀌면 처음부터 다시 받습니다. `--reset-checkpoint`는 선택 원천의 페이지 기록을 지우고 수집하고, `--dry-run`은 임시 DB에서 파일만 검증합니다.
 - 상주·직장인구는 기본이 CSV이고, `--source resident --api`처럼 주면 전체 API에서 선택 분기를 받습니다. 활성화 뒤에는 파일을 줄이는 VACUUM을 실행하며 `--no-vacuum`으로 끌 수 있습니다.
 - 갱신은 외부 API와 자료 DB를 바꾸므로 파일과 키를 준비한 뒤 직접 실행합니다.
-- 51업종 밀도 기준선은 `app/industries/data/density_percentiles.csv`이고, `scripts/build_density_baseline.py --industries --emit`이 완전한 표본일 때만 갱신합니다.
+- 51업종 밀도 기준선은 `app/domain/industries/data/density_percentiles.csv`이고, `scripts/build_density_baseline.py --industries --emit`이 완전한 표본일 때만 갱신합니다.
 
 ## 자료 범위와 판단 한계
 

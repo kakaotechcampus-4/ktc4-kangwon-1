@@ -16,8 +16,8 @@ from llm_stream_fixture import stream_response
 
 class SettingsTests(unittest.TestCase):
     def settings_type(self):
-        self.assertTrue((Path(__file__).parents[1] / "app/llm/config.py").exists())
-        return importlib.import_module("app.llm.config").LLMSettings
+        self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/llm/config.py").exists())
+        return importlib.import_module("app.infrastructure.llm.config").LLMSettings
 
     def test_agent_overrides_legacy_and_explicit_overrides_agent(self):
         settings_type = self.settings_type()
@@ -65,9 +65,9 @@ class SettingsTests(unittest.TestCase):
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.assertTrue((Path(__file__).parents[1] / "app/llm/client.py").exists())
-        self.client = importlib.import_module("app.llm.client")
-        self.settings_type = importlib.import_module("app.llm.config").LLMSettings
+        self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/llm/client.py").exists())
+        self.client = importlib.import_module("app.infrastructure.llm.client")
+        self.settings_type = importlib.import_module("app.infrastructure.llm.config").LLMSettings
         self.settings = self.settings_type(
             model="test", api_key="secret", base_url="https://one.invalid/v1"
         )
@@ -114,7 +114,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 **kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
             )
 
-        return patch("app.llm.client.openai.AsyncOpenAI", side_effect=make_client)
+        return patch("app.infrastructure.llm.client.openai.AsyncOpenAI", side_effect=make_client)
 
     async def test_parallel_settings_keep_models_urls_and_optional_fields_separate(self):
         other = self.settings_type(
@@ -171,28 +171,30 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
 
 class EnvironmentTests(unittest.TestCase):
     def test_imports_do_not_load_environment_and_compatibility_aliases_use_backend_loader(self):
-        self.assertTrue((Path(__file__).parents[1] / "app/config.py").exists())
-        common = importlib.import_module("app.config")
-        with patch("app.config.load_dotenv") as loader:
+        self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/config.py").exists())
+        common = importlib.import_module("app.infrastructure.config")
+        with patch("app.infrastructure.config.load_dotenv") as loader:
             for name in ("commercial_area", "floating_population", "business_lifecycle"):
-                importlib.reload(importlib.import_module(f"app.agents.{name}.config"))
+                importlib.reload(
+                    importlib.import_module(f"app.infrastructure.market_data.{name}.config")
+                )
             for name in ("commercial_area", "floating_population"):
-                module = importlib.import_module(f"app.agents.{name}.config")
+                module = importlib.import_module(f"app.infrastructure.market_data.{name}.config")
                 self.assertEqual(module.BACKEND_DIR, Path(__file__).resolve().parents[1])
             for name in ("commercial_area", "map_analysis"):
-                module = importlib.import_module(f"app.agents.{name}.config")
+                module = importlib.import_module(f"app.infrastructure.market_data.{name}.config")
                 self.assertIs(module.load_dotenv_if_present, common.load_environment)
             loader.assert_not_called()
             common.load_environment()
             loader.assert_called_once_with(common.BACKEND_DIR / ".env", override=False)
 
     def test_client_constructor_does_not_load_dotenv(self):
-        from app.agents.floating_population.client import SeoulOpenDataClient
+        from app.infrastructure.market_data.floating_population.client import SeoulOpenDataClient
 
         with (
             patch.dict(os.environ, {"FLOATING_POPULATION_API_KEY": "test"}, clear=True),
             patch("dotenv.load_dotenv") as loader,
-            patch("app.config.load_dotenv") as common_loader,
+            patch("app.infrastructure.config.load_dotenv") as common_loader,
         ):
             client = SeoulOpenDataClient()
             self.assertEqual(client.settings.api_key, "test")
@@ -202,10 +204,10 @@ class EnvironmentTests(unittest.TestCase):
     def test_server_loads_only_on_startup_once(self):
         async def start():
             module = importlib.import_module("app.main")
-            with patch("app.config.load_dotenv") as loader:
+            with patch("app.infrastructure.config.load_dotenv") as loader:
                 importlib.reload(module)
                 loader.assert_not_called()
-                from app.services.settings import ExecutionSettings
+                from app.infrastructure.settings import ExecutionSettings
 
                 with (
                     patch("app.main.initialize") as initialize,

@@ -6,13 +6,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from app.agentic.aliases import encode
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.agentic.evaluators import PERSONAS
-from app.agentic.recording import CallRecording, ReplayGenerate
-from app.db.connection import SQLITE_BUSY_TIMEOUT_MS, connect
-from app.local_data.database import LocalDataDB
-from app.services.mock import call
+from app.ai.aliases import encode
+from app.ai.evaluators import PERSONAS
+from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.infrastructure.llm.recording import CallRecording, ReplayGenerate
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.mock import call
+from app.infrastructure.persistence.connection import SQLITE_BUSY_TIMEOUT_MS, connect
 from tests import test_simple_l_inputs as fixtures
 
 
@@ -47,7 +47,7 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         first, second = list(self.profiles().values())[:2]
         existing = encode(self.scope, {"fact_id": first})["fact_id"]
         digest = Mock(return_value=SimpleNamespace(hexdigest=lambda: existing + "0" * 56))
-        with patch("app.agentic.aliases.sha256", digest):
+        with patch("app.ai.aliases.sha256", digest):
             with self.assertRaisesRegex(ValueError, "8회"):
                 await asyncio.wait_for(
                     asyncio.to_thread(encode, self.scope, {"fact_id": second}), 5
@@ -122,7 +122,7 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.loop.generate = replays["decision"]
         self.loop.evaluator_generate = evaluator
         # 기록된 최종 제출은 수용 목록이 비어 있으므로 손님 코드 지적이 생기지 않게 합니다.
-        with patch("app.agentic.customer_rubric.code_checks", return_value=([], [], set())):
+        with patch("app.ai.customer_rubric.code_checks", return_value=([], [], set())):
             outcome, _ = await asyncio.wait_for(
                 asyncio.gather(self.loop.review_and_finalize(), writer()), 10
             )

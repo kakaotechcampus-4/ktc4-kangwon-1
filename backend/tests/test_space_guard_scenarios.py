@@ -10,14 +10,14 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.agentic import scoring
-from app.agentic.scoring import evaluate, profiles, result
-from app.agentic.space_rules import load_requirements
-from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
-from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+from app.domain import scoring
+from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
+from app.domain.schemas import DecisionResult
+from app.domain.scoring import evaluate, profiles, result
+from app.domain.space_rules import load_requirements
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.schemas import DecisionResult
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 
@@ -34,7 +34,7 @@ def raised(grades):
             return result("C1", grades[code], reason="시험용 고정 등급", agglomeration="무관")
         return REAL_SCORE_ITEM(item, profile, code, *args, **kwargs)
 
-    return patch("app.agentic.scoring.score_item", side_effect=score_item)
+    return patch("app.domain.scoring.score_item", side_effect=score_item)
 
 
 class ServicePathScenarioTests(unittest.TestCase):

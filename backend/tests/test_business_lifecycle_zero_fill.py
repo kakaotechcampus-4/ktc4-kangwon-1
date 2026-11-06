@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from app.agents.business_lifecycle.preprocess import aggregate_rows
+from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows
 
 
 def source_row(quarter, source, stores=20, opened=2, closed=1):

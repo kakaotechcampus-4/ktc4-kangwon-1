@@ -16,13 +16,18 @@ from app.api.v1 import router as v1_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
-from app.config import AuthSettings, KakaoOAuthSettings, MailSettings, load_environment
-from app.db import repository
-from app.db.connection import initialize
-from app.local_data.score_reference import warm_reference
-from app.logging import protect_http_query_logs
-from app.services.jobs import AnalysisJobRegistry
-from app.services.settings import ExecutionSettings
+from app.application.jobs import AnalysisJobRegistry
+from app.infrastructure.config import (
+    AuthSettings,
+    KakaoOAuthSettings,
+    MailSettings,
+    load_environment,
+)
+from app.infrastructure.market_data.local.score_reference import warm_reference
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.settings import ExecutionSettings
+from app.shared.logging import protect_http_query_logs
 
 DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 logger = logging.getLogger(__name__)

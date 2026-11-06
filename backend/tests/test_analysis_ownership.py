@@ -6,18 +6,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.db import repository
-from app.db.connection import connect, initialize
+from app.application.auth import SESSION_COOKIE_NAME
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.auth import SESSION_COOKIE_NAME
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import create_user
 
 ORIGIN = {"Origin": "http://localhost:3000"}
 
 
 def _session_cookie(user_id, path):
-    from app.db.repository import sessions as session_repo
+    from app.infrastructure.persistence.repository import sessions as session_repo
 
     token, _ = session_repo.create_session(user_id, db_path=path)
     return token

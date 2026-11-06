@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.agents.commercial_area import client, franchise
-from app.agents.commercial_area.config import Settings
+from app.infrastructure.market_data.commercial_area import client, franchise
+from app.infrastructure.market_data.commercial_area.config import Settings
 
 ITEM = {
     "bizesId": "test-1",

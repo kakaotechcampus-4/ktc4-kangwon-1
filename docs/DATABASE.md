@@ -106,7 +106,7 @@ erDiagram
 
 ## 요청 DB
 
-스키마 버전은 **6**입니다(`backend/app/db/connection.py`의 `SCHEMA_VERSION`).
+스키마 버전은 **6**입니다(`backend/app/infrastructure/persistence/connection.py`의 `SCHEMA_VERSION`).
 
 - **더 새로운 버전은 거절하지 않습니다.** 옛 코드가 새 파일을 만나도 그대로 씁니다. 막으면 새 버전을 배포한 뒤 구 릴리스로 되돌아갈 길이 사라집니다(무중단 배포는 헬스체크 실패 시 구 릴리스로 되돌립니다).
 - **옛 버전은 `_UPGRADABLE_FROM`에 있을 때만 올립니다.** 지금은 `{5}`뿐입니다. `schema.sql`이 전부 `IF NOT EXISTS`라 테이블·인덱스를 **추가만** 하는 변경은 스키마를 다시 실행하는 것으로 올라갑니다. 기존 테이블의 칼럼이나 제약을 바꾸는 변경은 여기 더하지 말고 별도 절차를 만드세요.
@@ -381,7 +381,7 @@ erDiagram
 `space_fit_current`와 같은 '옆 표' 방식을 씁니다.
 
 **옛 요청.** 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. `LEGACY_OWNER_CUTOFF`
-(`app/db/repository/requests.py`) 이전에 만들어진 것만 조회를 열어 둡니다. 경계가 없으면
+(`app/infrastructure/persistence/repository/requests.py`) 이전에 만들어진 것만 조회를 열어 둡니다. 경계가 없으면
 앞으로 소유자 기록이 빠진 요청까지 전부 공개돼 영구 구멍이 됩니다.
 
 **탈퇴.** `facts`·`scores` 등에 삭제 금지 트리거가 걸려 있어 분석 자료는 지울 수 없습니다.

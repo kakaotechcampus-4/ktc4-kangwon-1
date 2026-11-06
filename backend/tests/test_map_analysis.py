@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.map_analysis.client import MapApiError, PlaceClient
-from app.agents.map_analysis.config import Settings
-from app.schemas import Site
+from app.domain.schemas import Site
+from app.infrastructure.market_data.map_analysis.client import MapApiError, PlaceClient
+from app.infrastructure.market_data.map_analysis.config import Settings
 
 HIT: dict[str, Any] = {
     "meta": {"total_count": 100, "pageable_count": 45, "is_end": False},

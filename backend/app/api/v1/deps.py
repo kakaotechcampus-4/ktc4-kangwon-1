@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request
 
-from app.services.auth import SESSION_COOKIE_NAME, is_verified, origin_allowed, session_user
+from app.application.auth import SESSION_COOKIE_NAME, is_verified, origin_allowed, session_user
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 

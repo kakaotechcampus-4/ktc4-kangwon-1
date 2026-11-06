@@ -14,9 +14,9 @@ from typing import Any
 
 from app.api.v1.analyses import require_owner
 from app.api.v1.deps import current_user, optional_user, require_origin, verified_user
-from app.db.connection import initialize
-from app.db.repository import users as user_repo
-from app.passwords import hash_password
+from app.domain.passwords import hash_password
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.persistence.repository import users as user_repo
 
 TEST_EMAIL = "tester@example.com"
 TEST_PASSWORD = "testpassword1"

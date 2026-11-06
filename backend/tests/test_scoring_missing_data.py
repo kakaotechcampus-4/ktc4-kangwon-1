@@ -8,13 +8,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.agentic import scoring
-from app.agentic.facts import register_fact
-from app.agentic.report import ReportInvalid, validate_proposal
-from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.storage.raw import capture_scope
+from app.application.facts import register_fact
+from app.application.report import ReportInvalid, validate_proposal
+from app.domain import scoring
+from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class MissingDataTests(unittest.TestCase):
@@ -133,7 +133,7 @@ class MissingDataTests(unittest.TestCase):
             with (
                 self.subTest(status=status),
                 patch(
-                    "app.agentic.report.fact_rows",
+                    "app.application.report.fact_rows",
                     return_value={"f": {"status": status, "citable": citable}},
                 ),
             ):
