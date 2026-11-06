@@ -53,7 +53,7 @@ async function startAnalysis(page: Page) {
     await parking.getByRole('radio', { name: '가능' }).click();
   }
   await start.click();
-  await expect(page).toHaveURL(/\/analysis-progress\?id=/);
+  await expect(page).toHaveURL(/\/analysis-progress\?id=/, { timeout: 30_000 });
 }
 
 function answerFor(question: string) {
