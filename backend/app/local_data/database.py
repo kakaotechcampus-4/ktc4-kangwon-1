@@ -13,6 +13,7 @@ from uuid import uuid4
 from app.canonical import file_sha256
 from app.clock import utc_now_iso
 from app.db.connection import SQLITE_BUSY_TIMEOUT_MS
+from app.industries import catalog
 from app.industries.catalog import INDUSTRIES
 from app.seoul import previous_quarter
 
@@ -93,7 +94,7 @@ class LocalDataDB:
             raise DataValidationError("알 수 없는 원천")
         if quarter:
             previous_quarter(quarter)
-        mapping_hash = file_sha256(Path(__file__).parents[1] / "industries/catalog.py")
+        mapping_hash = file_sha256(Path(catalog.__file__))
         with self.connection() as con:
             existing = con.execute(
                 "SELECT version_id FROM data_versions WHERE source=? AND quarter=? "

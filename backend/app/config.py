@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
+BACKEND_DIR = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
 
 
 @dataclass(frozen=True)

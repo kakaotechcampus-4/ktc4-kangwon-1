@@ -35,7 +35,7 @@ include = ["app*"]
 "app.agents.commercial_area" = ["data/*.csv"]
 "app.agents.floating_population" = ["data/*.csv"]
 "app.agents.business_lifecycle" = ["data/trdar_area/*"]
-"app.industries" = ["data/*.csv", "data/*.json"]
+"app.industries" = ["data/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

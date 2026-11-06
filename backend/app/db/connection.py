@@ -9,9 +9,10 @@ from importlib.resources import files
 from pathlib import Path
 from threading import Lock
 
+from app.config import BACKEND_DIR
+
 logger = logging.getLogger(__name__)
 
-BACKEND_DIR = Path(__file__).resolve().parents[2]
 # ponytail: 초기화 잠금은 프로세스 내부용입니다. 다중 워커는 시작 전 마이그레이션이 필요합니다.
 _INITIALIZE_LOCK = Lock()
 SCHEMA_VERSION = 6
@@ -97,7 +98,7 @@ def _apply_schema(connection: sqlite3.Connection, path: Path) -> None:
     버전을 앞서 쓰면 DDL 이 실패했을 때 "테이블은 없는데 버전만 최신"인 파일이
     남습니다. 그런 파일은 다음 기동 때 검사를 통과해 버려 더 찾기 어렵습니다.
     """
-    schema = files("app.db").joinpath("schema.sql").read_text(encoding="utf-8")
+    schema = files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     connection.executescript(schema)
     missing = [name for name in _REQUIRED_TABLES if not _has_table(connection, name)]
     if missing:

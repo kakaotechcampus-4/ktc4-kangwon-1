@@ -23,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.config import BACKEND_DIR  # noqa: E402
 from app.industries import (  # noqa: E402
     LEGACY70_LINK_PATH,
     MASTER_PATH,
@@ -158,9 +159,7 @@ def check_small(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -
     seen = set()
     targets: dict[str, set[str]] = {}
     split_middles = {r["source_middle_code"] for r in rows}
-    evidence_path = (
-        PACKAGE_DIR.parents[1] / "examples" / "schema_compare" / "upjong_small_official.csv"
-    )
+    evidence_path = BACKEND_DIR / "examples" / "schema_compare" / "upjong_small_official.csv"
     with evidence_path.open(encoding="utf-8-sig", newline="") as handle:
         official = {
             (r["indsMclsCd"], r["indsSclsCd"], r["indsSclsNm"]) for r in csv.DictReader(handle)

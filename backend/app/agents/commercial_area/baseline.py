@@ -28,6 +28,7 @@ import math
 from pathlib import Path
 from typing import Final
 
+from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 from app.stats import percentile_rank
 
@@ -87,9 +88,7 @@ def _percentile(bounds: tuple[float, ...], density: float) -> float | None:
 
 # 원천: 소상공인시장진흥공단_상가(상권)정보_서울_202606.csv · 2026Q2
 # 서울 상권 1,650개 중심 · 반경 500m · 개/km² · service-51 · 분할 누락 0
-DENSITY_PERCENTILES_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "industries/data/density_percentiles.csv"
-)
+DENSITY_PERCENTILES_PATH: Final = DATA_DIR / "density_percentiles.csv"
 
 
 def load_density_percentiles(path: Path = DENSITY_PERCENTILES_PATH) -> dict[str, dict[int, float]]:
