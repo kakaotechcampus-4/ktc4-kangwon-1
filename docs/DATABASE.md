@@ -119,6 +119,8 @@ erDiagram
 
 `snapshots`는 요청 하나당 하나입니다. `local_snapshots`가 이 요청이 읽은 자료 버전 목록과 조회 범위를 기록해서, 활성 release가 바뀌어도 같은 요청은 같은 버전을 읽습니다.
 
+`config_hashes_json`(새 fact의 `input_versions`에도 들어감)의 키는 `industry_profile`·`code90`·`code90_reference`·`population_baseline`·`density_baseline`·`lifecycle_baseline`입니다. 값은 업종 프로필 CSV만 파일 해시이고, 나머지는 설정 행(방법·가중치·기준값·`REFERENCE_VERSION`)의 내용 해시라서 파일을 옮기거나 import 줄을 고쳐도 바뀌지 않습니다. 2026-11 구조 개편 전 결과는 `파일명+폴더명` 키와 파일 해시를 썼으며, 저장만 하고 다시 검증하지 않으므로 그대로 둡니다.
+
 ```mermaid
 erDiagram
   analysis_requests {

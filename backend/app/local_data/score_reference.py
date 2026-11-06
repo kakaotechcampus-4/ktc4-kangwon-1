@@ -6,16 +6,16 @@ import threading
 from collections import Counter, defaultdict
 from functools import lru_cache
 from itertools import product
-from pathlib import Path
 from uuid import uuid4
 
-from app.canonical import canonical_hash, canonical_json, file_sha256
+from app.canonical import canonical_hash, canonical_json
 from app.config import BACKEND_DIR
 from app.db.connection import readonly
 from app.geo import haversine_m, to_epsg5181
 from app.industries.catalog import INDUSTRIES
 
 CACHE_DIR = BACKEND_DIR / "cache" / "s2-half-reference"
+REFERENCE_VERSION = "1"
 _BUILDING = threading.Lock()
 
 
@@ -101,9 +101,7 @@ def _build_reference(path, stores_id, areas_id):
 @lru_cache(maxsize=2)
 def city_reference(path, stores_id, areas_id, stores_hash, areas_hash):
     """새 자료 버전에서 한 번 계산하며 재시작 후에도 공개 집계 캐시를 재사용합니다."""
-    key = canonical_hash(
-        [file_sha256(Path(__file__)), path, stores_id, areas_id, stores_hash, areas_hash]
-    )
+    key = canonical_hash([REFERENCE_VERSION, path, stores_id, areas_id, stores_hash, areas_hash])
     folder = CACHE_DIR
     target = folder / f"{key}.json"
     with _BUILDING:

@@ -5,12 +5,11 @@ import io
 import json
 import os
 import uuid
-from pathlib import Path
 
 from app.agents.business_lifecycle import baseline as lifecycle_baseline
 from app.agents.commercial_area import baseline as density_baseline
 from app.agents.floating_population import baseline as population_baseline
-from app.canonical import canonical_json, file_sha256
+from app.canonical import canonical_hash, canonical_json, file_sha256
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
 from app.db.connection import connect
@@ -53,17 +52,23 @@ def snapshot_config(scope, *, local=False):
     ):
         raise ValueError("승인된 51개 업종 프로필이 필요합니다.")
     configs = [
-        (profile_path, profiles),
+        ("industry_profile", profiles),
         (
-            Path(code90.__file__),
+            "code90",
             [{"configuration": "code90", "method": code90.METHOD, "weights": code90.WEIGHTS}],
         ),
         (
-            Path(score_reference.__file__),
-            [{"configuration": "code90_reference", "method": code90.METHOD}],
+            "code90_reference",
+            [
+                {
+                    "configuration": "code90_reference",
+                    "method": code90.METHOD,
+                    "version": score_reference.REFERENCE_VERSION,
+                }
+            ],
         ),
         (
-            Path(population_baseline.__file__),
+            "population_baseline",
             [
                 {
                     "configuration": "population_baseline",
@@ -82,7 +87,7 @@ def snapshot_config(scope, *, local=False):
             ],
         ),
         (
-            Path(density_baseline.__file__),
+            "density_baseline",
             [
                 {
                     "configuration": "density_baseline",
@@ -91,7 +96,7 @@ def snapshot_config(scope, *, local=False):
             ],
         ),
         (
-            Path(lifecycle_baseline.__file__),
+            "lifecycle_baseline",
             [
                 {
                     "configuration": "lifecycle_baseline",
@@ -101,9 +106,9 @@ def snapshot_config(scope, *, local=False):
         ),
     ]
     hashes = {}
-    for path, rows in configs:
-        digest = file_sha256(path)
-        hashes[path.name + str(path.parent.name)] = digest
+    for name, rows in configs:
+        digest = file_sha256(profile_path) if name == "industry_profile" else canonical_hash(rows)
+        hashes[name] = digest
         if local:
             continue
         with connect(scope.path) as db:
@@ -112,7 +117,7 @@ def snapshot_config(scope, *, local=False):
             scope.record_sync(
                 source="baseline",
                 source_type="file",
-                args={"file_name": path.name, "file_hash": digest, "quarter": "20262"},
+                args={"file_name": name, "file_hash": digest, "quarter": "20262"},
                 page="file",
                 status=None,
                 payload={"rows": rows},
