@@ -1368,12 +1368,12 @@
   min-width: 0;
   padding: 13px 0;
 }
-.report-page .industry-ranking-list > li:has(.industry-ranking-detail[open]) {
+.report-page .industry-ranking-list > li:has(.industry-ranking-detail) {
   align-items: start;
 }
 .report-page
   .industry-ranking-list
-  > li:has(.industry-ranking-detail[open])
+  > li:has(.industry-ranking-detail)
   > .industry-ranking-number {
   padding-top: 13px;
 }
