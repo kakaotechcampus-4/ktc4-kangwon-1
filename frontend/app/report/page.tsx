@@ -12,7 +12,6 @@ import {
   mockRankingView,
   rankingView,
 } from '@/components/report/industryRanking';
-import { INDUSTRIES } from '@/lib/api/industries';
 import {
   FactCompetitionSection,
   FactFloatingPopulationSection,
@@ -460,11 +459,6 @@ function ReportContent() {
   const ranking = analysisResult
     ? rankingView(analysisResult, factIndex)
     : mockRankingView();
-  const rankingCount = analysisResult
-    ? analysisResult.ranking?.length
-      ? Object.keys(INDUSTRIES).length
-      : analysisResult.top5.length
-    : Object.keys(INDUSTRIES).length;
   const reviewerList =
     analysisResult?.evaluator_reviews ?? mockReportData.evaluatorReviews;
   const limitations = analysisResult
@@ -759,9 +753,9 @@ function ReportContent() {
             <Chapter
               id="compare"
               title="분석한 51개 업종을 검토 순서대로 정리했어요. 순위는 업종 간 비교를 돕는 참고 자료이며, 실제 입점 가능 여부와는 별도로 확인해야 합니다."
-              aside={`${rankingCount}개 업종`}
+              aside={ranking.label}
             >
-              <IndustryRankingList view={ranking} totalCount={rankingCount} />
+              <IndustryRankingList view={ranking} />
             </Chapter>
             <Chapter
               id="reviews"

@@ -34,7 +34,7 @@ function RankingRow({ industry }: { industry: RankingItem }) {
         </span>
         {(industry.reasons || (industry.checks?.length ?? 0) > 0) && (
           <details className="industry-ranking-detail">
-            <summary>추천 이유 보기</summary>
+            <summary>{industry.detailTitle}</summary>
             {industry.reasons && <p>{industry.reasons}</p>}
             {industry.checks && industry.checks.length > 0 && (
               <>
@@ -53,13 +53,7 @@ function RankingRow({ industry }: { industry: RankingItem }) {
   );
 }
 
-export default function IndustryRankingList({
-  view,
-  totalCount,
-}: {
-  view: RankingView;
-  totalCount: number;
-}) {
+export default function IndustryRankingList({ view }: { view: RankingView }) {
   const firstTen = view.items.slice(0, 10);
   const remaining = view.items.slice(10);
   return (
@@ -68,9 +62,7 @@ export default function IndustryRankingList({
       <div className="industry-ranking-mobile">
         <div className="industry-ranking-mobile-heading-row">
           <h3 className="industry-ranking-mobile-heading">먼저 검토할 업종</h3>
-          <span className="industry-ranking-mobile-count">
-            {totalCount}개 업종
-          </span>
+          <span className="industry-ranking-mobile-count">{view.label}</span>
         </div>
         <ol className="industry-ranking-list" start={1}>
           {firstTen.map((industry) => (

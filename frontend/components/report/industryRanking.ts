@@ -11,6 +11,7 @@ export type RankingItem = {
   rank: number;
   name: string;
   aiExcluded: boolean;
+  detailTitle?: string;
   reasons?: string;
   checks?: string[];
 };
@@ -25,6 +26,7 @@ export type RankingView = {
   items: RankingItem[];
   groups: RankingGroup[];
   notice: string | null;
+  label: string;
 };
 
 export function mockRankingView(): RankingView {
@@ -36,6 +38,7 @@ export function mockRankingView(): RankingView {
     })),
     groups: [],
     notice: null,
+    label: `${mockIndustryRankingCodes.length}개 업종`,
   };
 }
 
@@ -71,7 +74,12 @@ export function rankingView(
     }
     const reasons = renderSegments(candidate.reasons_segments, facts).trim();
     const checks = candidateChecks(candidate, facts);
-    return reasons || checks.length > 0 ? { ...item, reasons, checks } : item;
+    const detailTitle = item.aiExcluded
+      ? 'AI가 뺀 이유 보기'
+      : '추천 이유 보기';
+    return reasons || checks.length > 0
+      ? { ...item, detailTitle, reasons, checks }
+      : item;
   });
 
   const excludedLines = result.excluded_candidates.map((candidate) => {
@@ -98,7 +106,7 @@ export function rankingView(
     {
       title: '제외한 업종',
       description:
-        'AI가 근거를 보고 빼자고 한 업종이에요. 순위에는 그대로 남겨 두었어요.',
+        'AI가 근거를 보고 빼자고 한 업종과 그 이유예요. 추천 순서는 바꾸지 않았어요.',
       lines: excludedLines,
     },
     {
@@ -109,9 +117,14 @@ export function rankingView(
     },
   ].filter((group) => group.lines.length > 0);
 
+  const excludedCount =
+    (result.condition_excluded?.length ?? 0) + regulationLines.length;
   return {
     items,
     groups,
+    label: result.ranking?.length
+      ? `${items.length}개 순위${excludedCount ? ` · ${excludedCount}개 제외` : ''}`
+      : `추천 ${items.length}개`,
     notice: result.ranking?.length
       ? null
       : '이 분석은 전체 순위를 저장하지 않아 추천 업종만 보여 드려요. 다시 분석하면 전체 순위를 볼 수 있어요.',

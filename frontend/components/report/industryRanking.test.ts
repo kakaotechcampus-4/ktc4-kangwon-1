@@ -44,7 +44,7 @@ const top5 = [
   candidate('M104', '회계·세무 서비스', '법인 수요가 있습니다.'),
   candidate('M105', '회사 본부·경영 컨설팅 서비스', '업무 지구입니다.'),
   candidate('N102', '건물 청소·방제', '관리 건물이 많습니다.'),
-  candidate('N105', '여행 서비스', '유동인구가 많습니다.'),
+  candidate('N105', '여행 서비스', '온라인 예약 비중이 큽니다.'),
 ];
 
 const base = {
@@ -95,9 +95,20 @@ describe('업종 비교 순위', () => {
       reasons: '주변 사무실이 많습니다.',
       checks: ['임대료를 확인하세요.'],
     });
-    expect(view.items[4].aiExcluded).toBe(true);
+    expect(view.items[0].detailTitle).toBe('추천 이유 보기');
+    expect(view.items[4]).toMatchObject({
+      aiExcluded: true,
+      detailTitle: 'AI가 뺀 이유 보기',
+    });
     expect(view.items[5].reasons).toBeUndefined();
     expect(view.notice).toBeNull();
+    expect(view.label).toBe('6개 순위 · 2개 제외');
+  });
+
+  it('제외 설명은 순위에 남는다고 단정하지 않는다', () => {
+    const view = rankingView(base, indexFacts([]));
+    const excluded = view.groups.find((group) => group.title === '제외한 업종');
+    expect(excluded?.description).not.toContain('순위에는');
   });
 
   it('조건 제외·AI 제외·규제 제외를 순위 아래 따로 모은다', () => {
@@ -127,5 +138,6 @@ describe('업종 비교 순위', () => {
     expect(view.items.map((item) => item.rank)).toEqual([1, 2, 3, 4, 5]);
     expect(view.items[4].aiExcluded).toBe(true);
     expect(view.notice).toContain('전체 순위');
+    expect(view.label).toBe('추천 5개');
   });
 });
