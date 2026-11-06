@@ -111,6 +111,18 @@ export interface ConditionExcludedCandidate {
   score_rank: number;
 }
 
+export interface RankedIndustry {
+  industry_code: string;
+  industry_name: string;
+  rank: number;
+  ai_excluded: boolean;
+}
+
+export interface RegulationExcludedIndustry {
+  industry_code: string;
+  industry_name: string;
+}
+
 export interface NewFactor {
   direction: 'favorable' | 'adverse' | 'neutral';
   claim: string;
@@ -192,6 +204,8 @@ export interface DecisionResult {
   top5: FinalCandidate[];
   excluded_candidates: FinalCandidate[];
   condition_excluded?: ConditionExcludedCandidate[];
+  ranking?: RankedIndustry[];
+  regulation_excluded?: RegulationExcludedIndustry[];
   // 보고서가 인용한 fact만 담는다. 차트용 전체 fact는 getAnalysisFacts로 받는다.
   facts: FactView[];
   L_records: LRecord[];

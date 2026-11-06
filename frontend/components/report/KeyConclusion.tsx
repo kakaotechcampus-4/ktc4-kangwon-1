@@ -170,12 +170,14 @@ export default function KeyConclusion({
   name,
   industryCode,
   badge,
+  summary,
   checks,
   facts,
 }: {
   name: string | null | undefined;
   industryCode?: string;
   badge?: string;
+  summary?: string;
   // 후보의 위험·확인 조건과 결과 전체의 확인 조건 문장
   checks: string[];
   facts: FactIndex;
@@ -327,6 +329,11 @@ export default function KeyConclusion({
               <p className="key-conclusion-direction-label text-sm font-bold text-[#9FB4D6]">
                 검토 방향
               </p>
+              {summary && (
+                <p className="key-conclusion-direction-summary break-keep text-base leading-[1.7] font-semibold text-white/90 sm:text-lg">
+                  {summary}
+                </p>
+              )}
               <p className="key-conclusion-direction-copy break-keep text-xl leading-[1.6] font-bold tracking-[-0.02em] sm:text-22">
                 <span className="key-conclusion-direction-desktop">
                   {withObject(name)} 먼저 검토하되,{' '}

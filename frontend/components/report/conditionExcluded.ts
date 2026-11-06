@@ -27,7 +27,6 @@ export function conditionExcludedLines(
     return null;
   }
   return items.map(
-    (item) =>
-      `${item.industry_name} — ${because(item.reasons)} 추천에서 뺐어요 (점수로는 ${item.score_rank}위)`
+    (item) => `${item.industry_name} — ${because(item.reasons)} 추천에서 뺐어요`
   );
 }

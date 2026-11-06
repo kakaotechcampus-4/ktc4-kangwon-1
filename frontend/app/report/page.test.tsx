@@ -109,6 +109,75 @@ describe('리포트 화면', () => {
     expect(getAnalysis).toHaveBeenCalledWith('r1');
   });
 
+  it('업종 비교는 목업 대신 서버 순위와 제외 업종을 보여 준다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue({
+      ...stored,
+      result: {
+        ...result,
+        ranking: [
+          {
+            industry_code: 'I21201',
+            industry_name: '시험용 수제과자점',
+            rank: 1,
+            ai_excluded: false,
+          },
+          {
+            industry_code: 'I21202',
+            industry_name: '시험용 둘째 업종',
+            rank: 2,
+            ai_excluded: true,
+          },
+        ],
+        condition_excluded: [
+          {
+            industry_code: 'I201',
+            industry_name: '한식 음식점',
+            reasons: ['배기(덕트) 설치 불가'],
+            score_rank: 2,
+          },
+        ],
+        regulation_excluded: [
+          { industry_code: 'I101', industry_name: '일반·생활 숙박' },
+        ],
+      },
+    });
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.getElementById('compare')?.textContent).toContain(
+        '시험용 둘째 업종'
+      )
+    );
+    const compare = document.getElementById('compare')!;
+    const names = [
+      ...compare.querySelectorAll(
+        '.industry-ranking-groups .industry-ranking-name'
+      ),
+    ].map((node) => node.firstChild?.textContent);
+    expect(names).toEqual(['시험용 수제과자점', '시험용 둘째 업종']);
+    expect(compare.textContent).not.toContain('카페·비알코올 음료점');
+    expect(compare.textContent).toContain('AI 제외 의견');
+    expect(compare.textContent).toContain('주변 직장인이 많습니다.');
+    expect(compare.textContent).toContain('조건 때문에 뺀 업종');
+    expect(compare.textContent).toContain('일반·생활 숙박');
+    expect(compare.textContent).not.toMatch(/\d+점/);
+    expect(document.getElementById('conclusion')?.textContent).toContain(
+      '직장인 수요가 가장 큽니다.'
+    );
+  });
+
+  it('전체 순위가 없는 예전 분석은 추천 업종만 보여 주고 알린다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue(stored);
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.getElementById('compare')?.textContent).toContain(
+        '전체 순위를 저장하지 않아'
+      )
+    );
+    expect(document.getElementById('compare')?.textContent).not.toContain(
+      '카페·비알코올 음료점'
+    );
+  });
+
   it('PDF 다운로드를 누르면 예쁜 이름으로 인쇄 창을 연다', async () => {
     vi.mocked(getAnalysis).mockResolvedValue(stored);
     const titles: string[] = [];
