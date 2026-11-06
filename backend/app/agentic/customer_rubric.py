@@ -9,18 +9,12 @@ SQLite 읽기는 호출자가 스레드로 격리합니다.
 
 import json
 
+from app.agentic.contracts import CustomerCandidateScore, CustomerCheck, CustomerRubric, ReviewIssue
+from app.agentic.scoring import WEIGHTS
 from app.canonical import canonical_json
 from app.db.connection import connect
 from app.db.repository import facts as fact_db
 from app.db.repository import scores as score_db
-
-from .contracts import (
-    CustomerCandidateScore,
-    CustomerCheck,
-    CustomerRubric,
-    ReviewIssue,
-)
-from .scoring import WEIGHTS
 
 DEMAND = ("D1", "D2", "D3", "D4")
 # 본 질문(K6)을 가장 크게 두고, 코드 문항은 확실한 잘못을 잡는 안전장치로 과반을 남깁니다.
@@ -245,7 +239,7 @@ def code_checks(scope, draft):
 
 def packet(scope, draft, scored, issues):
     """모델에는 K6 판단에 필요한 Top5 문장·인용 fact만 넘깁니다."""
-    from .report import fact_rows
+    from app.agentic.report import fact_rows
 
     candidates = []
     ids = set()

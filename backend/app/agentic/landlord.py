@@ -2,13 +2,12 @@
 
 import json
 
+from app.agentic.aliases import encode
 from app.canonical import canonical_json
 from app.db.connection import connect
 from app.db.repository import facts as fact_db
 from app.industries.catalog import INDUSTRIES
 from app.local_data.provenance import expand_spatial_scope, validate_snapshot
-
-from .aliases import encode
 
 PERSONA = (
     "임대인 편입니다. 공실 해소와 임대 지속성을 우선 검토하세요. "

@@ -10,13 +10,12 @@ from typing import get_args
 from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
 
+from app.agentic.contracts import Actor
 from app.canonical import canonical_json
 from app.concurrency import run_in_thread
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.storage.scrub import env_secrets, scrub
-
-from .contracts import Actor
 
 _IDENTIFIER = re.compile(
     r"^(?P<prefix>(?:request|snapshot|fact|tc|consult|score|question|report|map|f|s|sc|ss)_)?"

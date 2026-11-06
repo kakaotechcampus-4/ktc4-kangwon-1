@@ -9,6 +9,9 @@ from collections import Counter
 from functools import cache
 from typing import Any, TypeGuard
 
+from app.agentic import code90
+from app.agentic.availability import coverage_notes
+from app.agentic.space_rules import judge, load_requirements
 from app.agents.business_lifecycle.baseline import (
     BASELINE_BASE_QUARTER,
     BASELINE_QUARTER_COUNT,
@@ -25,10 +28,6 @@ from app.agents.floating_population.population import (
 )
 from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
-
-from . import code90
-from .availability import coverage_notes
-from .space_rules import judge, load_requirements
 
 WEIGHTS = {
     "D1": 10,

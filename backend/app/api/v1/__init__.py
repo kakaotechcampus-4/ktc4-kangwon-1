@@ -1,5 +1,5 @@
 """v1 API 패키지입니다."""
 
-from .analyses import router
+from app.api.v1.analyses import router
 
 __all__ = ["router"]

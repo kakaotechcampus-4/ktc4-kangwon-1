@@ -6,8 +6,7 @@ from typing import Any
 
 from app.clock import utc_now_iso
 from app.db.connection import connect
-
-from .common import _dumps, _request_row, _text
+from app.db.repository.common import _dumps, _request_row, _text
 
 
 def append_event(

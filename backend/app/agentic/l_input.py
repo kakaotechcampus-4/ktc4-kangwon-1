@@ -2,13 +2,12 @@
 
 import json
 
+from app.agentic.aliases import decode
+from app.agentic.contracts import LInput, LRecord
+from app.agentic.report import RULE_SPACE_MESSAGE, fact_rows, l_grade, rule_scored_space
 from app.db.connection import connect
 from app.db.repository import agentic as agentic_db
 from app.text import has_digit
-
-from .aliases import decode
-from .contracts import LInput, LRecord
-from .report import RULE_SPACE_MESSAGE, fact_rows, l_grade, rule_scored_space
 
 
 def build_record(scope, raw, base_id, base_rows):

@@ -3,12 +3,11 @@
 import json
 import re
 
+from app.agentic.aliases import encode, label_periods
+from app.agentic.report import fact_rows
 from app.canonical import canonical_json
 from app.db.connection import connect
 from app.db.repository import scores as score_db
-
-from .aliases import encode, label_periods
-from .report import fact_rows
 
 PERSONA = (
     "심사관입니다. 점수·순위는 바꾸지 않고 보고서 문장과 근거가 맞는지 검토합니다. "

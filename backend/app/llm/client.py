@@ -12,9 +12,9 @@ from openai.lib.streaming.chat import AsyncChatCompletionStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 
-from .budget import current_scope
-from .config import LLMSettings
-from .session import acquire_client
+from app.llm.budget import current_scope
+from app.llm.config import LLMSettings
+from app.llm.session import acquire_client
 
 RETRY_DELAYS = (1.0, 2.0)
 RETRY_HTTP_STATUSES = frozenset({429, 502, 503, 504})

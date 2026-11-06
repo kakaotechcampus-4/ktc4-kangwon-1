@@ -4,9 +4,8 @@ import csv
 from dataclasses import dataclass
 from functools import cache
 
+from app.agentic.space_values import GROUND_LEVELS, area_fit, floor_number
 from app.industries import DATA_DIR
-
-from .space_values import GROUND_LEVELS, area_fit, floor_number
 
 FACILITY_NAMES = {"kitchen": "주방", "ventilation": "배기(덕트)", "water_supply": "급배수"}
 FACILITY_STATES = frozenset({"present", "installable", "unavailable"})

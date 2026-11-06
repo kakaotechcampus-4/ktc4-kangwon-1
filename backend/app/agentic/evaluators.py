@@ -9,6 +9,11 @@ from dataclasses import replace
 
 from pydantic import ValidationError
 
+from app.agentic import customer_rubric, examiner, founder, landlord
+from app.agentic.aliases import encode, label_periods, labels_periods
+from app.agentic.contracts import EvaluatorReview, ReviewRef, ToolReply
+from app.agentic.report import ReportInvalid, fact_rows
+from app.agentic.sql_tool import error
 from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
@@ -18,12 +23,6 @@ from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
 from app.text import has_digit
-
-from . import customer_rubric, examiner, founder, landlord
-from .aliases import encode, label_periods, labels_periods
-from .contracts import EvaluatorReview, ReviewRef, ToolReply
-from .report import ReportInvalid, fact_rows
-from .sql_tool import error
 
 PERSONAS = {
     "examiner": examiner.PERSONA,

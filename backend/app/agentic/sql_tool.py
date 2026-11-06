@@ -6,14 +6,13 @@ import re
 import sqlite3
 from time import monotonic
 
+from app.agentic.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolError, ToolReply
+from app.agentic.facts import register_fact
 from app.concurrency import run_in_thread
 from app.db.connection import connect, readonly
 from app.geo import haversine_m
 from app.local_data.persistence import register_cell
 from app.local_data.provenance import load_snapshot, validate_snapshot
-
-from .contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolError, ToolReply
-from .facts import register_fact
 
 VIEWS = {
     "v_raw_stores": "commercial_area",

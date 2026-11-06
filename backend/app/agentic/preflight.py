@@ -6,6 +6,10 @@ from dataclasses import replace
 
 import httpx
 
+from app.agentic.contracts import MapSearchInput
+from app.agentic.map_regulation import check_regulation, map_search
+from app.agentic.sql_tool import error
+from app.agentic.tools import SharedTools
 from app.agents.map_analysis.client import MapApiError
 from app.canonical import canonical_hash
 from app.clock import utc_now_iso
@@ -18,11 +22,6 @@ from app.education_zone import (
     find_education_zones,
 )
 from app.industries import DATA_DIR
-
-from .contracts import MapSearchInput
-from .map_regulation import check_regulation, map_search
-from .sql_tool import error
-from .tools import SharedTools
 
 FACILITIES = ("HP8", "SC4", "CT1", "AT4", "SW8")
 

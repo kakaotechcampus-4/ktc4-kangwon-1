@@ -13,8 +13,8 @@ from typing import Any
 
 import httpx
 
-from .config import FTC_BRAND_BASE_URL, FTC_BRAND_OPERATION, Settings
-from .schemas import Franchise, FranchiseByMiddle, MiddleCategory, Store
+from app.agents.commercial_area.config import FTC_BRAND_BASE_URL, FTC_BRAND_OPERATION, Settings
+from app.agents.commercial_area.schemas import Franchise, FranchiseByMiddle, MiddleCategory, Store
 
 MIN_BRAND_LENGTH = 2
 NORMALIZE_PATTERN = re.compile(r"[\s\(\)\[\]\-_.,'\"·&]+")

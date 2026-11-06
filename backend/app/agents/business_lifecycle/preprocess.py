@@ -4,6 +4,12 @@ from typing import Any
 
 import pandas as pd
 
+from app.agents.business_lifecycle.client import (
+    SeoulOpenAPINoDataError,
+    fetch_recent_store_data,
+    get_recent_quarters,
+)
+from app.agents.business_lifecycle.config import Settings
 from app.industries.catalog import (
     EXCLUDED_SEOUL_INDUSTRIES,
     INDUSTRY_TO_SEOUL,
@@ -17,9 +23,6 @@ from app.industries.catalog import (
 from app.industries.catalog import (
     SEOUL_TO_INDUSTRY as SEOUL_TO_SERVICE,
 )
-
-from .client import SeoulOpenAPINoDataError, fetch_recent_store_data, get_recent_quarters
-from .config import Settings
 
 
 class UpstreamDataError(ValueError):

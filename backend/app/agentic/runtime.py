@@ -10,21 +10,10 @@ from types import SimpleNamespace
 
 from pydantic import ValidationError
 
-from app.canonical import canonical_json
-from app.clock import utc_now_iso
-from app.concurrency import run_in_thread
-from app.db.connection import connect
-from app.db.repository import agentic as agentic_db
-from app.db.repository import append_event
-from app.industries.catalog import INDUSTRIES
-from app.llm.budget import BudgetExceeded, llm_scope
-from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
-from app.llm.config import LLMSettings
-
-from . import advisor, questions
-from .aliases import encode, encode_messages, labels_periods
-from .budget import RuntimeBudget
-from .contracts import (
+from app.agentic import advisor, questions
+from app.agentic.aliases import encode, encode_messages, labels_periods
+from app.agentic.budget import RuntimeBudget
+from app.agentic.contracts import (
     EVALUATOR_ACTORS,
     EVALUATOR_COUNT,
     EvaluatorReview,
@@ -39,11 +28,11 @@ from .contracts import (
     TextSegment,
     ToolReply,
 )
-from .evaluators import review
-from .l_input import build_record
-from .questions import LoopOutcome
-from .read_tools import score_summary
-from .report import (
+from app.agentic.evaluators import review
+from app.agentic.l_input import build_record
+from app.agentic.questions import LoopOutcome
+from app.agentic.read_tools import score_summary
+from app.agentic.report import (
     ReportInvalid,
     complete_l_records,
     finalize,
@@ -51,11 +40,21 @@ from .report import (
     recompute_l_scores,
     validate_l_records,
 )
-from .scoring import rank_candidates
-from .snapshot import persist_space_requirements
-from .space import ensure_space_fits
-from .sql_tool import error
-from .tools import ToolExecutor, validation_message
+from app.agentic.scoring import rank_candidates
+from app.agentic.snapshot import persist_space_requirements
+from app.agentic.space import ensure_space_fits
+from app.agentic.sql_tool import error
+from app.agentic.tools import ToolExecutor, validation_message
+from app.canonical import canonical_json
+from app.clock import utc_now_iso
+from app.concurrency import run_in_thread
+from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
+from app.db.repository import append_event
+from app.industries.catalog import INDUSTRIES
+from app.llm.budget import BudgetExceeded, llm_scope
+from app.llm.client import LLMHTTPError, LLMResponseError, complete_json, complete_tools
+from app.llm.config import LLMSettings
 
 SYSTEM_PROMPT = """당신은 빈 상가의 업종 검토를 담당하는 decision입니다.
 계산·코드 점수·순위·배지는 서버가 정합니다. 초기 score_summary를 재사용하세요.

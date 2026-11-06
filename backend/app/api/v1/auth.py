@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
+from app.api.v1.deps import current_user, db_path, require_origin
 from app.db.repository import list_user_requests
 from app.db.repository import sessions as session_repo
 from app.kakao_oauth import KakaoOAuthError, authorize_url
@@ -23,8 +24,6 @@ from app.services.auth import (
     public_user,
     safe_next,
 )
-
-from .deps import current_user, db_path, require_origin
 
 EmailText = Annotated[str, AfterValidator(service.normalize_email)]
 

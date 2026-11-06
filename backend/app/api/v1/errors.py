@@ -5,10 +5,9 @@ import logging
 from fastapi import HTTPException
 
 from app.address import ADDRESS_INPUT_ERRORS, GeocodeError
+from app.api.v1.jobs import request_headers
 from app.errors import AnalysisConflictError as AnalysisConflictError
 from app.logging import log_exception
-
-from .jobs import request_headers
 
 logger = logging.getLogger(__name__)
 

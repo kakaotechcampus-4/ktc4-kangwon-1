@@ -4,6 +4,10 @@ import json
 import uuid
 from dataclasses import dataclass
 
+from app.agentic.contracts import QuestionSessionRef, ToolReply
+from app.agentic.facts import register_fact
+from app.agentic.space import CONFIRMED_UNIT, ensure_space_fits
+from app.agentic.sql_tool import error
 from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
@@ -12,11 +16,6 @@ from app.db.repository import agentic as agentic_db
 from app.db.repository import raw as raw_db
 from app.db.repository.agentic import begin_immediate
 from app.errors import AnalysisConflictError
-
-from .contracts import QuestionSessionRef, ToolReply
-from .facts import register_fact
-from .space import CONFIRMED_UNIT, ensure_space_fits
-from .sql_tool import error
 
 
 @dataclass

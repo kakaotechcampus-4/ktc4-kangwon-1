@@ -10,10 +10,9 @@ from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 
+from app.agents.business_lifecycle.config import Settings
 from app.geo import to_epsg5181
 from app.schemas import Site
-
-from .config import Settings
 
 Point = tuple[float, float]
 Ring = Sequence[Point]

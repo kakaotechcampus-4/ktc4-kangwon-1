@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-from .catalog import (
+from app.industries.catalog import (
     INDUSTRIES,
     INDUSTRY_MAJORS,
     INDUSTRY_TERMS,
@@ -22,7 +22,7 @@ from .catalog import (
     SMALL_TO_INDUSTRY,
     SPLIT_MIDDLES,
 )
-from .models import Industry
+from app.industries.models import Industry
 
 _TAIL = re.compile(r"(소매업|판매업|운영업|서비스업|전문점|판매|소매|업소|업|점)$")
 _NOISE = re.compile(r"[\s\-,·ㆍ/()]|및")

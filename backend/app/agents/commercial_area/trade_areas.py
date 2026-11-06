@@ -25,10 +25,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.agents.commercial_area.config import PACKAGE_DIR
+from app.agents.commercial_area.schemas import TradeArea
 from app.geo import to_epsg5181
-
-from .config import PACKAGE_DIR
-from .schemas import TradeArea
 
 DATA_PATH = PACKAGE_DIR / "data" / "seoul_trade_areas.csv"
 REQUIRED_COLUMNS = {"code", "name", "kind", "signgu", "x", "y", "area_m2"}

@@ -6,11 +6,9 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
-from app.geo import haversine_m as haversine_m
-
-from .baseline import seoul_percentile
-from .config import RESTAURANT_MAJOR_NAMES, Settings
-from .schemas import (
+from app.agents.commercial_area.baseline import seoul_percentile
+from app.agents.commercial_area.config import RESTAURANT_MAJOR_NAMES, Settings
+from app.agents.commercial_area.schemas import (
     CategoryRank,
     Diversity,
     MajorCategory,
@@ -22,6 +20,7 @@ from .schemas import (
     SpecializationRank,
     Store,
 )
+from app.geo import haversine_m as haversine_m
 
 
 def area_km2(radius_m: int) -> float:

@@ -9,20 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from app.db.repository import (
-    create_request,
-    get_analysis_detail,
-    get_answer_gate,
-    list_snapshot_facts,
-    owner_of,
-)
-from app.schemas import DecisionResult, Schema, Text
-from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
-from app.services.mock import dependencies, generators
-
-from .deps import optional_user, require_origin, verified_user
-from .errors import run_or_http
-from .jobs import (
+from app.api.v1.deps import optional_user, require_origin, verified_user
+from app.api.v1.errors import run_or_http
+from app.api.v1.jobs import (
     WAIT_QUERY,
     AnalysisRequest,
     await_task,
@@ -34,7 +23,17 @@ from .jobs import (
     start_job,
     start_task,
 )
-from .responses import AcceptedAnalysis, AnalysisEvents, RequestFacts, StoredAnalysis
+from app.api.v1.responses import AcceptedAnalysis, AnalysisEvents, RequestFacts, StoredAnalysis
+from app.db.repository import (
+    create_request,
+    get_analysis_detail,
+    get_answer_gate,
+    list_snapshot_facts,
+    owner_of,
+)
+from app.schemas import DecisionResult, Schema, Text
+from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
+from app.services.mock import dependencies, generators
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])

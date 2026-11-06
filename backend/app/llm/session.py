@@ -8,7 +8,7 @@ from functools import wraps
 
 import openai
 
-from .config import LLMSettings
+from app.llm.config import LLMSettings
 
 
 class LLMClientSession:

@@ -6,6 +6,15 @@ import os
 import uuid
 from dataclasses import replace
 
+from app.agentic.contracts import (
+    IndustryRestriction,
+    MapPlace,
+    MapResult,
+    RegulationResult,
+    ToolReply,
+)
+from app.agentic.facts import register_fact
+from app.agentic.scoring import regulation
 from app.agents.business_lifecycle.area_resolver import polygon_contains_point
 from app.agents.map_analysis.client import PlaceClient
 from app.agents.map_analysis.config import Settings
@@ -18,10 +27,6 @@ from app.education_zone import find_education_zones
 from app.geo import to_epsg5181
 from app.industries.catalog import INDUSTRIES
 from app.industries.lookup import industry_terms
-
-from .contracts import IndustryRestriction, MapPlace, MapResult, RegulationResult, ToolReply
-from .facts import register_fact
-from .scoring import regulation
 
 
 def _place_facts(scope, response_id, documents):
@@ -72,7 +77,7 @@ async def map_search(scope, site, input, shared):
         async with asyncio.timeout(15):
             for query in queries:
                 if not shared.measurement and shared.map_http >= 20:
-                    from .sql_tool import error
+                    from app.agentic.sql_tool import error
 
                     return error("BUDGET_EXCEEDED", "지도 HTTP 20회 상한입니다.")
                 # 재시도 없는 클라이언트에서 실패한 전송도 예약 횟수에 포함합니다.

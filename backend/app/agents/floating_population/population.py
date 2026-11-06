@@ -26,12 +26,21 @@ import hashlib
 import io
 from pathlib import Path
 
+from app.agents.floating_population.baseline import index
+from app.agents.floating_population.models import (
+    AGE_BANDS,
+    FlpopRecord,
+    PopulationRecord,
+    period_ko,
+)
+from app.agents.floating_population.numeric import complete_sum, ratio, rounded
+from app.agents.floating_population.schemas import (
+    PopulationBenchmark,
+    PopulationSummary,
+    ResidentPopulation,
+    WorkerPopulation,
+)
 from app.storage.raw import current_capture
-
-from .baseline import index
-from .models import AGE_BANDS, FlpopRecord, PopulationRecord, period_ko
-from .numeric import complete_sum, ratio, rounded
-from .schemas import PopulationBenchmark, PopulationSummary, ResidentPopulation, WorkerPopulation
 
 RESIDENT_KIND = "REPOP"
 WORKER_KIND = "WRC_POPLTN"

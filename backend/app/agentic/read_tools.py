@@ -2,13 +2,7 @@
 
 import json
 
-from app.concurrency import run_in_thread
-from app.db.connection import connect
-from app.db.repository import facts as fact_db
-from app.db.repository import scores as score_db
-from app.local_data.provenance import expand_spatial_scope, validate_snapshot
-
-from .contracts import (
+from app.agentic.contracts import (
     FactsResult,
     FactView,
     Scorecard,
@@ -16,10 +10,15 @@ from .contracts import (
     ScorecardSummary,
     ScoreItem,
 )
-from .scoring import apply_space, rank_key, summarize
-from .space import rule_answers
-from .space_rules import judge, load_requirements
-from .sql_tool import error
+from app.agentic.scoring import apply_space, rank_key, summarize
+from app.agentic.space import rule_answers
+from app.agentic.space_rules import judge, load_requirements
+from app.agentic.sql_tool import error
+from app.concurrency import run_in_thread
+from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository import scores as score_db
+from app.local_data.provenance import expand_spatial_scope, validate_snapshot
 
 
 class InvalidCursor(ValueError):

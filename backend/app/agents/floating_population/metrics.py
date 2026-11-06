@@ -2,11 +2,9 @@
 
 from typing import Literal
 
-from app.seoul import shift_quarter
-
-from . import baseline
-from .geo import circle_overlap_ratio
-from .models import (
+from app.agents.floating_population import baseline
+from app.agents.floating_population.geo import circle_overlap_ratio
+from app.agents.floating_population.models import (
     AGE_BANDS,
     DAYS,
     TIME_BAND_HOURS,
@@ -18,8 +16,8 @@ from .models import (
     period_ko,
     quarter_days,
 )
-from .numeric import complete_sum, ratio, rounded
-from .schemas import (
+from app.agents.floating_population.numeric import complete_sum, ratio, rounded
+from app.agents.floating_population.schemas import (
     Benchmark,
     Population,
     QuarterPoint,
@@ -28,6 +26,7 @@ from .schemas import (
     Reliability,
     Trend,
 )
+from app.seoul import shift_quarter
 
 
 def aggregate(records: list[FlpopRecord], quarter: str) -> Population:

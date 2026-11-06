@@ -6,6 +6,12 @@ import json
 import os
 import uuid
 
+from app.agentic import code90
+from app.agentic.c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
+from app.agentic.facts import CALC_VERSION, register_fact
+from app.agentic.inputs import format_snapshot
+from app.agentic.scoring import WEIGHTS, evaluate
+from app.agentic.space_values import FACILITY_LEVELS, FLOOR_LEVELS
 from app.agents.business_lifecycle import baseline as lifecycle_baseline
 from app.agents.commercial_area import baseline as density_baseline
 from app.agents.floating_population import baseline as population_baseline
@@ -19,13 +25,6 @@ from app.industries import DATA_DIR
 from app.industries.catalog import INDUSTRIES
 from app.local_data import score_reference
 from app.storage.raw import RawStorageError, current_capture
-
-from . import code90
-from .c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
-from .facts import CALC_VERSION, register_fact
-from .inputs import format_snapshot
-from .scoring import WEIGHTS, evaluate
-from .space_values import FACILITY_LEVELS, FLOOR_LEVELS
 
 METRICS = {
     "D1": ("pattern_fit_index", "배수", "floating_population"),

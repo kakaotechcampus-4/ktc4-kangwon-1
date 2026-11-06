@@ -2,10 +2,9 @@
 
 from app.clock import utc_now_iso
 from app.db.connection import connect
+from app.db.repository.common import _request_row, _require_changed, _text
 from app.industries.catalog import CATALOG_VERSION
 from app.schemas import AgentError, AnalysisTask, validate_radius
-
-from .common import _request_row, _require_changed, _text
 
 
 def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=None):

@@ -22,9 +22,8 @@ from __future__ import annotations
 
 import math
 
+from app.agents.floating_population.models import TIME_BANDS
 from app.stats import percentile_rank
-
-from .models import TIME_BANDS
 
 BASELINE_LABEL = "서울 전체 상권 평균 (2026년 2분기 · 1,648곳)"
 

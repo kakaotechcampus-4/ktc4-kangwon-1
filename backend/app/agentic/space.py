@@ -4,13 +4,8 @@ import json
 import re
 from contextlib import nullcontext
 
-from app.db.connection import connect
-from app.db.repository import facts as fact_db
-from app.db.repository.agentic import begin_immediate
-from app.industries.catalog import INDUSTRIES
-
-from .facts import register_fact
-from .space_values import (
+from app.agentic.facts import register_fact
+from app.agentic.space_values import (
     CONFIRMED_STATES,
     GROUND_LEVELS,
     NEEDED_LEVELS,
@@ -18,6 +13,10 @@ from .space_values import (
     floor_number,
     readable_answer,
 )
+from app.db.connection import connect
+from app.db.repository import facts as fact_db
+from app.db.repository.agentic import begin_immediate
+from app.industries.catalog import INDUSTRIES
 
 CONFIRMED_UNIT = "확인 화면 확정값"
 

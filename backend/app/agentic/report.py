@@ -5,18 +5,8 @@ import uuid
 from copy import deepcopy
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.clock import utc_now_iso
-from app.db.connection import connect
-from app.db.repository import agentic as agentic_db
-from app.db.repository import facts as fact_db
-from app.db.repository import scores as score_db
-from app.industries.catalog import INDUSTRIES
-from app.local_data.provenance import expand_spatial_scope, validate_snapshot
-from app.schemas import DecisionResult
-from app.text import has_digit
-
-from .code90 import METHOD
-from .contracts import (
+from app.agentic.code90 import METHOD
+from app.agentic.contracts import (
     EVALUATOR_ACTORS,
     EVALUATOR_COUNT,
     ConditionExcludedCandidate,
@@ -27,10 +17,19 @@ from .contracts import (
     RankedIndustry,
     RegulationExcludedIndustry,
 )
-from .read_tools import score_summary
-from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
-from .space import rule_answers
-from .space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
+from app.agentic.read_tools import score_summary
+from app.agentic.scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
+from app.agentic.space import rule_answers
+from app.agentic.space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
+from app.clock import utc_now_iso
+from app.db.connection import connect
+from app.db.repository import agentic as agentic_db
+from app.db.repository import facts as fact_db
+from app.db.repository import scores as score_db
+from app.industries.catalog import INDUSTRIES
+from app.local_data.provenance import expand_spatial_scope, validate_snapshot
+from app.schemas import DecisionResult
+from app.text import has_digit
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
 RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
@@ -471,7 +470,7 @@ def join_segments(segments, facts):
 
 
 def limitation_segments(model_segments, texts):
-    from .contracts import TextSegment
+    from app.agentic.contracts import TextSegment
 
     added = [
         TextSegment(type="text", text=t if t.endswith((".", "!", "?")) else t + ".") for t in texts

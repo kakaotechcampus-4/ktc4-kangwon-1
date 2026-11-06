@@ -2,13 +2,12 @@
 
 import json
 
+from app.agentic.aliases import encode
+from app.agentic.landlord import _facts
+from app.agentic.report import ReportInvalid, fact_rows
 from app.canonical import canonical_json
 from app.db.connection import connect
 from app.db.repository import scores as score_db
-
-from .aliases import encode
-from .landlord import _facts
-from .report import ReportInvalid, fact_rows
 
 PERSONA = (
     "임차인·창업자 편입니다. 후보들의 운영·공사 전제와 초안 문장을 검토하세요. "

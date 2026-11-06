@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
+from app.agents.commercial_area.config import Settings
+from app.agents.commercial_area.schemas import MiddleCode, Store
 from app.industries.catalog import (
     EXCLUDED_SMALLS,
     INDUSTRIES,
@@ -15,9 +17,6 @@ from app.industries.catalog import (
     SPLIT_MIDDLES,
 )
 from app.industries.lookup import service_code
-
-from .config import Settings
-from .schemas import MiddleCode, Store
 
 
 def map_stores(stores: Sequence[Store], master: Sequence[MiddleCode] | None = None) -> list[Store]:

@@ -8,10 +8,9 @@ from typing import Any
 
 import httpx
 
+from app.agents.business_lifecycle.config import Settings
 from app.seoul import SeoulOpenApiError as SeoulOpenAPIError
 from app.seoul import previous_quarter, request_json, shift_quarter
-
-from .config import Settings
 
 SEOUL_API_BASE_URL = "http://openapi.seoul.go.kr:8088"
 SERVICE_NAME = "VwsmTrdarStorQq"

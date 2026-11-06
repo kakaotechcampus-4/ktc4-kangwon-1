@@ -9,7 +9,12 @@ from typing import Any
 
 import httpx
 
-from .config import KAKAO_CATEGORY_URL, KAKAO_KEYWORD_URL, MAX_RADIUS_M, Settings
+from app.agents.map_analysis.config import (
+    KAKAO_CATEGORY_URL,
+    KAKAO_KEYWORD_URL,
+    MAX_RADIUS_M,
+    Settings,
+)
 
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DEFAULT_RETRY_BACKOFF_S = 1.5

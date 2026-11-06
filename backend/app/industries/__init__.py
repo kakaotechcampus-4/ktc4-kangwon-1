@@ -16,8 +16,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .catalog import CATALOG_VERSION, EXPECTED_INDUSTRY_COUNT, UNREVIEWED_MAPPING_COUNT
-from .models import Industry
+from app.industries.catalog import (
+    CATALOG_VERSION,
+    EXPECTED_INDUSTRY_COUNT,
+    UNREVIEWED_MAPPING_COUNT,
+)
+from app.industries.models import Industry
 
 MAPPING_REVIEW_WARNING = (
     f"서울시 업종 연결 중 {UNREVIEWED_MAPPING_COUNT}건은 모델 판정이며 "

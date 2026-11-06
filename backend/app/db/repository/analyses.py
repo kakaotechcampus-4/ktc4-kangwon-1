@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from app.db.connection import connect
+from app.db.repository.common import _request_row, _text
 from app.schemas import FactView, Site
-
-from .common import _request_row, _text
 
 # 저장 어휘를 공개 계약 어휘로 옮깁니다. "n.a."는 facts.status 컬럼의 인코딩이라
 # DB 바깥에는 쓰지 않습니다. 반대로 옮길 일이 생기면 이 표를 뒤집어 씁니다.

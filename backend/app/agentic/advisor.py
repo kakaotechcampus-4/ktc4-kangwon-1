@@ -6,6 +6,9 @@ import uuid
 
 from pydantic import ValidationError
 
+from app.agentic.contracts import AdvisorAnswer, ToolReply
+from app.agentic.report import ReportInvalid, fact_rows
+from app.agentic.sql_tool import error
 from app.canonical import canonical_json
 from app.clock import utc_now_iso
 from app.concurrency import run_in_thread
@@ -14,10 +17,6 @@ from app.db.repository import agentic as agentic_db
 from app.llm.budget import BudgetExceeded
 from app.llm.client import LLMHTTPError, LLMResponseError
 from app.llm.config import LLMSettings
-
-from .contracts import AdvisorAnswer, ToolReply
-from .report import ReportInvalid, fact_rows
-from .sql_tool import error
 
 ADVISOR_PROMPT = """당신은 decision의 상권 자문역입니다. 질문과 제공한 fact만 읽으며
 도구는 없습니다.
