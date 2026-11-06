@@ -11,6 +11,7 @@ from app.db.connection import resolve_path
 class ExecutionSettings:
     db_path: str | Path | None = None
     max_concurrency: int = 2
+    warm_reference: bool = False
 
     def __post_init__(self):
         if type(self.max_concurrency) is not int or self.max_concurrency < 1:
@@ -19,5 +20,7 @@ class ExecutionSettings:
     @classmethod
     def from_env(cls):
         return cls(
-            db_path=resolve_path(), max_concurrency=int(os.getenv("ANALYSIS_MAX_CONCURRENCY", "2"))
+            db_path=resolve_path(),
+            max_concurrency=int(os.getenv("ANALYSIS_MAX_CONCURRENCY", "2")),
+            warm_reference=os.getenv("WARM_SCORE_REFERENCE", "0") == "1",
         )

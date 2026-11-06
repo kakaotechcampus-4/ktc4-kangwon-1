@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -17,11 +19,13 @@ from app.api.v1.jobs import health as api_health
 from app.config import AuthSettings, KakaoOAuthSettings, MailSettings, load_environment
 from app.db import repository
 from app.db.connection import initialize
+from app.local_data.score_reference import warm_reference
 from app.logging import protect_http_query_logs
 from app.services.jobs import AnalysisJobRegistry
 from app.services.settings import ExecutionSettings
 
 DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+logger = logging.getLogger(__name__)
 
 
 def allowed_origins() -> list[str]:
@@ -33,12 +37,21 @@ def allowed_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+def _warm_reference() -> None:
+    try:
+        warm_reference()
+    except Exception:
+        logger.warning("경쟁 참고 분포를 미리 계산하지 못했습니다.", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     path = app.state.execution_settings.db_path
     await asyncio.to_thread(initialize, path)
     # 이전 프로세스가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
     await asyncio.to_thread(repository.fail_interrupted, db_path=path)
+    if app.state.execution_settings.warm_reference:
+        threading.Thread(target=_warm_reference, daemon=True).start()
     registry = app.state.job_registry
     try:
         yield

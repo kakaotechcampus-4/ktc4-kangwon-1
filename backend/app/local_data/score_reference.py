@@ -2,7 +2,7 @@
 
 import json
 import math
-import tempfile
+import threading
 from collections import Counter, defaultdict
 from functools import lru_cache
 from itertools import product
@@ -10,9 +10,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.canonical import canonical_hash, canonical_json, file_sha256
+from app.config import BACKEND_DIR
 from app.db.connection import readonly
 from app.geo import haversine_m, to_epsg5181
 from app.industries.catalog import INDUSTRIES
+
+CACHE_DIR = BACKEND_DIR / "cache" / "s2-half-reference"
+_BUILDING = threading.Lock()
 
 
 def inverse_center(x, y):
@@ -100,25 +104,44 @@ def city_reference(path, stores_id, areas_id, stores_hash, areas_hash):
     key = canonical_hash(
         [file_sha256(Path(__file__)), path, stores_id, areas_id, stores_hash, areas_hash]
     )
-    folder = Path(tempfile.gettempdir()) / "chaeum-s2-half-reference"
+    folder = CACHE_DIR
     target = folder / f"{key}.json"
-    if target.exists():
-        try:
-            value = json.loads(target.read_text(encoding="utf-8"))
-            if value["key"] == key and value["checksum"] == canonical_hash(value["data"]):
-                return value["data"]
-        except (OSError, ValueError, KeyError, TypeError):
-            # 손상된 공개 집계 캐시는 고정한 원본으로 다시 계산합니다.
-            pass
-    value = _build_reference(path, stores_id, areas_id)
-    folder.mkdir(parents=True, exist_ok=True)
-    staging = folder / f"{key}.{uuid4().hex}.tmp"
-    staging.write_text(
-        canonical_json({"key": key, "data": value, "checksum": canonical_hash(value)}),
-        encoding="utf-8",
+    with _BUILDING:
+        if target.exists():
+            try:
+                value = json.loads(target.read_text(encoding="utf-8"))
+                if value["key"] == key and value["checksum"] == canonical_hash(value["data"]):
+                    return value["data"]
+            except (OSError, ValueError, KeyError, TypeError):
+                # 손상된 공개 집계 캐시는 고정한 원본으로 다시 계산합니다.
+                pass
+        value = _build_reference(path, stores_id, areas_id)
+        folder.mkdir(parents=True, exist_ok=True)
+        staging = folder / f"{key}.{uuid4().hex}.tmp"
+        staging.write_text(
+            canonical_json({"key": key, "data": value, "checksum": canonical_hash(value)}),
+            encoding="utf-8",
+        )
+        staging.replace(target)
+        return value
+
+
+def warm_reference(path=None):
+    from app.local_data.adapter import LocalAdapter
+
+    adapter = LocalAdapter(path)
+    stores = [v for v in adapter.versions if v["source"] == "stores"]
+    areas = [v for v in adapter.versions if v["source"] == "areas"]
+    if len(stores) != 1 or len(areas) != 1:
+        return False
+    city_reference(
+        str(adapter.path),
+        stores[0]["version_id"],
+        areas[0]["version_id"],
+        stores[0]["file_hash"],
+        areas[0]["file_hash"],
     )
-    staging.replace(target)
-    return value
+    return True
 
 
 def attach_reference(adapter, task, data):

@@ -127,6 +127,7 @@ python -m uvicorn app.main:create_app --factory --reload
 | `FLOATING_POPULATION_API_KEY` · `BUSINESS_LIFECYCLE_API_KEY` · `SEOUL_OPEN_API_KEY` · `COMMERCIAL_AREA_API_KEY` · `FRANCHISE_API_KEY` | **자료 갱신과 연구 스크립트용** 키. 일반 요청에는 쓰지 않습니다. |
 | `MOCK_MODE` | 켜면 외부 호출 없이 고정 응답 |
 | `ANALYSIS_MAX_CONCURRENCY` · `CORS_ALLOW_ORIGINS` | 백그라운드 동시 분석 수, 프론트 주소 |
+| `WARM_SCORE_REFERENCE` | `1`이면 서버 시작 때 경쟁 참고 분포(약 1~2분)를 배경에서 미리 계산해 `cache/`에 둡니다. 운영 서비스 설정이 켭니다. |
 
 모델 설정에서 주의할 점입니다.
 
