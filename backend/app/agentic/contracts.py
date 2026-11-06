@@ -674,6 +674,18 @@ class ConditionExcludedCandidate(Schema):
     score_rank: Annotated[int, Field(ge=1, le=51)]
 
 
+class RankedIndustry(Schema):
+    industry_code: IndustryCode
+    industry_name: Text
+    rank: Annotated[int, Field(ge=1, le=51)]
+    ai_excluded: bool = False
+
+
+class RegulationExcludedIndustry(Schema):
+    industry_code: IndustryCode
+    industry_name: Text
+
+
 class FinalCandidate(ScorecardSummary):
     industry_name: Text
     reasons_segments: list[FactSegment]

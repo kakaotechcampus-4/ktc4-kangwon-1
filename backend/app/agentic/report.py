@@ -24,6 +24,8 @@ from .contracts import (
     FinalCandidate,
     LRecord,
     LSelection,
+    RankedIndustry,
+    RegulationExcludedIndustry,
 )
 from .read_tools import score_summary
 from .scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
@@ -86,6 +88,26 @@ def rule_scored_space(fact, component, industry_code):
         return True
     raw = fact.get("value_json")
     return metric == "existing_facilities" and raw is not None and isinstance(json.loads(raw), dict)
+
+
+def industry_ranking(rows, excluded_codes):
+    return [
+        RankedIndustry(
+            industry_code=r["code"],
+            industry_name=r["name"],
+            rank=rank,
+            ai_excluded=r["code"] in excluded_codes,
+        )
+        for rank, r in enumerate(rank_candidates(rows, limit=len(rows)), 1)
+    ]
+
+
+def regulation_excluded(rows):
+    return [
+        RegulationExcludedIndustry(industry_code=r["code"], industry_name=r["name"])
+        for r in sorted(rows, key=rank_key)
+        if r["regulation"] == "금지"
+    ]
 
 
 def condition_excluded(rows):
@@ -546,6 +568,8 @@ def finalize(
         top5=top,
         excluded_candidates=excluded,
         condition_excluded=condition_excluded(rows),
+        ranking=industry_ranking(rows, excluded_codes),
+        regulation_excluded=regulation_excluded(rows),
         facts=views,
         L_records=all_records,
         evaluator_reviews=reviews

@@ -14,7 +14,9 @@ from app.agentic.contracts import (
     FactView,
     FinalCandidate,
     LRecord,
+    RankedIndustry,
     Ratio,
+    RegulationExcludedIndustry,
     ReviewResolution,
     UserQuestion,
 )
@@ -51,6 +53,10 @@ class DecisionResult(Schema):
     condition_excluded: list[ConditionExcludedCandidate] = Field(
         default_factory=list, max_length=51
     )
+    ranking: list[RankedIndustry] = Field(default_factory=list, max_length=51)
+    regulation_excluded: list[RegulationExcludedIndustry] = Field(
+        default_factory=list, max_length=51
+    )
     facts: list[FactView]
     L_records: list[LRecord] = Field(min_length=51, max_length=51)
     evaluator_reviews: list[EvaluatorReview] = Field(
@@ -75,6 +81,19 @@ class DecisionResult(Schema):
         codes = [r.industry_code for r in self.top5]
         if len(codes) != len(set(codes)) or any(r.G == "금지" for r in self.top5):
             raise ValueError("Top 5는 업종 중복·규제 금지를 포함할 수 없습니다.")
+        if self.ranking:
+            ranked = [r.industry_code for r in self.ranking]
+            groups = [
+                *ranked,
+                *(r.industry_code for r in self.condition_excluded),
+                *(r.industry_code for r in self.regulation_excluded),
+            ]
+            if [r.rank for r in self.ranking] != list(range(1, len(ranked) + 1)):
+                raise ValueError("업종 순위는 1부터 빠짐없이 이어져야 합니다.")
+            if ranked[: len(codes)] != codes:
+                raise ValueError("업종 순위 앞부분은 Top 5와 같아야 합니다.")
+            if len(groups) != len(set(groups)) or set(groups) != set(INDUSTRIES):
+                raise ValueError("순위·조건 제외·규제 제외는 전체 업종을 한 번씩 담아야 합니다.")
         return self
 
 

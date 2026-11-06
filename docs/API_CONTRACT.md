@@ -1137,6 +1137,8 @@ MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성
 | schema_version / rubric_version / tool_contract_version | 결과 2.0·채점표 v0.8·도구 계약 3. 모델 이름에 V2를 붙이지 않음 |
 | request_id / run_id / report_id / snapshot_id / score_snapshot_id | 요청·실행·보고서·원문·채택 점수의 참조 |
 | top5 / excluded_candidates | 최대 5개 후보/제외 항목. Top 5는 금지·공간 제외 후 calculation.ranking_points(구 결과는 B)→coverage→코드 정렬, 공간 규칙 조정도 적용 |
+| ranking | Top 5와 같은 정렬로 금지·공간 제외를 뺀 나머지 전체 업종에 매긴 순위(1부터 빈틈 없음, 앞 5개는 Top 5와 같음). 업종 코드·이름·rank·ai_excluded(모델이 excluded_candidates로 제안했는지, 순위에는 영향 없음). 점수는 담지 않음. 구 결과는 빈 목록 |
+| condition_excluded / regulation_excluded | 공간 조건으로 뺀 업종(이유·금지 제외 순위)/규제 금지 업종. ranking이 있으면 셋을 합쳐 전체 업종을 한 번씩 담음 |
 | code_points / L_points / L_status | 코드 기여점수 최대90·판단 최대10. L 미확인은 null이며 0점이 아님 |
 | calculation | 선택 필드. S2_half-v1의 code_points·ranking_points·applicable_weight·raw_points·estimated_points. 90×raw_points/applicable_weight로 코드 점수를 환산한 뒤 기존 L을 더함. estimated_points는 환산 전 보완 추정 기여이며 관측 사실이 아님 |
 | A / B / H | 적용 배점(n.a. 제외·unknown 포함)·하한·상한 |
