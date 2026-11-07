@@ -14,7 +14,7 @@ from openai.types.chat import ChatCompletionMessage
 
 from app.ai import evaluators, runtime
 from app.ai.runtime import DecisionLoop
-from app.infrastructure.llm.budget import BudgetExceeded
+from app.application.ports.llm_budget import BudgetExceeded
 from app.infrastructure.llm.recording import CallRecording
 from examiner_eval.cases import Case
 from examiner_eval.store import RequestContext, make_scope

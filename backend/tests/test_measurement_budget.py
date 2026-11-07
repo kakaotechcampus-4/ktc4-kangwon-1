@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.ai.budget import RuntimeBudget
-from app.infrastructure.llm.budget import BudgetExceeded
+from app.application.ports.llm_budget import BudgetExceeded
 
 
 class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):

@@ -4,7 +4,7 @@ import math
 from collections import Counter
 from time import monotonic
 
-from app.infrastructure.llm.budget import FINAL_RESERVE, BudgetExceeded, LLMBudget
+from app.application.ports.llm_budget import FINAL_RESERVE, BudgetExceeded, LLMBudget
 
 ROLE_LIMITS = {
     "decision": (230000, 36000, 22),

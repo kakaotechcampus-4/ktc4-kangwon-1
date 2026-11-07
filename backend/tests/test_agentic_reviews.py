@@ -87,7 +87,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
     async def run_truncated_review(self, truncations):
         from app.ai.evaluators import review
         from app.ai.runtime import DecisionLoop
-        from app.infrastructure.llm.client import LLMResponseError
+        from app.application.ports.llm import LLMResponseError
 
         seen = []
 

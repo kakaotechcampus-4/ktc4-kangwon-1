@@ -10,9 +10,9 @@ from typing import get_args
 from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
 
+from app.application.ports.llm import LLMHTTPError, LLMResponseError
+from app.application.ports.llm_budget import BudgetExceeded
 from app.domain.contracts import Actor
-from app.infrastructure.llm.budget import BudgetExceeded
-from app.infrastructure.llm.client import LLMHTTPError, LLMResponseError
 from app.shared.canonical import canonical_json
 from app.shared.concurrency import run_in_thread
 from app.shared.scrub import env_secrets, scrub

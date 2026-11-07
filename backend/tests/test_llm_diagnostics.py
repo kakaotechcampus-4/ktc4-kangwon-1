@@ -8,8 +8,9 @@ import openai
 from llm_stream_fixture import stream_response
 from openai.types.chat import ChatCompletionMessage
 
-from app.infrastructure.llm.client import LLMResponseError, complete_json
-from app.infrastructure.llm.config import LLMSettings
+from app.application.ports.llm import LLMResponseError
+from app.application.ports.llm_settings import LLMSettings
+from app.infrastructure.llm.client import complete_json
 
 
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):

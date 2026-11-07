@@ -13,14 +13,13 @@ from app.ai.questions import save_confirmed_space
 from app.ai.runtime import DecisionLoop
 from app.application.errors import INTERRUPTED_MESSAGE, AnalysisConflictError
 from app.application.local_snapshot import persist_local
+from app.application.ports.llm import llm, with_llm_session
 from app.application.ports.market import market
 from app.application.ports.storage import storage
 from app.application.snapshot import persist_snapshot_scores
 from app.domain.schemas import AgentError, AnalysisTask
 from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeError, resolve_site
 from app.infrastructure.config import BACKEND_DIR
-from app.infrastructure.llm.recording import CallRecording
-from app.infrastructure.llm.session import with_client_session
 from app.infrastructure.mock import dependencies, generators
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -133,7 +132,9 @@ def _make_recorder(request_id, recording_path, measurement):
     """측정 모드이거나 기록 경로를 받았을 때만 모델 호출을 파일로 남깁니다."""
     if not (measurement or recording_path):
         return None
-    return CallRecording(recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json")
+    return llm().recording(
+        recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json"
+    )
 
 
 async def _resolve_and_save_site(path, request_id, address, radius_m, resolve):
@@ -164,7 +165,7 @@ async def _finish_loop(loop):
     return outcome
 
 
-@with_client_session
+@with_llm_session
 async def execute_agentic_analysis(
     address,
     *,
@@ -244,7 +245,7 @@ async def execute_agentic_analysis(
         raise
 
 
-@with_client_session
+@with_llm_session
 async def resume_agentic_analysis(
     request_id,
     answers,

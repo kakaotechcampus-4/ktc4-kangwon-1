@@ -16,8 +16,10 @@ from llm_stream_fixture import stream_response
 
 class SettingsTests(unittest.TestCase):
     def settings_type(self):
-        self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/llm/config.py").exists())
-        return importlib.import_module("app.infrastructure.llm.config").LLMSettings
+        self.assertTrue(
+            (Path(__file__).parents[1] / "app/application/ports/llm_settings.py").exists()
+        )
+        return importlib.import_module("app.application.ports.llm_settings").LLMSettings
 
     def test_agent_overrides_legacy_and_explicit_overrides_agent(self):
         settings_type = self.settings_type()
@@ -67,7 +69,9 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/llm/client.py").exists())
         self.client = importlib.import_module("app.infrastructure.llm.client")
-        self.settings_type = importlib.import_module("app.infrastructure.llm.config").LLMSettings
+        self.settings_type = importlib.import_module(
+            "app.application.ports.llm_settings"
+        ).LLMSettings
         self.settings = self.settings_type(
             model="test", api_key="secret", base_url="https://one.invalid/v1"
         )

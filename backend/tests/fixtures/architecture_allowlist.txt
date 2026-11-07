@@ -1,10 +1,3 @@
-app.ai.advisor -> app.infrastructure.llm.budget
-app.ai.advisor -> app.infrastructure.llm.client
-app.ai.advisor -> app.infrastructure.llm.config
-app.ai.budget -> app.infrastructure.llm.budget
-app.ai.evaluators -> app.infrastructure.llm.budget
-app.ai.evaluators -> app.infrastructure.llm.client
-app.ai.evaluators -> app.infrastructure.llm.config
 app.ai.map_regulation -> app.infrastructure.clients.education_zone
 app.ai.map_regulation -> app.infrastructure.market_data.business_lifecycle.area_resolver
 app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.client
@@ -12,9 +5,6 @@ app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.config
 app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.matching
 app.ai.preflight -> app.infrastructure.clients.education_zone
 app.ai.preflight -> app.infrastructure.market_data.map_analysis.client
-app.ai.runtime -> app.infrastructure.llm.budget
-app.ai.runtime -> app.infrastructure.llm.client
-app.ai.runtime -> app.infrastructure.llm.config
 app.ai.sql_tool -> app.infrastructure.persistence.connection
 app.ai.tools -> app.infrastructure.market_data.map_analysis.client
 app.application.analysis -> app.ai.budget
@@ -23,8 +13,6 @@ app.application.analysis -> app.ai.questions
 app.application.analysis -> app.ai.runtime
 app.application.analysis -> app.infrastructure.clients.address
 app.application.analysis -> app.infrastructure.config
-app.application.analysis -> app.infrastructure.llm.recording
-app.application.analysis -> app.infrastructure.llm.session
 app.application.analysis -> app.infrastructure.mock
 app.application.auth -> app.infrastructure.clients.kakao_oauth
 app.application.auth -> app.infrastructure.clients.mailer

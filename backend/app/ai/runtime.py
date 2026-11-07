@@ -19,6 +19,9 @@ from app.ai.questions import LoopOutcome
 from app.ai.read_tools import score_summary
 from app.ai.sql_tool import error
 from app.ai.tools import ToolExecutor, validation_message
+from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
+from app.application.ports.llm_budget import BudgetExceeded, llm_scope
+from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores, storage
 from app.application.report import (
     ReportInvalid,
@@ -47,14 +50,6 @@ from app.domain.contracts import (
 )
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.scoring import rank_candidates
-from app.infrastructure.llm.budget import BudgetExceeded, llm_scope
-from app.infrastructure.llm.client import (
-    LLMHTTPError,
-    LLMResponseError,
-    complete_json,
-    complete_tools,
-)
-from app.infrastructure.llm.config import LLMSettings
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -407,9 +402,11 @@ class DecisionLoop:
         if generator is None:
             with llm_scope(self.budget, role, final=self.state.get("phase") == "final"):
                 if definitions is not None:
-                    value = await complete_tools(messages, definitions, settings, receipt=receipt)
+                    value = await llm().complete_tools(
+                        messages, definitions, settings, receipt=receipt
+                    )
                 else:
-                    value = await complete_json(
+                    value = await llm().complete_json(
                         messages[0]["content"], messages[1]["content"], settings, receipt=receipt
                     )
         else:

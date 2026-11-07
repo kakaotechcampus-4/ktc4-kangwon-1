@@ -10,8 +10,8 @@ import httpx
 import openai
 from llm_stream_fixture import stream_response
 
+from app.application.ports.llm_settings import LLMSettings
 from app.infrastructure.llm.client import complete_json
-from app.infrastructure.llm.config import LLMSettings
 from app.infrastructure.llm.session import acquire_client, client_session_scope
 
 

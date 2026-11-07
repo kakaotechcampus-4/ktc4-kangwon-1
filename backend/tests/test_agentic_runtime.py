@@ -74,7 +74,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_large_single_input_allowed_until_cumulative_limit(self):
         from app.ai.budget import RuntimeBudget
-        from app.infrastructure.llm.budget import BudgetExceeded
+        from app.application.ports.llm_budget import BudgetExceeded
 
         budget = RuntimeBudget(
             {
@@ -524,7 +524,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_advisor_failure_continues_and_limit_two(self):
         from app.ai.runtime import DecisionLoop
-        from app.infrastructure.llm.client import LLMResponseError
+        from app.application.ports.llm import LLMResponseError
 
         fact_id = await self.make_fact()
         calls = []
@@ -658,7 +658,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_advisor_reasoning_does_not_inherit_luna(self):
         from unittest.mock import patch
 
-        from app.infrastructure.llm.config import LLMSettings
+        from app.application.ports.llm_settings import LLMSettings
 
         with patch.dict(
             "os.environ", {"LLM_REASONING_EFFORT": "none", "ADVISOR_LLM_REASONING_EFFORT": ""}
@@ -668,7 +668,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_budget_token_and_time_caps(self):
         from app.ai.budget import RuntimeBudget
-        from app.infrastructure.llm.budget import BudgetExceeded
+        from app.application.ports.llm_budget import BudgetExceeded
 
         for saved in [
             {"active_seconds": 600},

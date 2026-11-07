@@ -9,9 +9,9 @@ import httpx
 import openai
 from llm_stream_fixture import sse_response
 
+from app.application.ports.llm_budget import LLMBudget, llm_scope
+from app.application.ports.llm_settings import LLMSettings
 from app.infrastructure.llm import client
-from app.infrastructure.llm.budget import LLMBudget, llm_scope
-from app.infrastructure.llm.config import LLMSettings
 
 
 class StreamingTests(unittest.IsolatedAsyncioTestCase):

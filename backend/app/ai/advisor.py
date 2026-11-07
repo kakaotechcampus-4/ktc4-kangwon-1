@@ -7,12 +7,12 @@ import uuid
 from pydantic import ValidationError
 
 from app.ai.sql_tool import error
+from app.application.ports.llm import LLMHTTPError, LLMResponseError
+from app.application.ports.llm_budget import BudgetExceeded
+from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
 from app.application.report import ReportInvalid, fact_rows
 from app.domain.contracts import AdvisorAnswer, ToolReply
-from app.infrastructure.llm.budget import BudgetExceeded
-from app.infrastructure.llm.client import LLMHTTPError, LLMResponseError
-from app.infrastructure.llm.config import LLMSettings
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread

@@ -12,12 +12,12 @@ from unittest.mock import patch
 from openai.types.chat import ChatCompletionMessage
 
 from app.ai.runtime import DecisionLoop
+from app.application.ports.llm import LLMHTTPError, LLMResponseError
+from app.application.ports.llm_budget import BudgetExceeded
 from app.application.snapshot import persist_report
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.schemas import Site
 from app.domain.scoring import WEIGHTS, result, summarize
-from app.infrastructure.llm.budget import BudgetExceeded
-from app.infrastructure.llm.client import LLMHTTPError, LLMResponseError
 from app.infrastructure.llm.recording import CallRecording, ReplayGenerate
 from app.infrastructure.persistence.connection import initialize
 from app.infrastructure.persistence.raw_capture import capture_scope
