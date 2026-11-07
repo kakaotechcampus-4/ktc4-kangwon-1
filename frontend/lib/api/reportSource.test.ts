@@ -1,10 +1,70 @@
 import { describe, expect, it } from 'vitest';
 import {
+  confirmedSpace,
   isExampleReport,
   reportSource,
   storedReport,
 } from '@/lib/api/reportSource';
-import type { DecisionResult, StoredAnalysis } from '@/lib/api/types';
+import type {
+  DecisionResult,
+  FactView,
+  JsonValue,
+  StoredAnalysis,
+} from '@/lib/api/types';
+
+function spaceFact(
+  metric: string,
+  value: JsonValue,
+  source: FactView['source'] = 'user',
+  unit = '확인 화면 확정값'
+): FactView {
+  return {
+    fact_id: metric,
+    source,
+    metric,
+    value,
+    unit,
+    period: '',
+    spatial_scope: {},
+    industry_code: null,
+    status: 'observed',
+    citable: true,
+    calc_version: '',
+    provenance_ref: '',
+  };
+}
+
+describe('분석 때 확인한 공간', () => {
+  it('임대인이 확인한 면적과 층을 읽는다', () => {
+    expect(
+      confirmedSpace([
+        spaceFact('exclusive_area', '185.57㎡'),
+        spaceFact('floor', '1층'),
+      ])
+    ).toEqual({ areaM2: 185.57, floor: '1층' });
+  });
+
+  it('임대인이 확인하지 않은 값은 쓰지 않는다', () => {
+    expect(
+      confirmedSpace([
+        spaceFact('exclusive_area', '50㎡', 'commercial_area'),
+        spaceFact('exclusive_area', '면적 모름'),
+      ])
+    ).toEqual({ areaM2: null, floor: null });
+  });
+
+  it('질문에 글로 답한 면적과 층은 숫자로 바꾸지 않는다', () => {
+    expect(
+      confirmedSpace([
+        spaceFact('exclusive_area', '30평', 'user', '임대인 답변'),
+        spaceFact('floor', '답변하지 않았습니다.', 'user', '임대인 답변'),
+      ])
+    ).toEqual({ areaM2: null, floor: null });
+    expect(
+      confirmedSpace([spaceFact('exclusive_area', '약 33평 (109.09㎡)')])
+    ).toEqual({ areaM2: null, floor: null });
+  });
+});
 
 const resultFor = (requestId: string) =>
   ({ request_id: requestId }) as DecisionResult;

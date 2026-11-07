@@ -72,8 +72,13 @@ export function rankingView(
     if (!candidate) {
       return item;
     }
-    const reasons = renderSegments(candidate.reasons_segments, facts).trim();
-    const checks = candidateChecks(candidate, facts);
+    const shownSpaceFits = new Set<string>();
+    const reasons = renderSegments(
+      candidate.reasons_segments,
+      facts,
+      shownSpaceFits
+    ).trim();
+    const checks = candidateChecks(candidate, facts, shownSpaceFits);
     const detailTitle = item.aiExcluded
       ? 'AI가 뺀 이유 보기'
       : '추천 이유 보기';

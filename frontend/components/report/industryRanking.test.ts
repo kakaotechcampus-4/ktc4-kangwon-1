@@ -105,6 +105,44 @@ describe('업종 비교 순위', () => {
     expect(view.label).toBe('6개 순위 · 2개 제외');
   });
 
+  it('한 업종의 이유와 확인에 같은 공간 비교 문구를 한 번만 쓴다', () => {
+    const spaceFit = {
+      fact_id: 'sf',
+      source: 'code',
+      metric: 'space_fit',
+      value: { area: '일치', confidence: 'low', ventilation: '미확인' },
+      unit: '',
+      period: '',
+      spatial_scope: {},
+      industry_code: 'M103',
+      status: 'observed',
+      citable: true,
+      calc_version: '',
+      provenance_ref: '',
+    };
+    const cited = { type: 'fact', fact_id: 'sf', format: 'text' } as const;
+    const first = {
+      ...top5[0],
+      reasons_segments: [{ type: 'text', text: '면적이 맞습니다.' }, cited],
+      risks_segments: [{ type: 'text', text: '배기를 확인하세요.' }, cited],
+      confirmation_conditions_segments: [
+        { type: 'text', text: '설비를 확정하세요.' },
+        cited,
+      ],
+    } as FinalCandidate;
+    const view = rankingView(
+      { ...base, top5: [first, ...top5.slice(1)] } as DecisionResult,
+      indexFacts([spaceFit] as never)
+    );
+    expect(view.items[0].reasons).toBe(
+      '면적이 맞습니다. 면적 일치 · 배기(덕트) 미확인 (비교 신뢰도 낮음)'
+    );
+    expect(view.items[0].checks).toEqual([
+      '배기를 확인하세요. 면적 일치 · 배기(덕트) 미확인',
+      '설비를 확정하세요. 면적 일치 · 배기(덕트) 미확인',
+    ]);
+  });
+
   it('제외 설명은 순위에 남는다고 단정하지 않는다', () => {
     const view = rankingView(base, indexFacts([]));
     const excluded = view.groups.find((group) => group.title === '제외한 업종');

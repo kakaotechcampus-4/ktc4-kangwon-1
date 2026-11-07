@@ -4,8 +4,11 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportPage from './page';
 import { getAnalysis, getAnalysisFacts } from '@/lib/api/analyses';
+import { fetchBuildingInfo, type BuildingInfo } from '@/lib/api/building';
+import { saveConfirmedBuilding, saveRequestId } from '@/lib/api/resultStore';
 import type {
   DecisionResult,
+  FactView,
   FinalCandidate,
   StoredAnalysis,
 } from '@/lib/api/types';
@@ -26,6 +29,43 @@ vi.mock('@/lib/api/analyses', async (importOriginal) => ({
   getAnalysis: vi.fn(),
   getAnalysisFacts: vi.fn(),
 }));
+vi.mock('@/lib/api/building', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/building')>()),
+  fetchBuildingInfo: vi.fn(),
+}));
+
+function field<T>(value: T) {
+  return { value, registryValue: value, source: 'registry' as const };
+}
+
+const registryBuilding: BuildingInfo = {
+  buildingName: '',
+  floorLabel: '1층',
+  address: '서울특별시 송파구 위례광장로 199',
+  mainUse: field('제2종근린생활시설'),
+  totalAreaM2: field(2761.27),
+  floors: field('지상 10층'),
+  floorUse: field('일반음식점'),
+  exclusiveAreaM2: field(50),
+  parking: field('possible'),
+  facility: field('type2'),
+  sewage: field('정화조'),
+};
+
+const confirmedArea: FactView = {
+  fact_id: 'area',
+  source: 'user',
+  metric: 'exclusive_area',
+  value: '185.57㎡',
+  unit: '확인 화면 확정값',
+  period: '',
+  spatial_scope: {},
+  industry_code: null,
+  status: 'observed',
+  citable: true,
+  calc_version: '',
+  provenance_ref: '',
+};
 
 const candidate: FinalCandidate = {
   industry_code: 'I21201',
@@ -90,15 +130,98 @@ const stored: StoredAnalysis = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
   window.history.replaceState({}, '', '/report?id=r1');
   vi.mocked(getAnalysisFacts).mockResolvedValue({
     request_id: 'r1',
     snapshot_id: null,
     facts: [],
   });
+  vi.mocked(fetchBuildingInfo).mockRejectedValue(new Error('조회 실패'));
 });
 
 describe('리포트 화면', () => {
+  it('기록에서 다시 열어도 건축물대장과 확인한 면적으로 상가 정보를 채운다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue(stored);
+    vi.mocked(getAnalysisFacts).mockResolvedValue({
+      request_id: 'r1',
+      snapshot_id: 'snap-1',
+      facts: [confirmedArea],
+    });
+    vi.mocked(fetchBuildingInfo).mockResolvedValue(registryBuilding);
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('제2종 근린생활시설')
+    );
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('185.57㎡')
+    );
+    expect(fetchBuildingInfo).toHaveBeenCalledWith(
+      '서울특별시 송파구 위례광장로 199',
+      expect.objectContaining({ floorUnit: '1층' })
+    );
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('정화조');
+    expect(text).toContain('185.57㎡');
+    expect(text).not.toContain('50㎡');
+    expect(text).not.toContain('조회 필요');
+  });
+
+  it('같은 분석을 이 탭에서 확인했다면 그때 고친 값을 그대로 쓴다', async () => {
+    saveRequestId('r1');
+    saveConfirmedBuilding({
+      ...registryBuilding,
+      facility: { value: 'type1', registryValue: 'type2', source: 'user' },
+    });
+    vi.mocked(getAnalysis).mockResolvedValue(stored);
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('제1종 근린생활시설')
+    );
+    expect(fetchBuildingInfo).not.toHaveBeenCalled();
+  });
+
+  it('상세주소가 없어도 확인한 층을 임차인 찾기까지 같게 보여 준다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue({
+      ...stored,
+      site: { ...stored.site, detail_address: null },
+    } as StoredAnalysis);
+    vi.mocked(getAnalysisFacts).mockResolvedValue({
+      request_id: 'r1',
+      snapshot_id: 'snap-1',
+      facts: [
+        confirmedArea,
+        { ...confirmedArea, fact_id: 'floor', metric: 'floor', value: '1층' },
+      ],
+    });
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('185.57㎡')
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /임차인 매칭 시작하기/ })
+    );
+    const text = document.body.textContent ?? '';
+    expect(text).not.toContain('미입력');
+    expect(text).toContain('1층 · 185.57㎡');
+    expect(text).not.toContain('층 정보 확인 필요');
+  });
+
+  it('건축물대장을 다시 못 읽어도 확인한 면적은 보여 준다', async () => {
+    vi.mocked(getAnalysis).mockResolvedValue(stored);
+    vi.mocked(getAnalysisFacts).mockResolvedValue({
+      request_id: 'r1',
+      snapshot_id: 'snap-1',
+      facts: [confirmedArea],
+    });
+    render(<ReportPage />);
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('185.57㎡')
+    );
+    await waitFor(() => expect(fetchBuildingInfo).toHaveBeenCalled());
+    expect(document.body.textContent).toContain('조회 필요');
+  });
+
   it('서버에서 받은 추천 업종과 주소를 보여 준다', async () => {
     vi.mocked(getAnalysis).mockResolvedValue(stored);
     render(<ReportPage />);

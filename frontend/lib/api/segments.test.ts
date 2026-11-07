@@ -59,6 +59,105 @@ describe('fact 글자 변환', () => {
   it('그 밖의 묶음 값은 날것으로 보이지 않는다', () => {
     expect(formatFact(fact('age_share', { '20': 0.3 }), 'text')).toBeNull();
   });
+
+  it('글로 인용한 소수는 둘째 자리까지 줄인다', () => {
+    expect(
+      formatFact(
+        { ...fact('pattern_fit_index', 1.088340273646639), unit: '배수' },
+        'text'
+      )
+    ).toBe('1.09');
+    expect(formatFact(fact('ratio', 0.9324690402476782), 'text')).toBe('0.93');
+  });
+
+  it('배수 뒤에 모델이 쓴 배와 겹치지 않는다', () => {
+    const facts = indexFacts([
+      { ...fact('pattern_fit_index', 1.088340273646639, 'p'), unit: '배수' },
+    ]);
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '적합도는 ' },
+          { type: 'fact', fact_id: 'p', format: 'text' },
+          { type: 'text', text: '배로 높습니다.' },
+        ],
+        facts
+      )
+    ).toBe('적합도는 1.09배로 높습니다.');
+  });
+
+  it('글로 인용한 정수와 아주 큰 수는 서버와 같게 둔다', () => {
+    expect(formatFact(fact('year', 2024), 'text')).toBe('2024');
+    expect(formatFact(fact('x', 1e21), 'text')).toBe('1e+21');
+  });
+
+  it('업종 공간 요건은 권장 면적으로 읽는다', () => {
+    expect(
+      formatFact(
+        fact('space_requirements', {
+          area_band: '40~200㎡',
+          confidence: 'low',
+          floor_preference: 'basement_preferred',
+          industry_code: 'R104',
+        }),
+        'text'
+      )
+    ).toBe('권장 면적 40~200㎡');
+  });
+});
+
+describe('같은 공간 비교 근거 반복', () => {
+  const spaceFit = fact(
+    'space_fit',
+    {
+      area: '일치',
+      confidence: 'low',
+      ventilation: '미확인',
+    },
+    'sf'
+  );
+
+  it('한 묶음 안에서는 신뢰도 문구를 처음 한 번만 쓴다', () => {
+    const facts = indexFacts([spaceFit]);
+    const shown = new Set<string>();
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '면적이 맞습니다.' },
+          { type: 'fact', fact_id: 'sf', format: 'text' },
+        ],
+        facts,
+        shown
+      )
+    ).toBe('면적이 맞습니다. 면적 일치 · 배기(덕트) 미확인 (비교 신뢰도 낮음)');
+    expect(
+      renderSegments(
+        [
+          { type: 'text', text: '배기를 확인하세요.' },
+          { type: 'fact', fact_id: 'sf', format: 'text' },
+        ],
+        facts,
+        shown
+      )
+    ).toBe('배기를 확인하세요. 면적 일치 · 배기(덕트) 미확인');
+    expect(
+      renderSegments(
+        [
+          { type: 'fact', fact_id: 'sf', format: 'text' },
+          { type: 'text', text: '.' },
+        ],
+        facts,
+        shown
+      )
+    ).toBe('면적 일치 · 배기(덕트) 미확인.');
+  });
+
+  it('묶음을 넘기지 않으면 지금처럼 매번 쓴다', () => {
+    const facts = indexFacts([spaceFit]);
+    const segments = [{ type: 'fact', fact_id: 'sf', format: 'text' }] as const;
+    expect(renderSegments(segments, facts)).toContain('면적 일치');
+    expect(renderSegments(segments, facts)).toContain('면적 일치');
+  });
 });
 
 describe('문장 조각 잇기', () => {
