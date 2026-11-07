@@ -5,6 +5,7 @@ import './globals.css';
 import StyledJsxRegistry from './StyledJsxRegistry';
 import { PRETENDARD_LATIN_URL } from '@/styles/fonts';
 import AuthProvider from '@/components/auth/AuthProvider';
+import Footer from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
   title: '채움 · 공실에 맞는 업종을 찾아드립니다',
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body className="min-h-full flex flex-col">
         <StyledJsxRegistry>
           <AuthProvider>{children}</AuthProvider>
+          <Footer />
         </StyledJsxRegistry>
       </body>
     </html>

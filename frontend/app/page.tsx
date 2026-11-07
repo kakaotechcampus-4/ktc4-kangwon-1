@@ -33,12 +33,6 @@ export default function Home() {
       <div className="lazy-section [contain-intrinsic-size:auto_300px] sm:[contain-intrinsic-size:auto_525px]">
         <CTABanner />
       </div>
-      <footer className="w-full border-t border-[#EEF1F4] px-4 py-10 sm:px-8">
-        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3 text-sm text-[#5B6470]">
-          <p className="font-extrabold text-[#111827]">채움 · chum.ai</p>
-          <p>공간의 다음 가능성을 찾습니다. © 2026 chum.ai</p>
-        </div>
-      </footer>
     </div>
   );
 }
