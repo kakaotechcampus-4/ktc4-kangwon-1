@@ -2,9 +2,7 @@
 
 import unittest
 
-from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.industries import load_middle_master
-from app.industries.catalog import (
+from app.domain.industries.catalog import (
     EXCLUDED_SEOUL_INDUSTRIES,
     EXPECTED_INDUSTRY_COUNT,
     INDUSTRIES,
@@ -15,7 +13,9 @@ from app.industries.catalog import (
     LEGACY70_TO_INDUSTRY,
     SEOUL_TO_INDUSTRY,
 )
-from app.industries.lookup import normalize_name
+from app.domain.industries.lookup import normalize_name
+from app.infrastructure.market_data.commercial_area.config import Settings
+from app.infrastructure.market_data.commercial_area.industries import load_middle_master
 
 LEGACY_IDS = range(1, 71)
 

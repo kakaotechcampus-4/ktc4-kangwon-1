@@ -3,8 +3,8 @@
 import hashlib
 import json
 
-from app.local_data.database import LocalDataDB
-from app.seoul import previous_quarter
+from app.domain.quarters import previous_quarter
+from app.infrastructure.market_data.local.database import LocalDataDB
 
 
 def complete_versions(db: LocalDataDB, versions: list[str], latest: str) -> list[str]:

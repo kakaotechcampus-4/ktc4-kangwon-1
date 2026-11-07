@@ -12,8 +12,8 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
-from app.db import repository as repo
-from app.db.connection import SCHEMA_VERSION, connect, initialize
+from app.infrastructure.persistence import repository as repo
+from app.infrastructure.persistence.connection import SCHEMA_VERSION, connect, initialize
 
 # 인증 때문에 v6에서 늘어난 표입니다. 되돌릴 때 외래키 순서가 있어 역순으로 지웁니다.
 AUTH_TABLES = (
@@ -92,7 +92,9 @@ class SchemaVersionTests(unittest.TestCase):
         previous = SCHEMA_VERSION - 1
         _set_user_version(path, previous)
 
-        with patch("app.db.connection._UPGRADABLE_FROM", frozenset({previous})):
+        with patch(
+            "app.infrastructure.persistence.connection._UPGRADABLE_FROM", frozenset({previous})
+        ):
             initialize(path)
 
         self.assertEqual(_user_version(path), SCHEMA_VERSION)
@@ -103,7 +105,7 @@ class SchemaVersionTests(unittest.TestCase):
         # 버전을 먼저 쓰면 "표는 없는데 버전만 최신"인 파일이 남아 다음 기동에서
         # 검사를 통과해 버립니다. 적용 → 확인 → 버전 순서를 지키는지 봅니다.
         path = self.directory / "broken.sqlite3"
-        with patch("app.db.connection._REQUIRED_TABLES", ("없는표",)):
+        with patch("app.infrastructure.persistence.connection._REQUIRED_TABLES", ("없는표",)):
             with self.assertRaisesRegex(RuntimeError, "없는표"):
                 initialize(path)
 

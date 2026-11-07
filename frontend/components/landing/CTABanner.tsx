@@ -27,17 +27,10 @@ export default function CTABanner() {
     router.push('/building-confirm');
   }
 
-  // 진한 파랑 통 박스는 눈이 피로해서, 연한 하늘색 바탕에 남색 글자와
-  // 파랑 버튼 하나만 강조하는 차분한 구성으로 둔다.
+  // 모바일은 흰 바탕에 입력과 버튼을 분리하고, 큰 화면은 연한 하늘색 카드로 묶는다.
   return (
-    <section className="w-full px-4 py-26 sm:px-8">
-      <div
-        className="mx-auto flex max-w-[1120px] flex-col gap-8 rounded-[28px] border px-8 py-14 sm:px-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between"
-        style={{
-          backgroundColor: colors.brand.wash,
-          borderColor: '#D5E1EC',
-        }}
-      >
+    <section className="w-full bg-white px-4 py-12 sm:bg-transparent sm:px-8 sm:py-26">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 bg-transparent px-2 py-0 sm:gap-8 sm:rounded-[28px] sm:border sm:border-[#D5E1EC] sm:bg-[#EAF2F7] sm:px-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p
             className="text-sm font-bold tracking-[0.08em]"
@@ -46,7 +39,7 @@ export default function CTABanner() {
             START ANALYSIS
           </p>
           <h2
-            className="mt-3 text-34 leading-[1.35] font-extrabold tracking-[-0.03em]"
+            className="mt-3 text-3xl leading-[1.3] font-extrabold tracking-[-0.02em] sm:text-4xl sm:leading-[1.35]"
             style={{ color: colors.brand.dark }}
           >
             이 자리의 다음을
@@ -60,8 +53,7 @@ export default function CTABanner() {
 
         <form
           onSubmit={handleSubmit}
-          className="flex w-full flex-wrap gap-2.5 rounded-2xl border bg-white p-2 shadow-[0_10px_30px_rgba(16,35,58,0.06)] lg:max-w-[480px]"
-          style={{ borderColor: '#D5DEE7' }}
+          className="flex w-full flex-row items-center gap-2.5 sm:flex-wrap sm:gap-2.5 sm:rounded-2xl sm:border sm:border-[#D5DEE7] sm:bg-white sm:p-2 sm:shadow-[0_10px_30px_rgba(16,35,58,0.06)] lg:max-w-[480px]"
         >
           <label htmlFor="landing-address" className="sr-only">
             분석할 상가 주소
@@ -71,13 +63,13 @@ export default function CTABanner() {
             value={address}
             onChange={(event) => setAddress(event.target.value)}
             placeholder="예) 서울시 강동구 길동 ○○로 12"
-            className="h-12 min-w-[180px] flex-1 bg-transparent px-3 text-base outline-none placeholder:text-[#8A97A5]"
-            style={{ color: colors.brand.dark }}
+            className="h-[48px] w-auto min-w-0 flex-1 rounded-xl border border-[#D5DEE7] bg-white px-3 text-sm shadow-[0_4px_12px_rgba(16,35,58,0.04)] outline-none placeholder:text-[#8A97A5] focus:border-[#2453D6] sm:min-w-[180px] sm:rounded-none sm:border-0 sm:bg-transparent sm:px-3 sm:text-base sm:shadow-none"
+            style={{ color: colors.brand.dark, height: 48 }}
           />
           <button
             type="submit"
-            className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-bold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: colors.brand.primary }}
+            className="inline-flex h-[48px] w-auto shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-white transition-opacity hover:opacity-90 sm:px-5 sm:text-base"
+            style={{ backgroundColor: colors.brand.primary, height: 48 }}
           >
             분석 시작
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">

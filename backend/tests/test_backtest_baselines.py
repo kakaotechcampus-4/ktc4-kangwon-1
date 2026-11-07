@@ -1,9 +1,9 @@
 import unittest
 
-from app.agentic import scoring
-from app.agents.business_lifecycle import baseline as lifecycle
-from app.agents.commercial_area import baseline as density
-from app.agents.floating_population import baseline as floating
+from app.domain import scoring
+from app.domain.baselines import business_lifecycle as lifecycle
+from app.domain.baselines import commercial_area as density
+from app.domain.baselines import floating_population as floating
 from backtest.baselines import BaselineMismatch, swapped
 from tests.backtest_fixture import file_values
 

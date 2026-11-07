@@ -9,19 +9,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agentic.scoring import (  # noqa: E402,F401
+from app.domain.scoring import (  # noqa: E402,F401
     AMBIGUITIES,
     WEIGHTS,
-    evaluate,
     population_baseline,
     profiles,
     regulation,
     result,
     score_item,
-    seoul_age_share,
     summarize,
     valid,
 )
+from app.domain.scoring import evaluate as score_sample  # noqa: E402
+from app.infrastructure.market_data.floating_population.population import seoul_age_share  # noqa: E402
+
+
+def evaluate(sample, **options):
+    return score_sample(sample, age_baseline=seoul_age_share, **options)
 
 
 def main() -> int:

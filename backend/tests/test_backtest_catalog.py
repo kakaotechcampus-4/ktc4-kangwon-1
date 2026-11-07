@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
 from backtest.catalog import develop_code, invalid_rows, read_sample, row_key
 
 FIELDS = ["업종코드", "업종", "그룹", "순번", "상호", "주소"]

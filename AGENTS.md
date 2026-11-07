@@ -15,12 +15,12 @@ backend/    FastAPI · Python 3.12 · 비동기(asyncio)
 docs/       규칙 문서 (컨벤션 · Git · API 계약)
 ```
 
-현재 공개 API는 `services/analysis.py`에서 단일 decision 도구 루프를 실행합니다.
+현재 공개 API는 `app/application/analysis.py`에서 단일 decision 도구 루프를 실행합니다.
 
 ```
-주소 → 좌표(address.py)
-     → 자료 DB 버전 고정·SQL 조회(local_data) + 시설·규제 사전 조회
-     → 코드 채점·fact 저장(agentic)
+주소 → 좌표(infrastructure/clients/address.py)
+     → 자료 DB 버전 고정·SQL 조회(infrastructure/market_data/local) + 시설·규제 사전 조회
+     → 코드 채점(domain)·fact 저장(application)
      → decision 도구 루프: 필요한 조회·선택적 질문·답변 재개 → 초안
      → 평가자 4명 병렬 검토 → decision이 한 번 반영
      → 서버 검증·요청 SQLite 저장 → API 조회
@@ -28,7 +28,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 
 ## 반드시 지킬 것
 
-1. **공개 결과는 `backend/app/schemas.py`, 도구 입력·응답은 `backend/app/agentic/contracts.py`가 기준이다.**
+1. **공개 결과는 `backend/app/domain/schemas.py`, 판단·근거 형식은 `backend/app/domain/contracts.py`, 도구 입력·응답은 `backend/app/ai/tool_contracts.py`가 기준이다.**
    `AnalysisTask`·`AgentAnalysis`는 수집·계산 경계에도 사용합니다. HTTP 요청·응답 모델은
    `app/api/v1/`에 있습니다. 계약 변경은 호출자·화면에 영향을 주므로 PR에서 합의합니다.
    자료 DB는 수집·활성화용이며 요청 DB에는 버전 참조·근거·판단·질문 이력을 저장합니다.
@@ -36,7 +36,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 2. **외부 호출은 전부 비동기다.** `httpx.AsyncClient`, `AsyncOpenAI`를 씁니다.
    `httpx.Client`, `time.sleep`을 새로 넣지 마세요 — 분석 한 번이 100회 넘는 HTTP 요청을 만들고,
    동기 호출은 FastAPI 이벤트 루프를 통째로 멈춥니다.
-   파일·SQLite·SHP 읽기는 `asyncio.to_thread()`로 격리합니다. 서울 API 전송은 `app/seoul.py`에서 공유합니다.
+   파일·SQLite·SHP 읽기는 `asyncio.to_thread()`로 격리합니다. 서울 API 전송은 `app/infrastructure/market_data/seoul.py`에서 공유합니다.
 
 3. **일반 분석 실패는 에이전트 결과로 수집한다.** 외부 API 실패는 `status="error"`와 `error`,
    부분 실패는 `status="partial"` + `warnings`로 표현해 다른 에이전트를 계속 실행합니다.
@@ -44,7 +44,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
    저장소 오류도 서비스 계층에서 전파하며 에이전트 오류로 바꾸지 않습니다.
 
 4. **모델 응답을 그대로 믿지 않는다.** Pydantic으로 도구 계약을 검증하고,
-   `agentic/report.py`에서 fact 소유·인용 가능 상태·업종·숫자 슬롯·코드 채점과의 정합성을 검증합니다.
+   `app/application/report.py`에서 fact 소유·인용 가능 상태·업종·숫자 슬롯·코드 채점과의 정합성을 검증합니다.
    유효한 근거가 있다는 것만으로 모델 문장의 의미까지 참이라고 보장하지 않습니다.
 
 5. **키는 코드에 넣지 않는다.** `backend/.env`만 씁니다. `.env.example`에 변수 이름만 올립니다.

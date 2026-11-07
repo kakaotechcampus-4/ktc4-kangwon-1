@@ -17,6 +17,8 @@ function stored(overrides: Partial<StoredAnalysis>): StoredAnalysis {
       input_address: '서울 송파구 오금로 404 2층 201호',
       road_address: '서울특별시 송파구 오금로 404',
       detail_address: '2층 201호',
+      latitude: 37.5021,
+      longitude: 127.1283,
     },
     result: resultFor('req-b'),
     error: null,
@@ -102,6 +104,7 @@ describe('storedReport', () => {
         roadAddress: '서울특별시 송파구 오금로 404',
         floorUnit: '2층 201호',
       },
+      coordinates: { latitude: 37.5021, longitude: 127.1283 },
       analyzedDate: '2026.10.27',
     });
   });
@@ -133,6 +136,28 @@ describe('storedReport', () => {
     expect(nothing.kind === 'ready' && nothing.vacancyInput).toBeNull();
   });
 
+  it('좌표가 한쪽만 있거나 숫자가 아니면 좌표 없음으로 둔다', () => {
+    // 위도만 맞는 지도는 엉뚱한 자리를 가리키므로 아예 주소로 찾게 넘긴다.
+    for (const site of [
+      { road_address: '서울특별시 송파구 오금로 404', latitude: 37.5021 },
+      {
+        road_address: '서울특별시 송파구 오금로 404',
+        latitude: 37.5021,
+        longitude: '127.1283',
+      },
+      { road_address: '서울특별시 송파구 오금로 404' },
+      // 좌표를 못 구한 옛 기록
+      {
+        road_address: '서울특별시 송파구 오금로 404',
+        latitude: 0,
+        longitude: 0,
+      },
+    ]) {
+      const report = storedReport(stored({ site }));
+      expect(report.kind === 'ready' && report.coordinates).toBeNull();
+    }
+  });
+
   it('아직 끝나지 않은 요청은 진행 중이다', () => {
     for (const status of ['pending', 'running', 'waiting_for_input'] as const) {
       expect(storedReport(stored({ status, result: null }))).toEqual({
@@ -162,6 +187,10 @@ describe('isExampleReport', () => {
   it('주소에 example이 있으면 예시 리포트다', () => {
     expect(isExampleReport('?example=1')).toBe(true);
     expect(isExampleReport('?id=a&example=1')).toBe(true);
+  });
+
+  it('랜딩·목록의 데모 예시 번호(demo)도 예시 리포트다', () => {
+    expect(isExampleReport('?demo=oegeum-404')).toBe(true);
   });
 
   it('example이 없으면 예시가 아니다', () => {

@@ -4,7 +4,12 @@ import asyncio
 import inspect
 import unittest
 
-from app.services.jobs import AnalysisJobRegistry, JobClosedError, JobConflictError, JobLimitError
+from app.application.jobs import (
+    AnalysisJobRegistry,
+    JobClosedError,
+    JobConflictError,
+    JobLimitError,
+)
 
 
 class JobRegistryTests(unittest.IsolatedAsyncioTestCase):
@@ -59,7 +64,7 @@ class JobRegistryTests(unittest.IsolatedAsyncioTestCase):
         async def fail():
             raise RuntimeError("secret-sentinel")
 
-        with self.assertLogs("app.services.jobs", level="WARNING") as logs:
+        with self.assertLogs("app.application.jobs", level="WARNING") as logs:
             task = registry.start("request", fail())
             with self.assertRaises(RuntimeError):
                 await task
@@ -81,7 +86,7 @@ class JobRegistryTests(unittest.IsolatedAsyncioTestCase):
 
         task = registry.start("request", work())
         await started.wait()
-        with self.assertLogs("app.services.jobs", level="WARNING"):
+        with self.assertLogs("app.application.jobs", level="WARNING"):
             await registry.shutdown(timeout_seconds=0.01)
         self.assertTrue(cleanup.is_set())
         self.assertFalse(task.done())

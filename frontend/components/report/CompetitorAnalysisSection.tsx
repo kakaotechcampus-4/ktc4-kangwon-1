@@ -698,37 +698,48 @@ function CompetitionTable({
     data.lqBaseline.appliedRadiusM ?? data.lqBaseline.requestedRadiusM
   ).toLocaleString('ko-KR');
   const district = data.districtBaseline?.signguName ?? '자치구';
-  const rows = [
-    ...recommended.map((item) => ({ item, recommended: true })),
-    ...notRecommended.map((item) => ({ item, recommended: false })),
-  ];
-  return (
-    <SectionCard
-      title="업종별 경쟁 지표"
-      description="배수는 기준 대비 밀집도예요. ▲ 주황은 같은 업종이 기준보다 몰려 있고, ▼ 파랑은 기준보다 적다는 뜻이에요."
+  const renderGroup = (
+    items: CompetitionItem[],
+    label: string,
+    description: string,
+    isRecommended: boolean
+  ) => (
+    <section
+      key={label}
+      className="ca-table-group"
+      data-recommended={isRecommended}
     >
+      <header className="ca-table-group-head">
+        <div>
+          <h4>{label}</h4>
+          <p>{description}</p>
+        </div>
+        <span>{items.length}개 업종</span>
+      </header>
       <div className="ca-table-wrap">
         <table className="ca-table">
+          <caption className="sr-only">{label} 경쟁 지표 비교</caption>
           <thead>
             <tr>
-              <th>업종</th>
-              <th>동종 점포</th>
-              <th>반경 {radius}m 대비</th>
-              <th>{district} 대비</th>
+              <th scope="col">업종</th>
+              <th scope="col">동종 점포 수</th>
+              <th scope="col">
+                반경 {radius}m 대비
+                <small>1.0배 = 같은 업종 평균</small>
+              </th>
+              <th scope="col">
+                {district} 대비
+                <small>1.0배 = 자치구 평균</small>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ item, recommended: isRec }) => {
+            {items.map((item) => {
               const middle = findMiddleCategory(item.name, data);
               return (
                 <tr key={item.key}>
                   <td>
                     <span className="ca-table-name">{item.name}</span>
-                    <span
-                      className={`ca-table-tag ${isRec ? 'is-rec' : 'is-not'}`}
-                    >
-                      {isRec ? '추천' : '비추천'}
-                    </span>
                   </td>
                   {middle ? (
                     <>
@@ -755,7 +766,30 @@ function CompetitionTable({
           </tbody>
         </table>
       </div>
-    </SectionCard>
+    </section>
+  );
+
+  return (
+    <div className="ca-comparison-tables">
+      <p className="ca-table-guide">
+        배수는 기준 대비 밀집도예요. 1.0배보다 크면 기준보다 높고, 작으면
+        낮습니다.
+      </p>
+      {recommended.length > 0 &&
+        renderGroup(
+          recommended,
+          '상위 추천 업종',
+          '먼저 검토할 업종의 경쟁 지표입니다.',
+          true
+        )}
+      {notRecommended.length > 0 &&
+        renderGroup(
+          notRecommended,
+          '제외 후보',
+          '추천 기준에서 제외된 업종을 별도로 모았습니다.',
+          false
+        )}
+    </div>
   );
 }
 

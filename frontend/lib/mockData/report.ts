@@ -154,9 +154,8 @@ export interface BusinessLifecycleScoringMethod {
 
 /**
  * 추천/비추천 10개 업종으로 이미 필터링된 결과.
- * lib/api/adapters/businessLifecycle.ts의 adaptBusinessLifecycle()이
- * industries(공통 업종 코드 75개) 중 이름이 일치하는 것만 골라 이 형태로
- * 만든다 — coverage/scoring_method는 필터링 없이 원본 그대로다.
+ * 예전 개폐업 에이전트 응답(industries, 공통 업종 코드 75개) 중 이름이 일치하는
+ * 것만 골라 둔 목업이다 — coverage/scoring_method는 원본 그대로다.
  *
  * summary/metadata/taxonomy는 실제 응답에 있지만 화면이 아직 쓰지 않는다
  * (summary는 요약 카드 첫 줄로 보여주는 정도만 — CoverageSummary 참고).
@@ -471,7 +470,7 @@ export const mockReportData = {
       issue_id: 'examiner:1',
       disposition: 'accepted',
       reason:
-        '분석 반경과 비교 기준의 반경이 달라, 같은 조건의 경쟁 밀도로 볼 수 없었어요.',
+        '분석 반경과 비교 기준의 범위가 달라 같은 조건의 경쟁 밀도로 단정할 수 없어요.',
       fact_ids: [],
       applied: ['비교 범위가 다른 경쟁 점수는 제외했어요.'],
       not_applied: [],
@@ -491,7 +490,7 @@ export const mockReportData = {
       fact_id: 'mock_radius',
       source: 'commercial_area',
       metric: 'radius_m',
-      value: 100,
+      value: 500,
       unit: 'm',
       period: '예시 수치',
       spatial_scope: {},
@@ -505,7 +504,7 @@ export const mockReportData = {
       fact_id: 'mock_baseline_radius',
       source: 'commercial_area',
       metric: 'baseline_radius_m',
-      value: 500,
+      value: 2000,
       unit: 'm',
       period: '예시 수치',
       spatial_scope: {},
@@ -517,117 +516,124 @@ export const mockReportData = {
     },
   ] satisfies FactView[],
   rent: '월세 120만원',
-  analyzedDate: '2026.08.22',
+  analyzedDate: '2026.10.30',
 
   aiConclusion: {
-    industry: '네일·뷰티',
+    industry: '카페·비알코올 음료점',
     reason:
-      '목업 평가에서는 네일·뷰티를 우선 검토합니다. 동종 점포 수와 주거생활형 인구 구성을 참고하되, 4층 접근성과 시설 조건은 별도 확인이 필요합니다.',
+      '오금로 404 예시에서는 저녁 시간대와 30~50대 유동 비중, 생활형 업종 구성을 함께 고려해 카페·비알코올 음료점을 먼저 검토합니다. 주변 점포 수와 실제 매물·시설 조건은 현장에서 확인해야 합니다.',
   },
 
   recommended: [
     {
       rank: 1,
-      name: '네일·뷰티',
-      score: 92,
-      tags: ['동종 점포 1개', '최근 1년 폐업률 하락', '3년간 점포 11곳 증가'],
+      name: '카페·비알코올 음료점',
+      score: 86,
+      tags: [
+        '저녁 시간대 유동 비중이 가장 높음',
+        '개폐업 지표가 비교적 안정적',
+      ],
     },
     {
       rank: 2,
-      name: '무인점포',
-      score: 87,
-      tags: ['비교할 경쟁 자료 부족'],
+      name: '이용·미용',
+      score: 83,
+      tags: ['생활권 안에서 꾸준한 이용 수요를 기대할 수 있음'],
     },
     {
       rank: 3,
-      name: '소형 스튜디오',
-      score: 82,
-      tags: ['3년: 개업 9곳 · 폐업 4곳', '동종 점포 2개'],
+      name: '학원·교육기관',
+      score: 80,
+      tags: ['주거·생활권 이용 수요와 맞는 업종', '모임형 집적 지표 참고'],
     },
     {
       rank: 4,
-      name: '코인세탁실',
-      score: 78,
-      tags: ['동종 점포 3개', '개폐업 자료 미제공'],
+      name: '세탁',
+      score: 76,
+      tags: ['주거 생활권과 연계 가능한 업종'],
     },
     {
       rank: 5,
-      name: '반려동물 미용',
-      score: 73,
-      tags: ['3년간 점포 수 유지', '주거생활형 상권'],
+      name: '식료품 소매',
+      score: 72,
+      tags: ['생활권 기반 수요를 검토할 수 있음'],
     },
   ] as RecommendedIndustry[],
 
   notRecommended: [
     {
       rank: 1,
-      name: '고깃집',
+      name: '주점',
       score: 31,
-      tags: ['3년간 점포 11곳 감소', '최근 1년 폐업률 상승', '동종 점포 9개'],
+      tags: ['같은 업종 밀집도가 비교적 높음', '운영 시간·시설 조건 확인 필요'],
     },
     {
       rank: 2,
-      name: '대형 카페',
+      name: '한식 음식점',
       score: 38,
-      tags: ['점포 교체가 잦은 업종', '동종 점포 12개'],
+      tags: ['같은 업종 밀집도가 높은 편', '조리·환기 시설 확인 필요'],
     },
     {
       rank: 3,
-      name: '베이커리',
+      name: '일반·생활 숙박',
       score: 44,
-      tags: ['3년: 개업 9곳 · 폐업 15곳', '최근 1년 폐업률 상승'],
+      tags: ['건축물 용도와 인허가를 먼저 확인해야 함'],
     },
     {
       rank: 4,
-      name: '필라테스',
+      name: '자동차부품 소매',
       score: 27,
-      tags: ['비교할 경쟁 자료 부족'],
+      tags: ['주변 생활권의 주요 이용 흐름과 거리가 있음'],
     },
     {
       rank: 5,
-      name: '헬스장',
+      name: '운송장비 대여',
       score: 24,
-      tags: ['9분기: 개업 5곳 · 폐업 6곳', '개폐업 자료 신뢰도 낮음'],
+      tags: ['생활권 수요와 업종 특성이 다를 수 있음'],
     },
   ] as RecommendedIndustry[],
 
   footTraffic: {
-    dailyAverage: 4820,
+    dailyAverage: 8688,
     hourly: [
-      { hour: '00시', count: 50 },
-      { hour: '02시', count: 52 },
-      { hour: '04시', count: 65 },
-      { hour: '06시', count: 110 },
-      { hour: '08시', count: 420 },
-      { hour: '10시', count: 780 },
-      { hour: '12시', count: 1100 },
-      { hour: '14시', count: 900 },
-      { hour: '16시', count: 1050 },
-      { hour: '18시', count: 1300 },
-      { hour: '20시', count: 850 },
-      { hour: '22시', count: 350 },
-      { hour: '24시', count: 100 },
+      { hour: '00시', count: 210 },
+      { hour: '02시', count: 160 },
+      { hour: '04시', count: 130 },
+      { hour: '06시', count: 290 },
+      { hour: '08시', count: 620 },
+      { hour: '10시', count: 900 },
+      { hour: '12시', count: 1120 },
+      { hour: '14시', count: 1180 },
+      { hour: '16시', count: 1280 },
+      { hour: '18시', count: 1540 },
+      { hour: '20시', count: 1420 },
+      { hour: '22시', count: 1050 },
+      { hour: '24시', count: 320 },
     ] as FootTrafficHourly[],
-    peakLabel: '네일·뷰티 영업시간대 (10:00-20:00)',
+    peakLabel: '저녁 시간대 (17:00-21:00)',
     ageGroups: [
-      { label: '10대', percent: 4 },
-      { label: '20대', percent: 28 },
-      { label: '30대', percent: 26 },
-      { label: '40대', percent: 21 },
-      { label: '50대', percent: 14 },
-      { label: '60대+', percent: 7 },
+      { label: '10대', percent: 9 },
+      { label: '20대', percent: 13 },
+      { label: '30대', percent: 19 },
+      { label: '40대', percent: 24 },
+      { label: '50대', percent: 21 },
+      { label: '60대+', percent: 14 },
     ] as AgeGroupData[],
     source:
       'SK Planet 인구이동데이터 2025 · 시간대는 요일 평균, 연령대는 최근 30일 기준',
   },
 
   competitors: [
-    { industry: '네일·뷰티', count: 1, recommended: true },
-    { industry: '소형 스튜디오', count: 2, recommended: true },
-    { industry: '무인점포', count: 3, recommended: true },
-    { industry: '베이커리', count: 6, recommended: false },
-    { industry: '고깃집', count: 9, recommended: false },
-    { industry: '대형 카페', count: 12, recommended: false },
+    { industry: '카페·비알코올 음료점', count: 34, recommended: true },
+    { industry: '이용·미용', count: 67, recommended: true },
+    { industry: '학원·교육기관', count: 56, recommended: true },
+    { industry: '세탁', count: 18, recommended: true },
+    { industry: '식료품 소매', count: 42, recommended: true },
+    { industry: '주점', count: 29, recommended: false },
+    { industry: '한식 음식점', count: 83, recommended: false },
+    { industry: '일반·생활 숙박', count: 7, recommended: false },
+    { industry: '자동차부품 소매', count: 4, recommended: false },
+    { industry: '운송장비 대여', count: 3, recommended: false },
   ] as CompetitorData[],
   competitorSource: '소상공인진흥공단 상권정보시스템 2025',
 
@@ -640,17 +646,11 @@ export const mockReportData = {
   averageCloseRate: 12.4,
   openCloseSource: '국세청 사업자현황통계 2024',
 
-  // 추천 5 업종 중 "무인점포"는 여기서도 의도적으로 뺐다 — commercial_area의
-  // RECOMMENDED_NAME_TO_MIDDLE_CODE와 같은 이유로, 공통 업종 코드 75종에도
-  // "무인점포"에 정확히 대응하는 항목이 없다. 기본 렌더링(props 없이 이
-  // 목업을 쓸 때)에서도 adaptBusinessLifecycle()의 "이름 매칭 실패" 경로가
-  // 실제로 걸리는 걸 보여주려고 남겨뒀다.
-  // "코인세탁실"은 판단 보류(score: null, confidence: 'none',
-  // data_status: 'unsupported') 케이스를 기본 화면에서도 보여주려고
-  // 일부러 넣어뒀다 — 실제 응답도 75개 중 19개가 이 상태다.
+  // 레거시 컴포넌트 호환용 데이터. 실제 데모 화면은 reportPresentation.ts의
+  // 51개 정식 업종 코드 기반 fact 데이터를 사용한다.
   businessLifecycle: {
     summary:
-      '네일·뷰티·소형 스튜디오는 개업이 활발하고 최근 폐업률도 낮아 안정적이며, 고깃집·베이커리는 폐업이 빠르게 늘고 폐업률도 과거보다 상승해 위험 신호가 뚜렷합니다.',
+      '오금로 404 예시의 검토 후보 10개 업종에 대해 개업·폐업 지표를 비교합니다. 이 값은 데모용이며 실제 조사 결과가 아닙니다.',
     coverage: {
       target_industries: 75,
       scored_industries: 56,
@@ -678,8 +678,8 @@ export const mockReportData = {
     },
     industries: [
       {
-        industry_id: 'S209',
-        industry_name: '네일·뷰티',
+        industry_id: 'I212',
+        industry_name: '카페·비알코올 음료점',
         score: 78.4,
         type: '성장·안정형',
         confidence: 'high',
@@ -714,8 +714,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'N102',
-        industry_name: '소형 스튜디오',
+        industry_id: 'S207',
+        industry_name: '이용·미용',
         score: 66.7,
         type: '성장·안정형',
         confidence: 'medium',
@@ -750,8 +750,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'S208',
-        industry_name: '코인세탁실',
+        industry_id: 'P105',
+        industry_name: '학원·교육기관',
         score: null,
         type: '판단 보류',
         confidence: 'none',
@@ -782,8 +782,8 @@ export const mockReportData = {
         warning: '서울시 생활밀접업종 데이터에 직접 대응 업종 없음',
       },
       {
-        industry_id: 'S203',
-        industry_name: '반려동물 미용',
+        industry_id: 'S209',
+        industry_name: '세탁',
         score: 58.9,
         type: '안정 유지형',
         confidence: 'medium',
@@ -818,8 +818,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'I201',
-        industry_name: '고깃집',
+        industry_id: 'G205',
+        industry_name: '식료품 소매',
         score: 32.5,
         type: '쇠퇴·위험형',
         confidence: 'high',
@@ -854,8 +854,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'I212',
-        industry_name: '대형 카페',
+        industry_id: 'I211',
+        industry_name: '주점',
         score: 38.8,
         type: '과열·회전형',
         confidence: 'high',
@@ -890,8 +890,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'I211',
-        industry_name: '베이커리',
+        industry_id: 'I201',
+        industry_name: '한식 음식점',
         score: 44.3,
         type: '쇠퇴·위험형',
         confidence: 'medium',
@@ -926,8 +926,8 @@ export const mockReportData = {
         warning: null,
       },
       {
-        industry_id: 'R206',
-        industry_name: '헬스장',
+        industry_id: 'I101',
+        industry_name: '일반·생활 숙박',
         score: 41.2,
         type: '쇠퇴·위험형',
         confidence: 'low',
@@ -1081,82 +1081,82 @@ export const mockReportData = {
           {
             rank: 1,
             code: 'S207',
-            name: '이용 및 미용업',
-            count: 34,
-            densityPerKm2: 43.3,
-            note: '34개 · 이 반경 점포의 9.9%',
+            name: '이용·미용',
+            count: 67,
+            densityPerKm2: 85.3,
+            note: '67개 · 이 반경 점포의 8.4%',
           },
           {
             rank: 2,
-            code: 'I201',
-            name: '한식 음식점업',
-            count: 31,
-            densityPerKm2: 39.5,
-            note: '31개 · 이 반경 점포의 9.1%',
+            code: 'P105',
+            name: '학원·교육기관',
+            count: 56,
+            densityPerKm2: 71.3,
+            note: '56개 · 이 반경 점포의 7.0%',
           },
           {
             rank: 3,
-            code: 'I210',
-            name: '기타 간이 음식점업',
-            count: 28,
-            densityPerKm2: 35.7,
-            note: '28개 · 이 반경 점포의 8.2%',
+            code: 'G205',
+            name: '식료품 소매',
+            count: 42,
+            densityPerKm2: 53.5,
+            note: '42개 · 이 반경 점포의 5.3%',
           },
           {
             rank: 4,
-            code: 'L102',
-            name: '부동산 중개 및 대리업',
-            count: 22,
-            densityPerKm2: 28.0,
-            note: '22개 · 이 반경 점포의 6.4%',
+            code: 'I212',
+            name: '카페·비알코올 음료점',
+            count: 34,
+            densityPerKm2: 43.3,
+            note: '34개 · 이 반경 점포의 4.3%',
           },
           {
             rank: 5,
-            code: 'Q102',
-            name: '의원',
-            count: 19,
-            densityPerKm2: 24.2,
-            note: '19개 · 이 반경 점포의 5.6%',
+            code: 'I201',
+            name: '한식 음식점',
+            count: 83,
+            densityPerKm2: 105.7,
+            note: '83개 · 이 반경 점포의 10.4%',
           },
           {
             rank: 6,
-            code: 'G205',
-            name: '체인화 편의점',
-            count: 17,
-            densityPerKm2: 21.6,
-            note: '17개 · 이 반경 점포의 5.0%',
+            code: 'I211',
+            name: '주점',
+            count: 29,
+            densityPerKm2: 36.9,
+            note: '29개 · 이 반경 점포의 3.6%',
           },
           {
             rank: 7,
-            code: 'I212',
-            name: '비알코올 음료점업',
-            count: 15,
-            densityPerKm2: 19.1,
-            note: '15개 · 이 반경 점포의 4.4%',
+            code: 'S209',
+            name: '세탁',
+            count: 18,
+            densityPerKm2: 22.9,
+            note: '18개 · 이 반경 점포의 2.3%',
           },
           {
             rank: 8,
-            code: 'S208',
-            name: '세탁업',
-            count: 12,
-            densityPerKm2: 15.3,
-            note: '12개 · 이 반경 점포의 3.5%',
+            code: 'I101',
+            name: '일반·생활 숙박',
+            count: 7,
+            densityPerKm2: 8.9,
+            note: '7개 · 이 반경 점포의 0.9%',
           },
           {
             rank: 9,
-            code: 'P106',
-            name: '기타 교육기관',
-            count: 11,
-            densityPerKm2: 14.0,
-            note: '11개 · 이 반경 점포의 3.2%',
+            code: 'G202',
+            name: '자동차부품 소매',
+            count: 4,
+            densityPerKm2: 5.1,
+            note: '4개 · 이 반경 점포의 0.5%',
           },
           {
             rank: 10,
-            code: 'S203',
-            name: '반려동물 관련 서비스업',
-            count: 9,
-            densityPerKm2: 11.5,
-            note: '9개 · 이 반경 점포의 2.6%',
+            code: 'N109',
+            name: '운송장비 대여',
+            count: 3,
+            densityPerKm2: 3.8,
+            note: '3개 · 이 반경 점포의 0.4%',
           },
         ],
       },
@@ -1358,26 +1358,26 @@ export const mockReportData = {
     ] as FloatingPopulationTradeArea[],
 
     population: {
-      daily_avg: 4820,
+      daily_avg: 8688,
       female_ratio: 0.52,
       age_share: {
-        '10': 0.05,
-        '20': 0.15,
-        '30': 0.17,
+        '10': 0.09,
+        '20': 0.13,
+        '30': 0.19,
         '40': 0.24,
-        '50': 0.22,
-        '60': 0.17,
+        '50': 0.21,
+        '60': 0.14,
       },
       time_per_hour_share: {
-        '00_06': 0.06,
-        '06_11': 0.13,
-        '11_14': 0.19,
-        '14_17': 0.17,
-        '17_21': 0.28,
-        '21_24': 0.17,
+        '00_06': 0.105,
+        '06_11': 0.145,
+        '11_14': 0.17,
+        '14_17': 0.18,
+        '17_21': 0.225,
+        '21_24': 0.175,
       },
       peak_time_band: '17_21',
-      weekend_to_weekday_ratio: 1.12,
+      weekend_to_weekday_ratio: 1.08,
     } as FloatingPopulationPopulation,
 
     benchmark: {
@@ -1399,16 +1399,16 @@ export const mockReportData = {
     type: {
       label: '주거생활형',
       reasons: [
-        '40·50대 합이 46%로 이 지역 인구 구성에서 가장 큰 비중을 차지합니다.',
-        '저녁 시간대(17~21시) 통행이 서울 평균의 1.35배로 많아 퇴근·귀가 동선에 몰려 있습니다.',
-        '주말 통행량이 평일의 1.12배로 주말에 더 붐빕니다.',
+        '30~50대가 합계 64%로 이 지역 인구 구성에서 가장 큰 비중을 차지합니다.',
+        '저녁 시간대(17~21시) 통행 비중이 가장 높습니다.',
+        '주말 유동은 평일보다 약간 많은 편입니다.',
       ],
       is_inference: true,
     } as FloatingPopulationType,
 
     reliability: {
-      trade_area_count: 6,
-      covered_trade_areas: 6,
+      trade_area_count: 5,
+      covered_trade_areas: 5,
       level: 'high',
     } as FloatingPopulationReliability,
 
@@ -1427,26 +1427,18 @@ export const mockReportData = {
 
     trend: {
       quarters: [
-        { period: '2025년 3분기', daily_avg: 4460 },
-        { period: '2025년 4분기', daily_avg: 4610 },
-        { period: '2026년 1분기', daily_avg: 5050 },
-        { period: '2026년 2분기', daily_avg: 4820 },
+        { period: '2025년 3분기', daily_avg: 8430 },
+        { period: '2025년 4분기', daily_avg: 8570 },
+        { period: '2026년 1분기', daily_avg: 8629 },
+        { period: '2026년 2분기', daily_avg: 8688 },
       ],
       direction: '보합',
-      qoq_change: -4.6,
+      qoq_change: 0.7,
     } as FloatingPopulationTrend,
 
-    radius_profile: {
-      points: [
-        { radius_m: 50, daily_avg: 210 },
-        { radius_m: 100, daily_avg: 780 },
-        { radius_m: 200, daily_avg: 1950 },
-        { radius_m: 300, daily_avg: 3120 },
-        { radius_m: 500, daily_avg: 4820 },
-      ],
-      method:
-        '반경 안과 겹치는 상권의 길단위인구를 면적 비례로 안분해 추정했습니다.',
-    } as FloatingPopulationRadiusProfile,
+    // 현재 보고서 화면은 전체 반경 대표값만 사용하며, 반경별 누적 추정치는
+    // fact 기반 실제 화면과 맞추기 위해 예시 데이터에서 제외한다.
+    radius_profile: null,
 
     selection: {
       applied: false,
@@ -1456,36 +1448,32 @@ export const mockReportData = {
   } as FloatingPopulationData,
 
   aiSummary:
-    '해당 공간은 대규모 조리시설이 필요하지 않은 소규모 서비스·리테일 업종에 높은 적합도를 보입니다. 특히 네일·뷰티, 무인점포, 소형 스튜디오가 공간 및 상권 조건과 가장 잘 부합합니다. 현재 공실 기간(4개월)을 고려할 때 초기 설비 비용이 적은 무인점포 또는 뷰티 업종을 우선 검토하는 것을 권장합니다.',
+    '오금로 404 예시 리포트는 저녁 시간대 유동과 30~50대 비중, 주변 업종 구성을 함께 살펴봅니다. 카페·비알코올 음료점과 생활 서비스 업종을 우선 검토 후보로 두되, 추천은 실제 공간의 시설 상태나 인허가 가능성을 확정하지 않습니다.',
 
   aiAnalysisSummary: {
     exclusionReason:
-      '목업의 비추천 업종은 헬스장·고깃집·대형 카페·베이커리입니다. 이들 업종의 개폐업 자료에서는 관측 기간 순증감이 음수로 나타납니다. 이는 참고 지표이며 입점 불가 판정이 아닙니다. 환기·방음·하중·전력 조건은 아직 확인되지 않았습니다.',
+      '주점·한식 음식점 등은 경쟁 밀집도와 업종별 시설 요건을 고려해 제외 후보로 분류했습니다. 제외 후보는 입점 불가 판정이 아니며, 실제 수요와 공사·환기 조건을 별도로 확인해야 합니다.',
     recommendationReason:
-      '목업 적합도 평가의 1위는 네일·뷰티입니다. 반경 500m의 동종 점포는 1개로 집계돼 있고 유동인구는 주거생활형으로 분류됩니다. 경쟁점 수만으로 수요를 확정할 수 없으며, 4층 접근성과 실제 시설 조건을 확인해야 합니다.',
+      '예시 검토 순위 1위는 카페·비알코올 음료점입니다. 저녁 시간대 유동이 가장 많고 30~50대 비중이 큰 구성과 함께 살펴본 후보입니다. 경쟁점 수만으로 실제 수요를 확정할 수 없으며, 출입 동선과 시설 조건을 확인해야 합니다.',
     favorableConditions:
-      '유동인구 자료에서는 40·50대가 합계 46%를 차지합니다. 이 구성은 고객층을 검토하는 참고 자료이며, 해당 인구가 실제 4층 매장을 방문한다는 의미는 아닙니다.',
+      '유동인구 예시에서는 30~50대가 합계 64%를 차지합니다. 이 구성은 고객층을 검토하는 참고 자료이며, 해당 인구가 실제 매장을 방문한다는 의미는 아닙니다.',
     synergyTips:
-      '엘리베이터, 간판 노출, 급·배수와 전력 용량, 공사 허용 범위를 확인하세요. 현재 면적·층수 외 시설 조건과 임대 조건만으로 수익성이나 투자 회수 기간을 판단할 수 없습니다.',
+      '출입구와 간판 노출, 급·배수와 전력 용량, 공사 허용 범위를 확인하세요. 이 분석은 공간과 시설에 따른 업종 적합도를 살펴보며, 월세·보증금·수익성이나 투자 회수 기간은 분석하지 않습니다.',
   },
 };
 
-/**
- * 결정 에이전트가 쓰는 업종명(RecommendedIndustry.name)과 상권 에이전트의
- * 중분류 코드(CommercialAreaMiddleCategory.code)는 서로 다른 체계라 이름이
- * 문자 그대로 같지 않다. 실제 연동 전까지는 이 표로 수동 매핑하고, 표에
- * 없거나 byMiddleForRecommendations에서 해당 code를 못 찾으면 "매칭 안 됨"
- * 처리한다(무인점포가 의도적으로 빠져 있는 이유는 위 commercialArea 주석 참고).
- */
+/** 결정·상권 데이터에서 공통으로 쓰는 51개 업종 코드 매핑. */
 export const RECOMMENDED_NAME_TO_MIDDLE_CODE: Record<string, string> = {
-  '네일·뷰티': 'S209',
-  '소형 스튜디오': 'N102',
-  코인세탁실: 'S208',
-  '반려동물 미용': 'S203',
-  고깃집: 'I201',
-  '대형 카페': 'I212',
-  베이커리: 'I211',
-  헬스장: 'R206',
+  '카페·비알코올 음료점': 'I212',
+  '이용·미용': 'S207',
+  '학원·교육기관': 'P105',
+  세탁: 'S209',
+  '식료품 소매': 'G205',
+  주점: 'I211',
+  '한식 음식점': 'I201',
+  '일반·생활 숙박': 'I101',
+  '자동차부품 소매': 'G202',
+  '운송장비 대여': 'N109',
 };
 
 /**

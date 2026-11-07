@@ -84,7 +84,7 @@ export default function Header({ overlay = false }: HeaderProps) {
         </Link>
 
         <nav
-          className="flex items-center gap-0.5 justify-self-center sm:gap-1"
+          className="flex flex-1 items-center justify-evenly gap-0.5 sm:flex-none sm:justify-self-center sm:gap-1"
           style={navAccentStyle}
         >
           {navLinks.map(({ label, href, matchPaths }) => {

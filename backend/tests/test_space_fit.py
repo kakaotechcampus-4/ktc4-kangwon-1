@@ -8,16 +8,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic.contracts import GetFactsInput
-from app.agentic.facts import register_fact
-from app.agentic.questions import save_user_facts
-from app.agentic.read_tools import get_facts
-from app.agentic.snapshot import persist_space_requirements
-from app.agentic.space import compare_space, ensure_space_fits
-from app.canonical import canonical_json
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.storage.raw import capture_scope
+from app.ai.read_tools import get_facts
+from app.ai.tool_contracts import GetFactsInput
+from app.application.answers import save_user_facts
+from app.application.facts import register_fact
+from app.application.snapshot import persist_space_requirements
+from app.application.space import ensure_space_fits
+from app.domain.space_fit import compare_space
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
+from app.shared.canonical import canonical_json
 
 
 class CompareSpaceTests(unittest.TestCase):
@@ -419,7 +420,7 @@ class SpaceFitFactsTests(unittest.IsolatedAsyncioTestCase):
                 ),
             )
         with patch(
-            "app.agentic.questions.ensure_space_fits", side_effect=RuntimeError("비교 저장 실패")
+            "app.application.answers.ensure_space_fits", side_effect=RuntimeError("비교 저장 실패")
         ):
             with self.assertRaises(RuntimeError):
                 await asyncio.to_thread(save_user_facts, self.scope, {"floor": "1층"}, "q", saved)

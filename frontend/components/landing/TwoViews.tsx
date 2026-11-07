@@ -12,7 +12,7 @@ const views = [
     tag: '공간',
     title: '점포의 조건부터',
     description:
-      '면적과 층수, 전면 형태 등 업종 선택에 필요한 공간 정보를 살펴봅니다.',
+      '면적과 층수, 용도 등 업종 선택에 필요한 공간 정보를 살펴봅니다.',
   },
   {
     number: '02',
@@ -55,71 +55,84 @@ export default function TwoViews() {
   }, []);
 
   return (
-    <section
-      id="services"
-      className="relative -mt-14 w-full rounded-t-[56px] bg-white px-4 pt-10 pb-28 sm:rounded-t-[72px] sm:px-8"
-    >
-      {/* 아래로 스크롤을 유도하는 이중 화살표 */}
-      <a
-        href="#how-we-read"
-        className="scroll-cue mx-auto flex w-fit flex-col items-center"
-        aria-label="아래로 내려 채움이 공간을 보는 방법 보기"
+    <div className="w-full" style={{ backgroundColor: colors.brand.wash }}>
+      <section
+        id="services"
+        className="relative mx-0 mt-0 w-full rounded-[28px] border border-[#EEF1F4] bg-white px-4 pt-7 pb-8 shadow-none sm:-mt-14 sm:rounded-t-[72px] sm:rounded-b-none sm:border-0 sm:px-8 sm:pt-10 sm:pb-28"
       >
-        <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
-        <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
-      </a>
-      <div
-        id="how-we-read"
-        className="mx-auto mt-14 max-w-[1120px] scroll-mt-24"
-      >
-        <div className="text-center">
-          <Eyebrow>HOW WE READ SPACE</Eyebrow>
-          <h2 className="mt-3.5 text-4xl font-extrabold tracking-[-0.02em] text-[#111827]">
-            건물 안과 밖, 두 가지 시선으로
-          </h2>
-          <p className="mx-auto mt-4 max-w-[560px] text-base leading-[1.7] text-[#5B6470]">
-            공간의 조건을 파악하고, 동네의 흐름을 살펴봅니다. 따로 보면 놓치기
-            쉬운 단서를 함께 놓아야 이 자리에 어울리는 업종이 보입니다.
-          </p>
-        </div>
-
-        <ol
-          ref={listRef}
-          data-visible="false"
-          className="view-cards mt-14 grid gap-5 md:grid-cols-3"
+        {/* 모바일에서 다음 내용을 안내하는 이중 스크롤 화살표 */}
+        <a
+          href="#how-we-read"
+          className="scroll-cue mx-auto flex w-fit flex-col items-center"
+          aria-label="아래로 내려 채움이 공간을 보는 방법 보기"
         >
-          {views.map(({ number, tag, title, description }, index) => (
-            <li
-              key={tag}
-              className="view-card flex flex-col rounded-[22px] p-8"
-              style={
-                {
-                  backgroundColor: colors.brand.wash,
-                  '--i': index,
-                } as CSSProperties
-              }
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className="rounded-full px-3 py-1 text-13 font-bold text-white"
-                  style={{ backgroundColor: colors.brand.primary }}
-                >
-                  {tag}
-                </span>
-                <span className="view-card-number text-sm font-bold text-[#8A97A5]">
-                  {number}
-                </span>
-              </div>
-              <h3 className="mt-10 text-22 font-extrabold tracking-[-0.02em] text-[#111827]">
-                {title}
-              </h3>
-              <p className="mt-3 text-15 leading-[1.75] text-[#4B5563]">
-                {description}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+          <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
+          <ChevronDown size={36} strokeWidth={2.6} aria-hidden="true" />
+        </a>
+        <div
+          id="how-we-read"
+          className="mx-auto mt-8 max-w-[1120px] scroll-mt-24 sm:mt-14"
+        >
+          <div className="text-center">
+            <Eyebrow>HOW WE READ SPACE</Eyebrow>
+            <h2 className="mt-3.5 text-3xl font-extrabold tracking-[-0.02em] text-[#111827] sm:text-4xl">
+              건물 안과 밖, 두 가지 시선으로
+            </h2>
+            <p className="mx-auto mt-4 max-w-[560px] text-base leading-[1.7] text-[#5B6470]">
+              공간의 조건을 파악하고, 동네의 흐름을 살펴봅니다. 따로 보면 놓치기
+              쉬운 단서를 함께 놓아야 이 자리에 어울리는 업종이 보입니다.
+            </p>
+          </div>
+
+          <ol
+            ref={listRef}
+            data-visible="false"
+            className="view-cards mt-9 grid gap-4 sm:mt-14 sm:gap-5 md:grid-cols-3"
+          >
+            {views.map(({ number, tag, title, description }, index) => (
+              <li
+                key={tag}
+                className="view-card flex flex-col rounded-[22px] p-6 sm:p-8"
+                style={
+                  {
+                    backgroundColor: colors.brand.wash,
+                    '--i': index,
+                  } as CSSProperties
+                }
+              >
+                <div className="flex items-center justify-between gap-3 sm:hidden">
+                  <h3 className="text-xl font-extrabold tracking-[-0.02em] text-[#111827]">
+                    {title}
+                  </h3>
+                  <span
+                    className="shrink-0 rounded-full px-3 py-1 text-13 font-bold text-white"
+                    style={{ backgroundColor: colors.brand.primary }}
+                  >
+                    {tag}
+                  </span>
+                </div>
+                <div className="hidden items-center justify-between sm:flex">
+                  <span
+                    className="rounded-full px-3 py-1 text-13 font-bold text-white"
+                    style={{ backgroundColor: colors.brand.primary }}
+                  >
+                    {tag}
+                  </span>
+                  <span className="view-card-number text-sm font-bold text-[#8A97A5]">
+                    {number}
+                  </span>
+                </div>
+                <h3 className="mt-10 hidden text-22 font-extrabold tracking-[-0.02em] text-[#111827] sm:block">
+                  {title}
+                </h3>
+                <p className="mt-3 text-sm leading-[1.75] text-[#4B5563] sm:text-15">
+                  {description}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+    </div>
   );
 }

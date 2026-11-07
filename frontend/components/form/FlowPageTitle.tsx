@@ -14,9 +14,9 @@ export default function FlowPageTitle({
   description: string;
 }) {
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex flex-col items-start gap-2.5 sm:gap-3">
       <p
-        className="text-sm font-bold tracking-[0.08em]"
+        className="text-xs font-bold tracking-[0.08em] sm:text-sm"
         style={{ color: colors.brand.primary }}
       >
         {eyebrow}
@@ -25,13 +25,15 @@ export default function FlowPageTitle({
         className="font-extrabold tracking-[-0.04em] break-keep"
         style={{
           color: colors.brand.dark,
-          fontSize: 'clamp(30px, 3.4vw, 46px)',
+          fontSize: 'clamp(24px, 3.4vw, 46px)',
           lineHeight: 1.25,
         }}
       >
         {title}
       </h1>
-      <p className="text-base leading-relaxed text-[#4B5866]">{description}</p>
+      <p className="text-sm leading-relaxed text-[#4B5866] sm:text-base">
+        {description}
+      </p>
     </div>
   );
 }

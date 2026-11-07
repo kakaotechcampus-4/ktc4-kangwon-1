@@ -11,20 +11,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.db.repository import list_user_requests
-from app.db.repository import sessions as session_repo
-from app.kakao_oauth import KakaoOAuthError, authorize_url
-from app.passwords import PasswordPolicyError
-from app.services import auth as service
-from app.services.auth import (
+from app.api.v1.deps import current_user, require_origin
+from app.application import auth as service
+from app.application.auth import (
     SESSION_COOKIE_NAME,
     SESSION_COOKIE_SAMESITE,
+    SESSION_TTL,
     AuthError,
+    authorize_url,
     public_user,
     safe_next,
 )
-
-from .deps import current_user, db_path, require_origin
+from app.application.ports.identity import KakaoOAuthError
+from app.domain.passwords import PasswordPolicyError
 
 EmailText = Annotated[str, AfterValidator(service.normalize_email)]
 
@@ -70,6 +69,10 @@ class EmailBody(BaseModel):
     email: EmailText
 
 
+def _service(request: Request):
+    return request.app.state.services.auth
+
+
 def _settings(request: Request):
     state = request.app.state
     return state.auth_settings, state.kakao_settings, state.mail_settings
@@ -80,7 +83,7 @@ def _set_session(response: Response, token: str, request: Request) -> None:
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
-        max_age=int(session_repo.SESSION_TTL.total_seconds()),
+        max_age=int(SESSION_TTL.total_seconds()),
         httponly=True,
         secure=auth.cookie_secure,
         samesite=SESSION_COOKIE_SAMESITE,
@@ -103,11 +106,10 @@ def _clear_session(response: Response, request: Request) -> None:
 async def signup(body: SignupBody, request: Request, response: Response):
     auth, _, mail = _settings(request)
     try:
-        user_id, sent = await service.signup(
+        user_id, sent = await _service(request).signup(
             body.email,
             body.password,
             body.display_name,
-            db_path=db_path(request),
             mail=mail,
             auth=auth,
         )
@@ -115,7 +117,7 @@ async def signup(body: SignupBody, request: Request, response: Response):
         raise HTTPException(422, str(exc)) from None
     except AuthError as exc:
         raise HTTPException(409, exc.message) from None
-    token = await service.login_after_signup(user_id, db_path=db_path(request))
+    token = await _service(request).login_after_signup(user_id)
     _set_session(response, token, request)
     return {"user_id": user_id, "verification_sent": sent}
 
@@ -123,7 +125,7 @@ async def signup(body: SignupBody, request: Request, response: Response):
 @router.post("/auth/login", dependencies=[Depends(require_origin)])
 async def login(body: LoginBody, request: Request, response: Response):
     try:
-        token = await service.login(body.email, body.password, db_path=db_path(request))
+        token = await _service(request).login(body.email, body.password)
     except AuthError as exc:
         status = 429 if exc.code == "TOO_MANY_ATTEMPTS" else 401
         raise HTTPException(status, exc.message) from None
@@ -133,7 +135,7 @@ async def login(body: LoginBody, request: Request, response: Response):
 
 @router.post("/auth/logout", dependencies=[Depends(require_origin)])
 async def logout(request: Request, response: Response):
-    await service.logout(request.cookies.get(SESSION_COOKIE_NAME), db_path=db_path(request))
+    await _service(request).logout(request.cookies.get(SESSION_COOKIE_NAME))
     _clear_session(response, request)
     return {"status": "ok"}
 
@@ -147,7 +149,7 @@ async def me(user: Annotated[dict[str, Any], Depends(current_user)]):
 async def withdraw(
     user: Annotated[dict[str, Any], Depends(current_user)], request: Request, response: Response
 ):
-    await service.withdraw(user["user_id"], db_path=db_path(request))
+    await _service(request).withdraw(user["user_id"])
     _clear_session(response, request)
     return {"status": "ok"}
 
@@ -155,7 +157,7 @@ async def withdraw(
 @router.post("/auth/verify-email", dependencies=[Depends(require_origin)])
 async def verify_email(body: TokenBody, request: Request):
     try:
-        await service.verify_email(body.token, db_path=db_path(request))
+        await _service(request).verify_email(body.token)
     except AuthError as exc:
         raise HTTPException(400, exc.message) from None
     return {"status": "ok"}
@@ -167,9 +169,7 @@ async def resend_verification(
 ):
     auth, _, mail = _settings(request)
     try:
-        sent = await service.resend_verification(
-            user, db_path=db_path(request), mail=mail, auth=auth
-        )
+        sent = await _service(request).resend_verification(user, mail=mail, auth=auth)
     except AuthError as exc:
         raise HTTPException(409, exc.message) from None
     return {"verification_sent": sent}
@@ -178,7 +178,7 @@ async def resend_verification(
 @router.post("/auth/password/forgot", dependencies=[Depends(require_origin)])
 async def forgot_password(body: EmailBody, request: Request):
     auth, _, mail = _settings(request)
-    await service.forgot_password(body.email, db_path=db_path(request), mail=mail, auth=auth)
+    await _service(request).forgot_password(body.email, mail=mail, auth=auth)
     # 계정이 있든 없든 같은 응답입니다. 다르면 가입 여부가 새 나갑니다.
     return {"status": "ok"}
 
@@ -186,7 +186,7 @@ async def forgot_password(body: EmailBody, request: Request):
 @router.post("/auth/password/reset", dependencies=[Depends(require_origin)])
 async def reset_password(body: ResetBody, request: Request, response: Response):
     try:
-        await service.reset_password(body.token, body.new_password, db_path=db_path(request))
+        await _service(request).reset_password(body.token, body.new_password)
     except PasswordPolicyError as exc:
         raise HTTPException(422, str(exc)) from None
     except AuthError as exc:
@@ -199,7 +199,7 @@ async def reset_password(body: ResetBody, request: Request, response: Response):
 async def kakao_login(request: Request, next: str = "/"):
     auth, kakao, _ = _settings(request)
     try:
-        state = await service.start_kakao_login(safe_next(next), db_path=db_path(request))
+        state = await _service(request).start_kakao_login(safe_next(next))
         target = authorize_url(kakao, state=state)
     except KakaoOAuthError:
         return RedirectResponse(_login_error(auth.frontend_base_url, "unavailable"), 302)
@@ -213,9 +213,7 @@ async def kakao_callback(request: Request, code: str = "", state: str = "", erro
         # 사용자가 동의 화면에서 취소한 경우입니다.
         return RedirectResponse(_login_error(auth.frontend_base_url, "cancelled"), 302)
     try:
-        token, next_path = await service.kakao_callback(
-            code, state, db_path=db_path(request), kakao=kakao
-        )
+        token, next_path = await _service(request).kakao_callback(code, state, kakao=kakao)
     except (AuthError, KakaoOAuthError) as exc:
         reason = _CALLBACK_ERRORS.get(exc.code, "failed")
         return RedirectResponse(_login_error(auth.frontend_base_url, reason), 302)
@@ -236,6 +234,9 @@ async def my_analyses(
     offset: int = 0,
 ):
     items, total = await asyncio.to_thread(
-        list_user_requests, user["user_id"], limit=limit, offset=offset, db_path=db_path(request)
+        request.app.state.services.requests.mine,
+        user["user_id"],
+        limit=limit,
+        offset=offset,
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}

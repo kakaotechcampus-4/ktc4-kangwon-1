@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.industries.catalog import INDUSTRY_TO_SEOUL
+from app.domain.industries.catalog import INDUSTRY_TO_SEOUL
 from scripts.measure_lifecycle_baseline import measure
 
 

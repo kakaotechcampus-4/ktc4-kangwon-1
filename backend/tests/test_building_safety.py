@@ -8,8 +8,8 @@ import httpx
 import test_building_registry as fixtures
 from test_building_registry import answers, hub
 
-from app.address import GeocodeError
-from app.building_registry import BuildingRegistryError
+from app.application.ports.sites import BuildingRegistryError
+from app.infrastructure.clients.address import GeocodeError
 
 
 class BuildingSafetyTests(unittest.IsolatedAsyncioTestCase):

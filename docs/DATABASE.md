@@ -106,7 +106,7 @@ erDiagram
 
 ## 요청 DB
 
-스키마 버전은 **6**입니다(`backend/app/db/connection.py`의 `SCHEMA_VERSION`).
+스키마 버전은 **6**입니다(`backend/app/infrastructure/persistence/connection.py`의 `SCHEMA_VERSION`).
 
 - **더 새로운 버전은 거절하지 않습니다.** 옛 코드가 새 파일을 만나도 그대로 씁니다. 막으면 새 버전을 배포한 뒤 구 릴리스로 되돌아갈 길이 사라집니다(무중단 배포는 헬스체크 실패 시 구 릴리스로 되돌립니다).
 - **옛 버전은 `_UPGRADABLE_FROM`에 있을 때만 올립니다.** 지금은 `{5}`뿐입니다. `schema.sql`이 전부 `IF NOT EXISTS`라 테이블·인덱스를 **추가만** 하는 변경은 스키마를 다시 실행하는 것으로 올라갑니다. 기존 테이블의 칼럼이나 제약을 바꾸는 변경은 여기 더하지 말고 별도 절차를 만드세요.
@@ -118,6 +118,8 @@ erDiagram
 ### 1. 요청과 고정한 자료 버전
 
 `snapshots`는 요청 하나당 하나입니다. `local_snapshots`가 이 요청이 읽은 자료 버전 목록과 조회 범위를 기록해서, 활성 release가 바뀌어도 같은 요청은 같은 버전을 읽습니다.
+
+`config_hashes_json`(새 fact의 `input_versions`에도 들어감)의 키는 `industry_profile`·`code90`·`code90_reference`·`population_baseline`·`density_baseline`·`lifecycle_baseline`입니다. 값은 업종 프로필 CSV만 파일 해시이고, 나머지는 설정 행(방법·가중치·기준값·`REFERENCE_VERSION`)의 내용 해시라서 파일을 옮기거나 import 줄을 고쳐도 바뀌지 않습니다. 2026-11 구조 개편 전 결과는 `파일명+폴더명` 키와 파일 해시를 썼으며, 저장만 하고 다시 검증하지 않으므로 그대로 둡니다. 유동인구·밀도 기준선 행에는 계산 함수 버전(`METHOD`)도 들어갑니다. 기준선 모듈의 코드·값, 그리고 가져다 쓰는 `stats.percentile_rank`·`population.TIME_BANDS`가 바뀌면 `tests/test_snapshot_config_keys.py`가 버전을 올리라며 실패합니다. 그 밖의 모듈에서 가져온 함수는 지문에 들어가지 않으니, 기준선 계산에 새 도우미를 쓰면 지문 대상에 함께 넣습니다. 2026-11-07 이 버전을 넣으면서 두 기준선 해시가 한 번 바뀌었습니다(이후 새 분석만 해당).
 
 ```mermaid
 erDiagram
@@ -379,7 +381,7 @@ erDiagram
 `space_fit_current`와 같은 '옆 표' 방식을 씁니다.
 
 **옛 요청.** 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. `LEGACY_OWNER_CUTOFF`
-(`app/db/repository/requests.py`) 이전에 만들어진 것만 조회를 열어 둡니다. 경계가 없으면
+(`app/infrastructure/persistence/repository/requests.py`) 이전에 만들어진 것만 조회를 열어 둡니다. 경계가 없으면
 앞으로 소유자 기록이 빠진 요청까지 전부 공개돼 영구 구멍이 됩니다.
 
 **탈퇴.** `facts`·`scores` 등에 삭제 금지 트리거가 걸려 있어 분석 자료는 지울 수 없습니다.

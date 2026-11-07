@@ -73,6 +73,50 @@ class HttpLogProtectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("[REDACTED]", output)
         self.assertIn("/api/v1/auth/kakao/callback", output)
 
+    def test_uvicorn_access_format_survives_query_redaction(self):
+        from uvicorn.logging import AccessFormatter
+
+        from app.shared.logging import _ACCESS_QUERY_FILTER
+
+        record = logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            __file__,
+            1,
+            '%s - "%s %s HTTP/%s" %d',
+            (
+                "127.0.0.1:1",
+                "GET",
+                "/api/v1/auth/kakao/callback?code=secret-code&state=secret-state",
+                "1.1",
+                307,
+            ),
+            None,
+        )
+        self.assertTrue(_ACCESS_QUERY_FILTER.filter(record))
+        line = AccessFormatter(use_colors=False).format(record)
+        self.assertNotIn("secret-code", line)
+        self.assertNotIn("secret-state", line)
+        self.assertIn("/api/v1/auth/kakao/callback?code=[REDACTED]&state=[REDACTED]", line)
+        self.assertIn("307", line)
+
+    def test_access_template_with_args_is_also_redacted(self):
+        from app.shared.logging import _ACCESS_QUERY_FILTER
+
+        record = logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            __file__,
+            1,
+            "/cb?code=secret-code %s",
+            ("done",),
+            None,
+        )
+        _ACCESS_QUERY_FILTER.filter(record)
+        line = record.getMessage()
+        self.assertNotIn("secret-code", line)
+        self.assertIn("/cb?code=[REDACTED] done", line)
+
 
 if __name__ == "__main__":
     unittest.main()

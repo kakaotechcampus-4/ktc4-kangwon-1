@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.text import has_digit
+from app.domain.text import has_digit
 
 
 class TextTests(unittest.TestCase):

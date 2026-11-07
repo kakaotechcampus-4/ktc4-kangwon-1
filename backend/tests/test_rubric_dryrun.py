@@ -4,12 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.agentic.scoring import regulation, score_item, summarize
+from app.domain.scoring import regulation, score_item, summarize
+
+AGES = ("10", "20", "30", "40", "50", "60")
 
 
 class RubricDryrunTests(unittest.TestCase):
     def test_v08_default_c1_half_power_and_missing_demand(self):
-        from app.agentic.scoring import population_baseline
+        from app.domain.scoring import population_baseline
 
         sample = {
             "floating_population": {
@@ -23,14 +25,14 @@ class RubricDryrunTests(unittest.TestCase):
                 "by_middle": [{"code": "I201", "density_per_km2": 40}],
             },
         }
-        with patch("app.agentic.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES", {"I201": {50: 10}}):
+        with patch("app.domain.scoring.SEOUL_INDUSTRY_DENSITY_PERCENTILES", {"I201": {50: 10}}):
             self.assertEqual(score_item("C1", {}, "I201", sample)["value"], 2)
             self.assertEqual(score_item("C1", {}, "I201", sample, c1_alpha=0)["value"], 4)
             sample["floating_population"]["benchmark"]["mean_daily_per_trade_area"] = 0
             self.assertEqual(score_item("C1", {}, "I201", sample)["status"], "unknown")
 
     def test_c1_alternatives_only_change_c1(self):
-        from app.agentic.scoring import WEIGHTS
+        from app.domain.scoring import WEIGHTS
         from scripts.audit_c1_density import alternatives
         from scripts.build_density_baseline import area_km2
 
@@ -77,7 +79,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(zero_demand["demand"][0]["rows"][0]["items"]["C1"]["status"], "unknown")
 
     def test_normalized_bounds_and_only_g_blocks_recommendation(self):
-        from app.agentic.scoring import WEIGHTS
+        from app.domain.scoring import WEIGHTS
 
         items = {k: {"status": "n.a.", "points": None} for k in WEIGHTS}
         items["D1"] = {"status": "observed", "points": 7.5}
@@ -102,7 +104,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(report["badge"], "보류")
 
     def test_recommendation_requires_applicable_weight_and_demand_evidence(self):
-        from app.agentic.scoring import WEIGHTS
+        from app.domain.scoring import WEIGHTS
 
         items = {
             k: {"status": "observed", "points": weight * 0.75} for k, weight in WEIGHTS.items()
@@ -113,7 +115,9 @@ class RubricDryrunTests(unittest.TestCase):
         report = summarize("G204", items, "해당 없음")
         self.assertEqual(report["applicable_weight"], 80)
         self.assertEqual(report["badge"], "조건부")
-        self.assertIn("손님 수요 근거 없음", report["confirmation_conditions"])
+        self.assertIn(
+            "시간대·연령 항목 미적용: 업종별 수요 별도 확인 필요", report["confirmation_conditions"]
+        )
         items["D1"] = {"status": "observed", "points": 7.5}
         for key in ("D2", "C4", "D4", "S1"):
             items[key] = {"status": "n.a.", "points": None}
@@ -129,7 +133,7 @@ class RubricDryrunTests(unittest.TestCase):
         self.assertEqual(report["badge"], "추천")
 
     def test_v08_weights_and_unknown_decision_judgment(self):
-        from app.agentic.scoring import WEIGHTS, result
+        from app.domain.scoring import WEIGHTS, result
 
         self.assertEqual(sum(WEIGHTS.values()), 100)
         self.assertEqual(sum(v for k, v in WEIGHTS.items() if k != "L"), 90)
@@ -170,16 +174,48 @@ class RubricDryrunTests(unittest.TestCase):
         data = {"floating_population": {"population": {"age_share": {"20": 0.3, "30": 0.3}}}}
         profile = {"target_population": "상주", "target_age_bands": "20;30"}
         value = score_item("D3", profile, "G204", data)
-        from app.agents.floating_population.baseline import AGE_SHARE_AVG
+        from app.domain.baselines.floating_population import AGE_SHARE_AVG
 
         self.assertAlmostEqual(
             value["value"]["r"], 0.6 / (AGE_SHARE_AVG["20"] + AGE_SHARE_AVG["30"])
         )
         self.assertIn("유동 연령 대체", value["reason"])
-        from app.agentic.scoring import WEIGHTS
+        from app.domain.scoring import WEIGHTS
 
         items = {k: {"status": "n.a.", "points": None} for k in WEIGHTS}
         items["C1"] = {"status": "observed", "points": 15}
         report = summarize("G204", items, "unknown")
         self.assertEqual(report["coverage"], 1)
         self.assertEqual(report["c_coverage"], 1)
+
+
+class SampleScoringTests(unittest.TestCase):
+    sample = {
+        "address": "시험",
+        "floating_population": {
+            "period_code": "20262",
+            "resident": {"period_code": "20262", "age_share": dict.fromkeys(AGES, 1 / 6)},
+            "population": {"age_share": dict.fromkeys(AGES, 1 / 6)},
+        },
+    }
+
+    def test_saved_samples_use_seoul_age_share(self):
+        from scripts import rubric_dryrun
+
+        with patch(
+            "scripts.rubric_dryrun.seoul_age_share", return_value=dict.fromkeys(AGES, 1 / 6)
+        ) as share:
+            rubric_dryrun.evaluate(self.sample)
+        share.assert_any_call("REPOP", "20262")
+
+    def test_sample_scripts_share_the_same_scoring(self):
+        from scripts import (
+            audit_c1_density,
+            rubric_dryrun,
+            validate_c1_alpha,
+            verify_rubric_reproduction,
+        )
+
+        for module in (audit_c1_density, validate_c1_alpha, verify_rubric_reproduction):
+            with self.subTest(module=module.__name__):
+                self.assertIs(module.evaluate, rubric_dryrun.evaluate)

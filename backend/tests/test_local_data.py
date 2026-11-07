@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.local_data.database import DataValidationError, LocalDataDB
-from app.local_data.refresh import collect_pages, normalize, store_rows
+from app.infrastructure.market_data.local.database import DataValidationError, LocalDataDB
+from app.infrastructure.market_data.local.refresh import collect_pages, normalize, store_rows
 from scripts.build_density_baseline import CSV_FIELDS
 from tests.local_data_fixture import complete_versions
 

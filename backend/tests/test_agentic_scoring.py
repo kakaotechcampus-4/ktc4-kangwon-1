@@ -8,13 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic.facts import register_fact
-from app.agentic.scoring import WEIGHTS, rank_candidates, result, score_item, summarize
-from app.agentic.snapshot import persist_snapshot_scores
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import RawStorageError, capture_scope
+from app.application.facts import register_fact
+from app.application.snapshot import persist_snapshot_scores
+from app.domain.schemas import AnalysisTask, Site
+from app.domain.scoring import WEIGHTS, rank_candidates, result, score_item, summarize
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import RawStorageError, capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class ScoringPolicyTests(unittest.TestCase):
@@ -88,8 +88,8 @@ class ScoringPolicyTests(unittest.TestCase):
         )
 
     def test_partial_source_increases_unknown(self):
-        from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
-        from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+        from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+        from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
 
         sample = {
             "commercial_area": {
@@ -111,10 +111,42 @@ class ScoringPolicyTests(unittest.TestCase):
         self.assertEqual(score_item("C1", {}, "G204", sample)["status"], "unknown")
 
 
+class SeoulAgeBaselineTests(unittest.TestCase):
+    profile = {"target_population": "상주", "target_age_bands": "20;30"}
+    sample = {
+        "floating_population": {
+            "resident": {"period_code": "20252", "age_share": {"20": 0.3, "30": 0.3}},
+            "population": {"age_share": {"20": 0.1, "30": 0.1}},
+        }
+    }
+
+    def test_d3_asks_injected_seoul_baseline(self):
+        calls = []
+
+        def baseline(kind, quarter):
+            calls.append((kind, quarter))
+            return {"20": 0.2, "30": 0.2}
+
+        row = score_item("D3", self.profile, "I201", self.sample, age_baseline=baseline)
+        self.assertEqual(calls, [("REPOP", "20252")])
+        self.assertEqual(row["value"]["population"], "상주")
+        self.assertAlmostEqual(row["value"]["r"], 1.5)
+
+    def test_d3_without_baseline_falls_back_to_floating(self):
+        row = score_item("D3", self.profile, "I201", self.sample)
+        self.assertEqual(row["value"]["population"], "유동")
+
+    def test_saved_baseline_wins_over_injected(self):
+        sample = {**self.sample, "population_baselines": {"REPOP": {"20": 0.3, "30": 0.3}}}
+        row = score_item("D3", self.profile, "I201", sample, age_baseline=lambda *_: {})
+        self.assertEqual(row["value"]["population"], "상주")
+        self.assertAlmostEqual(row["value"]["r"], 1.0)
+
+
 class C1AgglomerationFieldTests(unittest.TestCase):
     def sample(self):
-        from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
-        from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+        from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+        from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
 
         return {
             "commercial_area": {
@@ -228,7 +260,7 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_unrelated_c1_is_cited_to_industry_profile(self):
-        from app.agentic.contracts import ScoreItem
+        from app.ai.tool_contracts import ScoreItem
 
         task = AnalysisTask(
             request_id="facts",
@@ -254,7 +286,7 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
         ScoreItem(item="C1", status=status, grade=grade, points=points, fact_ids=fact_ids)
 
     async def test_c1_fact_unit_and_sources_follow_the_agglomeration_type(self):
-        from app.agentic.snapshot import persist_report
+        from app.application.snapshot import persist_report
 
         rows = []
         for code, kind in (("I201", "모임형"), ("G204", "근처형"), ("M103", "무관")):
@@ -315,7 +347,7 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(ids["float"], facts["M103"][1])
 
     async def test_observed_c1_without_agglomeration_type_is_rejected(self):
-        from app.agentic.snapshot import persist_report
+        from app.application.snapshot import persist_report
 
         items = {key: result(key) for key in WEIGHTS}
         items["C1"] = result("C1", 2, reason="모임형: 서울 중앙값 대비", value=1.0)
@@ -325,11 +357,11 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
                 persist_report(scope, {"rows": rows, "top5": rows}, {}, [])
 
     async def test_scoring_failure_marks_service_failed(self):
-        from app.services.analysis import execute_agentic_analysis
-        from app.services.mock import dependencies
+        from app.application.analysis import execute_agentic_analysis
+        from app.infrastructure.mock import dependencies
 
         with (
-            patch("app.agentic.snapshot._persist", side_effect=ValueError("secret")),
+            patch("app.application.snapshot._persist", side_effect=ValueError("secret")),
             self.assertRaises(RawStorageError),
         ):
             await execute_agentic_analysis(

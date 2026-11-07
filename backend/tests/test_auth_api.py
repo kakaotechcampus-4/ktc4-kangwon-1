@@ -12,9 +12,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 
+from app.application.auth import SESSION_COOKIE_NAME
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.auth import SESSION_COOKIE_NAME
-from app.services.settings import ExecutionSettings
 
 ORIGIN = {"Origin": "http://localhost:3000"}
 EMAIL = "owner@example.com"
@@ -30,7 +30,10 @@ class AuthApiTests(unittest.TestCase):
         # 메일은 보내지 않고 링크만 가로챕니다. 토큰은 해시로만 저장돼 DB에서 못 읽습니다.
         self.sent: list[tuple[str, str]] = []
         sender = self.enterContext(
-            patch("app.services.auth.send_mail", new=AsyncMock(side_effect=self._capture))
+            patch(
+                "app.infrastructure.clients.mailer.send_mail",
+                new=AsyncMock(side_effect=self._capture),
+            )
         )
         self.sender = sender
         # 세션 쿠키는 Secure 라 http 로는 전송되지 않습니다. 운영과 같은 https 로 띄웁니다.
@@ -96,6 +99,31 @@ class AuthApiTests(unittest.TestCase):
             "/api/v1/analyses?mock=true", json={"address": "시험"}, headers=ORIGIN
         )
         self.assertEqual(allowed.status_code, 200, allowed.text)
+
+    def test_resend_sends_new_link_until_verified(self):
+        self.signup()
+        first = self._link_token()
+        response = self.client.post("/api/v1/auth/verification/resend", headers=ORIGIN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"verification_sent": True})
+        second = self._link_token()
+        self.assertNotEqual(first, second)
+        verified = self.client.post(
+            "/api/v1/auth/verify-email", json={"token": second}, headers=ORIGIN
+        )
+        self.assertEqual(verified.status_code, 200)
+        again = self.client.post("/api/v1/auth/verification/resend", headers=ORIGIN)
+        self.assertEqual(again.status_code, 409)
+
+    def test_withdraw_ends_session_and_removes_login(self):
+        self.signup()
+        response = self.client.delete("/api/v1/auth/me", headers=ORIGIN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 401)
+        login = self.client.post(
+            "/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD}, headers=ORIGIN
+        )
+        self.assertEqual(login.status_code, 401)
 
     def test_verification_token_is_single_use(self):
         self.signup()

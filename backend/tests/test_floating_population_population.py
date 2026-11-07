@@ -10,19 +10,22 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.agents.floating_population import population
-from app.agents.floating_population.client import SeoulOpenApiError, SeoulOpenDataClient
-from app.agents.floating_population.config import Settings
-from app.agents.floating_population.models import (
+from app.domain.population import (
     AGE_BANDS,
     DAYS,
+    RESIDENT_KIND,
     TIME_BANDS,
+    WORKER_KIND,
     FlpopRecord,
     PopulationRecord,
 )
-from app.agents.floating_population.population import (
-    RESIDENT_KIND,
-    WORKER_KIND,
+from app.infrastructure.market_data.floating_population import population
+from app.infrastructure.market_data.floating_population.client import (
+    SeoulOpenApiError,
+    SeoulOpenDataClient,
+)
+from app.infrastructure.market_data.floating_population.config import Settings
+from app.infrastructure.market_data.floating_population.population import (
     load_snapshot,
     resident_block,
     summary_block,
@@ -254,7 +257,12 @@ class FetchAllRowsTests(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         # 재시도 사이의 대기를 없앤다
-        self.enterContext(patch("app.agents.floating_population.client.asyncio.sleep", AsyncMock()))
+        self.enterContext(
+            patch(
+                "app.infrastructure.market_data.floating_population.client.asyncio.sleep",
+                AsyncMock(),
+            )
+        )
 
     def client(self, handler, **settings) -> SeoulOpenDataClient:
         http = httpx.AsyncClient(transport=httpx.MockTransport(handler))

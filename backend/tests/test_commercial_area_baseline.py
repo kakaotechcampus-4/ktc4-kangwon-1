@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from app.agents.commercial_area import baseline
-from app.agents.commercial_area.baseline import (
+from app.domain.baselines import commercial_area as baseline
+from app.domain.baselines.commercial_area import (
     SEOUL_RESTAURANT_DENSITY_PERCENTILES,
     load_density_percentiles,
     seoul_percentile,

@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
 
 DOTS = ("ㆍ", "‧", "・", "∙")
 

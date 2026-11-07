@@ -1,0 +1,3262 @@
+{
+  "facility_unverified_one_grade_discount": {
+    "code": "G202",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G202",
+            "name": "자동차부품 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 107,
+            "share": 0.110537,
+            "density_per_km2": 136.2366,
+            "lq": 7.7078,
+            "lq_district": 20.9528,
+            "diff_type_count": 861,
+            "jacobian": 16.2652,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G202",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 242.75,
+              "recent_year_close_rate": 1.39,
+              "oldest_year_close_rate": 0.4,
+              "net_change_rate": -0.48,
+              "turnover_rate": 1.37
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G202",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              245,
+              249,
+              251,
+              252,
+              248,
+              245,
+              244,
+              242,
+              239,
+              238,
+              231,
+              229
+            ],
+            "opened_counts": [
+              3,
+              4,
+              3,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              1,
+              0,
+              1,
+              2,
+              4,
+              3,
+              1,
+              2,
+              3,
+              1,
+              7,
+              2
+            ],
+            "close_rates": [
+              0.41,
+              0.0,
+              0.4,
+              0.79,
+              1.61,
+              1.22,
+              0.41,
+              0.83,
+              1.26,
+              0.42,
+              3.03,
+              0.87
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {}
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": -0.57,
+      "turnover_rate": 2.27,
+      "oldest_year_close_rate": 1.19,
+      "close_rate_trend": 0.43,
+      "avg_store_count": 3751.0,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 45012.0,
+      "oldest_year_close_rate_exact": 1.1851754845468832,
+      "recent_year_close_rate_exact": 1.6170271577638036
+    },
+    "reference_histogram": {
+      "0": 533,
+      "1": 411,
+      "2": 258,
+      "4": 96,
+      "5": 70,
+      "3": 194,
+      "6": 43,
+      "7": 21,
+      "10": 1,
+      "13": 2,
+      "8": 6,
+      "9": 6,
+      "18": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 11.25,
+        "value": 107.27291338582678,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준) · 서울 상위 5% 초과로 한 단계 감점",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.8580246913580246,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 2,
+        "points": 3.75,
+        "value": 1.039647577092511,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.6035242290748899,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 2.552623456790123,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 0.0,
+      "D4": 1.3383928571428572,
+      "C1": 28.27740646317095,
+      "S1": 2.0182724252491697,
+      "S2": 1.9465042372881358,
+      "S3": 2.338598901098901,
+      "S4": 1.0555579688110857,
+      "C4": 0.0
+    },
+    "expected_normalized": 66.55451913496998
+  },
+  "city_count_rank_and_LQ": {
+    "code": "G202",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G202",
+            "name": "자동차부품 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 107,
+            "share": 0.110537,
+            "density_per_km2": 136.2366,
+            "lq": 7.7078,
+            "lq_district": 20.9528,
+            "diff_type_count": 861,
+            "jacobian": 16.2652,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G202",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 242.75,
+              "recent_year_close_rate": 1.39,
+              "oldest_year_close_rate": 0.4,
+              "net_change_rate": -0.48,
+              "turnover_rate": 1.37
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G202",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              245,
+              249,
+              251,
+              252,
+              248,
+              245,
+              244,
+              242,
+              239,
+              238,
+              231,
+              229
+            ],
+            "opened_counts": [
+              3,
+              4,
+              3,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              1,
+              0,
+              1,
+              2,
+              4,
+              3,
+              1,
+              2,
+              3,
+              1,
+              7,
+              2
+            ],
+            "close_rates": [
+              0.41,
+              0.0,
+              0.4,
+              0.79,
+              1.61,
+              1.22,
+              0.41,
+              0.83,
+              1.26,
+              0.42,
+              3.03,
+              0.87
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {}
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": -0.57,
+      "turnover_rate": 2.27,
+      "oldest_year_close_rate": 1.19,
+      "close_rate_trend": 0.43,
+      "avg_store_count": 3751.0,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 45012.0,
+      "oldest_year_close_rate_exact": 1.1851754845468832,
+      "recent_year_close_rate_exact": 1.6170271577638036
+    },
+    "reference_histogram": {
+      "0": 533,
+      "1": 411,
+      "2": 258,
+      "4": 96,
+      "5": 70,
+      "3": 194,
+      "6": 43,
+      "7": 21,
+      "10": 1,
+      "13": 2,
+      "8": 6,
+      "9": 6,
+      "18": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 11.25,
+        "value": 107.27291338582678,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준) · 서울 상위 5% 초과로 한 단계 감점",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.8580246913580246,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 2,
+        "points": 3.75,
+        "value": 1.039647577092511,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.6035242290748899,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 2.552623456790123,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 0.0,
+      "D4": 1.3383928571428572,
+      "C1": 28.27740646317095,
+      "S1": 2.0182724252491697,
+      "S2": 1.9465042372881358,
+      "S3": 2.338598901098901,
+      "S4": 1.0555579688110857,
+      "C4": 0.0
+    },
+    "expected_normalized": 66.55451913496998
+  },
+  "S_ratio_continuous": {
+    "code": "G202",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G202",
+            "name": "자동차부품 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 107,
+            "share": 0.110537,
+            "density_per_km2": 136.2366,
+            "lq": 7.7078,
+            "lq_district": 20.9528,
+            "diff_type_count": 861,
+            "jacobian": 16.2652,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G202",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 242.75,
+              "recent_year_close_rate": 1.39,
+              "oldest_year_close_rate": 0.4,
+              "net_change_rate": -0.48,
+              "turnover_rate": 1.37
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G202",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              245,
+              249,
+              251,
+              252,
+              248,
+              245,
+              244,
+              242,
+              239,
+              238,
+              231,
+              229
+            ],
+            "opened_counts": [
+              3,
+              4,
+              3,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              1,
+              0,
+              1,
+              2,
+              4,
+              3,
+              1,
+              2,
+              3,
+              1,
+              7,
+              2
+            ],
+            "close_rates": [
+              0.41,
+              0.0,
+              0.4,
+              0.79,
+              1.61,
+              1.22,
+              0.41,
+              0.83,
+              1.26,
+              0.42,
+              3.03,
+              0.87
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {}
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": -0.57,
+      "turnover_rate": 2.27,
+      "oldest_year_close_rate": 1.19,
+      "close_rate_trend": 0.43,
+      "avg_store_count": 3751.0,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 45012.0,
+      "oldest_year_close_rate_exact": 1.1851754845468832,
+      "recent_year_close_rate_exact": 1.6170271577638036
+    },
+    "reference_histogram": {
+      "0": 533,
+      "1": 411,
+      "2": 258,
+      "4": 96,
+      "5": 70,
+      "3": 194,
+      "6": 43,
+      "7": 21,
+      "10": 1,
+      "13": 2,
+      "8": 6,
+      "9": 6,
+      "18": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 11.25,
+        "value": 107.27291338582678,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준) · 서울 상위 5% 초과로 한 단계 감점",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.8580246913580246,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 2,
+        "points": 3.75,
+        "value": 1.039647577092511,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.6035242290748899,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 2.552623456790123,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 0.0,
+      "D4": 1.3383928571428572,
+      "C1": 28.27740646317095,
+      "S1": 2.0182724252491697,
+      "S2": 1.9465042372881358,
+      "S3": 2.338598901098901,
+      "S4": 1.0555579688110857,
+      "C4": 0.0
+    },
+    "expected_normalized": 66.55451913496998
+  },
+  "D75_continuous": {
+    "code": "G202",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G202",
+            "name": "자동차부품 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 107,
+            "share": 0.110537,
+            "density_per_km2": 136.2366,
+            "lq": 7.7078,
+            "lq_district": 20.9528,
+            "diff_type_count": 861,
+            "jacobian": 16.2652,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G202",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 242.75,
+              "recent_year_close_rate": 1.39,
+              "oldest_year_close_rate": 0.4,
+              "net_change_rate": -0.48,
+              "turnover_rate": 1.37
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G202",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              245,
+              249,
+              251,
+              252,
+              248,
+              245,
+              244,
+              242,
+              239,
+              238,
+              231,
+              229
+            ],
+            "opened_counts": [
+              3,
+              4,
+              3,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              1,
+              0,
+              1,
+              2,
+              4,
+              3,
+              1,
+              2,
+              3,
+              1,
+              7,
+              2
+            ],
+            "close_rates": [
+              0.41,
+              0.0,
+              0.4,
+              0.79,
+              1.61,
+              1.22,
+              0.41,
+              0.83,
+              1.26,
+              0.42,
+              3.03,
+              0.87
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {}
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": -0.57,
+      "turnover_rate": 2.27,
+      "oldest_year_close_rate": 1.19,
+      "close_rate_trend": 0.43,
+      "avg_store_count": 3751.0,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 45012.0,
+      "oldest_year_close_rate_exact": 1.1851754845468832,
+      "recent_year_close_rate_exact": 1.6170271577638036
+    },
+    "reference_histogram": {
+      "0": 533,
+      "1": 411,
+      "2": 258,
+      "4": 96,
+      "5": 70,
+      "3": 194,
+      "6": 43,
+      "7": 21,
+      "10": 1,
+      "13": 2,
+      "8": 6,
+      "9": 6,
+      "18": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 11.25,
+        "value": 107.27291338582678,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준) · 서울 상위 5% 초과로 한 단계 감점",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.8580246913580246,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 2,
+        "points": 3.75,
+        "value": 1.039647577092511,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.6035242290748899,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 2.552623456790123,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 0.0,
+      "D4": 1.3383928571428572,
+      "C1": 28.27740646317095,
+      "S1": 2.0182724252491697,
+      "S2": 1.9465042372881358,
+      "S3": 2.338598901098901,
+      "S4": 1.0555579688110857,
+      "C4": 0.0
+    },
+    "expected_normalized": 66.55451913496998
+  },
+  "matched_customer_yoy_half": {
+    "code": "G203",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G203",
+            "name": "모터사이클·운동용품·자전거 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 5,
+            "share": 0.005165,
+            "density_per_km2": 6.3662,
+            "lq": 0.7065,
+            "lq_district": 0.8141,
+            "diff_type_count": 963,
+            "jacobian": 16.2693,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G203",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 25.5,
+              "recent_year_close_rate": 0.96,
+              "oldest_year_close_rate": 0.0,
+              "net_change_rate": 1.63,
+              "turnover_rate": 2.94
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G203",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              21,
+              25,
+              25,
+              26,
+              26,
+              26,
+              26,
+              27,
+              26,
+              26,
+              26,
+              26
+            ],
+            "opened_counts": [
+              0,
+              4,
+              0,
+              1,
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            "close_rates": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.85,
+              0.0,
+              3.85,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "G203": -0.0664
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": 0.22,
+      "turnover_rate": 3.59,
+      "oldest_year_close_rate": 1.64,
+      "close_rate_trend": -0.02,
+      "avg_store_count": 5404.083333333333,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 64849.0,
+      "oldest_year_close_rate_exact": 1.6396505815854627,
+      "recent_year_close_rate_exact": 1.6193771626297577
+    },
+    "reference_histogram": {
+      "9": 85,
+      "10": 47,
+      "36": 1,
+      "25": 2,
+      "6": 120,
+      "19": 7,
+      "1": 137,
+      "0": 71,
+      "2": 185,
+      "3": 189,
+      "4": 196,
+      "20": 7,
+      "40": 3,
+      "5": 148,
+      "13": 20,
+      "11": 43,
+      "7": 125,
+      "30": 3,
+      "34": 1,
+      "53": 1,
+      "35": 1,
+      "8": 94,
+      "27": 3,
+      "12": 40,
+      "18": 12,
+      "14": 19,
+      "17": 9,
+      "16": 14,
+      "15": 19,
+      "37": 2,
+      "24": 3,
+      "23": 8,
+      "26": 1,
+      "29": 1,
+      "31": 1,
+      "21": 7,
+      "22": 4,
+      "39": 1,
+      "43": 3,
+      "44": 1,
+      "52": 1,
+      "38": 2,
+      "46": 1,
+      "32": 1,
+      "51": 1,
+      "50": 1,
+      "28": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9918746372605918,
+          "p": 78
+        },
+        "reason": "적합성·규모 최소 등급"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": 0.946,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9802795328355352,
+          "population": "유동",
+          "requested_population": "유동"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 7.5,
+        "value": 0.9994034536891679,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준)",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.5925925925925926,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 1.392757660167131,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.818941504178273,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "상권 과거 또는 서울 폐업률 분모 0·결측"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 4.847649448636096,
+      "D2": 3.3875,
+      "D3": 4.630241240666285,
+      "D4": 1.2848214285714286,
+      "C1": 13.99327033949508,
+      "S1": 2.354651162790698,
+      "S2": 2.40375,
+      "S3": 2.061638591117917,
+      "S4": 1.1700334617990893,
+      "C4": 0.0
+    },
+    "expected_normalized": 40.65025013221117
+  },
+  "complete_zero_old_closures": {
+    "code": "G203",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G203",
+            "name": "모터사이클·운동용품·자전거 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 5,
+            "share": 0.005165,
+            "density_per_km2": 6.3662,
+            "lq": 0.7065,
+            "lq_district": 0.8141,
+            "diff_type_count": 963,
+            "jacobian": 16.2693,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G203",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 25.5,
+              "recent_year_close_rate": 0.96,
+              "oldest_year_close_rate": 0.0,
+              "net_change_rate": 1.63,
+              "turnover_rate": 2.94
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G203",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              21,
+              25,
+              25,
+              26,
+              26,
+              26,
+              26,
+              27,
+              26,
+              26,
+              26,
+              26
+            ],
+            "opened_counts": [
+              0,
+              4,
+              0,
+              1,
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            "close_rates": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              3.85,
+              0.0,
+              3.85,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "G203": -0.0664
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.62,
+      "net_change_rate": 0.22,
+      "turnover_rate": 3.59,
+      "oldest_year_close_rate": 1.64,
+      "close_rate_trend": -0.02,
+      "avg_store_count": 5404.083333333333,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 64849.0,
+      "oldest_year_close_rate_exact": 1.6396505815854627,
+      "recent_year_close_rate_exact": 1.6193771626297577
+    },
+    "reference_histogram": {
+      "9": 85,
+      "10": 47,
+      "36": 1,
+      "25": 2,
+      "6": 120,
+      "19": 7,
+      "1": 137,
+      "0": 71,
+      "2": 185,
+      "3": 189,
+      "4": 196,
+      "20": 7,
+      "40": 3,
+      "5": 148,
+      "13": 20,
+      "11": 43,
+      "7": 125,
+      "30": 3,
+      "34": 1,
+      "53": 1,
+      "35": 1,
+      "8": 94,
+      "27": 3,
+      "12": 40,
+      "18": 12,
+      "14": 19,
+      "17": 9,
+      "16": 14,
+      "15": 19,
+      "37": 2,
+      "24": 3,
+      "23": 8,
+      "26": 1,
+      "29": 1,
+      "31": 1,
+      "21": 7,
+      "22": 4,
+      "39": 1,
+      "43": 3,
+      "44": 1,
+      "52": 1,
+      "38": 2,
+      "46": 1,
+      "32": 1,
+      "51": 1,
+      "50": 1,
+      "28": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9918746372605918,
+          "p": 78
+        },
+        "reason": "적합성·규모 최소 등급"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": 0.946,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9802795328355352,
+          "population": "유동",
+          "requested_population": "유동"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 7.5,
+        "value": 0.9994034536891679,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준)",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.5925925925925926,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 1.392757660167131,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 3,
+        "points": 5.625,
+        "value": 0.818941504178273,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "상권 과거 또는 서울 폐업률 분모 0·결측"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 4.847649448636096,
+      "D2": 3.3875,
+      "D3": 4.630241240666285,
+      "D4": 1.2848214285714286,
+      "C1": 13.99327033949508,
+      "S1": 2.354651162790698,
+      "S2": 2.40375,
+      "S3": 2.061638591117917,
+      "S4": 1.1700334617990893,
+      "C4": 0.0
+    },
+    "expected_normalized": 40.65025013221117
+  },
+  "complete_full_period_S2_half": {
+    "code": "G211",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G211",
+            "name": "가구 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 1,
+            "share": 0.001033,
+            "density_per_km2": 1.2732,
+            "lq": 0.2999,
+            "lq_district": 0.3813,
+            "diff_type_count": 967,
+            "jacobian": 16.3979,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G211",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 7.166666666666667,
+              "recent_year_close_rate": 0.0,
+              "oldest_year_close_rate": 3.33,
+              "net_change_rate": -1.16,
+              "turnover_rate": 1.16
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G211",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              8,
+              8,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7
+            ],
+            "opened_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "close_rates": [
+              0.0,
+              0.0,
+              14.29,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "G211": 0.0
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.52,
+      "net_change_rate": -0.7,
+      "turnover_rate": 2.86,
+      "oldest_year_close_rate": 2.01,
+      "close_rate_trend": -0.49,
+      "avg_store_count": 3507.75,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 42093.0,
+      "oldest_year_close_rate_exact": 2.0149563772330703,
+      "recent_year_close_rate_exact": 1.5232908970490837
+    },
+    "reference_histogram": {
+      "10": 18,
+      "3": 216,
+      "0": 308,
+      "5": 98,
+      "2": 278,
+      "1": 331,
+      "7": 50,
+      "32": 1,
+      "4": 151,
+      "50": 2,
+      "6": 55,
+      "66": 1,
+      "36": 1,
+      "69": 1,
+      "9": 16,
+      "11": 19,
+      "15": 8,
+      "12": 10,
+      "8": 29,
+      "28": 1,
+      "58": 2,
+      "61": 3,
+      "22": 1,
+      "16": 2,
+      "30": 2,
+      "38": 1,
+      "34": 2,
+      "18": 3,
+      "35": 4,
+      "41": 1,
+      "21": 4,
+      "13": 1,
+      "14": 2,
+      "17": 2,
+      "67": 1,
+      "20": 1,
+      "51": 1,
+      "33": 3,
+      "27": 2,
+      "26": 1,
+      "24": 1,
+      "19": 1,
+      "47": 1,
+      "71": 1,
+      "70": 2,
+      "72": 1,
+      "31": 2
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9918746372605918,
+          "p": 78
+        },
+        "reason": "적합성·규모 최소 등급"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": 0.946,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 1.026083207587842,
+          "population": "상주",
+          "requested_population": "상주"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 0.4992941176470589,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준)",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.0,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "과거·최근 각각 노출량 부족"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.40559440559440557,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "과거·최근 각각 노출량 부족"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 4.847649448636096,
+      "D2": 3.3875,
+      "D3": 5.489060142272039,
+      "D4": 1.9191964285714285,
+      "C1": 7.786168480682342,
+      "S1": 3.75,
+      "S2": 1.203332078313253,
+      "S3": 2.667910447761194,
+      "S4": 1.8374999999999997,
+      "C4": 0.0
+    },
+    "expected_normalized": 36.99935665451589
+  },
+  "complete_low_exposure_quadratic": {
+    "code": "G211",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G211",
+            "name": "가구 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 1,
+            "share": 0.001033,
+            "density_per_km2": 1.2732,
+            "lq": 0.2999,
+            "lq_district": 0.3813,
+            "diff_type_count": 967,
+            "jacobian": 16.3979,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G211",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 7.166666666666667,
+              "recent_year_close_rate": 0.0,
+              "oldest_year_close_rate": 3.33,
+              "net_change_rate": -1.16,
+              "turnover_rate": 1.16
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G211",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              8,
+              8,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7,
+              7
+            ],
+            "opened_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "close_rates": [
+              0.0,
+              0.0,
+              14.29,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "G211": 0.0
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.52,
+      "net_change_rate": -0.7,
+      "turnover_rate": 2.86,
+      "oldest_year_close_rate": 2.01,
+      "close_rate_trend": -0.49,
+      "avg_store_count": 3507.75,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 42093.0,
+      "oldest_year_close_rate_exact": 2.0149563772330703,
+      "recent_year_close_rate_exact": 1.5232908970490837
+    },
+    "reference_histogram": {
+      "10": 18,
+      "3": 216,
+      "0": 308,
+      "5": 98,
+      "2": 278,
+      "1": 331,
+      "7": 50,
+      "32": 1,
+      "4": 151,
+      "50": 2,
+      "6": 55,
+      "66": 1,
+      "36": 1,
+      "69": 1,
+      "9": 16,
+      "11": 19,
+      "15": 8,
+      "12": 10,
+      "8": 29,
+      "28": 1,
+      "58": 2,
+      "61": 3,
+      "22": 1,
+      "16": 2,
+      "30": 2,
+      "38": 1,
+      "34": 2,
+      "18": 3,
+      "35": 4,
+      "41": 1,
+      "21": 4,
+      "13": 1,
+      "14": 2,
+      "17": 2,
+      "67": 1,
+      "20": 1,
+      "51": 1,
+      "33": 3,
+      "27": 2,
+      "26": 1,
+      "24": 1,
+      "19": 1,
+      "47": 1,
+      "71": 1,
+      "70": 2,
+      "72": 1,
+      "31": 2
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 0.9918746372605918,
+          "p": 78
+        },
+        "reason": "적합성·규모 최소 등급"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": 0.946,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 1.026083207587842,
+          "population": "상주",
+          "requested_population": "상주"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 0,
+        "points": 0.0,
+        "value": 0.4992941176470589,
+        "reason": "모임형: 서울 중앙값 대비 같은 업종 밀도; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준)",
+        "agglomeration": "모임형"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.0,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "과거·최근 각각 노출량 부족"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.40559440559440557,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "과거·최근 각각 노출량 부족"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 4.847649448636096,
+      "D2": 3.3875,
+      "D3": 5.489060142272039,
+      "D4": 1.9191964285714285,
+      "C1": 7.786168480682342,
+      "S1": 3.75,
+      "S2": 1.203332078313253,
+      "S3": 2.667910447761194,
+      "S4": 1.8374999999999997,
+      "C4": 0.0
+    },
+    "expected_normalized": 36.99935665451589
+  },
+  "medical_subset_floor": {
+    "code": "G215",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "G215",
+            "name": "의약품·의료기기 소매",
+            "major_code": "G2",
+            "major_name": "소매업",
+            "count": 12,
+            "share": 0.012397,
+            "density_per_km2": 15.2789,
+            "lq": 0.856,
+            "lq_district": 0.9714,
+            "diff_type_count": 956,
+            "jacobian": 16.0672,
+            "major_cluster_count": 268,
+            "major_cluster_diversity": 4.8017
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "G215",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 78.91666666666667,
+              "recent_year_close_rate": 0.96,
+              "oldest_year_close_rate": 0.93,
+              "net_change_rate": -0.11,
+              "turnover_rate": 2.01
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "G215",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              80,
+              81,
+              81,
+              80,
+              79,
+              79,
+              78,
+              78,
+              77,
+              77,
+              78,
+              79
+            ],
+            "opened_counts": [
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2
+            ],
+            "closed_counts": [
+              1,
+              0,
+              1,
+              1,
+              1,
+              0,
+              2,
+              1,
+              1,
+              1,
+              0,
+              1
+            ],
+            "close_rates": [
+              1.25,
+              0.0,
+              1.23,
+              1.25,
+              1.27,
+              0.0,
+              2.56,
+              1.28,
+              1.3,
+              1.3,
+              0.0,
+              1.27
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "G215": 0.0
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.65,
+      "net_change_rate": 0.31,
+      "turnover_rate": 3.68,
+      "oldest_year_close_rate": 1.64,
+      "close_rate_trend": 0.01,
+      "avg_store_count": 12721.0,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 152652.0,
+      "oldest_year_close_rate_exact": 1.6438847487347068,
+      "recent_year_close_rate_exact": 1.6479458976252477
+    },
+    "reference_histogram": {
+      "4": 43,
+      "43": 6,
+      "19": 45,
+      "57": 4,
+      "11": 78,
+      "20": 44,
+      "3": 34,
+      "1": 25,
+      "8": 69,
+      "0": 29,
+      "6": 53,
+      "12": 61,
+      "14": 56,
+      "2": 33,
+      "5": 44,
+      "18": 50,
+      "25": 38,
+      "42": 8,
+      "54": 5,
+      "31": 26,
+      "28": 33,
+      "9": 40,
+      "23": 47,
+      "26": 32,
+      "16": 51,
+      "24": 65,
+      "13": 60,
+      "7": 54,
+      "10": 60,
+      "17": 64,
+      "15": 67,
+      "22": 38,
+      "34": 17,
+      "30": 21,
+      "40": 7,
+      "37": 11,
+      "32": 18,
+      "79": 1,
+      "21": 56,
+      "88": 1,
+      "63": 2,
+      "62": 1,
+      "29": 20,
+      "36": 18,
+      "35": 9,
+      "27": 27,
+      "33": 14,
+      "41": 2,
+      "38": 6,
+      "39": 4,
+      "45": 3,
+      "47": 2,
+      "46": 2,
+      "44": 6,
+      "51": 2,
+      "55": 1,
+      "68": 1,
+      "49": 4,
+      "53": 2,
+      "52": 5,
+      "50": 2,
+      "56": 1,
+      "60": 2,
+      "75": 1,
+      "72": 2,
+      "66": 1,
+      "85": 1,
+      "99": 1,
+      "104": 1,
+      "100": 1,
+      "105": 1,
+      "94": 1,
+      "106": 1,
+      "107": 1
+    },
+    "components": {
+      "HP8": {
+        "status": "unknown",
+        "points": null
+      }
+    },
+    "facility_floors": {
+      "HP8": 5.0
+    },
+    "items": {
+      "D1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 1.0255591054313098,
+          "p": 79
+        },
+        "reason": "적합성·규모 최소 등급"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 3,
+        "points": 7.5,
+        "value": 1.0570824524312896,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": {
+          "r": 0.9044540229885056,
+          "population": "상주",
+          "requested_population": "상주"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 3,
+        "points": 11.25,
+        "value": 0.5097827931316448,
+        "reason": "근처형: C1 α=0.5; 검증용 점포·서울 500m 밀도 기준선 분기 20252 일치(현행 지도 기준)",
+        "agglomeration": "근처형"
+      },
+      "C4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시설 최근접 거리 미확인; 검색 0건을 부재로 확정하지 않음"
+      },
+      "S1": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.5818181818181818,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S2": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.875,
+        "value": 0.8858695652173914,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S3": {
+        "status": "observed",
+        "grade": 4,
+        "points": 7.5,
+        "value": 0.546195652173913,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "S4": {
+        "status": "observed",
+        "grade": 2,
+        "points": 3.75,
+        "value": 1.026001955034213,
+        "reason": "서울 동일 업종 대비; 누락 원천 0 보충=0"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 5.479233226837059,
+      "D2": 6.6510306553911205,
+      "D3": 2.8681752873563204,
+      "D4": 1.9191964285714285,
+      "C1": 15.170851883741443,
+      "S1": 2.3706896551724137,
+      "S2": 1.6829268292682926,
+      "S3": 2.4253075571177503,
+      "S4": 1.8509360223873397,
+      "C4": 5.0
+    },
+    "expected_normalized": 45.41834754584317
+  },
+  "profile_fixed_LQ_shrink5": {
+    "code": "I102",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "I102",
+            "name": "기타 숙박",
+            "major_code": "I1",
+            "major_name": "숙박업",
+            "count": 12,
+            "share": 0.012397,
+            "density_per_km2": 15.2789,
+            "lq": 2.1505,
+            "lq_district": 2.4841,
+            "diff_type_count": 956,
+            "jacobian": 16.0672,
+            "major_cluster_count": 22,
+            "major_cluster_diversity": 1.9836
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "I102",
+            "data_complete": true,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": 1.0,
+              "recent_year_close_rate": 0.0,
+              "oldest_year_close_rate": 0.0,
+              "net_change_rate": 0.0,
+              "turnover_rate": 0.0
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": [
+          {
+            "industry_id": "I102",
+            "zero_filled_sources": 0,
+            "store_counts": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "opened_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "closed_counts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "close_rates": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "score90_customer_trends": {
+        "I102": 0.0
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.67,
+      "net_change_rate": -1.16,
+      "turnover_rate": 4.54,
+      "oldest_year_close_rate": 3.97,
+      "close_rate_trend": -2.3,
+      "avg_store_count": 143.08333333333334,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 1717.0,
+      "oldest_year_close_rate_exact": 3.9735099337748343,
+      "recent_year_close_rate_exact": 1.6728624535315986
+    },
+    "reference_histogram": {
+      "1": 168,
+      "10": 66,
+      "5": 100,
+      "15": 43,
+      "4": 112,
+      "7": 87,
+      "0": 253,
+      "2": 111,
+      "12": 41,
+      "25": 12,
+      "26": 12,
+      "8": 64,
+      "9": 62,
+      "6": 92,
+      "13": 31,
+      "18": 23,
+      "22": 16,
+      "27": 8,
+      "16": 23,
+      "14": 30,
+      "3": 94,
+      "23": 9,
+      "19": 22,
+      "29": 4,
+      "11": 43,
+      "30": 5,
+      "28": 5,
+      "41": 1,
+      "33": 4,
+      "17": 22,
+      "21": 18,
+      "20": 14,
+      "53": 1,
+      "55": 1,
+      "54": 1,
+      "31": 5,
+      "48": 1,
+      "165": 1,
+      "148": 1,
+      "24": 8,
+      "88": 1,
+      "102": 1,
+      "154": 1,
+      "86": 1,
+      "59": 1,
+      "82": 1,
+      "71": 1,
+      "35": 2,
+      "75": 1,
+      "40": 1,
+      "44": 1,
+      "93": 2,
+      "170": 1,
+      "32": 2,
+      "43": 1,
+      "77": 1,
+      "37": 1,
+      "39": 2,
+      "38": 1,
+      "58": 1,
+      "176": 1,
+      "178": 1,
+      "70": 1,
+      "105": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 2,
+        "points": 5.0,
+        "value": {
+          "r": 1.0498732037193577,
+          "population": "상주",
+          "requested_population": "상주"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 7.5,
+        "value": null,
+        "reason": "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)",
+        "agglomeration": "무관"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S2": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S3": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 5.935122569737955,
+      "D4": 1.9191964285714285,
+      "C1": 18.86661314263842,
+      "S1": 0.33749999999999997,
+      "S2": 0.022565789473684213,
+      "S3": 0.33749999999999997,
+      "S4": 0.0,
+      "C4": 0.0
+    },
+    "expected_normalized": 41.12774689563223
+  },
+  "unsupported_source": {
+    "code": "I207",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "I207",
+            "name": "구내식당 및 뷔페",
+            "major_code": "I2",
+            "major_name": "음식점업",
+            "count": 2,
+            "share": 0.002066,
+            "density_per_km2": 2.5465,
+            "lq": 1.0135,
+            "lq_district": 0.9349,
+            "diff_type_count": 966,
+            "jacobian": 16.3648,
+            "major_cluster_count": 238,
+            "major_cluster_diversity": 3.3141
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "I207",
+            "data_complete": false,
+            "zero_filled_sources": 0,
+            "metrics": {
+              "avg_store_count": null,
+              "recent_year_close_rate": null,
+              "oldest_year_close_rate": null,
+              "net_change_rate": null,
+              "turnover_rate": null
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": []
+      },
+      "score90_customer_trends": {}
+    },
+    "city": null,
+    "reference_histogram": {
+      "3": 156,
+      "20": 3,
+      "1": 459,
+      "9": 19,
+      "12": 7,
+      "2": 312,
+      "0": 426,
+      "4": 93,
+      "5": 62,
+      "8": 17,
+      "11": 5,
+      "7": 29,
+      "6": 31,
+      "10": 6,
+      "14": 3,
+      "18": 2,
+      "13": 3,
+      "15": 2,
+      "17": 1,
+      "16": 4,
+      "21": 2
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "observed",
+        "grade": 3,
+        "points": 7.5,
+        "value": 1.0570824524312896,
+        "reason": "요일 프로필 지수"
+      },
+      "D3": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0584,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 7.5,
+        "value": null,
+        "reason": "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)",
+        "agglomeration": "무관"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "서울 대응 업종 없음"
+      },
+      "S2": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "서울 대응 업종 없음"
+      },
+      "S3": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "서울 대응 업종 없음"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "서울 대응 업종 없음"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 6.6510306553911205,
+      "D3": 0.0,
+      "D4": 1.3383928571428572,
+      "C1": 15.028734612792224,
+      "S1": 0.0,
+      "S2": 0.0,
+      "S3": 0.0,
+      "S4": 0.0,
+      "C4": 0.0
+    },
+    "expected_normalized": 34.5272371879893
+  },
+  "original_observation": {
+    "code": "I102",
+    "data": {
+      "runtime_partial_sources": [],
+      "commercial_collection_complete": true,
+      "commercial_split_missing": [],
+      "comparison_radius_m": 2000,
+      "commercial_area": {
+        "radius_m": 500,
+        "by_middle": [
+          {
+            "code": "I102",
+            "name": "기타 숙박",
+            "major_code": "I1",
+            "major_name": "숙박업",
+            "count": 0,
+            "share": 0.0,
+            "density_per_km2": 0.0,
+            "lq": null,
+            "lq_district": 0.0,
+            "diff_type_count": 628,
+            "jacobian": 13.2326,
+            "major_cluster_count": 0,
+            "major_cluster_diversity": 0.0
+          }
+        ]
+      },
+      "business_lifecycle": {
+        "metadata": {
+          "base_quarter": "20252",
+          "quarter_count": 12
+        },
+        "industries": [
+          {
+            "industry_id": "I102",
+            "data_complete": false,
+            "zero_filled_sources": 12,
+            "metrics": {
+              "avg_store_count": 0.0,
+              "recent_year_close_rate": null,
+              "oldest_year_close_rate": null,
+              "net_change_rate": null,
+              "turnover_rate": null
+            }
+          }
+        ]
+      },
+      "lifecycle_quarterly": {
+        "quarters": [
+          "20223",
+          "20224",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20251",
+          "20252"
+        ],
+        "industries": []
+      },
+      "score90_customer_trends": {
+        "I102": 0.0
+      }
+    },
+    "city": {
+      "recent_year_close_rate": 1.67,
+      "net_change_rate": -1.16,
+      "turnover_rate": 4.54,
+      "oldest_year_close_rate": 3.97,
+      "close_rate_trend": -2.3,
+      "avg_store_count": 143.08333333333334,
+      "zero_filled_sources": 0,
+      "data_complete": true,
+      "data_status": "observed",
+      "exposure": 1717.0,
+      "oldest_year_close_rate_exact": 3.9735099337748343,
+      "recent_year_close_rate_exact": 1.6728624535315986
+    },
+    "reference_histogram": {
+      "1": 169,
+      "10": 67,
+      "5": 101,
+      "15": 43,
+      "4": 112,
+      "7": 87,
+      "0": 249,
+      "2": 111,
+      "12": 41,
+      "25": 12,
+      "26": 12,
+      "8": 64,
+      "9": 62,
+      "6": 94,
+      "13": 32,
+      "18": 23,
+      "22": 16,
+      "27": 8,
+      "16": 23,
+      "14": 30,
+      "3": 95,
+      "23": 9,
+      "19": 22,
+      "29": 4,
+      "11": 44,
+      "30": 5,
+      "28": 5,
+      "41": 1,
+      "33": 4,
+      "17": 22,
+      "21": 18,
+      "20": 14,
+      "53": 1,
+      "55": 1,
+      "54": 1,
+      "31": 5,
+      "48": 1,
+      "165": 1,
+      "148": 1,
+      "24": 8,
+      "88": 1,
+      "102": 1,
+      "154": 1,
+      "86": 1,
+      "59": 1,
+      "82": 1,
+      "71": 1,
+      "35": 2,
+      "75": 1,
+      "40": 1,
+      "44": 1,
+      "93": 2,
+      "170": 1,
+      "32": 2,
+      "43": 1,
+      "77": 1,
+      "37": 1,
+      "39": 2,
+      "38": 1,
+      "58": 1,
+      "176": 1,
+      "178": 1,
+      "70": 1,
+      "105": 1
+    },
+    "components": {},
+    "facility_floors": {},
+    "items": {
+      "D1": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D2": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "D3": {
+        "status": "observed",
+        "grade": 1,
+        "points": 2.5,
+        "value": {
+          "r": 0.819949281487743,
+          "population": "상주",
+          "requested_population": "상주"
+        },
+        "reason": "동일 모집단 대상 연령 비중 합/서울 비중 합"
+      },
+      "D4": {
+        "status": "observed",
+        "grade": 1,
+        "points": 1.25,
+        "value": -0.0986,
+        "reason": "전년 동기 변화율"
+      },
+      "C1": {
+        "status": "observed",
+        "grade": 2,
+        "points": 7.5,
+        "value": null,
+        "reason": "집적과 무관한 업종이라 중간 등급 고정(관측값 아님)",
+        "agglomeration": "무관"
+      },
+      "C4": {
+        "status": "n.a.",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "사용자 승인 미적용"
+      },
+      "S1": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S2": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S3": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "S4": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "개폐업 관측·전체 노출량 부족"
+      },
+      "L": {
+        "status": "unknown",
+        "grade": null,
+        "points": null,
+        "value": null,
+        "reason": "시험에서는 decision 도구·새 fact_id 근거·판단 채점을 실행하지 않음"
+      }
+    },
+    "expected_points": {
+      "D1": 0.0,
+      "D2": 0.0,
+      "D3": 1.8118660185967879,
+      "D4": 1.6500000000000001,
+      "C1": 15.0,
+      "S1": 0.0,
+      "S2": 0.0,
+      "S3": 0.0,
+      "S4": 0.0,
+      "C4": 0.0
+    },
+    "expected_normalized": 27.69279902789518
+  }
+}

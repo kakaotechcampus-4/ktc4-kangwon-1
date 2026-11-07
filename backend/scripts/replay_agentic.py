@@ -11,14 +11,14 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agentic.contracts import MapResult, RegulationResult, ToolReply  # noqa: E402
-from app.agentic.recording import ReplayGenerate  # noqa: E402
-from app.agentic.runtime import DecisionLoop  # noqa: E402
-from app.config import load_environment  # noqa: E402
-from app.db.connection import SQLITE_BUSY_TIMEOUT_MS, connect  # noqa: E402
-from app.local_data.provenance import validate_snapshot  # noqa: E402
-from app.schemas import AnalysisTask, Site  # noqa: E402
-from app.storage.raw import CaptureScope  # noqa: E402
+from app.ai.runtime import DecisionLoop  # noqa: E402
+from app.domain.contracts import MapResult, RegulationResult, ToolReply  # noqa: E402
+from app.domain.schemas import AnalysisTask, Site  # noqa: E402
+from app.infrastructure.config import load_environment  # noqa: E402
+from app.infrastructure.llm.recording import ReplayGenerate  # noqa: E402
+from app.infrastructure.persistence.connection import SQLITE_BUSY_TIMEOUT_MS, connect  # noqa: E402
+from app.infrastructure.persistence.provenance import validate_snapshot  # noqa: E402
+from app.infrastructure.persistence.raw_capture import CaptureScope  # noqa: E402
 
 
 def prepare(source, output, request_id):

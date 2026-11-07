@@ -10,21 +10,25 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.agentic.budget import RuntimeBudget
-from app.agentic.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
-from app.agentic.report import ReportInvalid, finalize, validate_l_records
-from app.agentic.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
-from app.agentic.tools import ToolExecutor, _audit
-from app.db.connection import connect, initialize
-from app.llm.budget import BudgetExceeded
-from app.local_data.adapter import LocalAdapter
-from app.local_data.database import LocalDataDB
-from app.local_data.persistence import register_cell
-from app.local_data.provenance import save_snapshot
-from app.schemas import Site
-from app.storage.raw import capture_scope
-from app.storage.scrub import env_secrets, scrub, scrub_text
-from app.text import has_digit
+from app.ai.budget import RuntimeBudget
+from app.ai.sql_tool import query_raw
+from app.ai.tools import ToolExecutor, _audit
+from app.application.local_snapshot import register_cell
+from app.application.ports.llm_budget import BudgetExceeded
+from app.application.report import finalize, validate_l_records
+from app.domain.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply, error
+from app.domain.raw_views import LOCAL_VIEWS
+from app.domain.report import ReportInvalid
+from app.domain.schemas import Site
+from app.domain.text import has_digit
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.provenance import save_snapshot
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.raw_query import _authorizer
+from app.shared.scrub import env_secrets, scrub, scrub_text
+from tests.fact_fixture import fact_record
 
 
 class BudgetBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -158,7 +162,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
         }
 
     def validate(self, proposal, facts):
-        with patch("app.agentic.report.fact_rows", return_value=facts):
+        with patch("app.application.report.fact_rows", return_value=facts):
             return validate_l_records(
                 self.scope,
                 [LRecord.model_validate(r) for r in proposal["L_records"]],
@@ -183,10 +187,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_overlap_and_other_industry_fact_rejected(self):
         ids = ["f_" + str(uuid.uuid4()) for _ in range(2)]
-        facts = {
-            f: {"status": "observed", "citable": 1, "metric": "lq", "industry_code": "I201"}
-            for f in ids
-        }
+        facts = {f: fact_record(f, metric="lq", industry_code="I201") for f in ids}
         _audit(
             self.scope,
             "call",
@@ -208,7 +209,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ReportInvalid, "중복"):
             self.validate(proposal, facts)
         proposal = self.proposal(ids)
-        facts[ids[0]]["industry_code"] = "I202"
+        facts[ids[0]].industry_code = "I202"
         with self.assertRaisesRegex(ReportInvalid, "업종"):
             self.validate(proposal, facts)
 

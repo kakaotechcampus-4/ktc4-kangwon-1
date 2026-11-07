@@ -10,12 +10,12 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 from fastapi.testclient import TestClient
 
-from app.config import KakaoOAuthSettings
-from app.db.connection import connect
-from app.db.repository import sessions as session_repo
+from app.application.auth import SESSION_COOKIE_NAME
+from app.application.ports.identity import KakaoOAuthSettings
+from app.infrastructure.persistence.connection import connect
+from app.infrastructure.persistence.repository import sessions as session_repo
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.auth import SESSION_COOKIE_NAME
-from app.services.settings import ExecutionSettings
 
 FRONTEND = "https://app.example.test"
 KAKAO_ID = 3_481_900_000_000_000_001  # int64. 문자열로 보관돼야 자릿수가 안 깎입니다.

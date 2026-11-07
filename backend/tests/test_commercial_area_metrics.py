@@ -3,9 +3,9 @@
 import math
 import unittest
 
-from app.agents.commercial_area.config import Settings
-from app.agents.commercial_area.franchise import build_franchise
-from app.agents.commercial_area.metrics import (
+from app.infrastructure.market_data.commercial_area.config import Settings
+from app.infrastructure.market_data.commercial_area.franchise import build_franchise
+from app.infrastructure.market_data.commercial_area.metrics import (
     area_km2,
     build_diversity,
     build_major_rows,
@@ -17,7 +17,7 @@ from app.agents.commercial_area.metrics import (
     hhi,
     stores_within,
 )
-from app.agents.commercial_area.schemas import MiddleCode, Store
+from app.infrastructure.market_data.commercial_area.schemas import MiddleCode, Store
 
 MASTER = [
     MiddleCode(code="I201", name="한식 음식점", major_code="I2", major_name="음식점업"),

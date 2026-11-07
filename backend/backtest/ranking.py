@@ -1,7 +1,7 @@
 from typing import Any
 
-from app.agentic.scoring import adjusted_lower, regulation
-from app.industries.catalog import INDUSTRIES, INDUSTRIES_WITHOUT_SEOUL
+from app.domain.industries.catalog import INDUSTRIES, INDUSTRIES_WITHOUT_SEOUL
+from app.domain.scoring import adjusted_lower, regulation
 
 ITEMS = ("D1", "D2", "D3", "D4", "C1", "C4", "S1", "S2", "S3", "S4", "L")
 DOMAINS = {"D": ("D1", "D2", "D3", "D4"), "C": ("C1", "C4"), "S": ("S1", "S2", "S3", "S4")}

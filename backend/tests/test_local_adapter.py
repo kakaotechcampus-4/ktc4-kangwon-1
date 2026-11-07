@@ -7,20 +7,34 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agents.commercial_area.client import CSV_FIELDS
-from app.agents.floating_population.models import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
-from app.db import repository
-from app.db.connection import connect, initialize
-from app.geo import to_epsg5181
-from app.local_data.adapter import LocalAdapter
-from app.local_data.database import LocalDataDB
-from app.local_data.persistence import persist_local, register_cell
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import capture_scope
+from app.application.local_snapshot import metric_periods, persist_local, register_cell
+from app.domain.geo import to_epsg5181
+from app.domain.population import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
+from app.domain.schemas import AnalysisTask, Site
+from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
 from tests.local_data_fixture import complete_versions
 
 
 class LocalAdapterTests(unittest.TestCase):
+    def test_cell_row_finds_named_values_and_reports_missing_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = LocalDataDB(Path(directory) / "market.sqlite3")
+            version = db.stage(
+                "stores",
+                "20262",
+                [{"row_key": "a", "payload": {"a": 1}, "latitude": 37.5, "longitude": 127.0}],
+                "first",
+            )
+            db.activate(complete_versions(db, [version], "20262"))
+            adapter = LocalAdapter(db.path)
+            self.assertEqual(adapter.cell_row("stores", version, "a").values["a"], 1)
+            self.assertIsNone(adapter.cell_row("stores", version, "없는 행"))
+
     def test_versions_are_pinned_and_vacuum(self):
         with tempfile.TemporaryDirectory() as directory:
             db = LocalDataDB(Path(directory) / "market.sqlite3")
@@ -149,11 +163,11 @@ class LocalAdapterTests(unittest.TestCase):
                 with (
                     patch("httpx.AsyncClient", side_effect=AssertionError("API 금지")),
                     patch(
-                        "app.agents.commercial_area.client.StoreClient",
+                        "app.infrastructure.market_data.commercial_area.client.StoreClient",
                         side_effect=AssertionError("점포 API 금지"),
                     ),
                     patch(
-                        "app.agents.floating_population.client.SeoulOpenDataClient",
+                        "app.infrastructure.market_data.floating_population.client.SeoulOpenDataClient",
                         side_effect=AssertionError("서울 API 금지"),
                     ),
                 ):
@@ -174,8 +188,8 @@ class LocalAdapterTests(unittest.TestCase):
                             metric="place_name",
                             unit="텍스트",
                         )
-                        from app.agentic.contracts import GetFactsInput
-                        from app.agentic.read_tools import get_facts
+                        from app.ai.read_tools import get_facts
+                        from app.ai.tool_contracts import GetFactsInput
 
                         reply = await get_facts(scope, GetFactsInput(fact_ids=[fact]))
                         self.assertEqual(reply.facts[0].spatial_scope["radius_m"], 500)
@@ -209,6 +223,31 @@ class LocalAdapterTests(unittest.TestCase):
                                 con.execute("SELECT COUNT(*) FROM local_provenance").fetchone()[0],
                                 10,
                             )
+                            lifecycle_periods = {
+                                metric: {
+                                    period
+                                    for (period,) in con.execute(
+                                        "SELECT DISTINCT period FROM facts "
+                                        "WHERE source='business_lifecycle' AND metric=?",
+                                        (metric,),
+                                    )
+                                }
+                                for metric in (
+                                    "recent_year_close_rate",
+                                    "oldest_year_close_rate",
+                                    "avg_store_count",
+                                    "turnover_rate",
+                                )
+                            }
+                            self.assertEqual(
+                                lifecycle_periods,
+                                {
+                                    "recent_year_close_rate": {"20253~20262"},
+                                    "oldest_year_close_rate": {"20233~20242"},
+                                    "avg_store_count": {"20233~20262"},
+                                    "turnover_rate": {"20233~20262"},
+                                },
+                            )
                             floating = {
                                 v["version_id"]
                                 for v in adapter.versions
@@ -238,7 +277,7 @@ class LocalAdapterTests(unittest.TestCase):
                     from types import SimpleNamespace
                     from unittest.mock import AsyncMock
 
-                    from app.services.analysis import execute_agentic_analysis
+                    from app.application.analysis import execute_agentic_analysis
 
                     outcome = SimpleNamespace(
                         status="draft_available",
@@ -246,19 +285,20 @@ class LocalAdapterTests(unittest.TestCase):
                             model_dump_json=lambda: '{"request_id":"local-service"}'
                         ),
                     )
+                    limitations = []
                     loop = SimpleNamespace(
-                        state={"limitations": []},
+                        begin=lambda items, timings: limitations.extend(items),
                         run=AsyncMock(return_value=outcome),
                         review_and_finalize=AsyncMock(return_value=outcome),
                         save=AsyncMock(),
                     )
                     with (
                         patch(
-                            "app.services.analysis.DecisionLoop.create",
+                            "app.ai.runtime.DecisionLoop.create",
                             AsyncMock(return_value=loop),
                         ),
                         patch(
-                            "app.services.analysis.collect_preflight",
+                            "app.application.analysis.collect_preflight",
                             AsyncMock(return_value=({}, None)),
                         ),
                     ):
@@ -270,7 +310,7 @@ class LocalAdapterTests(unittest.TestCase):
                             request_id="local-service",
                         )
                     self.assertEqual(received.status, "draft_available")
-                    self.assertIn("서울 밖 점포 미반영", loop.state["limitations"])
+                    self.assertIn("서울 밖 점포 미반영", limitations)
                     with connect(path) as con:
                         self.assertEqual(
                             con.execute(
@@ -282,6 +322,20 @@ class LocalAdapterTests(unittest.TestCase):
                         )
 
             asyncio.run(run())
+
+
+class MetricPeriodTests(unittest.TestCase):
+    def test_duplicate_quarters_do_not_shift_periods(self):
+        quarters = ["20221", "20222", "20223", "20224", "20231", "20232", "20233", "20234"]
+        found = metric_periods({"business_lifecycle": [*quarters, "20234", "20221"]})
+        self.assertEqual(
+            found["business_lifecycle"],
+            {
+                "recent_year_close_rate": "20231~20234",
+                "close_rate_ratio": "20231~20234",
+                "oldest_year_close_rate": "20221~20224",
+            },
+        )
 
 
 if __name__ == "__main__":

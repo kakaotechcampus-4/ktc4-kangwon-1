@@ -9,9 +9,9 @@ from types import SimpleNamespace
 import httpx
 
 from app.api.v1.analyses import analysis_runner
-from app.db.connection import initialize
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 

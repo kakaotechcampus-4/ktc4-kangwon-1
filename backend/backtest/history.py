@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from app.local_data.database import LocalDataDB, default_path
+from app.infrastructure.market_data.local.database import LocalDataDB, default_path
 
 POPULATION_SOURCES = ("stores", "lifecycle", "floating", "resident", "worker")
 REQUIRED_SOURCES = (*POPULATION_SOURCES, "areas")

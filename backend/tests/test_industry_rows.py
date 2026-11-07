@@ -2,8 +2,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.agents.commercial_area.schemas import MiddleCategory
-from app.industries import lookup
+from app.domain.industries import lookup
+from app.infrastructure.market_data.commercial_area.schemas import MiddleCategory
 
 
 def middle_row(code="I201", name=None):

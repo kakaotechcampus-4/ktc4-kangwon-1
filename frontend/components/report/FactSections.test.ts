@@ -42,11 +42,11 @@ describe('검토 후보 업종의 경쟁 상황', () => {
     const html = renderToStaticMarkup(
       createElement(FactCompetitionSection, { data })
     );
-    expect(html).toContain('서울 대비 밀도');
+    expect(html).toContain('서울 대비');
     expect(html).not.toContain('경쟁 부담');
     expect(html).not.toContain('높을수록 경쟁이 셉니다');
-    expect(html).toContain('몰릴수록 유리');
-    expect(html).toContain('낮을수록 유리');
-    expect(html).toContain('밀도와 무관');
+    expect(html).toContain('밀도가 높으면 긍정적으로 반영됩니다');
+    expect(html).toContain('밀도가 낮을수록 긍정적으로 반영됩니다');
+    expect(html).toContain('입지 점수에 반영하지 않습니다');
   });
 });

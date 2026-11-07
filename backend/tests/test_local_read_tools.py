@@ -7,15 +7,15 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agentic.sql_tool import query_raw
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.local_data.adapter import LocalAdapter
-from app.local_data.boundary import boundary_limitations, fetch_boundary
-from app.local_data.database import LocalDataDB
-from app.local_data.provenance import save_snapshot
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import capture_scope
+from app.ai.sql_tool import query_raw
+from app.domain.schemas import AnalysisTask, Site
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.boundary import boundary_limitations, fetch_boundary
+from app.infrastructure.market_data.local.database import LocalDataDB
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.provenance import save_snapshot
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 from tests.local_data_fixture import complete_versions
 
 
@@ -169,7 +169,9 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     scope, "SELECT store_count FROM v_raw_lifecycle WHERE request_id='other'"
                 )
                 self.assertEqual(foreign.data.rows, [])
-                with patch("app.agentic.sql_tool.monotonic", side_effect=[0, 3]):
+                with patch(
+                    "app.infrastructure.persistence.raw_query.monotonic", side_effect=[0, 3]
+                ):
                     timeout = await query_raw(scope, "SELECT count(*) FROM v_raw_lifecycle")
                 self.assertEqual(timeout.error.code, "SQL_TIMEOUT")
 

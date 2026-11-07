@@ -13,8 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agentic.c1_units import CLUSTER_UNIT, PROFILE_UNIT, c1_unit  # noqa: E402
-from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES  # noqa: E402
+from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES  # noqa: E402
+from app.domain.c1_units import CLUSTER_UNIT, PROFILE_UNIT, c1_unit  # noqa: E402
 from scripts.rubric_dryrun import evaluate, result, summarize, valid  # noqa: E402
 
 ALPHAS = (0, 0.5, 0.75, 1.0)

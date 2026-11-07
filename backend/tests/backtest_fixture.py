@@ -2,14 +2,14 @@ import copy
 import json
 from pathlib import Path
 
-from app.agents.business_lifecycle import baseline as lifecycle
-from app.agents.commercial_area import baseline as density
-from app.agents.commercial_area.client import CSV_FIELDS
-from app.agents.floating_population import baseline as floating
-from app.agents.floating_population.models import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
-from app.geo import to_epsg5181
-from app.local_data.database import LocalDataDB
-from app.schemas import Site
+from app.domain.baselines import business_lifecycle as lifecycle
+from app.domain.baselines import commercial_area as density
+from app.domain.baselines import floating_population as floating
+from app.domain.geo import to_epsg5181
+from app.domain.population import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
+from app.domain.schemas import Site
+from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS
+from app.infrastructure.market_data.local.database import LocalDataDB
 from backtest.baselines import FLOATING
 from tests.local_data_fixture import complete_versions
 

@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.address import GeocodeError
-from app.building_registry import BuildingRegistry, BuildingRegistryError, lookup_building
-from app.services.mock import building_registry as mock_building_registry
-
-from .deps import current_user
-from .jobs import is_mock
+from app.api.v1.deps import current_user
+from app.application.analysis import is_mock
+from app.application.building import BuildingLookupFailed, lookup
+from app.domain.building import BuildingRegistry
 
 router = APIRouter(prefix="/api/v1", tags=["building"])
+FAILURE_STATUS = {
+    "invalid_address": 400,
+    "address_service": 502,
+    "rate_limit": 429,
+    "timeout": 504,
+    "auth": 502,
+    "upstream": 502,
+}
 
 
 @router.get(
@@ -35,24 +41,7 @@ async def get_building_registry(
     ),
 ) -> BuildingRegistry:
     """조회 결과는 저장하지 않습니다. `MOCK_MODE` 환경변수가 켜져 있어도 고정 응답입니다."""
-    if is_mock(mock):
-        return mock_building_registry()
     try:
-        return await lookup_building(address)
-    except GeocodeError as exc:
-        invalid = exc.code in {
-            "EMPTY_ADDRESS",
-            "NOT_FOUND",
-            "ADDRESS_AMBIGUOUS",
-            "ADDRESS_MISMATCH",
-        }
-        raise HTTPException(
-            400 if invalid else 502,
-            "주소를 확인해 주세요." if invalid else "주소 조회 서비스에 실패했습니다.",
-        ) from exc
-    except BuildingRegistryError as exc:
-        if exc.code == "RATE_LIMIT":
-            raise HTTPException(429, "건축물대장 조회 한도를 초과했습니다.") from None
-        if exc.code == "AUTH":
-            raise HTTPException(502, "건축물대장 인증키 또는 사용 권한을 확인해 주세요.") from None
-        raise HTTPException(502, "건축물대장 조회에 실패했습니다.") from exc
+        return await lookup(address, mock=is_mock(mock))
+    except BuildingLookupFailed as exc:
+        raise HTTPException(FAILURE_STATUS[exc.reason], exc.message) from exc.__cause__

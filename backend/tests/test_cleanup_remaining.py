@@ -12,17 +12,17 @@ from types import SimpleNamespace
 from typing import get_args
 from unittest.mock import MagicMock, patch
 
-from app.agentic.contracts import Metric
-from app.agentic.facts import register_fact
-from app.agentic.scoring import WEIGHTS, evaluate, result, summarize
-from app.agentic.snapshot import persist_report
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.errors import AnalysisConflictError
-from app.local_data.adapter import LocalAdapter
-from app.local_data.boundary import boundary_limitations
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import CaptureScope, capture_scope
+from app.application.errors import AnalysisConflictError
+from app.application.facts import register_fact
+from app.application.snapshot import persist_report
+from app.domain.contracts import Metric
+from app.domain.schemas import AnalysisTask, Site
+from app.domain.scoring import WEIGHTS, evaluate, result, summarize
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.market_data.local.boundary import boundary_limitations
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import CaptureScope, capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
@@ -161,8 +161,8 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run["reasons"], ["기존 수집 실패"])
 
     async def pending_question(self):
-        from app.services.analysis import execute_agentic_analysis
-        from app.services.mock import dependencies
+        from app.application.analysis import execute_agentic_analysis
+        from app.infrastructure.mock import dependencies
 
         waiting = await execute_agentic_analysis(
             "질문",
@@ -179,7 +179,7 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         return scope, waiting.question_session_id, json.loads(run[2])
 
     async def test_concurrent_answer_loser_leaves_no_raw_response(self):
-        from app.agentic.questions import save_user_facts
+        from app.application.answers import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         replies = await asyncio.gather(
@@ -200,11 +200,11 @@ class RemainingStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count, 1)
 
     async def test_answer_fact_failure_rolls_back_raw_response(self):
-        from app.agentic.questions import save_user_facts
+        from app.application.answers import save_user_facts
 
         scope, question_id, state = await self.pending_question()
         with (
-            patch("app.agentic.questions.register_fact", side_effect=OSError("저장 실패")),
+            patch("app.application.answers.register_fact", side_effect=OSError("저장 실패")),
             self.assertRaises(OSError),
         ):
             await asyncio.to_thread(save_user_facts, scope, {"floor": "지상"}, question_id, state)
@@ -255,15 +255,19 @@ class RemainingPolicyTests(unittest.TestCase):
         task = AnalysisTask(request_id="one", site=site, radius_m=500)
         with (
             patch(
-                "app.agents.commercial_area.config.Settings.from_env",
+                "app.infrastructure.market_data.commercial_area.config.Settings.from_env",
                 return_value=SimpleNamespace(lq_radius_candidates=(1000,)),
             ),
             patch(
-                "app.local_data.adapter.format_inputs",
+                "app.infrastructure.market_data.local.adapter.format_inputs",
                 return_value=({"commercial_area": {}}, [], []),
             ),
-            patch("app.agents.commercial_area.franchise.load_cached_brands", return_value={}),
+            patch(
+                "app.infrastructure.market_data.commercial_area.franchise.load_cached_brands",
+                return_value={},
+            ),
         ):
             data = adapter.analyze(task)
         self.assertEqual(data["comparison_radius_m"], 1000)
-        self.assertEqual(data["limitations"], ["서울 밖 점포 미반영"])
+        self.assertIn("서울 밖 점포 미반영", data["limitations"])
+        self.assertTrue(any("경쟁 참고 자료" in note for note in data["limitations"]))

@@ -10,14 +10,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.agentic.contracts import GetFactsInput
-from app.agentic.read_tools import get_facts
-from app.agentic.snapshot import persist_space_requirements
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.industries import DATA_DIR
-from app.industries.catalog import INDUSTRIES
-from app.storage.raw import capture_scope
+from app.ai.read_tools import get_facts
+from app.ai.tool_contracts import GetFactsInput
+from app.application.snapshot import persist_space_requirements
+from app.domain.industries import DATA_DIR
+from app.domain.industries.catalog import INDUSTRIES
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 FACILITY_LEVELS = {"required", "preferred", "conditional", "false"}
 FLOOR_LEVELS = {"ground_required", "ground_preferred", "basement_preferred", "false"}
@@ -155,7 +155,7 @@ class SpaceRequirementsFactsTests(unittest.IsolatedAsyncioTestCase):
                 path = initialize(folder / "request.sqlite3")
                 create_request("old", "시험", db_path=path)
                 async with capture_scope("old", path) as scope:
-                    with patch("app.agentic.snapshot.DATA_DIR", folder):
+                    with patch("app.application.snapshot.DATA_DIR", folder):
                         with self.assertRaises(ValueError):
                             await asyncio.to_thread(persist_space_requirements, scope)
 
@@ -168,7 +168,7 @@ class SpaceRequirementsFactsTests(unittest.IsolatedAsyncioTestCase):
                 "industry_code,industry_name\nG204,종합 소매\n", encoding="utf-8-sig"
             )
             async with capture_scope("invalid", path) as scope:
-                with patch("app.agentic.snapshot.DATA_DIR", folder):
+                with patch("app.application.snapshot.DATA_DIR", folder):
                     with self.assertRaises(ValueError):
                         await asyncio.to_thread(persist_space_requirements, scope)
                 with connect(path) as db:

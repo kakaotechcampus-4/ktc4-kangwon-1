@@ -20,21 +20,22 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.business_lifecycle.config import Settings as LifecycleSettings  # noqa: E402
-from app.agents.floating_population.config import (  # noqa: E402
+from app.domain.quarters import previous_quarter  # noqa: E402
+from app.infrastructure.config import BACKEND_DIR, load_environment  # noqa: E402
+from app.infrastructure.market_data.business_lifecycle.config import Settings as LifecycleSettings  # noqa: E402
+from app.infrastructure.market_data.floating_population.config import (  # noqa: E402
     FLPOP_SERVICE,
     RESIDENT_SERVICE,
     WORKER_SERVICE,
 )
-from app.config import BACKEND_DIR, load_environment  # noqa: E402
-from app.local_data.boundary import fetch_boundary  # noqa: E402
-from app.local_data.database import (  # noqa: E402
+from app.infrastructure.market_data.local.boundary import fetch_boundary  # noqa: E402
+from app.infrastructure.market_data.local.database import (  # noqa: E402
     SOURCES,
     DataValidationError,
     LocalDataDB,
     default_path,
 )
-from app.local_data.refresh import (  # noqa: E402
+from app.infrastructure.market_data.local.refresh import (  # noqa: E402
     collect_pages,
     csv_rows,
     file_hash,
@@ -44,7 +45,7 @@ from app.local_data.refresh import (  # noqa: E402
     shape_rows,
     store_rows,
 )
-from app.seoul import previous_quarter, request_json  # noqa: E402
+from app.infrastructure.market_data.seoul import request_json  # noqa: E402
 from scripts.build_density_baseline import CSV_FIELDS  # noqa: E402
 
 SERVICES = {
@@ -103,7 +104,8 @@ async def _refresh(args, db: LocalDataDB) -> list[dict]:
                     if source == "stores"
                     else args.shp
                     if source == "areas"
-                    else BACKEND_DIR / f"app/agents/floating_population/data/{source}.csv"
+                    else BACKEND_DIR
+                    / f"app/infrastructure/market_data/floating_population/data/{source}.csv"
                 )
                 if path is None:
                     raise DataValidationError("--seoul-csv 에 서울 CSV 경로를 지정하세요.")

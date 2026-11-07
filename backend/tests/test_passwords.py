@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.passwords import (
+from app.domain.passwords import (
     MIN_PASSWORD_LENGTH,
     PasswordPolicyError,
     hash_password,
