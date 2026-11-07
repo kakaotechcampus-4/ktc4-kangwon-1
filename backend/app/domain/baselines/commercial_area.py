@@ -37,6 +37,7 @@ from app.domain.stats import percentile_rank
 # 유형별 중앙값 — 골목상권 362.9 · 전통시장 513.1 · 발달상권 640.4 · 관광특구 855.6
 BASELINE_SAMPLE_SIZE: Final = 1650
 BASELINE_SCOPE: Final = "서울 상권 반경 500m"
+METHOD: Final = "density-baseline-v1"
 
 # 5%p 간격 경계값(5% ~ 95%). scripts/build_density_baseline.py --emit 이 찍어준다.
 SEOUL_RESTAURANT_DENSITY_PERCENTILES: Final[tuple[float, ...]] = (

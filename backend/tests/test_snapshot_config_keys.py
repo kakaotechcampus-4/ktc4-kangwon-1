@@ -6,11 +6,14 @@ from pathlib import Path
 from app.application.snapshot import snapshot_config
 from app.domain import code90
 from app.domain.baselines import commercial_area as density_baseline
+from app.domain.baselines import floating_population as population_baseline
 from app.infrastructure.market_data.local import score_reference
 from app.shared.canonical import canonical_hash
 
 CODE90_LOGIC = "92394464"
 REFERENCE_LOGIC = "ca2260a8"
+POPULATION_LOGIC = "72429f98"
+DENSITY_LOGIC = "d6eee7bb"
 
 
 def logic_fingerprint(module):
@@ -56,6 +59,7 @@ class SnapshotConfigKeyTests(unittest.TestCase):
                 [
                     {
                         "configuration": "density_baseline",
+                        "method": density_baseline.METHOD,
                         "values": density_baseline.SEOUL_INDUSTRY_DENSITY_PERCENTILES,
                     }
                 ]
@@ -84,6 +88,42 @@ class SnapshotConfigKeyTests(unittest.TestCase):
             logic_fingerprint(score_reference),
             REFERENCE_LOGIC,
             "참고 분포 계산이 바뀌었습니다. REFERENCE_VERSION을 올리고 이 지문을 갱신하세요.",
+        )
+        self.assertEqual(
+            logic_fingerprint(population_baseline),
+            POPULATION_LOGIC,
+            "유동인구 기준선이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
+        )
+        self.assertEqual(
+            logic_fingerprint(density_baseline),
+            DENSITY_LOGIC,
+            "밀도 기준선이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
+        )
+
+    def test_population_row_carries_method(self):
+        _, hashes, _ = snapshot_config(None, local=True)
+        values = {
+            name: getattr(population_baseline, name)
+            for name in (
+                "AGE_SHARE_AVG",
+                "TIME_PER_HOUR_SHARE_AVG",
+                "WEEKEND_TO_WEEKDAY_AVG",
+                "TIME_BAND_DAILY_PERCENTILES",
+                "PATTERN_DAILY_PERCENTILES",
+                "DAILY_TOTAL_PERCENTILES",
+            )
+        }
+        self.assertEqual(
+            hashes["population_baseline"],
+            canonical_hash(
+                [
+                    {
+                        "configuration": "population_baseline",
+                        "method": population_baseline.METHOD,
+                        "values": values,
+                    }
+                ]
+            ),
         )
 
 

@@ -26,6 +26,7 @@ from app.domain.population import TIME_BANDS
 from app.domain.stats import percentile_rank
 
 BASELINE_LABEL = "서울 전체 상권 평균 (2026년 2분기 · 1,648곳)"
+METHOD = "population-baseline-v1"
 
 # 연령대별 비중 (가중). classify.SEOUL_AVG 와 같은 측정에서 나온 값이다.
 AGE_SHARE_AVG = {

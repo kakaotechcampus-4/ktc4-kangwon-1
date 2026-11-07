@@ -56,6 +56,7 @@ def snapshot_config(scope, *, local=False):
             [
                 {
                     "configuration": "population_baseline",
+                    "method": population_baseline.METHOD,
                     "values": {
                         name: getattr(population_baseline, name)
                         for name in (
@@ -75,6 +76,7 @@ def snapshot_config(scope, *, local=False):
             [
                 {
                     "configuration": "density_baseline",
+                    "method": density_baseline.METHOD,
                     "values": density_baseline.SEOUL_INDUSTRY_DENSITY_PERCENTILES,
                 }
             ],
