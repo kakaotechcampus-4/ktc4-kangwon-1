@@ -4,9 +4,9 @@ import asyncio
 import json
 import os
 import uuid
-from dataclasses import replace
 
 from app.application.facts import register_fact
+from app.application.ports.places import places as place_services
 from app.application.ports.storage import open_stores
 from app.domain.contracts import (
     IndustryRestriction,
@@ -15,15 +15,11 @@ from app.domain.contracts import (
     RegulationResult,
     ToolReply,
 )
-from app.domain.geo import to_epsg5181
+from app.domain.geo import polygon_contains_point, to_epsg5181
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.industries.lookup import industry_terms
+from app.domain.place_matching import distance_m, match_place
 from app.domain.scoring import regulation
-from app.infrastructure.clients.education_zone import find_education_zones
-from app.infrastructure.market_data.business_lifecycle.area_resolver import polygon_contains_point
-from app.infrastructure.market_data.map_analysis.client import PlaceClient
-from app.infrastructure.market_data.map_analysis.config import Settings
-from app.infrastructure.market_data.map_analysis.matching import distance_m, match_place
 from app.shared.canonical import canonical_json
 from app.shared.concurrency import run_in_thread
 
@@ -62,7 +58,7 @@ def _place_facts(scope, response_id, documents):
 
 async def map_search(scope, site, input, shared):
     owned = shared.map_client is None
-    client = shared.map_client or PlaceClient(replace(Settings.from_env(), max_retries=0))
+    client = shared.map_client or place_services().place_search()
     queries = (
         [input.facility_code]
         if input.facility_code
@@ -268,7 +264,7 @@ async def check_regulation(scope, site, shared):
         if scan is None:
             scan = await run_in_thread(_stored_regulation, scope)
         if scan is None:
-            lookup = shared.regulation_lookup or find_education_zones
+            lookup = shared.regulation_lookup or place_services().education_zones
             scan = await lookup(site.latitude, site.longitude, with_geometry=True)
         shared.regulation = await run_in_thread(_regulation, scope, site, scan)
         shared.regulation_scan = verified_education_scan(site, scan)

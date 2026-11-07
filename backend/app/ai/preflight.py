@@ -2,22 +2,16 @@
 
 import csv
 import json
-from dataclasses import replace
 
 import httpx
 
 from app.ai.map_regulation import check_regulation, map_search
 from app.ai.sql_tool import error
 from app.ai.tools import SharedTools
+from app.application.ports.places import EducationZoneError, MapApiError, places
 from app.application.ports.storage import open_stores
 from app.domain.contracts import MapSearchInput
 from app.domain.industries import DATA_DIR
-from app.infrastructure.clients.education_zone import (
-    EducationZoneError,
-    EducationZoneSettings,
-    find_education_zones,
-)
-from app.infrastructure.market_data.map_analysis.client import MapApiError
 from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -35,12 +29,7 @@ def facility_requests():
 
 
 async def _education_lookup(latitude, longitude, **kwargs):
-    return await find_education_zones(
-        latitude,
-        longitude,
-        settings=replace(EducationZoneSettings.from_env(), max_retries=0),
-        **kwargs,
-    )
+    return await places().education_zones(latitude, longitude, retry=False, **kwargs)
 
 
 def _facility_places(scope, reply, category):

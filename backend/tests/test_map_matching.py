@@ -3,11 +3,7 @@
 import unittest
 
 from app.domain.industries.lookup import industry_terms
-from app.infrastructure.market_data.map_analysis.matching import (
-    RULE_VERSION,
-    distance_m,
-    match_place,
-)
+from app.domain.place_matching import RULE_VERSION, distance_m, match_place
 
 
 class MatchingTests(unittest.TestCase):

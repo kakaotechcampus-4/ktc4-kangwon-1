@@ -1,11 +1,7 @@
 """서울 시도 경계의 수동 수집과 반경 포함 여부를 확인합니다."""
 
-from app.domain.geo import to_epsg5181
+from app.domain.geo import polygon_contains_point, polygon_distance_m, to_epsg5181
 from app.infrastructure.clients.education_zone import VWORLD_DATA_URL, EducationZoneSettings
-from app.infrastructure.market_data.business_lifecycle.area_resolver import (
-    polygon_contains_point,
-    polygon_distance_m,
-)
 from app.infrastructure.market_data.local.database import DataValidationError
 
 

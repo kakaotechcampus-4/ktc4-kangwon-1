@@ -3,10 +3,10 @@
 import unittest
 from itertools import permutations
 
+from app.domain.geo import polygon_contains_point
 from app.infrastructure.market_data.business_lifecycle.area_resolver import (
     ShapeFeature,
     _feature_area,
-    polygon_contains_point,
 )
 
 

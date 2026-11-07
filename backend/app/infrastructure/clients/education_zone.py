@@ -12,6 +12,7 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.ports.places import EducationZoneError
 from app.infrastructure.config import load_environment
 
 # 기존 CLI 가져오기 경로를 맞춥니다.
@@ -40,15 +41,6 @@ MAX_BACKOFF_S = 30.0
 DEFAULT_REFERER = "http://localhost:8000"
 # 보호구역 조회 하나가 주소 단계를 오래 붙잡지 않게 합니다. 실측은 0.1초 수준입니다.
 LOOKUP_TIMEOUT_S = 20.0
-
-
-class EducationZoneError(Exception):
-    """구역 조회 실패입니다. 키와 원문 응답은 메시지에 담지 않습니다."""
-
-    def __init__(self, code: str, message: str):
-        super().__init__(f"[{code}] {message}")
-        self.code = code
-        self.message = message
 
 
 @dataclass(frozen=True)

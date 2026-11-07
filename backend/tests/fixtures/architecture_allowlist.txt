@@ -1,12 +1,4 @@
-app.ai.map_regulation -> app.infrastructure.clients.education_zone
-app.ai.map_regulation -> app.infrastructure.market_data.business_lifecycle.area_resolver
-app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.client
-app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.config
-app.ai.map_regulation -> app.infrastructure.market_data.map_analysis.matching
-app.ai.preflight -> app.infrastructure.clients.education_zone
-app.ai.preflight -> app.infrastructure.market_data.map_analysis.client
 app.ai.sql_tool -> app.infrastructure.persistence.connection
-app.ai.tools -> app.infrastructure.market_data.map_analysis.client
 app.application.analysis -> app.ai.budget
 app.application.analysis -> app.ai.preflight
 app.application.analysis -> app.ai.questions

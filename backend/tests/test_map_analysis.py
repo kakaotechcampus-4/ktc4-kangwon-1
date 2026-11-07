@@ -9,8 +9,9 @@ from unittest.mock import patch
 
 import httpx
 
+from app.application.ports.places import MapApiError
 from app.domain.schemas import Site
-from app.infrastructure.market_data.map_analysis.client import MapApiError, PlaceClient
+from app.infrastructure.market_data.map_analysis.client import PlaceClient
 from app.infrastructure.market_data.map_analysis.config import Settings
 
 HIT: dict[str, Any] = {

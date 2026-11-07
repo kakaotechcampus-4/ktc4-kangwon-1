@@ -11,10 +11,10 @@ from app.ai.preflight import FACILITIES, collect_preflight
 from app.ai.runtime import DecisionLoop
 from app.ai.tools import SharedTools, ToolExecutor
 from app.application.local_snapshot import persist_local
+from app.application.ports.places import MapApiError
 from app.domain.contracts import MapResult, ToolReply
 from app.domain.schemas import AnalysisTask, Site
 from app.domain.scoring import evaluate
-from app.infrastructure.market_data.map_analysis.client import MapApiError
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.raw_capture import RawStorageError, capture_scope
 from app.infrastructure.persistence.repository import create_request
@@ -128,7 +128,7 @@ class PreflightTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.search_category.await_count, 5)
 
     async def test_regulation_failure_preserves_facilities(self):
-        from app.infrastructure.clients.education_zone import EducationZoneError
+        from app.application.ports.places import EducationZoneError
 
         self.lookup.side_effect = EducationZoneError("CONFIG_ERROR", "실패")
         data, shared = await collect_preflight(self.scope, self.site, self.shared)

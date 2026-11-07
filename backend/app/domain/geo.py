@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 EARTH_RADIUS_M = 6_371_000.0
 
@@ -102,3 +103,74 @@ def to_epsg5181(latitude: float, longitude: float) -> tuple[float, float]:
         )
     )
     return x, y
+
+
+Point = tuple[float, float]
+Ring = Sequence[Point]
+
+
+def polygon_distance_m(rings: Sequence[Ring], x: float, y: float) -> float:
+    """EPSG:5181에서 입력점과 폴리곤 경계 선분의 최소 거리(m)."""
+    distances = []
+    for ring in rings:
+        for (x1, y1), (x2, y2) in zip(ring, ring[1:], strict=False):
+            dx, dy = x2 - x1, y2 - y1
+            length2 = dx * dx + dy * dy
+            t = min(1.0, max(0.0, ((x - x1) * dx + (y - y1) * dy) / length2)) if length2 else 0.0
+            distances.append(math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)))
+    return min(distances, default=float("inf"))
+
+
+def polygon_contains_point(rings: Sequence[Ring], x: float, y: float) -> bool:
+    inside = False
+
+    for ring in rings:
+        if _point_on_ring_boundary(ring, x, y):
+            return True
+        if _ring_contains_point(ring, x, y):
+            inside = not inside
+
+    return inside
+
+
+def _ring_contains_point(ring: Ring, x: float, y: float) -> bool:
+    inside = False
+    previous_x, previous_y = ring[-1]
+
+    for current_x, current_y in ring:
+        crosses = (current_y > y) != (previous_y > y)
+        if crosses:
+            slope_x = (previous_x - current_x) * (y - current_y)
+            intersection_x = slope_x / (previous_y - current_y) + current_x
+            if x < intersection_x:
+                inside = not inside
+        previous_x, previous_y = current_x, current_y
+
+    return inside
+
+
+def _point_on_ring_boundary(ring: Ring, x: float, y: float) -> bool:
+    previous_x, previous_y = ring[-1]
+
+    for current_x, current_y in ring:
+        if _point_on_segment(previous_x, previous_y, current_x, current_y, x, y):
+            return True
+        previous_x, previous_y = current_x, current_y
+
+    return False
+
+
+def _point_on_segment(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    x: float,
+    y: float,
+) -> bool:
+    cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
+    if not math.isclose(cross, 0.0, abs_tol=1e-7):
+        return False
+    return min(x1, x2) - 1e-7 <= x <= max(x1, x2) + 1e-7 and (
+        min(y1, y2) - 1e-7 <= y <= max(y1, y2) + 1e-7
+    )

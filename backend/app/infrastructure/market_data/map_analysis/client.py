@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from app.application.ports.places import MapApiError
 from app.infrastructure.market_data.map_analysis.config import (
     KAKAO_CATEGORY_URL,
     KAKAO_KEYWORD_URL,
@@ -19,15 +20,6 @@ from app.infrastructure.market_data.map_analysis.config import (
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DEFAULT_RETRY_BACKOFF_S = 1.5
 MAX_BACKOFF_S = 30.0
-
-
-class MapApiError(Exception):
-    """카카오 조회 실패. 원문 예외 메시지는 안 담음 — 키가 섞여 나갈 수 있음"""
-
-    def __init__(self, code: str, message: str):
-        super().__init__(f"[{code}] {message}")
-        self.code = code
-        self.message = message
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
