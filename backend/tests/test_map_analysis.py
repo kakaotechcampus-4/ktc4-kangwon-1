@@ -170,6 +170,33 @@ class MapAnalysisClientTests(unittest.IsolatedAsyncioTestCase):
 
         await self.assert_code("UPSTREAM_TIMEOUT", handler)
 
+    async def test_corrupt_compressed_response_is_retried_then_succeeds(self):
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(1)
+            if len(attempts) == 1:
+                return httpx.Response(
+                    200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip")
+                )
+            return httpx.Response(200, json=HIT)
+
+        payload = await self.call(handler)
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(payload["meta"]["total_count"], 100)
+
+    async def test_repeated_corrupt_response_is_upstream_failed(self):
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(1)
+            return httpx.Response(
+                200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip")
+            )
+
+        await self.assert_code("UPSTREAM_FAILED", handler)
+        self.assertEqual(len(attempts), 3)
+
     # --- 설정 검증은 네트워크 전에 ---
 
     async def test_bad_settings_and_input_never_connect(self):

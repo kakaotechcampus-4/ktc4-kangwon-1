@@ -179,7 +179,7 @@ class PlaceClient:
                     if attempt < self.settings.max_retries:
                         await asyncio.sleep(wait_s)
                         continue
-                except httpx.TransportError:
+                except (httpx.TransportError, httpx.DecodingError):
                     timed_out = False
                     if attempt < self.settings.max_retries:
                         await asyncio.sleep(wait_s)
