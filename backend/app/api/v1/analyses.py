@@ -31,12 +31,11 @@ from app.application.analysis import (
     mock_run_options,
     resume_agentic_analysis,
 )
+from app.application.answers import confirmed_space_values
 from app.domain.schemas import DecisionResult, Schema, Text
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
-
-NOT_FOUND = "분석 요청을 찾을 수 없습니다."
 
 
 async def require_owner(
@@ -45,16 +44,14 @@ async def require_owner(
     user: Annotated[dict[str, Any] | None, Depends(optional_user)],
 ) -> None:
     """남의 요청은 404로 가립니다. 403이면 그 ID가 있다는 사실이 새 나갑니다."""
-    owner = await asyncio.to_thread(
-        analysis_requests.owner, request_id, db_path=request.app.state.execution_settings.db_path
+    visible = await asyncio.to_thread(
+        analysis_requests.visible_to,
+        request_id,
+        user,
+        db_path=request.app.state.execution_settings.db_path,
     )
-    if owner is None:
-        raise HTTPException(404, NOT_FOUND)
-    # 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. 그 자료만 열어 둡니다.
-    if owner == "legacy":
-        return
-    if user is None or user["user_id"] != owner:
-        raise HTTPException(404, NOT_FOUND)
+    if not visible:
+        raise HTTPException(404, analysis_requests.NOT_FOUND)
 
 
 # 진행 이벤트는 함수로 등록돼 있어 데코레이터 대신 dependencies 인자로 가드를 겁니다.
@@ -97,16 +94,8 @@ def options(request, request_id):
 
 
 def space_answers(body):
-    values = {}
-    if body.floor is not None:
-        values["floor"] = body.floor
-    if body.exclusive_area_m2 is not None:
-        values["exclusive_area"] = f"{body.exclusive_area_m2:.2f}".rstrip("0").rstrip(".") + "㎡"
-    if body.facilities is not None:
-        facilities = body.facilities.model_dump(exclude_none=True)
-        if facilities:
-            values["existing_facilities"] = facilities
-    return values or None
+    facilities = body.facilities.model_dump(exclude_none=True) if body.facilities else None
+    return confirmed_space_values(body.floor, body.exclusive_area_m2, facilities)
 
 
 def public_result(request_id, outcome):
@@ -189,7 +178,7 @@ async def get_analysis(request_id: str, request: Request):
         analysis_requests.detail, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if stored is None:
-        raise HTTPException(404, NOT_FOUND)
+        raise HTTPException(404, analysis_requests.NOT_FOUND)
     return stored
 
 
@@ -203,7 +192,7 @@ async def get_analysis_facts(request_id: str, request: Request):
         analysis_requests.facts, request_id, db_path=request.app.state.execution_settings.db_path
     )
     if found is None:
-        raise HTTPException(404, NOT_FOUND)
+        raise HTTPException(404, analysis_requests.NOT_FOUND)
     return RequestFacts(request_id=request_id, snapshot_id=found.snapshot_id, facts=found.facts)
 
 
@@ -227,17 +216,15 @@ async def answers(
         request_id,
         db_path=request.app.state.execution_settings.db_path,
     )
-    if gate is None:
-        raise HTTPException(404, NOT_FOUND)
-    # 질문 행이 없으면 question_session_id 가 None 이라 아래 비교에서 걸립니다.
-    if (
-        request_id in jobs(request)
-        or gate.status != "waiting_for_input"
-        or gate.question_session_id != body.question_session_id
-    ):
-        raise HTTPException(409, "현재 대기 중인 질문 세션이 아닙니다.")
-    if set(body.answers) != gate.fields:
-        raise HTTPException(422, "질문 항목과 답변 항목이 다릅니다.")
+    try:
+        analysis_requests.check_answers(
+            gate,
+            body.question_session_id,
+            set(body.answers),
+            running=request_id in jobs(request),
+        )
+    except analysis_requests.AnswerRejected as exc:
+        raise HTTPException(exc.status, exc.message) from None
 
     async def work():
         outcome = await runner(

@@ -2,7 +2,6 @@
 
 import json
 
-from app.ai.sql_tool import error
 from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
 from app.domain.contracts import (
@@ -12,6 +11,7 @@ from app.domain.contracts import (
     ScorecardResult,
     ScorecardSummary,
     ScoreItem,
+    error,
 )
 from app.domain.scoring import apply_space, rank_key, score_summary, summarize
 from app.domain.space_rules import judge, load_requirements

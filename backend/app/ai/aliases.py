@@ -2,8 +2,6 @@
 
 import json
 import re
-import sqlite3
-from hashlib import sha256
 
 from app.application.ports.storage import open_stores
 
@@ -56,39 +54,8 @@ def _walk(value, translate, key=None):
 def encode(scope, value):
     references = set()
     _walk(value, lambda fid: references.add(fid) or fid)
-    resolved = {}
     with open_stores(scope.path) as st:
-        # 먼저 쓰기 권한을 잡아 조회-삽입 사이의 동시 생성 경합을 막습니다.
-        st.begin_immediate()
-
-        def alias(fid):
-            existing = st.facts.alias_named(scope.request_id, fid)
-            if existing:
-                return existing
-            row = st.facts.alias_of_fact(scope.request_id, fid)
-            if row:
-                return row
-            if not st.facts.fact_in_snapshot(scope.request_id, scope.snapshot_id, fid):
-                raise ValueError("요청에 없는 fact를 별칭으로 내보낼 수 없습니다.")
-            for counter in range(8):
-                short = sha256(f"{fid}:{counter}".encode()).hexdigest()[:8]
-                try:
-                    st.facts.insert_alias(scope.request_id, short, fid)
-                except sqlite3.IntegrityError as exc:
-                    if exc.sqlite_errorcode not in {
-                        sqlite3.SQLITE_CONSTRAINT_UNIQUE,
-                        sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
-                    }:
-                        raise
-                    row = st.facts.alias_of_fact(scope.request_id, fid)
-                    if row:
-                        return row
-                else:
-                    return short
-            raise ValueError("별칭 충돌 재시도 8회 한도를 초과했습니다.")
-
-        for fid in sorted(references):
-            resolved[fid] = alias(fid)
+        resolved = st.facts.aliases_for(scope.request_id, scope.snapshot_id, sorted(references))
     return _walk(value, resolved.__getitem__)
 
 

@@ -21,6 +21,7 @@ from app.application.ports.llm import llm, with_llm_session
 from app.application.ports.market import market
 from app.application.ports.sites import sites
 from app.application.ports.storage import storage
+from app.application.preflight import collect_preflight
 from app.application.snapshot import persist_snapshot_scores
 from app.domain.schemas import AgentError, AnalysisTask
 from app.shared.clock import utc_now_iso
@@ -152,7 +153,7 @@ async def _collect_and_score(scope, task, adapter):
     if adapter is None:
         await persist_snapshot_scores(task)
         return {}, None
-    observations, shared = await decision().preflight(scope, task.site)
+    observations, shared = await collect_preflight(scope, task.site)
     data, _, _ = await run_in_thread(persist_local, task, scope, adapter, None, observations)
     return data, shared
 

@@ -3,8 +3,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from app.ai.preflight import collect_preflight
 from app.application.local_snapshot import persist_local
+from app.application.preflight import collect_preflight
 from app.domain.schemas import AnalysisTask, Site
 from app.infrastructure.clients.address import resolve_site
 from app.infrastructure.llm.session import with_client_session

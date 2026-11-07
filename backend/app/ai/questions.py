@@ -4,10 +4,9 @@ import json
 import uuid
 from dataclasses import dataclass
 
-from app.ai.sql_tool import error
 from app.application.answers import save_user_facts
 from app.application.ports.storage import open_stores
-from app.domain.contracts import QuestionSessionRef, ToolReply
+from app.domain.contracts import QuestionSessionRef, ToolReply, error
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import re
-import sqlite3
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+from app.application.errors import EmailTaken
 from app.application.ports.identity import (
     AuthSettings,
     KakaoOAuthError,
@@ -110,7 +110,7 @@ async def signup(
         user_id = await asyncio.to_thread(
             storage().users.create_email_user, email, digest, display_name, db_path=db_path
         )
-    except sqlite3.IntegrityError as exc:
+    except EmailTaken as exc:
         raise AuthError("EMAIL_TAKEN", "이미 가입된 이메일입니다.") from exc
     sent = await _send_verification(
         user_id, email, db_path=db_path, mail=mail, auth=auth, client=client

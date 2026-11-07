@@ -7,6 +7,17 @@ from app.application.space import CONFIRMED_UNIT, ensure_space_fits
 from app.shared.canonical import canonical_json
 
 
+def confirmed_space_values(floor, exclusive_area_m2, facilities):
+    values = {}
+    if floor is not None:
+        values["floor"] = floor
+    if exclusive_area_m2 is not None:
+        values["exclusive_area"] = f"{exclusive_area_m2:.2f}".rstrip("0").rstrip(".") + "㎡"
+    if facilities:
+        values["existing_facilities"] = facilities
+    return values or None
+
+
 def save_confirmed_space(scope, values):
     with open_stores(scope.path) as st:
         st.begin_immediate()

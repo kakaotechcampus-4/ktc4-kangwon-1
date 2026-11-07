@@ -855,3 +855,7 @@ def _tool_schema(name, model):
 
     references(schema)
     return schema
+
+
+def error(code, message):
+    return ToolReply(status="error", error=ToolError(code=code, message=message))

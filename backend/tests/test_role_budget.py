@@ -8,11 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.ai import evaluators
 from app.ai.budget import RuntimeBudget
-from app.ai.sql_tool import error
 from app.ai.tools import EVALUATORS, ToolExecutor
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.space import ensure_space_fits
-from app.domain.contracts import FactsResult, ToolReply
+from app.domain.contracts import FactsResult, ToolReply, error
 from app.infrastructure.mock import call
 from app.shared.canonical import canonical_json
 from tests import test_space_fit as space_fixtures

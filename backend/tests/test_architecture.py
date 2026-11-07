@@ -75,6 +75,14 @@ DOMAIN_FORBIDDEN_SHARED = {
 LEAF_MODULES = ("app.application.ports", "app.application.errors")
 DOMAIN_RESOURCES = APP / "domain" / "resources.py"
 ENTRY_POINTS = ("app.main", "app.bootstrap")
+DRIVERS = {"httpx", "openai", "sqlite3"}
+SCORING_MODULES = (
+    "app.application.analysis",
+    "app.application.local_snapshot",
+    "app.application.preflight",
+    "app.application.snapshot",
+    "app.domain.scoring",
+)
 
 
 def module_of(path):
@@ -161,6 +169,27 @@ class ArchitectureTests(unittest.TestCase):
             if "__pycache__" not in path.parts and layer(module_of(path)) is not None
         }
         self.assertEqual({module: names for module, names in found.items() if names}, {})
+
+    def test_only_infrastructure_uses_drivers(self):
+        found = {
+            module_of(path): sorted(
+                DRIVERS & {t.split(".")[0] for t in targets(path, module_of(path))}
+            )
+            for path in APP.rglob("*.py")
+            if "__pycache__" not in path.parts
+            and layer(module_of(path)) != "infrastructure"
+            and module_of(path) not in {"app.main", "app.bootstrap"}
+        }
+        self.assertEqual({module: names for module, names in found.items() if names}, {})
+
+    def test_scoring_path_loads_without_ai(self):
+        imports = "; ".join(f"import {module}" for module in SCORING_MODULES)
+        code = f"import sys; {imports}; print([m for m in sys.modules if m.startswith('app.ai')])"
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "[]")
 
     def test_entry_point_probe_catches_import_forms(self):
         with tempfile.TemporaryDirectory() as folder:

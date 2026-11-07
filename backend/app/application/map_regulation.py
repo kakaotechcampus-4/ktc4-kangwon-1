@@ -4,6 +4,8 @@ import asyncio
 import json
 import os
 import uuid
+from collections import Counter
+from dataclasses import dataclass, field
 
 from app.application.facts import register_fact
 from app.application.ports.places import places as place_services
@@ -14,6 +16,7 @@ from app.domain.contracts import (
     MapResult,
     RegulationResult,
     ToolReply,
+    error,
 )
 from app.domain.geo import polygon_contains_point, to_epsg5181
 from app.domain.industries.catalog import INDUSTRIES
@@ -72,8 +75,6 @@ async def map_search(scope, site, input, shared):
         async with asyncio.timeout(15):
             for query in queries:
                 if not shared.measurement and shared.map_http >= 20:
-                    from app.ai.sql_tool import error
-
                     return error("BUDGET_EXCEEDED", "지도 HTTP 20회 상한입니다.")
                 # 재시도 없는 클라이언트에서 실패한 전송도 예약 횟수에 포함합니다.
                 shared.map_http += 1
@@ -269,3 +270,19 @@ async def check_regulation(scope, site, shared):
         shared.regulation = await run_in_thread(_regulation, scope, site, scan)
         shared.regulation_scan = verified_education_scan(site, scan)
     return shared.regulation
+
+
+@dataclass
+class SharedTools:
+    measurement: bool = False
+    calls: Counter = field(default_factory=Counter)
+    seen: set = field(default_factory=set)
+    replies: dict = field(default_factory=dict)
+    map_cache: dict = field(default_factory=dict)
+    map_keys: set = field(default_factory=set)
+    map_http: int = 0
+    map_client: object = None
+    regulation_lookup: object = None
+    regulation_scan: object = None
+    regulation: object = None
+    observation_lock: asyncio.Lock = field(default_factory=asyncio.Lock)

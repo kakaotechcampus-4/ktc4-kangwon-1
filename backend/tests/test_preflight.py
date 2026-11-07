@@ -7,11 +7,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.ai.preflight import FACILITIES, collect_preflight
 from app.ai.runtime import DecisionLoop
-from app.ai.tools import SharedTools, ToolExecutor
+from app.ai.tools import ToolExecutor
 from app.application.local_snapshot import persist_local
+from app.application.map_regulation import SharedTools
 from app.application.ports.places import MapApiError
+from app.application.preflight import FACILITIES, collect_preflight
 from app.domain.contracts import MapResult, ToolReply
 from app.domain.schemas import AnalysisTask, Site
 from app.domain.scoring import evaluate
@@ -145,7 +146,7 @@ class PreflightTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_storage_and_contract_failures_propagate(self):
         for failure in (RawStorageError("저장 실패"), ValueError("계약 실패")):
-            with patch("app.ai.preflight.map_search", side_effect=failure):
+            with patch("app.application.preflight.map_search", side_effect=failure):
                 with self.assertRaises(type(failure)):
                     await collect_preflight(self.scope, self.site, self.shared)
 

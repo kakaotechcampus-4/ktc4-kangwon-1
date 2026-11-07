@@ -47,7 +47,7 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         first, second = list(self.profiles().values())[:2]
         existing = encode(self.scope, {"fact_id": first})["fact_id"]
         digest = Mock(return_value=SimpleNamespace(hexdigest=lambda: existing + "0" * 56))
-        with patch("app.ai.aliases.sha256", digest):
+        with patch("app.infrastructure.persistence.repository.facts.sha256", digest):
             with self.assertRaisesRegex(ValueError, "8회"):
                 await asyncio.wait_for(
                     asyncio.to_thread(encode, self.scope, {"fact_id": second}), 5

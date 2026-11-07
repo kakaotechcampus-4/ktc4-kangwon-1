@@ -3,14 +3,10 @@
 import csv
 import json
 
-import httpx
-
-from app.ai.map_regulation import check_regulation, map_search
-from app.ai.sql_tool import error
-from app.ai.tools import SharedTools
+from app.application.map_regulation import SharedTools, check_regulation, map_search
 from app.application.ports.places import EducationZoneError, MapApiError, places
 from app.application.ports.storage import open_stores
-from app.domain.contracts import MapSearchInput
+from app.domain.contracts import MapSearchInput, error
 from app.domain.industries import DATA_DIR
 from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
@@ -58,7 +54,7 @@ async def collect_preflight(scope, site, shared=None):
         if key not in shared.map_cache:
             try:
                 shared.map_cache[key] = await map_search(scope, site, input, shared)
-            except (MapApiError, TimeoutError, httpx.TransportError):
+            except (MapApiError, TimeoutError):
                 shared.map_cache[key] = error("MAP_UNAVAILABLE", "필수 시설을 확인하지 못했습니다.")
             shared.map_keys.add(key)
         reply = shared.map_cache[key]
@@ -75,7 +71,7 @@ async def collect_preflight(scope, site, shared=None):
             limitations.append(f"{category} 필수 시설 최근접 거리를 확인하지 못했습니다.")
     try:
         await check_regulation(scope, site, shared)
-    except (EducationZoneError, TimeoutError, httpx.TransportError):
+    except (EducationZoneError, TimeoutError):
         shared.regulation_scan = {
             "status": "error",
             "queried_at": utc_now_iso(),

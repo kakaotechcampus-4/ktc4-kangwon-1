@@ -283,7 +283,7 @@ class LocalAdapterTests(unittest.TestCase):
                             AsyncMock(return_value=loop),
                         ),
                         patch(
-                            "app.ai.engine.collect_preflight",
+                            "app.application.analysis.collect_preflight",
                             AsyncMock(return_value=({}, None)),
                         ),
                     ):

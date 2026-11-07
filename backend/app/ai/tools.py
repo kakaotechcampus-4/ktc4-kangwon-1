@@ -1,19 +1,23 @@
 """요청별 읽기 도구 권한·횟수·중복·감사 기록의 공통 실행 경계입니다."""
 
-import asyncio
 import uuid
-from collections import Counter
-from dataclasses import dataclass, field
 
 from pydantic import TypeAdapter, ValidationError
 
 from app.ai.aliases import decode, decode_report
-from app.ai.map_regulation import check_regulation, map_search
 from app.ai.read_tools import InvalidCursor, get_facts, get_scorecard
-from app.ai.sql_tool import error, query_raw
+from app.ai.sql_tool import query_raw
+from app.application.map_regulation import SharedTools, check_regulation, map_search
 from app.application.ports.places import MapApiError
 from app.application.ports.storage import open_stores
-from app.domain.contracts import EVALUATOR_ACTORS, TOOL_INPUTS, Actor, ToolReply, tool_definitions
+from app.domain.contracts import (
+    EVALUATOR_ACTORS,
+    TOOL_INPUTS,
+    Actor,
+    ToolReply,
+    error,
+    tool_definitions,
+)
 from app.shared.canonical import canonical_hash, canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -53,22 +57,6 @@ def validation_message(model, failure):
         rule = " " + str(context["error"])[:120] if detail["type"] == "value_error" else ""
         issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum + rule)
     return ("입력 오류: " + "; ".join(issues))[:400]
-
-
-@dataclass
-class SharedTools:
-    measurement: bool = False
-    calls: Counter = field(default_factory=Counter)
-    seen: set = field(default_factory=set)
-    replies: dict = field(default_factory=dict)
-    map_cache: dict = field(default_factory=dict)
-    map_keys: set = field(default_factory=set)
-    map_http: int = 0
-    map_client: object = None
-    regulation_lookup: object = None
-    regulation_scan: object = None
-    regulation: object = None
-    observation_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def _audit(scope, call_id, actor, name, arguments, reply):

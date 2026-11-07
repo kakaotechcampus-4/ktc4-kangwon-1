@@ -1,5 +1,4 @@
 from app.ai.budget import RuntimeBudget
-from app.ai.preflight import collect_preflight
 from app.ai.runtime import DecisionLoop
 
 
@@ -7,10 +6,6 @@ class AgenticDecisions:
     @staticmethod
     def budget(*, measurement):
         return RuntimeBudget(measurement=measurement)
-
-    @staticmethod
-    async def preflight(scope, site):
-        return await collect_preflight(scope, site)
 
     @staticmethod
     async def create(scope, site, **options):

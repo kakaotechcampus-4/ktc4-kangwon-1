@@ -1,5 +1,10 @@
 """fact·별칭·공간 비교 포인터를 읽고 씁니다."""
 
+import sqlite3
+from hashlib import sha256
+
+from app.infrastructure.persistence.repository.agentic import begin_immediate
+
 
 def fact_scope_row(db, fact_id, request_id, snapshot_id):
     return db.execute(
@@ -50,7 +55,7 @@ def fact_value_json(db, fact_id, request_id, snapshot_id):
     return None if row is None else row[0]
 
 
-def fact_in_snapshot(db, request_id, snapshot_id, fact_id):
+def _fact_in_snapshot(db, request_id, snapshot_id, fact_id):
     return (
         db.execute(
             "SELECT 1 FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id=?",
@@ -84,7 +89,7 @@ def review_facts(db, request_id, snapshot_id, codes):
     ).fetchall()
 
 
-def alias_named(db, request_id, alias):
+def _alias_named(db, request_id, alias):
     row = db.execute(
         "SELECT alias FROM fact_aliases WHERE request_id=? AND alias=?",
         (request_id, alias),
@@ -92,7 +97,7 @@ def alias_named(db, request_id, alias):
     return None if row is None else row[0]
 
 
-def alias_of_fact(db, request_id, fact_id):
+def _alias_of_fact(db, request_id, fact_id):
     row = db.execute(
         "SELECT alias FROM fact_aliases WHERE request_id=? AND fact_id=?",
         (request_id, fact_id),
@@ -100,11 +105,44 @@ def alias_of_fact(db, request_id, fact_id):
     return None if row is None else row[0]
 
 
-def insert_alias(db, request_id, alias, fact_id):
+def _insert_alias(db, request_id, alias, fact_id):
     db.execute(
         "INSERT INTO fact_aliases(request_id,alias,fact_id) VALUES(?,?,?)",
         (request_id, alias, fact_id),
     )
+
+
+def _alias(db, request_id, snapshot_id, fact_id):
+    existing = _alias_named(db, request_id, fact_id)
+    if existing:
+        return existing
+    row = _alias_of_fact(db, request_id, fact_id)
+    if row:
+        return row
+    if not _fact_in_snapshot(db, request_id, snapshot_id, fact_id):
+        raise ValueError("요청에 없는 fact를 별칭으로 내보낼 수 없습니다.")
+    for counter in range(8):
+        short = sha256(f"{fact_id}:{counter}".encode()).hexdigest()[:8]
+        try:
+            _insert_alias(db, request_id, short, fact_id)
+        except sqlite3.IntegrityError as exc:
+            if exc.sqlite_errorcode not in {
+                sqlite3.SQLITE_CONSTRAINT_UNIQUE,
+                sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY,
+            }:
+                raise
+            row = _alias_of_fact(db, request_id, fact_id)
+            if row:
+                return row
+        else:
+            return short
+    raise ValueError("별칭 충돌 재시도 8회 한도를 초과했습니다.")
+
+
+def aliases_for(db, request_id, snapshot_id, fact_ids):
+    # 먼저 쓰기 권한을 잡아 조회-삽입 사이의 동시 생성 경합을 막습니다.
+    begin_immediate(db)
+    return {fact_id: _alias(db, request_id, snapshot_id, fact_id) for fact_id in fact_ids}
 
 
 def fact_id_by_reference(db, request_id, snapshot_id, reference):

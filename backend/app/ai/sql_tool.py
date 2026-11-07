@@ -7,13 +7,9 @@ from app.application.errors import RawQueryRejected
 from app.application.facts import register_fact
 from app.application.local_snapshot import register_cell
 from app.application.ports.storage import open_stores, storage
-from app.domain.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolError, ToolReply
+from app.domain.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolReply, error
 from app.domain.raw_views import FIELDS, LOCAL_VIEWS, VIEWS
 from app.shared.concurrency import run_in_thread
-
-
-def error(code, message):
-    return ToolReply(status="error", error=ToolError(code=code, message=message))
 
 
 def _projection(sql):
