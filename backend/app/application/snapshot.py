@@ -8,7 +8,7 @@ import uuid
 
 from app.application.errors import RawStorageError
 from app.application.facts import CALC_VERSION, register_fact
-from app.application.inputs import format_snapshot
+from app.application.ports.market import market
 from app.application.ports.storage import open_stores, storage
 from app.domain import code90
 from app.domain.baselines import business_lifecycle as lifecycle_baseline
@@ -19,7 +19,6 @@ from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.scoring import WEIGHTS, evaluate
 from app.domain.space_values import FACILITY_LEVELS, FLOOR_LEVELS
-from app.infrastructure.market_data.local import score_reference
 from app.shared.canonical import canonical_hash, canonical_json, file_sha256
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -60,7 +59,7 @@ def snapshot_config(scope, *, local=False):
                 {
                     "configuration": "code90_reference",
                     "method": code90.METHOD,
-                    "version": score_reference.REFERENCE_VERSION,
+                    "version": market().reference_version,
                 }
             ],
         ),
@@ -458,7 +457,7 @@ def _persist(task, scope, education_scan=None):
             payload={"rows": [scan]},
             secrets=[os.getenv("VWORLD_API_KEY", "")],
         )
-    data, lineage, responses = format_snapshot(task, scope)
+    data, lineage, responses = market().format_snapshot(task, scope)
     data["education_zones"] = scan
     profiles, versions, config_rows = snapshot_config(scope)
     lineage["baseline"], lineage["profiles"] = config_rows

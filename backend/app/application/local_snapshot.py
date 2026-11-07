@@ -3,6 +3,7 @@
 import json
 
 from app.application.facts import register_fact
+from app.application.ports.market import market
 from app.application.ports.storage import open_stores, storage
 from app.application.snapshot import (
     persist_input_facts,
@@ -11,7 +12,6 @@ from app.application.snapshot import (
     snapshot_config,
 )
 from app.domain.scoring import evaluate
-from app.infrastructure.market_data.local.adapter import SOURCE_NAMES
 
 YEAR_QUARTERS = 4
 
@@ -43,7 +43,7 @@ def persist_local(task, scope, adapter, data=None, observations=None):
     storage().provenance.save_snapshot(scope, adapter, task, hashes, data)
     periods = {}
     for version in adapter.versions:
-        periods.setdefault(SOURCE_NAMES[version["source"]], []).append(version["quarter"])
+        periods.setdefault(market().source_names[version["source"]], []).append(version["quarter"])
     metadata = {
         "local_snapshot": scope.snapshot_id,
         "periods": {
@@ -89,7 +89,7 @@ def register_cell(
     return register_fact(
         scope,
         industry_code=row[2],
-        source=SOURCE_NAMES[source],
+        source=market().source_names[source],
         metric=metric,
         value=raw[column],
         unit=unit,

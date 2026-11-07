@@ -1,9 +1,9 @@
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol
 
 from app.application.ports.records import AnswerGate, ResumeContext, SnapshotFacts
+from app.application.ports.slot import Slot
 
 
 class AgenticStore(Protocol):
@@ -181,19 +181,7 @@ class Storage(Protocol):
     def current_capture(self) -> Any: ...
 
 
-_storage: Storage | None = None
-
-
-def configure(storage: Storage) -> None:
-    global _storage
-    _storage = storage
-
-
-def storage() -> Storage:
-    if _storage is None:
-        import_module("app.bootstrap")
-    assert _storage is not None
-    return _storage
+storage: Slot[Storage] = Slot()
 
 
 def open_stores(

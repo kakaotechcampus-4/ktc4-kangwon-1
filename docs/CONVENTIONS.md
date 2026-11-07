@@ -43,7 +43,10 @@ main.py          조립 지점. 설정·DB·라우터를 연결한다
 - 방향 규칙은 `tests/test_architecture.py`가 검사합니다. 아직 남은 예외는 `tests/fixtures/architecture_allowlist.txt`에 있고, 고치면 목록에서 지웁니다(줄어들기만 함).
 - 상대 import는 쓰지 않습니다(ruff TID252).
 - domain은 `os`·`sqlite3`·`httpx`·`asyncio`·`threading` 같은 I/O 모듈을 import하지 않습니다. 코드와 함께 배포되는 기준 CSV는 `domain/resources.py`의 `read_csv`로만 읽습니다. 서울 인구 스냅숏처럼 읽을 때 원문을 기록하는 자료는 호출하는 쪽이 함수로 넘깁니다(`evaluate(..., age_baseline=)`).
-- application·ai는 DB를 직접 열지 않고 `application/ports/storage.py`의 저장 창구(`open_stores(path)`, `storage().requests` 등)를 씁니다. sqlite 구현은 `infrastructure/persistence/stores.py`, 연결은 `app/bootstrap.py`가 합니다. 창구 정의는 저장소 함수 서명과 1:1입니다.
+- application·ai는 DB를 직접 열지 않고 `application/ports/storage.py`의 저장 창구(`open_stores(path)`, `storage().requests` 등)를 씁니다. sqlite 구현은 `infrastructure/persistence/stores.py`, 연결은 `app/bootstrap.py`가 합니다. 창구 정의는 저장소 함수 서명과 1:1이고 `tests/test_storage_port.py`가 검사합니다.
+- 시장 자료(원문→계산 변환, 로컬 자료, 참고 분포 버전)는 `application/ports/market.py`의 `market()` 창구로 씁니다. 구현은 `infrastructure/market_data/service.py`입니다.
+- 창구는 처음 쓰일 때 `app.bootstrap`을 불러 연결합니다. 그래서 계층 모듈은 `app.bootstrap`·`app.main`을 import하지 않습니다(`tests/test_architecture.py`).
+- 시험에서 저장소 함수를 바꿔치기할 때는 `repository/requests.py` 같은 하위 모듈을 patch합니다. 패키지 `repository`가 재수출한 이름을 patch하면 창구에는 반영되지 않습니다.
 
 **계산 함수는 순수하게 둡니다.** `metrics.py`가 네트워크를 모르기 때문에 시험이 빠르고 안정적입니다.
 

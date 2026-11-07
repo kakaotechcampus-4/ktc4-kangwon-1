@@ -13,6 +13,7 @@ from app.ai.questions import save_confirmed_space
 from app.ai.runtime import DecisionLoop
 from app.application.errors import INTERRUPTED_MESSAGE, AnalysisConflictError
 from app.application.local_snapshot import persist_local
+from app.application.ports.market import market
 from app.application.ports.storage import storage
 from app.application.snapshot import persist_snapshot_scores
 from app.domain.schemas import AgentError, AnalysisTask
@@ -20,7 +21,6 @@ from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeErro
 from app.infrastructure.config import BACKEND_DIR
 from app.infrastructure.llm.recording import CallRecording
 from app.infrastructure.llm.session import with_client_session
-from app.infrastructure.market_data.local.adapter import LocalAdapter
 from app.infrastructure.mock import dependencies, generators
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
@@ -199,7 +199,9 @@ async def execute_agentic_analysis(
         await run_in_thread(lambda: storage().requests.mark_running(request_id, db_path=path))
         await _event(path, request_id, "address", "started")
         async with storage().capture(request_id, path) as scope:
-            adapter = await run_in_thread(LocalAdapter, local_data_path) if not mock else None
+            adapter = (
+                await run_in_thread(market().local_data, local_data_path) if not mock else None
+            )
             async with asyncio.timeout(limit):
                 task = await _resolve_and_save_site(path, request_id, address, radius_m, resolve)
                 timings[stage] = monotonic() - started

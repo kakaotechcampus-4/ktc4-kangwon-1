@@ -45,6 +45,7 @@ DOMAIN_FORBIDDEN_IMPORTS = {
 }
 FILE_CALLS = {"open", "read_bytes", "read_text", "write_bytes", "write_text"}
 DOMAIN_RESOURCES = APP / "domain" / "resources.py"
+ENTRY_POINTS = ("app.main", "app.bootstrap")
 
 
 def module_of(path):
@@ -94,6 +95,14 @@ def violations():
     return found
 
 
+def entry_imports(path, module):
+    return [
+        target
+        for target in targets(path, module)
+        if any(target == entry or target.startswith(f"{entry}.") for entry in ENTRY_POINTS)
+    ]
+
+
 def sql_strings(path):
     found = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -118,6 +127,26 @@ class ArchitectureTests(unittest.TestCase):
             and module_of(path) not in {"app", "app.main", "app.bootstrap"}
         ]
         self.assertEqual(loose, [])
+
+    def test_layers_do_not_import_entry_points(self):
+        found = {
+            module_of(path): entry_imports(path, module_of(path))
+            for path in APP.rglob("*.py")
+            if "__pycache__" not in path.parts and layer(module_of(path)) is not None
+        }
+        self.assertEqual({module: names for module, names in found.items() if names}, {})
+
+    def test_entry_point_probe_catches_import_forms(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "probe.py"
+            path.write_text(
+                "from app import bootstrap\nimport app.main\nfrom app.bootstrap import wire\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                entry_imports(path, "app.application.probe"),
+                ["app.bootstrap", "app.main", "app.bootstrap"],
+            )
 
     def test_sql_stays_in_infrastructure(self):
         outside = {

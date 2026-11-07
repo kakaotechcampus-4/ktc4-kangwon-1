@@ -5,7 +5,6 @@ import math
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from app.application.inputs import format_inputs
 from app.domain.geo import haversine_m, to_epsg5181
 from app.domain.population import TrdarArea
 from app.infrastructure.market_data.business_lifecycle.area_resolver import (
@@ -16,6 +15,7 @@ from app.infrastructure.market_data.business_lifecycle.area_resolver import (
 from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS, to_store
 from app.infrastructure.market_data.commercial_area.industries import map_stores
 from app.infrastructure.market_data.floating_population.geo import overlapping_areas
+from app.infrastructure.market_data.inputs import format_inputs
 from app.infrastructure.market_data.local.boundary import boundary_limitations
 from app.infrastructure.market_data.local.database import DataValidationError, default_path
 from app.infrastructure.persistence.connection import readonly
