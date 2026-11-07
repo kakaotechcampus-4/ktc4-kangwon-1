@@ -7,7 +7,7 @@ import os
 import uuid
 
 from app.application.errors import RawStorageError
-from app.application.facts import CALC_VERSION, register_fact
+from app.application.facts import register_fact
 from app.application.ports.market import market
 from app.application.ports.storage import open_stores, storage
 from app.domain import code90
@@ -15,6 +15,7 @@ from app.domain.baselines import business_lifecycle as lifecycle_baseline
 from app.domain.baselines import commercial_area as density_baseline
 from app.domain.baselines import floating_population as population_baseline
 from app.domain.c1_units import NEARBY_UNIT, PROFILE_UNIT, c1_unit
+from app.domain.facts import CALC_VERSION, METRICS, fact_period
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.scoring import WEIGHTS, evaluate
@@ -22,19 +23,6 @@ from app.domain.space_values import FACILITY_LEVELS, FLOOR_LEVELS
 from app.shared.canonical import canonical_hash, canonical_json, file_sha256
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
-
-METRICS = {
-    "D1": ("pattern_fit_index", "배수", "floating_population"),
-    "D2": ("day_fit_index", "배수", "floating_population"),
-    "D3": ("target_age_index", "배수", "floating_population"),
-    "D4": ("yoy_change", "비율", "floating_population"),
-    "C1": ("competition_index", "배수", "commercial_area"),
-    "C4": ("distance_m", "m", "map"),
-    "S1": ("close_rate_ratio", "배수", "business_lifecycle"),
-    "S2": ("net_change_index", "배수", "business_lifecycle"),
-    "S3": ("turnover_ratio", "배수", "business_lifecycle"),
-    "S4": ("close_trend_ratio", "배수", "business_lifecycle"),
-}
 
 
 def snapshot_config(scope, *, local=False):
@@ -337,12 +325,6 @@ def persist_report(scope, report, lineage, responses, version=None):
                     ),
                 )
     return score_id
-
-
-def fact_period(version, source, metric, default):
-    return version.get("metric_periods", {}).get(source, {}).get(metric) or version.get(
-        "periods", {}
-    ).get(source, default)
 
 
 def persist_input_facts(scope, data, lineage, responses, version):

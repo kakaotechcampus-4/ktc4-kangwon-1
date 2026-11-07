@@ -16,8 +16,9 @@ from app.application.ports.llm import LLMHTTPError, LLMResponseError
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
-from app.application.report import ReportInvalid, fact_rows
+from app.application.report import fact_rows
 from app.domain.contracts import EvaluatorReview, ReviewRef, ToolReply
+from app.domain.report import ReportInvalid
 from app.domain.text import has_digit
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso

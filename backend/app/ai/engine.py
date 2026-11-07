@@ -1,6 +1,5 @@
 from app.ai.budget import RuntimeBudget
 from app.ai.preflight import collect_preflight
-from app.ai.questions import save_confirmed_space
 from app.ai.runtime import DecisionLoop
 
 
@@ -12,10 +11,6 @@ class AgenticDecisions:
     @staticmethod
     async def preflight(scope, site):
         return await collect_preflight(scope, site)
-
-    @staticmethod
-    def confirm_space(scope, confirmed_space):
-        return save_confirmed_space(scope, confirmed_space)
 
     @staticmethod
     async def create(scope, site, **options):

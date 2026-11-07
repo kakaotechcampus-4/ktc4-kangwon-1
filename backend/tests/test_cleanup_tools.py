@@ -15,9 +15,10 @@ from app.ai.sql_tool import error, query_raw
 from app.ai.tools import ToolExecutor, _audit
 from app.application.local_snapshot import register_cell
 from app.application.ports.llm_budget import BudgetExceeded
-from app.application.report import ReportInvalid, finalize, validate_l_records
+from app.application.report import finalize, validate_l_records
 from app.domain.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
 from app.domain.raw_views import LOCAL_VIEWS
+from app.domain.report import ReportInvalid
 from app.domain.schemas import Site
 from app.domain.text import has_digit
 from app.infrastructure.market_data.local.adapter import LocalAdapter

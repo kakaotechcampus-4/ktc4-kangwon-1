@@ -7,6 +7,7 @@ import re
 import uuid
 from time import monotonic
 
+from app.application.answers import save_confirmed_space
 from app.application.errors import (
     ADDRESS_INPUT_ERRORS,
     INTERRUPTED_MESSAGE,
@@ -208,7 +209,7 @@ async def execute_agentic_analysis(
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
                 data, shared = await _collect_and_score(scope, task, adapter)
                 confirmed = (
-                    await run_in_thread(decision().confirm_space, scope, confirmed_space)
+                    await run_in_thread(save_confirmed_space, scope, confirmed_space)
                     if confirmed_space
                     else None
                 )

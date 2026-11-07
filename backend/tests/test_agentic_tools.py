@@ -266,7 +266,7 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(item.points)
 
     async def test_scorecard_follows_confirmed_space(self):
-        from app.ai.questions import save_confirmed_space
+        from app.application.answers import save_confirmed_space
         from app.application.snapshot import persist_report
         from app.domain.contracts import ScorecardResult
         from app.domain.scoring import WEIGHTS, apply_space, result, summarize

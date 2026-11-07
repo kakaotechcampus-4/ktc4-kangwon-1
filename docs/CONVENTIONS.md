@@ -50,6 +50,7 @@ main.py          조립 지점. 설정·DB·라우터를 연결한다
 - application은 ai를 직접 import하지 않고 `application/ports/decision.py`의 `decision()` 창구(예산·사전 수집·공간 답 저장·판단 루프 생성/재개)로 부릅니다. 구현은 `ai/engine.py`입니다.
 - AI의 원문 SQL 조회는 입력 검증·응답 조립만 `ai/sql_tool.py`에 두고, 읽기 전용 연결·권한 검사·임시 뷰는 `infrastructure/persistence/raw_query.py`(`storage().raw_query`)가 맡습니다. 뷰 목록과 필드 정의는 `domain/raw_views.py`입니다. 그래서 SQL 문장은 인프라 밖에 없습니다.
 - 주소 확인·건축물대장 조회는 `sites()`, 카카오 로그인·메일은 `identity()`, 데모 모드 대역은 `demo()` 창구로 부릅니다(`application/ports/`). 건축물대장 응답 모델은 `domain/building.py`입니다.
+- application 모듈에는 불러오기·저장만 두고, 같은 입력이면 같은 답을 내는 규칙은 domain에 둡니다: 리포트 문장·순위·조건 제외(`domain/report.py`), 공간 대조(`domain/space_fit.py`), fact 식별값·인용 가능 판정·지표 이름(`domain/facts.py`). 질문 답 저장은 `application/answers.py`입니다.
 - 창구는 처음 쓰일 때 `app.bootstrap`을 불러 연결합니다. 그래서 계층 모듈은 `app.bootstrap`·`app.main`을 import하지 않습니다(`tests/test_architecture.py`).
 - 시험에서 저장소 함수를 바꿔치기할 때는 `repository/requests.py` 같은 하위 모듈을 patch합니다. 패키지 `repository`가 재수출한 이름을 patch하면 창구에는 반영되지 않습니다.
 

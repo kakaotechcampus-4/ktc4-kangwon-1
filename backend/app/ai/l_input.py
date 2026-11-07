@@ -4,8 +4,9 @@ import json
 
 from app.ai.aliases import decode
 from app.application.ports.storage import open_stores
-from app.application.report import RULE_SPACE_MESSAGE, fact_rows, l_grade, rule_scored_space
+from app.application.report import RULE_SPACE_MESSAGE, fact_rows
 from app.domain.contracts import LInput, LRecord
+from app.domain.report import l_grade, rule_scored_space
 from app.domain.text import has_digit
 
 

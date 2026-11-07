@@ -22,14 +22,7 @@ from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
 from app.application.ports.llm_budget import BudgetExceeded, llm_scope
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores, storage
-from app.application.report import (
-    ReportInvalid,
-    complete_l_records,
-    finalize,
-    load_base,
-    recompute_l_scores,
-    validate_l_records,
-)
+from app.application.report import finalize, load_base, recompute_l_scores, validate_l_records
 from app.application.snapshot import persist_space_requirements
 from app.application.space import ensure_space_fits
 from app.domain.contracts import (
@@ -48,6 +41,7 @@ from app.domain.contracts import (
     ToolReply,
 )
 from app.domain.industries.catalog import INDUSTRIES
+from app.domain.report import ReportInvalid, complete_l_records
 from app.domain.scoring import rank_candidates, score_summary
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso

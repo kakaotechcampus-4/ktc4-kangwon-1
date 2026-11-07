@@ -6,12 +6,13 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from app.ai.questions import save_confirmed_space
+from app.application.answers import save_confirmed_space
 from app.application.facts import register_fact
-from app.application.report import complete_l_records, load_base, recompute_l_scores
+from app.application.report import load_base, recompute_l_scores
 from app.application.snapshot import persist_report, persist_space_requirements
 from app.application.space import ensure_space_fits, rule_answers
 from app.domain.industries.catalog import INDUSTRIES
+from app.domain.report import complete_l_records
 from app.domain.scoring import (
     WEIGHTS,
     apply_space,

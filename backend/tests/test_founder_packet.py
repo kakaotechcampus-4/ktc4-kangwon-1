@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from app.ai import evaluators
 from app.ai.aliases import decode
 from app.ai.runtime import DecisionLoop
-from app.application.report import ReportInvalid
 from app.domain.contracts import (
     FactReferenceSegment,
     ReviewIssue,
@@ -15,6 +14,7 @@ from app.domain.contracts import (
     SubmitLInput,
     TextSegment,
 )
+from app.domain.report import ReportInvalid
 from app.infrastructure.persistence.connection import connect
 from app.infrastructure.persistence.raw_capture import capture_scope
 from app.infrastructure.persistence.repository import create_request
@@ -102,7 +102,7 @@ class FounderPacketTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("value", card)
 
     async def test_confirmed_values_keep_states_and_other_request_is_not_read(self):
-        from app.ai.questions import save_confirmed_space
+        from app.application.answers import save_confirmed_space
 
         _, draft = await self.draft()
         values = {

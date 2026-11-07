@@ -4,7 +4,7 @@ import json
 import unittest
 from types import SimpleNamespace
 
-from app.application.report import join_segments, limitation_segments, render_segment
+from app.domain.report import join_segments, limitation_segments, render_segment
 
 
 def fact(metric, value, unit=""):

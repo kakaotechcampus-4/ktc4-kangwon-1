@@ -2,8 +2,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.application.report import industry_ranking, regulation_excluded
 from app.domain.contracts import RankedIndustry, RegulationExcludedIndustry
+from app.domain.report import industry_ranking, regulation_excluded
 from app.domain.scoring import rank_candidates
 
 

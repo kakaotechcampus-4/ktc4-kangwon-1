@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.application.facts import register_fact
-from app.application.report import ReportInvalid, validate_proposal
+from app.application.report import validate_proposal
 from app.domain import scoring
 from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
+from app.domain.report import ReportInvalid
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.raw_capture import capture_scope
 from app.infrastructure.persistence.repository import create_request

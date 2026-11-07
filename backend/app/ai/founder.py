@@ -5,7 +5,8 @@ import json
 from app.ai.aliases import encode
 from app.ai.landlord import _facts
 from app.application.ports.storage import open_stores
-from app.application.report import ReportInvalid, fact_rows
+from app.application.report import fact_rows
+from app.domain.report import ReportInvalid
 from app.shared.canonical import canonical_json
 
 PERSONA = (

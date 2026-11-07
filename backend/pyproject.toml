@@ -63,6 +63,7 @@ ban-relative-imports = "all"
 "app/ai/landlord.py" = ["C901"]
 "app/infrastructure/llm/recording.py" = ["C901"]
 "app/application/report.py" = ["C901", "PLR0915"]
+"app/domain/report.py" = ["C901"]
 "app/ai/runtime.py" = ["C901"]
 "app/domain/scoring.py" = ["C901", "PLR0915"]
 "app/application/snapshot.py" = ["C901"]

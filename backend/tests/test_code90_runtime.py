@@ -13,16 +13,12 @@ from pydantic import ValidationError
 
 from app.ai.read_tools import get_scorecard
 from app.application.facts import register_fact
-from app.application.report import (
-    code90_uses_metric,
-    complete_l_records,
-    load_base,
-    recompute_l_scores,
-)
+from app.application.report import load_base, recompute_l_scores
 from app.application.snapshot import persist_snapshot_scores
 from app.domain import code90
 from app.domain.contracts import GetScorecardInput, LRecord, NewFactor, ScoreItem
 from app.domain.geo import to_epsg5181
+from app.domain.report import code90_uses_metric, complete_l_records
 from app.domain.schemas import AnalysisTask, Site
 from app.domain.scoring import profiles, rank_candidates, result, summarize
 from app.domain.stats import calculate_rate

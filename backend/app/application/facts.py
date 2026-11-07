@@ -5,10 +5,9 @@ import uuid
 from contextlib import nullcontext
 
 from app.application.ports.storage import open_stores
+from app.domain.facts import CALC_VERSION, fact_identity, is_citable
 from app.shared.canonical import canonical_hash, canonical_json
 from app.shared.clock import utc_now_iso
-
-CALC_VERSION = "rubric-v0.8-pr3-2"
 
 
 def register_fact(
@@ -45,23 +44,22 @@ def register_fact(
     parent_fact_ids = sorted(set(parent_fact_ids))
     if status != "observed" and not (status == "unknown" and retain_unknown_value):
         value = None
-    identity = {
-        "industry": industry_code,
-        "source": source,
-        "metric": metric,
-        "value": value,
-        "unit": unit,
-        "status": status,
-        "period": period,
-        "rows": row_ids,
-        "responses": sorted(response_ids),
-        "comparison": comparison,
-        "calc_version": CALC_VERSION,
-        "local_cell": local_cell,
-    }
-    if parent_fact_ids:
-        identity["parents"] = parent_fact_ids
-    identity_hash = canonical_hash(identity)
+    identity_hash = canonical_hash(
+        fact_identity(
+            industry_code=industry_code,
+            source=source,
+            metric=metric,
+            value=value,
+            unit=unit,
+            status=status,
+            period=period,
+            row_ids=row_ids,
+            response_ids=response_ids,
+            comparison=comparison,
+            local_cell=local_cell,
+            parent_fact_ids=parent_fact_ids,
+        )
+    )
     with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
         st.begin_immediate()
         for offset in range(0, len(row_ids), 400):
@@ -82,7 +80,13 @@ def register_fact(
                 raise ValueError("부모 fact의 요청·스냅샷·업종이 다릅니다.")
             if status == "observed" and (parent[1] != "observed" or not parent[2]):
                 raise ValueError("관측 비교에는 인용 가능한 부모 fact가 필요합니다.")
-        citable = status == "observed" and bool(row_ids or response_ids or local or parent_fact_ids)
+        citable = is_citable(
+            status,
+            row_ids=row_ids,
+            response_ids=response_ids,
+            local=local,
+            parent_fact_ids=parent_fact_ids,
+        )
         if status == "observed" and not citable:
             raise ValueError("관측 fact에는 검증 가능한 원문 계보가 필요합니다.")
         old = st.facts.fact_id_by_identity(scope.snapshot_id, identity_hash)
