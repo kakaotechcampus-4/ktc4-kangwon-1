@@ -111,6 +111,38 @@ class ScoringPolicyTests(unittest.TestCase):
         self.assertEqual(score_item("C1", {}, "G204", sample)["status"], "unknown")
 
 
+class SeoulAgeBaselineTests(unittest.TestCase):
+    profile = {"target_population": "상주", "target_age_bands": "20;30"}
+    sample = {
+        "floating_population": {
+            "resident": {"period_code": "20252", "age_share": {"20": 0.3, "30": 0.3}},
+            "population": {"age_share": {"20": 0.1, "30": 0.1}},
+        }
+    }
+
+    def test_d3_asks_injected_seoul_baseline(self):
+        calls = []
+
+        def baseline(kind, quarter):
+            calls.append((kind, quarter))
+            return {"20": 0.2, "30": 0.2}
+
+        row = score_item("D3", self.profile, "I201", self.sample, age_baseline=baseline)
+        self.assertEqual(calls, [("REPOP", "20252")])
+        self.assertEqual(row["value"]["population"], "상주")
+        self.assertAlmostEqual(row["value"]["r"], 1.5)
+
+    def test_d3_without_baseline_falls_back_to_floating(self):
+        row = score_item("D3", self.profile, "I201", self.sample)
+        self.assertEqual(row["value"]["population"], "유동")
+
+    def test_saved_baseline_wins_over_injected(self):
+        sample = {**self.sample, "population_baselines": {"REPOP": {"20": 0.3, "30": 0.3}}}
+        row = score_item("D3", self.profile, "I201", sample, age_baseline=lambda *_: {})
+        self.assertEqual(row["value"]["population"], "상주")
+        self.assertAlmostEqual(row["value"]["r"], 1.0)
+
+
 class C1AgglomerationFieldTests(unittest.TestCase):
     def sample(self):
         from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES

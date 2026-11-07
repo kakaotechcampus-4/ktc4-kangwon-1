@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from app.domain.industries import catalog
 from app.domain.industries.catalog import INDUSTRIES
-from app.infrastructure.market_data.seoul import previous_quarter
+from app.domain.quarters import previous_quarter
 from app.infrastructure.persistence.connection import SQLITE_BUSY_TIMEOUT_MS
 from app.shared.canonical import file_sha256
 from app.shared.clock import utc_now_iso

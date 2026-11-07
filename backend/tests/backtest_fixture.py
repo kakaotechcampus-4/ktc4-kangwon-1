@@ -6,14 +6,9 @@ from app.domain.baselines import business_lifecycle as lifecycle
 from app.domain.baselines import commercial_area as density
 from app.domain.baselines import floating_population as floating
 from app.domain.geo import to_epsg5181
+from app.domain.population import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
 from app.domain.schemas import Site
 from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS
-from app.infrastructure.market_data.floating_population.models import (
-    _AGE_KEYS,
-    _DAY_KEYS,
-    TIME_BANDS,
-    PopulationRecord,
-)
 from app.infrastructure.market_data.local.database import LocalDataDB
 from backtest.baselines import FLOATING
 from tests.local_data_fixture import complete_versions

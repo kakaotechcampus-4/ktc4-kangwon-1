@@ -18,10 +18,10 @@ from app.domain.scoring import (  # noqa: E402,F401
     regulation,
     result,
     score_item,
-    seoul_age_share,
     summarize,
     valid,
 )
+from app.infrastructure.market_data.floating_population.population import seoul_age_share  # noqa: E402,F401
 
 
 def main() -> int:
@@ -42,7 +42,7 @@ def main() -> int:
     ]
     if not samples:
         raise SystemExit("표본 없음: 먼저 승인된 자료를 수집하세요.")
-    reports = [evaluate(s) for s in samples]
+    reports = [evaluate(s, age_baseline=seoul_age_share) for s in samples]
     sensitivities = {}
     for parameter, base in [
         ("coverage_min", 0.75),
@@ -53,7 +53,8 @@ def main() -> int:
     ]:
         sensitivities[parameter] = {
             str(round(base * factor, 3)): [
-                evaluate(s, **{parameter: base * factor})["badges"] for s in samples
+                evaluate(s, age_baseline=seoul_age_share, **{parameter: base * factor})["badges"]
+                for s in samples
             ]
             for factor in [0.8, 0.9, 1, 1.1, 1.2]
         }
@@ -70,7 +71,10 @@ def main() -> int:
         "sensitivity": sensitivities,
         "unimplemented_rules": AMBIGUITIES,
         "lower_threshold_comparison": {
-            str(threshold): [evaluate(s, lower_min=threshold)["badges"] for s in samples]
+            str(threshold): [
+                evaluate(s, age_baseline=seoul_age_share, lower_min=threshold)["badges"]
+                for s in samples
+            ]
             for threshold in [0.60, 0.65, 0.70]
         },
     }

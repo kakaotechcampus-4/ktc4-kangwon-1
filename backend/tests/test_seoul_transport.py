@@ -13,9 +13,9 @@ from app.infrastructure.market_data.floating_population.config import Settings
 
 class SeoulTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_lifecycle_quarters_are_bounded_parallel_and_keep_order(self):
+        from app.domain.quarters import get_recent_quarters
         from app.infrastructure.market_data.business_lifecycle.client import (
             fetch_store_data_for_quarters,
-            get_recent_quarters,
         )
 
         active = peak = 0

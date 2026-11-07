@@ -25,7 +25,7 @@ from app.domain.contracts import GetScorecardInput, LRecord, NewFactor, ScoreIte
 from app.domain.geo import to_epsg5181
 from app.domain.schemas import AnalysisTask, Site
 from app.domain.scoring import profiles, rank_candidates, result, summarize
-from app.infrastructure.market_data.business_lifecycle.preprocess import calculate_rate
+from app.domain.stats import calculate_rate
 from app.infrastructure.market_data.local.score_reference import (
     attach_reference,
     city_reference,

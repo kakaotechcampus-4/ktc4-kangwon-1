@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
+from app.domain.population import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
 from app.infrastructure.market_data.business_lifecycle.area_resolver import (
     BusinessAreaResolverError,
     _read_polygon_record,
@@ -23,12 +24,6 @@ from app.infrastructure.market_data.commercial_area.config import Settings as Co
 from app.infrastructure.market_data.commercial_area.metrics import build_radius_slices
 from app.infrastructure.market_data.commercial_area.schemas import MiddleCode, Store
 from app.infrastructure.market_data.floating_population.metrics import trend
-from app.infrastructure.market_data.floating_population.models import (
-    AGE_BANDS,
-    DAYS,
-    TIME_BANDS,
-    FlpopRecord,
-)
 
 
 def _flpop(quarter: str, total: float) -> FlpopRecord:

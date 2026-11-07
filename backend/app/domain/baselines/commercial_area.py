@@ -23,13 +23,13 @@
 
 from __future__ import annotations
 
-import csv
 import math
 from pathlib import Path
 from typing import Final
 
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
+from app.domain.resources import read_csv
 from app.domain.stats import percentile_rank
 
 # 표본: 서울 상권 1,650곳 · 반경 500m · 소상공인 2026년 1분기 · 단위 개/km²
@@ -95,23 +95,22 @@ def load_density_percentiles(path: Path = DENSITY_PERCENTILES_PATH) -> dict[str,
     """검토된 51업종 CSV를 읽고 누락·중복·잘못된 경계표를 거절합니다."""
     steps = range(5, 100, 5)
     result = {}
-    with path.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames != ["industry_code", *(f"p{p}" for p in steps)]:
-            raise ValueError("밀도 기준선 CSV 열이 일치하지 않습니다.")
-        for row in reader:
-            if None in row or None in row.values():
-                raise ValueError("밀도 기준선 CSV 행의 열 개수가 다릅니다.")
-            code = row["industry_code"]
-            bounds = {p: float(row[f"p{p}"]) for p in steps}
-            values = list(bounds.values())
-            if (
-                code in result
-                or any(not math.isfinite(v) or v < 0 for v in values)
-                or values != sorted(values)
-            ):
-                raise ValueError("밀도 기준선 CSV에 중복 업종·잘못된 경계값이 있습니다.")
-            result[code] = bounds
+    fieldnames, rows = read_csv(path)
+    if fieldnames != ["industry_code", *(f"p{p}" for p in steps)]:
+        raise ValueError("밀도 기준선 CSV 열이 일치하지 않습니다.")
+    for row in rows:
+        if None in row or None in row.values():
+            raise ValueError("밀도 기준선 CSV 행의 열 개수가 다릅니다.")
+        code = row["industry_code"]
+        bounds = {p: float(row[f"p{p}"]) for p in steps}
+        values = list(bounds.values())
+        if (
+            code in result
+            or any(not math.isfinite(v) or v < 0 for v in values)
+            or values != sorted(values)
+        ):
+            raise ValueError("밀도 기준선 CSV에 중복 업종·잘못된 경계값이 있습니다.")
+        result[code] = bounds
     if result.keys() != INDUSTRIES.keys():
         raise ValueError("밀도 기준선 CSV는 51업종 전체가 필요합니다.")
     return result

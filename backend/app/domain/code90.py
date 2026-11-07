@@ -4,9 +4,9 @@ from bisect import bisect_left, bisect_right
 from copy import deepcopy
 from statistics import mean
 
-from app.infrastructure.market_data.business_lifecycle.client import get_recent_quarters
-from app.infrastructure.market_data.business_lifecycle.preprocess import calculate_rate
-from app.infrastructure.market_data.floating_population.models import quarter_days
+from app.domain.population import quarter_days
+from app.domain.quarters import get_recent_quarters
+from app.domain.stats import calculate_rate
 
 METHOD = "S2_half-v1"
 WEIGHTS = {

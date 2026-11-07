@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-from app.infrastructure.market_data.floating_population.models import TrdarArea
+from app.domain.population import TrdarArea
 
 
 def circle_overlap_ratio(distance_m: float, radius_m: float, area_radius_m: float) -> float:

@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from app.domain.population import FlpopRecord, PopulationRecord
 from app.infrastructure.market_data.business_lifecycle.area_resolver import (
     load_shape_features,
     required_shape_paths,
@@ -21,7 +22,6 @@ from app.infrastructure.market_data.commercial_area.industries import (
     incomplete_split_codes,
     map_stores,
 )
-from app.infrastructure.market_data.floating_population.models import FlpopRecord, PopulationRecord
 from app.infrastructure.market_data.local.database import DataValidationError, LocalDataDB
 
 

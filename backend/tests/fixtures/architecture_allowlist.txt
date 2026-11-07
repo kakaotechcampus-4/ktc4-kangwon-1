@@ -39,16 +39,8 @@ app.application.inputs -> app.infrastructure.market_data.commercial_area.industr
 app.application.inputs -> app.infrastructure.market_data.commercial_area.metrics
 app.application.inputs -> app.infrastructure.market_data.floating_population.geo
 app.application.inputs -> app.infrastructure.market_data.floating_population.metrics
-app.application.inputs -> app.infrastructure.market_data.floating_population.models
-app.application.inputs -> app.infrastructure.market_data.floating_population.numeric
 app.application.inputs -> app.infrastructure.market_data.floating_population.population
 app.application.local_snapshot -> app.infrastructure.market_data.local.adapter
 app.application.report -> app.ai.read_tools
 app.application.snapshot -> app.infrastructure.market_data.local.score_reference
-app.domain.baselines.floating_population -> app.infrastructure.market_data.floating_population.models
-app.domain.code90 -> app.infrastructure.market_data.business_lifecycle.client
-app.domain.code90 -> app.infrastructure.market_data.business_lifecycle.preprocess
-app.domain.code90 -> app.infrastructure.market_data.floating_population.models
-app.domain.scoring -> app.infrastructure.market_data.floating_population.models
-app.domain.scoring -> app.infrastructure.market_data.floating_population.population
 app.infrastructure.market_data.local.adapter -> app.application.inputs

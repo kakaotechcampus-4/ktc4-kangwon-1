@@ -8,23 +8,17 @@ from app.domain.industries.catalog import EXCLUDED_SEOUL_INDUSTRIES, INDUSTRY_TO
 from app.domain.industries.catalog import INDUSTRIES as SERVICE_INDUSTRIES
 from app.domain.industries.catalog import INDUSTRIES_WITHOUT_SEOUL as UNSUPPORTED_SERVICE_INDUSTRIES
 from app.domain.industries.catalog import SEOUL_TO_INDUSTRY as SEOUL_TO_SERVICE
+from app.domain.quarters import get_recent_quarters
+from app.domain.stats import calculate_rate
 from app.infrastructure.market_data.business_lifecycle.client import (
     SeoulOpenAPINoDataError,
     fetch_recent_store_data,
-    get_recent_quarters,
 )
 from app.infrastructure.market_data.business_lifecycle.config import Settings
 
 
 class UpstreamDataError(ValueError):
     """외부 자료의 숫자·범위·매핑이 올바르지 않습니다."""
-
-
-def calculate_rate(numerator: float, denominator: float) -> float | None:
-    """결측 분자와 분모 0은 관측된 비율 0과 구분합니다."""
-    if pd.isna(numerator) or pd.isna(denominator) or denominator <= 0:
-        return None
-    return round(numerator / denominator * 100, 2)
 
 
 def _number(value: Any, *, count: bool) -> float:

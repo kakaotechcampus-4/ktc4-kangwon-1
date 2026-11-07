@@ -15,12 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import httpx  # noqa: E402
 
 from app.domain.industries.catalog import INDUSTRIES_WITHOUT_SEOUL  # noqa: E402
+from app.domain.quarters import get_recent_quarters  # noqa: E402
 from app.infrastructure.config import load_environment  # noqa: E402
-from app.infrastructure.market_data.business_lifecycle.client import (  # noqa: E402
-    get_api_key,
-    get_recent_quarters,
-    normalize_row,
-)
+from app.infrastructure.market_data.business_lifecycle.client import get_api_key, normalize_row  # noqa: E402
 from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows  # noqa: E402
 from app.infrastructure.market_data.seoul import request_json  # noqa: E402
 

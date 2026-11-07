@@ -21,16 +21,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.domain.baselines import floating_population as baseline  # noqa: E402
+from app.domain.population import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord, quarter_days  # noqa: E402
 from app.infrastructure.config import load_environment  # noqa: E402
 from app.infrastructure.market_data.floating_population.client import SeoulOpenDataClient  # noqa: E402
 from app.infrastructure.market_data.floating_population.metrics import aggregate  # noqa: E402
-from app.infrastructure.market_data.floating_population.models import (  # noqa: E402
-    AGE_BANDS,
-    DAYS,
-    TIME_BANDS,
-    FlpopRecord,
-    quarter_days,
-)
 
 REFERENCE_QUARTER = "20262"
 PERCENTILES = tuple(range(5, 100, 5))

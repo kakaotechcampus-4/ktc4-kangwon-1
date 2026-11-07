@@ -2,6 +2,8 @@
 
 from collections.abc import Mapping
 
+import pandas as pd
+
 
 def percentile_rank(value: float, thresholds: Mapping[int, float]) -> float:
     boundaries = sorted(thresholds.items())
@@ -16,3 +18,10 @@ def percentile_rank(value: float, thresholds: Mapping[int, float]) -> float:
             return prev_p + share * (p - prev_p)
         prev_p, prev_v = p, v
     return float(prev_p)
+
+
+def calculate_rate(numerator: float, denominator: float) -> float | None:
+    """결측 분자와 분모 0은 관측된 비율 0과 구분합니다."""
+    if pd.isna(numerator) or pd.isna(denominator) or denominator <= 0:
+        return None
+    return round(numerator / denominator * 100, 2)

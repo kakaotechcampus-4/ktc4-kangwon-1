@@ -10,22 +10,22 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
+from app.domain.population import (
+    AGE_BANDS,
+    DAYS,
+    RESIDENT_KIND,
+    TIME_BANDS,
+    WORKER_KIND,
+    FlpopRecord,
+    PopulationRecord,
+)
 from app.infrastructure.market_data.floating_population import population
 from app.infrastructure.market_data.floating_population.client import (
     SeoulOpenApiError,
     SeoulOpenDataClient,
 )
 from app.infrastructure.market_data.floating_population.config import Settings
-from app.infrastructure.market_data.floating_population.models import (
-    AGE_BANDS,
-    DAYS,
-    TIME_BANDS,
-    FlpopRecord,
-    PopulationRecord,
-)
 from app.infrastructure.market_data.floating_population.population import (
-    RESIDENT_KIND,
-    WORKER_KIND,
     load_snapshot,
     resident_block,
     summary_block,

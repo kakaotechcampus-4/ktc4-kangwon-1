@@ -13,19 +13,6 @@ class SeoulOpenApiTimeout(SeoulOpenApiError):
     """연결 오류와 구분하는 안전한 시간 초과입니다."""
 
 
-def previous_quarter(code: str) -> str:
-    return shift_quarter(code, -1)
-
-
-def shift_quarter(code: str, count: int) -> str:
-    """YYYYQ 분기를 이동합니다. 양수는 이후, 음수는 이전 분기입니다."""
-    if len(code) != 5 or not code.isdigit() or code[-1] not in "1234":
-        raise ValueError("분기는 YYYYQ 형식이어야 합니다.")
-    year, quarter = int(code[:4]), int(code[-1])
-    index = year * 4 + quarter - 1 + count
-    return f"{index // 4}{index % 4 + 1}"
-
-
 async def request_json(
     http: httpx.AsyncClient,
     *,

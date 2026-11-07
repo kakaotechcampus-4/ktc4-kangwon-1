@@ -11,6 +11,8 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 
+from app.domain.numeric import complete_sum, ratio, rounded
+
 TIME_BANDS = ("00_06", "06_11", "11_14", "14_17", "17_21", "21_24")
 # 구간 길이가 3~6시간으로 다르다. 총량을 그대로 비교하면 6시간짜리 00~06시가 거의 항상 1위가 되므로
 # 시간대 비교는 반드시 시간당 값으로 한다 (실데이터에서 확인된 왜곡).
@@ -195,3 +197,14 @@ class FlpopRecord(BaseModel):
             by_day={d: _num(row, k) for d, k in _DAY_KEYS.items()},
             by_age={a: _num(row, k) for a, k in _AGE_KEYS.items()},
         )
+
+
+RESIDENT_KIND = "REPOP"
+WORKER_KIND = "WRC_POPLTN"
+
+
+def age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
+    total = complete_sum(r.total for r in records)
+    return {
+        a: rounded(ratio(complete_sum(r.by_age[a] for r in records), total), 4) for a in AGE_BANDS
+    }

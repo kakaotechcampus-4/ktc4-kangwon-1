@@ -9,14 +9,9 @@ from unittest.mock import patch
 
 from app.application.local_snapshot import metric_periods, persist_local, register_cell
 from app.domain.geo import to_epsg5181
+from app.domain.population import _AGE_KEYS, _DAY_KEYS, TIME_BANDS, PopulationRecord
 from app.domain.schemas import AnalysisTask, Site
 from app.infrastructure.market_data.commercial_area.client import CSV_FIELDS
-from app.infrastructure.market_data.floating_population.models import (
-    _AGE_KEYS,
-    _DAY_KEYS,
-    TIME_BANDS,
-    PopulationRecord,
-)
 from app.infrastructure.market_data.local.adapter import LocalAdapter
 from app.infrastructure.market_data.local.database import LocalDataDB
 from app.infrastructure.persistence import repository

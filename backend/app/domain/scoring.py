@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 import math
 from bisect import bisect_right
 from collections import Counter
-from functools import cache
+from collections.abc import Callable
 from typing import Any, TypeGuard
 
 from app.domain import code90
@@ -20,14 +19,9 @@ from app.domain.baselines.business_lifecycle import (
 from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
+from app.domain.population import RESIDENT_KIND, WORKER_KIND, quarter_days
+from app.domain.resources import read_csv
 from app.domain.space_rules import judge, load_requirements
-from app.infrastructure.market_data.floating_population.models import quarter_days
-from app.infrastructure.market_data.floating_population.population import (
-    RESIDENT_KIND,
-    WORKER_KIND,
-    age_share,
-    load_snapshot,
-)
 
 WEIGHTS = {
     "D1": 10,
@@ -70,14 +64,14 @@ def result(
     return out
 
 
-@cache
-def seoul_age_share(kind: str, quarter: str) -> dict:
-    records = [r for r in load_snapshot(kind) if r.stdr_yyqu_cd == quarter]
-    return age_share(records) if records else {}
-
-
 def score_item(
-    item: str, profile: dict, code: str, data: dict, exposure_min: float = 40, c1_alpha: float = 0.5
+    item: str,
+    profile: dict,
+    code: str,
+    data: dict,
+    exposure_min: float = 40,
+    c1_alpha: float = 0.5,
+    age_baseline: Callable[[str, str], dict] | None = None,
 ):
     baseline: Any
     row: Any
@@ -202,7 +196,8 @@ def score_item(
             snapshot_kind = RESIDENT_KIND if kind == "상주" else WORKER_KIND
             baseline = data.get("population_baselines", {}).get(snapshot_kind)
             if baseline is None:
-                baseline = seoul_age_share(snapshot_kind, block.get("period_code", ""))
+                period = block.get("period_code", "")
+                baseline = age_baseline(snapshot_kind, period) if age_baseline else {}
             if not all(valid(local.get(age)) and valid(baseline.get(age)) for age in ages):
                 local = pop.get("age_share", {})
                 baseline = population_baseline.AGE_SHARE_AVG
@@ -471,8 +466,7 @@ AGGLOMERATION_TYPES = ("모임형", "근처형", "무관")
 
 
 def profiles() -> dict:
-    with (DATA_DIR / "industry_profile.csv").open(encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f))
+    _, rows = read_csv(DATA_DIR / "industry_profile.csv")
     if any(r["reviewed_v2"] != "true" for r in rows):
         raise ValueError("미승인 프로필")
     for r in rows:
@@ -530,6 +524,7 @@ def evaluate(
     c1_alpha=0.5,
     profile_rows=None,
     space_answers: dict | None = None,
+    age_baseline: Callable[[str, str], dict] | None = None,
     **thresholds,
 ) -> dict:
     rows = []
@@ -541,7 +536,7 @@ def evaluate(
     eligible = reference.get("samples", []) if reference_ok else []
     for code, profile in (profiles() if profile_rows is None else profile_rows).items():
         items = {
-            item: score_item(item, profile, code, sample, exposure_min, c1_alpha)
+            item: score_item(item, profile, code, sample, exposure_min, c1_alpha, age_baseline)
             for item in WEIGHTS
         }
         components = {

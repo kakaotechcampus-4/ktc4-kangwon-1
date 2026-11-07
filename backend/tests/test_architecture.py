@@ -29,6 +29,22 @@ SQL = re.compile(
     re.IGNORECASE,
 )
 SQL_OUTSIDE_INFRASTRUCTURE = {"app/ai/sql_tool.py"}
+DOMAIN_FORBIDDEN_IMPORTS = {
+    "asyncio",
+    "contextvars",
+    "httpx",
+    "openai",
+    "os",
+    "shutil",
+    "socket",
+    "sqlite3",
+    "subprocess",
+    "tempfile",
+    "threading",
+    "urllib",
+}
+FILE_CALLS = {"open", "read_bytes", "read_text", "write_bytes", "write_text"}
+DOMAIN_RESOURCES = APP / "domain" / "resources.py"
 
 
 def module_of(path):
@@ -147,6 +163,31 @@ class ArchitectureTests(unittest.TestCase):
                 for alias in node.names:
                     with self.subTest(name=alias.name):
                         self.assertFalse(alias.name.startswith("_"))
+
+    def test_domain_has_no_io_imports(self):
+        for path in sorted((APP / "domain").rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                    names = [node.module]
+                for name in names:
+                    with self.subTest(path=path.name, module=name):
+                        self.assertNotIn(name.split(".")[0], DOMAIN_FORBIDDEN_IMPORTS)
+
+    def test_domain_reads_files_only_through_resources(self):
+        for path in sorted((APP / "domain").rglob("*.py")):
+            if path == DOMAIN_RESOURCES:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+                    with self.subTest(path=path.name, line=node.lineno):
+                        self.assertNotIn(name, FILE_CALLS)
 
     def test_mock_imports_in_fresh_process(self):
         result = subprocess.run(

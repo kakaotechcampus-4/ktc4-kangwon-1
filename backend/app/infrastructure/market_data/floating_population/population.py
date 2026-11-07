@@ -27,13 +27,16 @@ import io
 from pathlib import Path
 
 from app.domain.baselines.floating_population import index
-from app.infrastructure.market_data.floating_population.models import (
+from app.domain.numeric import complete_sum, ratio, rounded
+from app.domain.population import (
     AGE_BANDS,
+    RESIDENT_KIND,
+    WORKER_KIND,
     FlpopRecord,
     PopulationRecord,
+    age_share,
     period_ko,
 )
-from app.infrastructure.market_data.floating_population.numeric import complete_sum, ratio, rounded
 from app.infrastructure.market_data.floating_population.schemas import (
     PopulationBenchmark,
     PopulationSummary,
@@ -41,9 +44,6 @@ from app.infrastructure.market_data.floating_population.schemas import (
     WorkerPopulation,
 )
 from app.infrastructure.persistence.raw_capture import current_capture
-
-RESIDENT_KIND = "REPOP"
-WORKER_KIND = "WRC_POPLTN"
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SNAPSHOT_PATHS = {RESIDENT_KIND: DATA_DIR / "resident.csv", WORKER_KIND: DATA_DIR / "worker.csv"}
@@ -114,13 +114,6 @@ def _read(kind: str, path: Path) -> list[PopulationRecord]:
             payload={"rows": rows},
         )
     return [PopulationRecord.from_api_row(row, kind) for row in rows]
-
-
-def age_share(records: list[PopulationRecord]) -> dict[str, float | None]:
-    total = complete_sum(r.total for r in records)
-    return {
-        a: rounded(ratio(complete_sum(r.by_age[a] for r in records), total), 4) for a in AGE_BANDS
-    }
 
 
 def _persons_per_household(records: list[PopulationRecord]) -> float | None:
@@ -255,3 +248,9 @@ def summary_block(
             f"그 사이 혼재 (서울 {len(both):,}곳 기준). type 과 별개"
         ),
     )
+
+
+@functools.cache
+def seoul_age_share(kind: str, quarter: str) -> dict:
+    records = [r for r in load_snapshot(kind) if r.stdr_yyqu_cd == quarter]
+    return age_share(records) if records else {}

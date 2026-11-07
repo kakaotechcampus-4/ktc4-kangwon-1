@@ -1,10 +1,10 @@
 """확인 화면 공간 값과 업종 요건으로 제외·순위 조정·안내를 정합니다."""
 
-import csv
 from dataclasses import dataclass
 from functools import cache
 
 from app.domain.industries import DATA_DIR
+from app.domain.resources import read_csv
 from app.domain.space_values import GROUND_LEVELS, area_fit, floor_number
 
 FACILITY_NAMES = {"kitchen": "주방", "ventilation": "배기(덕트)", "water_supply": "급배수"}
@@ -23,9 +23,8 @@ class SpaceJudgement:
 
 @cache
 def load_requirements() -> dict[str, dict]:
-    path = DATA_DIR / "industry_space_requirements.csv"
-    with path.open(encoding="utf-8-sig", newline="") as handle:
-        return {row["industry_code"]: row for row in csv.DictReader(handle)}
+    _, rows = read_csv(DATA_DIR / "industry_space_requirements.csv")
+    return {row["industry_code"]: row for row in rows}
 
 
 def _ground_penalty(floor: int) -> int:

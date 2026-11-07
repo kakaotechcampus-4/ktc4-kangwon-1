@@ -20,9 +20,10 @@ from datetime import date
 
 import httpx
 
+from app.domain.population import FlpopRecord, TrdarArea
+from app.domain.quarters import previous_quarter
 from app.infrastructure.market_data.floating_population.config import Settings
-from app.infrastructure.market_data.floating_population.models import FlpopRecord, TrdarArea
-from app.infrastructure.market_data.seoul import SeoulOpenApiError, previous_quarter, request_json
+from app.infrastructure.market_data.seoul import SeoulOpenApiError, request_json
 
 
 class MissingApiKeyError(RuntimeError):

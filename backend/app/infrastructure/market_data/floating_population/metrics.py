@@ -3,8 +3,8 @@
 from typing import Literal
 
 from app.domain.baselines import floating_population as baseline
-from app.infrastructure.market_data.floating_population.geo import circle_overlap_ratio
-from app.infrastructure.market_data.floating_population.models import (
+from app.domain.numeric import complete_sum, ratio, rounded
+from app.domain.population import (
     AGE_BANDS,
     DAYS,
     TIME_BAND_HOURS,
@@ -16,7 +16,8 @@ from app.infrastructure.market_data.floating_population.models import (
     period_ko,
     quarter_days,
 )
-from app.infrastructure.market_data.floating_population.numeric import complete_sum, ratio, rounded
+from app.domain.quarters import shift_quarter
+from app.infrastructure.market_data.floating_population.geo import circle_overlap_ratio
 from app.infrastructure.market_data.floating_population.schemas import (
     Benchmark,
     Population,
@@ -26,7 +27,6 @@ from app.infrastructure.market_data.floating_population.schemas import (
     Reliability,
     Trend,
 )
-from app.infrastructure.market_data.seoul import shift_quarter
 
 
 def aggregate(records: list[FlpopRecord], quarter: str) -> Population:

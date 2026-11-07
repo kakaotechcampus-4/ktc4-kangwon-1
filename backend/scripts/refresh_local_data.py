@@ -20,6 +20,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.domain.quarters import previous_quarter  # noqa: E402
 from app.infrastructure.config import BACKEND_DIR, load_environment  # noqa: E402
 from app.infrastructure.market_data.business_lifecycle.config import Settings as LifecycleSettings  # noqa: E402
 from app.infrastructure.market_data.floating_population.config import (  # noqa: E402
@@ -44,7 +45,7 @@ from app.infrastructure.market_data.local.refresh import (  # noqa: E402
     shape_rows,
     store_rows,
 )
-from app.infrastructure.market_data.seoul import previous_quarter, request_json  # noqa: E402
+from app.infrastructure.market_data.seoul import request_json  # noqa: E402
 from scripts.build_density_baseline import CSV_FIELDS  # noqa: E402
 
 SERVICES = {

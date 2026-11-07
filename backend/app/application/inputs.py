@@ -9,6 +9,16 @@ from app.application.ports.storage import open_stores
 from app.domain.geo import to_epsg5181
 from app.domain.industries.catalog import SEOUL_TO_INDUSTRY
 from app.domain.industries.lookup import service_code
+from app.domain.numeric import complete_sum
+from app.domain.population import (
+    RESIDENT_KIND,
+    WORKER_KIND,
+    FlpopRecord,
+    PopulationRecord,
+    TrdarArea,
+    age_share,
+    quarter_days,
+)
 from app.infrastructure.market_data.business_lifecycle.client import normalize_row
 from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows
 from app.infrastructure.market_data.commercial_area.client import (
@@ -32,17 +42,7 @@ from app.infrastructure.market_data.floating_population.metrics import (
     daily_benchmark,
     trend,
 )
-from app.infrastructure.market_data.floating_population.models import (
-    FlpopRecord,
-    PopulationRecord,
-    TrdarArea,
-    quarter_days,
-)
-from app.infrastructure.market_data.floating_population.numeric import complete_sum
 from app.infrastructure.market_data.floating_population.population import (
-    RESIDENT_KIND,
-    WORKER_KIND,
-    age_share,
     resident_block,
     worker_block,
 )
