@@ -1,7 +1,5 @@
 """로컬 계산 자료를 기존 채점·fact 저장기에 넘깁니다."""
 
-import json
-
 from app.application.facts import register_fact
 from app.application.ports.market import market
 from app.application.ports.storage import open_stores, storage
@@ -54,7 +52,7 @@ def persist_local(task, scope, adapter, data=None, observations=None):
     }
     persist_input_facts(scope, data, {}, [], metadata)
     report = evaluate(data, profile_rows=profiles)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         map_rows = st.raw.map_row_ids(scope.request_id, scope.snapshot_id)
     score_id = persist_report(scope, report, {"map": map_rows}, [], metadata)
     return data, report, score_id
@@ -81,14 +79,14 @@ def register_cell(
     row = adapter.cell_row(source, version_id, row_key)
     if row is None:
         raise ValueError("원문 행 없음")
-    raw = dict(zip(json.loads(row[1]), json.loads(row[0]), strict=True))
+    raw = row.values
     if column not in raw or raw[column] is None:
         raise ValueError("원문 열 없음")
     if expected_value is not None and raw[column] != expected_value:
         raise ValueError("SQL 반환값과 원문 셀 값 불일치")
     return register_fact(
         scope,
-        industry_code=row[2],
+        industry_code=row.industry_code,
         source=market().source_names[source],
         metric=metric,
         value=raw[column],

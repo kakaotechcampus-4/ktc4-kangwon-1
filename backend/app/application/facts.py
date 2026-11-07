@@ -60,8 +60,8 @@ def register_fact(
             parent_fact_ids=parent_fact_ids,
         )
     )
-    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
-        st.begin_immediate()
+    with open_stores(scope) if stores is None else nullcontext(stores) as st:
+        st.begin_write()
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()

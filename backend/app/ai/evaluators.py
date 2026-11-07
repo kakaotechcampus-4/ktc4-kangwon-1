@@ -60,7 +60,7 @@ def _without_fit_checks(definitions):
 
 
 def save_review(scope, review):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         st.agentic.insert_review(
             request_id=scope.request_id,
             snapshot_id=scope.snapshot_id,

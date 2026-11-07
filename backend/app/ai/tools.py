@@ -60,7 +60,7 @@ def validation_message(model, failure):
 
 
 def _audit(scope, call_id, actor, name, arguments, reply):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         st.agentic.insert_tool_call(
             tool_call_id=call_id,
             request_id=scope.request_id,
@@ -75,7 +75,7 @@ def _audit(scope, call_id, actor, name, arguments, reply):
 
 
 def previous_reply(scope, actor, name, signature):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         rows = st.agentic.tool_call_history(scope.request_id, scope.snapshot_id, actor, name)
     for row in rows:
         try:
@@ -91,7 +91,7 @@ def previous_reply(scope, actor, name, signature):
 
 
 def space_revision(scope):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         fact_ids = st.facts.current_space_fit_ids(scope.request_id, scope.snapshot_id)
     return canonical_hash(fact_ids)
 

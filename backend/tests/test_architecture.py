@@ -221,6 +221,38 @@ class ArchitectureTests(unittest.TestCase):
         }
         self.assertEqual(sorted(found), [])
 
+    def test_api_and_ai_do_not_know_where_data_lives(self):
+        found = {
+            f"{path.relative_to(APP)}:{line}:{name}"
+            for path in layer_files("ai", "api")
+            for line, name in identifiers(path)
+            if name == "db_path"
+        }
+        found |= {
+            f"{path.relative_to(APP)}:{node.lineno}:path"
+            for path in layer_files("ai")
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            if isinstance(node, ast.Attribute) and node.attr == "path"
+        }
+        self.assertEqual(sorted(found), [])
+
+    def test_application_errors_do_not_carry_http_status(self):
+        found = set()
+        for path in layer_files("application"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = (
+                    node.func.id
+                    if isinstance(node.func, ast.Name)
+                    else getattr(node.func, "attr", "")
+                )
+                if name.endswith(("Failed", "Rejected", "Error")) and any(
+                    isinstance(arg, ast.Constant) and arg.value in HTTP_STATUS for arg in node.args
+                ):
+                    found.add(f"{path.relative_to(APP)}:{node.lineno}:{name}")
+        self.assertEqual(sorted(found), [])
+
     def test_entry_point_probe_catches_import_forms(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "probe.py"

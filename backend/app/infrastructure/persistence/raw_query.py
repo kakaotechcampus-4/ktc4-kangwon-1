@@ -1,11 +1,12 @@
 import json
 import math
+import re
 import sqlite3
 from time import monotonic
 
 from app.application.errors import RawQueryRejected
 from app.domain.geo import haversine_m
-from app.domain.raw_views import FIELDS, LOCAL_VIEWS, VIEWS
+from app.domain.raw_views import FIELDS, LINEAGE_COLUMN, LOCAL_VIEWS, VERSION_COLUMN, VIEWS
 from app.infrastructure.persistence.connection import readonly
 
 FUNCTIONS = {
@@ -177,7 +178,15 @@ def local_views(db, scope, snapshot, adapter):
     return mappings
 
 
-def run_query(scope, sql, params, *, max_rows, snapshot, adapter):
+def _with_column(sql, column, alias):
+    return re.sub(r"\bFROM\b", f", {column} AS {alias} FROM", sql, count=1, flags=re.I)
+
+
+def run_query(scope, sql, params, *, max_rows, snapshot, adapter, lineage=False, version=False):
+    if lineage:
+        sql = _with_column(sql, "raw_row_id", LINEAGE_COLUMN)
+    if version:
+        sql = _with_column(sql, "version_id", VERSION_COLUMN)
     deadline = monotonic() + 2
     timed_out = False
 

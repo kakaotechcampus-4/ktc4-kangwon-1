@@ -120,7 +120,7 @@ def _cited(segments):
 
 def load(scope, draft):
     """점수표 문항·문항별 fact·인용 가능 여부를 한 번에 읽습니다."""
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         summary = st.scores.score_rows(draft.score_snapshot_id)
         if summary is None:
             raise ValueError("초안의 점수표가 없습니다.")

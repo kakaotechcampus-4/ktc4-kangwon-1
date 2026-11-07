@@ -19,8 +19,8 @@ def confirmed_space_values(floor, exclusive_area_m2, facilities):
 
 
 def save_confirmed_space(scope, values):
-    with open_stores(scope.path) as st:
-        st.begin_immediate()
+    with open_stores(scope) as st:
+        st.begin_write()
         response = scope.record_sync(
             source="user",
             source_type="api",
@@ -50,8 +50,8 @@ def save_confirmed_space(scope, values):
 
 
 def save_user_facts(scope, answers, question_id, saved):
-    with open_stores(scope.path) as st:
-        st.begin_immediate()
+    with open_stores(scope) as st:
+        st.begin_write()
         question = st.agentic.question_status(question_id)
         if question is None or question != "waiting":
             raise AnalysisConflictError("이미 답변한 질문입니다.")

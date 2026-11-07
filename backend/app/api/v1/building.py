@@ -5,11 +5,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.v1.deps import current_user
-from app.api.v1.jobs import is_mock
+from app.application.analysis import is_mock
 from app.application.building import BuildingLookupFailed, lookup
 from app.domain.building import BuildingRegistry
 
 router = APIRouter(prefix="/api/v1", tags=["building"])
+FAILURE_STATUS = {
+    "invalid_address": 400,
+    "address_service": 502,
+    "rate_limit": 429,
+    "timeout": 504,
+    "auth": 502,
+    "upstream": 502,
+}
 
 
 @router.get(
@@ -36,4 +44,4 @@ async def get_building_registry(
     try:
         return await lookup(address, mock=is_mock(mock))
     except BuildingLookupFailed as exc:
-        raise HTTPException(exc.status, exc.message) from exc.__cause__
+        raise HTTPException(FAILURE_STATUS[exc.reason], exc.message) from exc.__cause__

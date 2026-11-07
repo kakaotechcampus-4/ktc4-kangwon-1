@@ -60,7 +60,7 @@ class SqliteStores:
         self.scores = cast(ScoreStore, _Bound(scores, db))
         self.raw = cast(RawStore, _Bound(raw, db))
 
-    def begin_immediate(self) -> None:
+    def begin_write(self) -> None:
         begin_immediate(self.db)
 
     def pin_provenance(self, *args: Any, **kwargs: Any) -> Any:
@@ -80,8 +80,10 @@ class SqliteStorage:
     raw_query = staticmethod(raw_query.run_query)
 
     @contextmanager
-    def stores(self, path: str | Path | None, *, immediate: bool = False) -> Iterator[Stores]:
+    def stores(self, path: str | Path | None) -> Iterator[Stores]:
         with connect(path) as db:
-            if immediate:
-                begin_immediate(db)
             yield SqliteStores(db)
+
+    @staticmethod
+    def error_name(error: BaseException) -> str:
+        return getattr(error, "sqlite_errorname", type(error).__name__)

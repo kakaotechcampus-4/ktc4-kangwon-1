@@ -54,7 +54,7 @@ def _walk(value, translate, key=None):
 def encode(scope, value):
     references = set()
     _walk(value, lambda fid: references.add(fid) or fid)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         resolved = st.facts.aliases_for(scope.request_id, scope.snapshot_id, sorted(references))
     return _walk(value, resolved.__getitem__)
 
@@ -78,7 +78,7 @@ def encode_messages(scope, messages, label=False):
 
 
 def decode(scope, value):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
 
         def original(reference):
             if not isinstance(reference, str):

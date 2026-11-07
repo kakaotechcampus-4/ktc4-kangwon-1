@@ -8,7 +8,7 @@ from app.application.facts import register_fact
 from app.application.local_snapshot import register_cell
 from app.application.ports.storage import open_stores, storage
 from app.domain.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolReply, error
-from app.domain.raw_views import FIELDS, LOCAL_VIEWS, VIEWS
+from app.domain.raw_views import FIELDS, LINEAGE_COLUMN, LOCAL_VIEWS, VERSION_COLUMN, VIEWS
 from app.shared.concurrency import run_in_thread
 
 
@@ -57,34 +57,34 @@ def _query(scope, input):
         view
         and view != "v_ref_district_counts"
         and raw_alias is None
-        and "__server_lineage__" not in projection
+        and LINEAGE_COLUMN not in projection
     ):
-        hidden = raw_alias = "__server_lineage__"
-        sql = re.sub(
-            r"\bFROM\b", ", raw_row_id AS __server_lineage__ FROM", sql, count=1, flags=re.I
-        )
-    if is_local:
-        sql = re.sub(
-            r"\bFROM\b", ", version_id AS __server_version__ FROM", sql, count=1, flags=re.I
-        )
+        hidden = raw_alias = LINEAGE_COLUMN
     try:
         columns, rows, mappings = storage().raw_query(
-            scope, sql, input.params, max_rows=input.max_rows, snapshot=snapshot, adapter=adapter
+            scope,
+            sql,
+            input.params,
+            max_rows=input.max_rows,
+            snapshot=snapshot,
+            adapter=adapter,
+            lineage=hidden is not None,
+            version=is_local,
         )
     except RawQueryRejected as exc:
         return error(exc.code, exc.message)
-    public_columns = [c for c in columns if c not in (hidden, "__server_version__")]
+    public_columns = [c for c in columns if c not in (hidden, VERSION_COLUMN)]
     citable = set()
     output = []
     truncated = len(rows) > input.max_rows
     output_bytes = len(json.dumps(public_columns, ensure_ascii=False).encode()) + 1024
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         for values in rows[: input.max_rows]:
             value_map = dict(zip(columns, values, strict=True))
             ref = value_map.get(raw_alias) if raw_alias else None
             if hidden:
                 value_map.pop(hidden, None)
-            version = value_map.pop("__server_version__", None)
+            version = value_map.pop(VERSION_COLUMN, None)
             row_bytes = len(json.dumps(value_map, ensure_ascii=False).encode())
             # 계보와 응답 메타데이터 몫도 남겨 모델·감사 기록을 같은 상한에 가둡니다.
             if output_bytes + row_bytes + 200 > 65536:

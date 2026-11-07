@@ -29,7 +29,7 @@ def _cursor(value):
 
 
 def _scorecards(scope, input):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         snapshot = st.scores.latest_score_snapshot(scope.request_id, scope.snapshot_id)
         if snapshot is None:
             return error("SOURCE_UNAVAILABLE", "저장된 코드 점수가 없습니다.")
@@ -74,7 +74,7 @@ def _scorecards(scope, input):
 
 def _facts(scope, input):
     storage().provenance.validate_snapshot(scope)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         records = st.facts.find_facts(
             scope.request_id,
             scope.snapshot_id,

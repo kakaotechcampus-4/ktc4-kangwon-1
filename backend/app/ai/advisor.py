@@ -104,7 +104,7 @@ def save_advisor(loop, input, answer, receipt, settings):
         if "gpt" in (actual or settings.model or "").lower()
         else "unknown"
     )
-    with open_stores(loop.scope.path) as st:
+    with open_stores(loop.scope) as st:
         st.agentic.insert_advisor_consult(
             consult_id=answer.consult_id,
             request_id=loop.scope.request_id,

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import uuid
 from time import monotonic
@@ -97,7 +98,7 @@ async def _failure(path, request_id, exc, stage, timings=None):
             {
                 "exception_class": type(cause).__name__,
                 "message": safe(cause),
-                "error_code": safe(getattr(cause, "sqlite_errorname", type(cause).__name__)),
+                "error_code": safe(storage().error_name(cause)),
             }
         )
         cause = cause.__cause__
@@ -298,3 +299,7 @@ def mock_run_options(*, ask):
 
 def mock_resume_options():
     return demo().resume_options()
+
+
+def is_mock(requested):
+    return requested or os.getenv("MOCK_MODE", "").lower() in {"1", "true", "yes"}

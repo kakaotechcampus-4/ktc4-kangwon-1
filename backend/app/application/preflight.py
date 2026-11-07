@@ -29,7 +29,7 @@ async def _education_lookup(latitude, longitude, **kwargs):
 
 def _facility_places(scope, reply, category):
     places = {}
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         for place in reply.data.places:
             found = st.facts.facts_by_ids(
                 scope.request_id, scope.snapshot_id, [place.distance_fact_id]

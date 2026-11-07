@@ -20,8 +20,9 @@ from app.ai.tools import ToolExecutor, validation_message
 from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
 from app.application.ports.llm_budget import BudgetExceeded, llm_scope
 from app.application.ports.llm_settings import LLMSettings
-from app.application.ports.storage import open_stores, storage
+from app.application.ports.storage import open_stores
 from app.application.report import finalize, load_base, recompute_l_scores, validate_l_records
+from app.application.requests import record_event
 from app.application.snapshot import persist_space_requirements
 from app.application.space import ensure_space_fits
 from app.domain.contracts import (
@@ -93,7 +94,7 @@ submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출
 
 
 def _save(scope, state, status, result_model=None):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         st.agentic.save_run(
             request_id=scope.request_id,
             snapshot_id=scope.snapshot_id,
@@ -244,11 +245,7 @@ class DecisionLoop:
 
     async def event(self, stage, event, detail):
         try:
-            await run_in_thread(
-                lambda: storage().requests.append_event(
-                    self.scope.request_id, stage, event, detail, db_path=self.scope.path
-                )
-            )
+            await run_in_thread(lambda: record_event(self.scope, stage, event, detail))
         except Exception:
             # 진행 기록만 격리합니다. 결과·예산 저장 실패는 호출자에게 전파합니다.
             pass
@@ -315,7 +312,7 @@ class DecisionLoop:
         return outcome
 
     def _save_final_result(self, result):
-        with open_stores(self.scope.path) as st:
+        with open_stores(self.scope) as st:
             st.agentic.finalize_report(result.report_id, result.model_dump_json())
 
     async def save(self, status="running", result_model=None):

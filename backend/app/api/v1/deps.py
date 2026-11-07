@@ -11,17 +11,15 @@ from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request
 
-from app.application.auth import SESSION_COOKIE_NAME, is_verified, origin_allowed, session_user
+from app.application.auth import SESSION_COOKIE_NAME, is_verified, origin_allowed
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
-def db_path(request: Request):
-    return request.app.state.execution_settings.db_path
-
-
 async def optional_user(request: Request) -> dict[str, Any] | None:
-    return await session_user(request.cookies.get(SESSION_COOKIE_NAME), db_path=db_path(request))
+    return await request.app.state.services.auth.session_user(
+        request.cookies.get(SESSION_COOKIE_NAME)
+    )
 
 
 async def current_user(

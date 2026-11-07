@@ -12,7 +12,7 @@ def build_record(scope, raw, base_id, base_rows):
     item = LInput.model_validate(decode(scope, raw))
     ids = {factor.fact_id for factor in item.factors} | set(item.fact_ids)
     facts = fact_rows(scope, ids)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         calls = [
             call.tool_call_id
             for call in st.agentic.decision_tool_calls(scope.request_id, scope.snapshot_id)

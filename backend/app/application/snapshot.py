@@ -2,12 +2,12 @@
 
 import csv
 import io
-import os
 import uuid
 
 from app.application.errors import RawStorageError
 from app.application.facts import register_fact
 from app.application.ports.market import market
+from app.application.ports.places import places
 from app.application.ports.storage import open_stores, storage
 from app.domain import code90
 from app.domain.baselines import business_lifecycle as lifecycle_baseline
@@ -96,7 +96,7 @@ def snapshot_config(scope, *, local=False):
         hashes[name] = digest
         if local:
             continue
-        with open_stores(scope.path) as st:
+        with open_stores(scope) as st:
             old = st.raw.baseline_response_id(scope.snapshot_id, digest)
         if not old:
             scope.record_sync(
@@ -109,7 +109,7 @@ def snapshot_config(scope, *, local=False):
             )
     if local:
         return {r["industry_code"]: r for r in profiles}, hashes, ([], {})
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         profile_refs = {}
         shared = []
         for row in st.raw.baseline_rows(scope.snapshot_id):
@@ -157,7 +157,7 @@ def persist_space_requirements(scope):
     ):
         raise ValueError("검토한 51업종 공간 요건 표가 필요합니다.")
     digest = file_sha256(path)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         existing = st.raw.profile_response_id(scope.request_id, scope.snapshot_id, digest)
     response_id = (
         existing
@@ -171,7 +171,7 @@ def persist_space_requirements(scope):
             payload={"rows": rows},
         )
     )
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         references = {
             row.value["industry_code"]: row.raw_row_id for row in st.raw.response_rows(response_id)
         }
@@ -199,7 +199,7 @@ def persist_report(scope, report, lineage, responses, version=None):
     response_refs = {}
     for response in responses:
         response_refs.setdefault(response["source"], []).append(response["response_id"])
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         for row in report["rows"]:
             for item, score in row["items"].items():
                 if item == "L":
@@ -390,7 +390,7 @@ def persist_input_facts(scope, data, lineage, responses, version):
             ),
         ]
     )
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         for code, source, metric, value, unit in operands:
             known = value is not None and source not in data.get("runtime_partial_sources", [])
             refs = (
@@ -435,7 +435,7 @@ def _persist(task, scope, education_scan=None):
             page="node",
             status=None,
             payload={"rows": [scan]},
-            secrets=[os.getenv("VWORLD_API_KEY", "")],
+            secrets=places().zone_secrets(),
         )
     data, lineage, responses = market().format_snapshot(task, scope)
     data["education_zones"] = scan

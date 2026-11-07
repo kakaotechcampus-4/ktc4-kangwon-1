@@ -18,6 +18,7 @@ from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
 from app.application.jobs import AnalysisJobRegistry
 from app.application.ports.identity import AuthSettings, KakaoOAuthSettings, MailSettings
+from app.application.services import Services
 from app.bootstrap import wire
 from app.infrastructure.config import load_environment
 from app.infrastructure.market_data.local.score_reference import warm_reference
@@ -80,8 +81,11 @@ def create_app(
         description="공실 주소를 받아 업종 추천 리포트를 돌려주는 API입니다.",
     )
     app.state.execution_settings = settings or ExecutionSettings.from_env()
-    app.state.recording_dir = recording_dir
-    app.state.measurement = measurement
+    app.state.services = Services(
+        app.state.execution_settings.db_path,
+        recording_dir=recording_dir,
+        measurement=measurement,
+    )
     app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
     app.state.auth_settings = AuthSettings.from_env()
     app.state.kakao_settings = KakaoOAuthSettings.from_env()

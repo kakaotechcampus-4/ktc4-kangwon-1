@@ -1,7 +1,6 @@
 """지도·규제 원문을 읽기 도구로 감싸고 서버에서 fact를 등록합니다."""
 
 import asyncio
-import os
 import uuid
 from collections import Counter
 from dataclasses import dataclass, field
@@ -27,7 +26,7 @@ from app.shared.concurrency import run_in_thread
 
 
 def _place_facts(scope, response_id, documents):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         rows = st.raw.response_rows(response_id)
 
         refs = {canonical_json(r.value): r.raw_row_id for r in rows}
@@ -108,7 +107,7 @@ async def map_search(scope, site, input, shared):
                     page="1",
                     status=200,
                     payload=response,
-                    secrets=[os.getenv("GEOCODING_API_KEY", "")],
+                    secrets=place_services().map_secrets(),
                 )
                 facts = await run_in_thread(_place_facts, scope, response_id, documents)
                 more = more or response["meta"].get("is_end") is not True
@@ -207,9 +206,9 @@ def _regulation(scope, site, scan):
         page="1",
         status=200 if raw["status"] == "ok" else 502,
         payload={"rows": [raw]},
-        secrets=[os.getenv("VWORLD_API_KEY", "")],
+        secrets=place_services().zone_secrets(),
     )
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         ref = st.raw.first_row_id(response)
     fact = register_fact(
         scope,
@@ -249,7 +248,7 @@ def _regulation(scope, site, scan):
 
 
 def _stored_regulation(scope):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         raw = st.raw.latest_regulation(scope.request_id, scope.snapshot_id)
     if raw is not None:
         if raw.get("status") in {"ok", "error"} and "queried_at" in raw:

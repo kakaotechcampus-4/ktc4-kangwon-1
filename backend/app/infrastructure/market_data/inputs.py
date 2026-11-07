@@ -58,7 +58,7 @@ def to_float(value, *, digits: int | None = 2):
 
 
 def load_raw(scope):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         responses = [dict(r) for r in st.raw.snapshot_responses(scope.snapshot_id)]
         rows = [dict(r) for r in st.raw.snapshot_rows(scope.snapshot_id)]
     # 큰 원문 BLOB을 SQL에서 정렬하면 불필요한 임시 파일이 생깁니다.

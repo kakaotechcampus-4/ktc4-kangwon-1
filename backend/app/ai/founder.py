@@ -53,7 +53,7 @@ def review_packet(scope, draft):
     codes = [c["industry_code"] for c in candidates]
     # 요청·스냅샷 격리와 현재 공간 비교 선택은 기존 읽기 경로를 재사용합니다.
     rows = _facts(scope, codes)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         stored = st.scores.scoped_score_rows(
             payload["score_snapshot_id"], scope.request_id, scope.snapshot_id
         )

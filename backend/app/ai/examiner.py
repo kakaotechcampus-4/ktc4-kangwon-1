@@ -74,7 +74,7 @@ def _table(rows, columns):
 
 
 def _score_items(scope, score_snapshot_id, codes):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         rows = st.scores.scores_for_industries(score_snapshot_id, codes)
         snapshot = st.scores.score_rows(score_snapshot_id)
     calculations = {r["code"]: r["items"] for r in snapshot or []}

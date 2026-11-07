@@ -14,7 +14,7 @@ CONFIRMED_UNIT = "확인 화면 확정값"
 
 
 def rule_answers(scope, *, stores=None):
-    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
+    with open_stores(scope) if stores is None else nullcontext(stores) as st:
         rows = st.facts.user_space_answers(scope.request_id, scope.snapshot_id)
     answers, candidates = {}, {}
     for row in rows:
@@ -32,8 +32,8 @@ def rule_answers(scope, *, stores=None):
 
 def ensure_space_fits(scope, *, stores=None):
     """비교 값·부모 계보가 바뀌면 새 fact를 만들고 현재 포인터만 갱신합니다."""
-    with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
-        st.begin_immediate()
+    with open_stores(scope) if stores is None else nullcontext(stores) as st:
+        st.begin_write()
         profiles, answers, answer_ids, candidates = {}, {}, {}, {}
         for row in st.facts.space_fit_inputs(scope.request_id, scope.snapshot_id):
             if row.source == "industry_profile" and row.metric == "space_requirements":

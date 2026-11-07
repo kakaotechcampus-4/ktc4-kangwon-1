@@ -38,7 +38,7 @@ GROUPS = {
 
 def _facts(scope, codes):
     storage().provenance.validate_snapshot(scope)
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         rows = st.facts.review_facts(scope.request_id, scope.snapshot_id, codes)
     storage().provenance.expand_spatial_scope(scope, rows)
     return rows

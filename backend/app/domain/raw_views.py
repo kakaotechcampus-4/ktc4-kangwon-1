@@ -10,6 +10,8 @@ VIEWS = {
 
 
 LOCAL_VIEWS = set(VIEWS) | {"v_ref_district_counts"}
+LINEAGE_COLUMN = "__server_lineage__"
+VERSION_COLUMN = "__server_version__"
 FIELDS = {
     "store_count": ("SIMILR_INDUTY_STOR_CO", "store_count", "개"),
     "opening_count": ("OPBIZ_STOR_CO", "opening_count", "개"),

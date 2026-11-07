@@ -267,7 +267,7 @@ class Stores(Protocol):
     scores: ScoreStore
     raw: RawStore
 
-    def begin_immediate(self) -> None: ...
+    def begin_write(self) -> None: ...
     def pin_provenance(
         self, scope, source, metric, industry, calc_version, cell=..., unit=...
     ) -> str: ...
@@ -290,9 +290,7 @@ class Storage(Protocol):
     sessions: SessionStore
     provenance: ProvenanceStore
 
-    def stores(
-        self, path: str | Path | None, *, immediate: bool = False
-    ) -> AbstractContextManager[Stores]: ...
+    def stores(self, path: str | Path | None) -> AbstractContextManager[Stores]: ...
     def initialize(self, path: str | Path | None) -> Path: ...
     def capture(
         self, request_id: str, path: Path
@@ -301,15 +299,23 @@ class Storage(Protocol):
         self, request_id: str, path: Path, run_id: str, snapshot_id: str
     ) -> AnalysisScope: ...
     def current_capture(self) -> AnalysisScope | None: ...
+    def error_name(self, error: BaseException) -> str: ...
     def raw_query(
-        self, scope: Any, sql: str, params: Any, *, max_rows: int, snapshot: Any, adapter: Any
+        self,
+        scope: Any,
+        sql: str,
+        params: Any,
+        *,
+        max_rows: int,
+        snapshot: Any,
+        adapter: Any,
+        lineage: bool = False,
+        version: bool = False,
     ) -> tuple[list[str], list[Any], dict[str, Any]]: ...
 
 
 storage: Slot[Storage] = Slot()
 
 
-def open_stores(
-    path: str | Path | None, *, immediate: bool = False
-) -> AbstractContextManager[Stores]:
-    return storage().stores(path, immediate=immediate)
+def open_stores(scope: AnalysisScope) -> AbstractContextManager[Stores]:
+    return storage().stores(scope.path)

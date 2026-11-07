@@ -57,7 +57,7 @@ NEW_METRICS = {
 
 
 def load_base(scope):
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         row = st.scores.first_score_snapshot(scope.request_id, scope.snapshot_id)
     if row is None:
         raise ValueError("코드 점수가 없습니다.")
@@ -70,7 +70,7 @@ def fact_rows(scope, ids):
     storage().provenance.validate_snapshot(scope)
     if not ids:
         return {}
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         rows = {
             r.fact_id: r for r in st.facts.facts_by_ids(scope.request_id, scope.snapshot_id, ids)
         }
@@ -113,7 +113,7 @@ def validate_l_records(scope, records, base_id, base_rows, advisor_unavailable=F
     for fact in facts.values():
         if fact.status != "observed" or not fact.citable:
             raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         code_ids = st.scores.code_item_fact_ids(base_id)
         space_values = st.facts.current_space_fit_values(scope.request_id, scope.snapshot_id)
         for record in records:
@@ -234,7 +234,7 @@ def recompute_l_scores(scope, records, base_id, base_rows, regulation_result=Non
         )
         rows.append(apply_space(scored, judge(requirements.get(original["code"], {}), answers)))
     score_id = "ss_" + str(uuid.uuid4())
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         st.scores.insert_score_snapshot(
             score_snapshot_id=score_id,
             request_id=scope.request_id,
@@ -393,7 +393,7 @@ def finalize(
             for c in top
         ],
     }
-    with open_stores(scope.path) as st:
+    with open_stores(scope) as st:
         st.agentic.insert_report(
             report_id=report_id,
             request_id=scope.request_id,

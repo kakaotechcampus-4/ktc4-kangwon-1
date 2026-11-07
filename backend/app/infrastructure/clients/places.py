@@ -1,3 +1,4 @@
+import os
 from dataclasses import replace
 
 from app.infrastructure.clients.education_zone import EducationZoneSettings, find_education_zones
@@ -9,6 +10,14 @@ class PlaceServices:
     @staticmethod
     def place_search() -> PlaceClient:
         return PlaceClient(replace(Settings.from_env(), max_retries=0))
+
+    @staticmethod
+    def map_secrets():
+        return [os.getenv("GEOCODING_API_KEY", "")]
+
+    @staticmethod
+    def zone_secrets():
+        return [os.getenv("VWORLD_API_KEY", "")]
 
     @staticmethod
     async def education_zones(latitude, longitude, *, retry=True, **kwargs):

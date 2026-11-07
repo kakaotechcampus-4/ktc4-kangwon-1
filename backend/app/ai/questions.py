@@ -39,7 +39,7 @@ async def ask_user(loop, input):
 
 
 def save_question(loop, session_id, input):
-    with open_stores(loop.scope.path) as st:
+    with open_stores(loop.scope) as st:
         st.agentic.insert_question(
             question_session_id=session_id,
             request_id=loop.scope.request_id,
@@ -51,7 +51,7 @@ def save_question(loop, session_id, input):
 
 async def validate_resume(scope, answers):
     def load():
-        with open_stores(scope.path) as st:
+        with open_stores(scope) as st:
             row = st.agentic.run_state(scope.request_id, scope.snapshot_id)
             question = st.agentic.question_session(scope.request_id, scope.snapshot_id)
             if (

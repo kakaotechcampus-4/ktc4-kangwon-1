@@ -5,6 +5,7 @@ import math
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from app.application.ports.market import CellRow
 from app.domain.geo import haversine_m, to_epsg5181
 from app.domain.population import TrdarArea
 from app.infrastructure.market_data.business_lifecycle.area_resolver import (
@@ -75,11 +76,14 @@ class LocalAdapter:
         if source not in SOURCE_NAMES:
             raise DataValidationError("허용되지 않은 원천")
         with self.connection() as db:
-            return db.execute(
+            row = db.execute(
                 f"SELECT payload,columns_json,industry_code FROM {source} JOIN source_fields "
                 "USING(version_id) WHERE version_id=? AND row_key=?",
                 (version_id, row_key),
             ).fetchone()
+        if row is None:
+            return None
+        return CellRow(dict(zip(json.loads(row[1]), json.loads(row[0]), strict=True)), row[2])
 
     def rows(self, source: str, *, area_codes=None, bounds=None) -> list[dict]:
         if source not in SOURCE_NAMES:

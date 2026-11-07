@@ -2,7 +2,6 @@
 
 import asyncio
 import uuid
-from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -16,7 +15,6 @@ from app.api.v1.jobs import (
     AnalysisRequest,
     await_task,
     health,
-    is_mock,
     jobs,
     list_analysis_events,
     request_headers,
@@ -27,6 +25,7 @@ from app.api.v1.responses import AcceptedAnalysis, AnalysisEvents, RequestFacts,
 from app.application import requests as analysis_requests
 from app.application.analysis import (
     execute_agentic_analysis,
+    is_mock,
     mock_resume_options,
     mock_run_options,
     resume_agentic_analysis,
@@ -36,6 +35,7 @@ from app.domain.schemas import DecisionResult, Schema, Text
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 router.add_api_route("/health", health, methods=["GET"])
+ANSWER_STATUS = {"not_found": 404, "conflict": 409, "mismatch": 422}
 
 
 async def require_owner(
@@ -45,10 +45,7 @@ async def require_owner(
 ) -> None:
     """남의 요청은 404로 가립니다. 403이면 그 ID가 있다는 사실이 새 나갑니다."""
     visible = await asyncio.to_thread(
-        analysis_requests.visible_to,
-        request_id,
-        user,
-        db_path=request.app.state.execution_settings.db_path,
+        request.app.state.services.requests.visible_to, request_id, user
     )
     if not visible:
         raise HTTPException(404, analysis_requests.NOT_FOUND)
@@ -82,15 +79,6 @@ def analysis_runner():
 
 def resume_runner():
     return resume_agentic_analysis
-
-
-def options(request, request_id):
-    directory = getattr(request.app.state, "recording_dir", None)
-    return {
-        "db_path": request.app.state.execution_settings.db_path,
-        "recording_path": Path(directory) / f"{request_id}-model-calls.json" if directory else None,
-        "measurement": request.app.state.measurement,
-    }
 
 
 def space_answers(body):
@@ -138,7 +126,7 @@ async def create_analysis(
             allow_questions=body.allow_questions,
             confirmed_space=space_answers(body),
             request_prepared=True,
-            **options(request, request_id),
+            **request.app.state.services.requests.run_options(request_id),
             **(mock_run_options(ask=body.allow_questions) if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
@@ -147,12 +135,11 @@ async def create_analysis(
     task = start_task(request, request_id, work())
     try:
         await asyncio.to_thread(
-            analysis_requests.create,
+            request.app.state.services.requests.create,
             request_id,
             body.address,
             radius_m=body.radius_m,
             user_id=user["user_id"],
-            db_path=request.app.state.execution_settings.db_path,
         )
     except BaseException:
         task.cancel()
@@ -174,9 +161,7 @@ async def create_analysis(
     dependencies=[Depends(require_owner)],
 )
 async def get_analysis(request_id: str, request: Request):
-    stored = await asyncio.to_thread(
-        analysis_requests.detail, request_id, db_path=request.app.state.execution_settings.db_path
-    )
+    stored = await asyncio.to_thread(request.app.state.services.requests.detail, request_id)
     if stored is None:
         raise HTTPException(404, analysis_requests.NOT_FOUND)
     return stored
@@ -188,9 +173,7 @@ async def get_analysis(request_id: str, request: Request):
     dependencies=[Depends(require_owner)],
 )
 async def get_analysis_facts(request_id: str, request: Request):
-    found = await asyncio.to_thread(
-        analysis_requests.facts, request_id, db_path=request.app.state.execution_settings.db_path
-    )
+    found = await asyncio.to_thread(request.app.state.services.requests.facts, request_id)
     if found is None:
         raise HTTPException(404, analysis_requests.NOT_FOUND)
     return RequestFacts(request_id=request_id, snapshot_id=found.snapshot_id, facts=found.facts)
@@ -211,11 +194,7 @@ async def answers(
     mock: bool = False,
     wait: bool = WAIT_QUERY,
 ):
-    gate = await asyncio.to_thread(
-        analysis_requests.answer_gate,
-        request_id,
-        db_path=request.app.state.execution_settings.db_path,
-    )
+    gate = await asyncio.to_thread(request.app.state.services.requests.answer_gate, request_id)
     try:
         analysis_requests.check_answers(
             gate,
@@ -224,13 +203,13 @@ async def answers(
             running=request_id in jobs(request),
         )
     except analysis_requests.AnswerRejected as exc:
-        raise HTTPException(exc.status, exc.message) from None
+        raise HTTPException(ANSWER_STATUS[exc.reason], exc.message) from None
 
     async def work():
         outcome = await runner(
             request_id,
             body.answers,
-            **options(request, request_id),
+            **request.app.state.services.requests.run_options(request_id),
             **(mock_resume_options() if is_mock(mock) else {}),
         )
         return public_result(request_id, outcome)
