@@ -1,17 +1,39 @@
 """fact·별칭·공간 비교 포인터를 읽고 씁니다."""
 
+import json
 import sqlite3
 from hashlib import sha256
 
-from app.infrastructure.persistence.repository.agentic import begin_immediate
+from app.application.ports.records import FactScope, SpaceAnswer, SpaceFitInput
+from app.domain.facts import FactRecord
+from app.infrastructure.persistence.repository.common import begin_immediate
+from app.shared.canonical import canonical_json
 
 
-def fact_scope_row(db, fact_id, request_id, snapshot_id):
-    return db.execute(
+def _fact_record(row):
+    return FactRecord(
+        fact_id=row["fact_id"],
+        industry_code=row["industry_code"],
+        source=row["source"],
+        metric=row["metric"],
+        unit=row["unit"],
+        period=row["period"],
+        status=row["status"],
+        citable=bool(row["citable"]),
+        calc_version=row["calc_version"],
+        local_lineage=bool(row["local_lineage"]),
+        value_text=row["value_json"],
+        spatial_key=row["spatial_scope_json"],
+    )
+
+
+def fact_scope(db, fact_id, request_id, snapshot_id):
+    row = db.execute(
         "SELECT industry_code,status,citable FROM facts WHERE fact_id=? "
         "AND request_id=? AND snapshot_id=?",
         (fact_id, request_id, snapshot_id),
     ).fetchone()
+    return None if row is None else FactScope(row[0], row[1], bool(row[2]))
 
 
 def fact_id_by_identity(db, snapshot_id, identity_hash):
@@ -22,13 +44,51 @@ def fact_id_by_identity(db, snapshot_id, identity_hash):
     return None if row is None else row[0]
 
 
-def insert_fact(db, values):
+def insert_fact(
+    db,
+    *,
+    fact_id,
+    request_id,
+    snapshot_id,
+    industry_code,
+    source,
+    metric,
+    value,
+    unit,
+    period,
+    spatial_scope,
+    comparison,
+    status,
+    citable,
+    calc_version,
+    lineage_hash,
+    identity_hash,
+    created_at,
+):
     db.execute(
         "INSERT INTO facts(fact_id,request_id,snapshot_id,industry_code,source,"
         "metric,value_json,unit,period,spatial_scope_json,comparison_json,status,"
         "citable,calc_version,lineage_hash,identity_hash,created_at) "
         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        values,
+        (
+            fact_id,
+            request_id,
+            snapshot_id,
+            industry_code,
+            source,
+            metric,
+            canonical_json(value),
+            unit,
+            period,
+            canonical_json(spatial_scope),
+            canonical_json(comparison),
+            status,
+            int(citable),
+            calc_version,
+            lineage_hash,
+            identity_hash,
+            created_at,
+        ),
     )
 
 
@@ -39,20 +99,18 @@ def insert_local_fact_lineage(db, fact_id, ref, row_key, column):
     )
 
 
-def insert_fact_sources(db, rows):
-    db.executemany("INSERT INTO fact_sources(fact_id,raw_row_id,field_pointer) VALUES(?,?,?)", rows)
+def insert_fact_sources(db, fact_id, raw_row_ids, field_pointer):
+    db.executemany(
+        "INSERT INTO fact_sources(fact_id,raw_row_id,field_pointer) VALUES(?,?,?)",
+        [(fact_id, raw_row_id, field_pointer) for raw_row_id in raw_row_ids],
+    )
 
 
-def insert_fact_parents(db, rows):
-    db.executemany("INSERT INTO fact_parents(fact_id,parent_fact_id) VALUES(?,?)", rows)
-
-
-def fact_value_json(db, fact_id, request_id, snapshot_id):
-    row = db.execute(
-        "SELECT value_json FROM facts WHERE fact_id=? AND request_id=? AND snapshot_id=?",
-        (fact_id, request_id, snapshot_id),
-    ).fetchone()
-    return None if row is None else row[0]
+def insert_fact_parents(db, fact_id, parent_fact_ids):
+    db.executemany(
+        "INSERT INTO fact_parents(fact_id,parent_fact_id) VALUES(?,?)",
+        [(fact_id, parent_fact_id) for parent_fact_id in parent_fact_ids],
+    )
 
 
 def _fact_in_snapshot(db, request_id, snapshot_id, fact_id):
@@ -77,7 +135,7 @@ def citable_fact_ids(db, request_id, snapshot_id):
 
 
 def review_facts(db, request_id, snapshot_id, codes):
-    return db.execute(
+    rows = db.execute(
         "SELECT f.*,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=f.fact_id) "
         "AS local_lineage FROM facts f WHERE f.request_id=? AND f.snapshot_id=? "
         "AND (f.industry_code IS NULL OR f.industry_code IN ("
@@ -87,6 +145,7 @@ def review_facts(db, request_id, snapshot_id, codes):
         "AND c.fact_id=f.fact_id)) ORDER BY f.fact_id",
         [request_id, snapshot_id, *codes],
     ).fetchall()
+    return [_fact_record(row) for row in rows]
 
 
 def _alias_named(db, request_id, alias):
@@ -186,47 +245,53 @@ def find_facts(
                 "WHERE request_id=? AND snapshot_id=?)"
             )
             params.extend([request_id, snapshot_id])
-    cursor = db.execute(query + " ORDER BY fact_id", params)
-    columns = [c[0] for c in cursor.description]
-    return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    return [_fact_record(row) for row in db.execute(query + " ORDER BY fact_id", params).fetchall()]
 
 
 def facts_by_ids(db, request_id, snapshot_id, ids):
-    cursor = db.execute(
+    rows = db.execute(
         "SELECT *,EXISTS(SELECT 1 FROM local_fact_lineage l WHERE l.fact_id=facts.fact_id) "
         "AS local_lineage FROM facts WHERE request_id=? AND snapshot_id=? AND fact_id IN ("
         + ",".join("?" for _ in ids)
         + ")",
         [request_id, snapshot_id, *ids],
-    )
-    names = [c[0] for c in cursor.description]
-    return [dict(zip(names, r, strict=True)) for r in cursor.fetchall()]
+    ).fetchall()
+    return [_fact_record(row) for row in rows]
 
 
 def current_space_fit_values(db, request_id, snapshot_id):
-    return db.execute(
-        "SELECT c.industry_code,f.value_json FROM space_fit_current c "
-        "JOIN facts f USING(fact_id) WHERE c.request_id=? AND c.snapshot_id=?",
-        (request_id, snapshot_id),
-    ).fetchall()
+    return {
+        row[0]: json.loads(row[1])
+        for row in db.execute(
+            "SELECT c.industry_code,f.value_json FROM space_fit_current c "
+            "JOIN facts f USING(fact_id) WHERE c.request_id=? AND c.snapshot_id=?",
+            (request_id, snapshot_id),
+        ).fetchall()
+    }
 
 
 def current_space_fit_ids(db, request_id, snapshot_id):
-    return db.execute(
-        "SELECT fact_id FROM space_fit_current WHERE request_id=? AND snapshot_id=? "
-        "ORDER BY industry_code",
-        (request_id, snapshot_id),
-    ).fetchall()
+    return [
+        row[0]
+        for row in db.execute(
+            "SELECT fact_id FROM space_fit_current WHERE request_id=? AND snapshot_id=? "
+            "ORDER BY industry_code",
+            (request_id, snapshot_id),
+        ).fetchall()
+    ]
 
 
 def space_fit_inputs(db, request_id, snapshot_id):
-    return db.execute(
-        "SELECT fact_id,industry_code,source,metric,value_json FROM facts "
-        "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
-        "AND (metric='space_requirements' OR source='user') "
-        "ORDER BY created_at DESC,fact_id DESC",
-        (request_id, snapshot_id),
-    ).fetchall()
+    return [
+        SpaceFitInput(row[0], row[1], row[2], row[3], json.loads(row[4]))
+        for row in db.execute(
+            "SELECT fact_id,industry_code,source,metric,value_json FROM facts "
+            "WHERE request_id=? AND snapshot_id=? AND status='observed' AND citable=1 "
+            "AND (metric='space_requirements' OR source='user') "
+            "ORDER BY created_at DESC,fact_id DESC",
+            (request_id, snapshot_id),
+        ).fetchall()
+    ]
 
 
 def point_space_fit(db, request_id, snapshot_id, industry_code, fact_id):
@@ -240,10 +305,13 @@ def point_space_fit(db, request_id, snapshot_id, industry_code, fact_id):
 
 
 def user_space_answers(db, request_id, snapshot_id):
-    return db.execute(
-        "SELECT fact_id,metric,value_json,unit FROM facts WHERE request_id=? "
-        "AND snapshot_id=? AND source='user' AND status='observed' AND citable=1 "
-        "AND metric IN ('floor','exclusive_area','existing_facilities') "
-        "ORDER BY created_at DESC,fact_id DESC",
-        (request_id, snapshot_id),
-    ).fetchall()
+    return [
+        SpaceAnswer(row[0], row[1], json.loads(row[2]), row[3])
+        for row in db.execute(
+            "SELECT fact_id,metric,value_json,unit FROM facts WHERE request_id=? "
+            "AND snapshot_id=? AND source='user' AND status='observed' AND citable=1 "
+            "AND metric IN ('floor','exclusive_area','existing_facilities') "
+            "ORDER BY created_at DESC,fact_id DESC",
+            (request_id, snapshot_id),
+        ).fetchall()
+    ]

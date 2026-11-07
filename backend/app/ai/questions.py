@@ -1,13 +1,11 @@
 """임대인 질문과 답변 검증입니다."""
 
-import json
 import uuid
 from dataclasses import dataclass
 
 from app.application.answers import save_user_facts
 from app.application.ports.storage import open_stores
 from app.domain.contracts import QuestionSessionRef, ToolReply, error
-from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
 
@@ -43,15 +41,11 @@ async def ask_user(loop, input):
 def save_question(loop, session_id, input):
     with open_stores(loop.scope.path) as st:
         st.agentic.insert_question(
-            (
-                session_id,
-                loop.scope.request_id,
-                loop.scope.snapshot_id,
-                canonical_json([q.model_dump(mode="json") for q in input.questions]),
-                "{}",
-                "waiting",
-                utc_now_iso(),
-            ),
+            question_session_id=session_id,
+            request_id=loop.scope.request_id,
+            snapshot_id=loop.scope.snapshot_id,
+            questions=[q.model_dump(mode="json") for q in input.questions],
+            created_at=utc_now_iso(),
         )
 
 
@@ -62,17 +56,17 @@ async def validate_resume(scope, answers):
             question = st.agentic.question_session(scope.request_id, scope.snapshot_id)
             if (
                 row is None
-                or row[1] != "waiting_for_input"
+                or row.status != "waiting_for_input"
                 or question is None
-                or question[2] != "waiting"
+                or question.status != "waiting"
             ):
                 raise ValueError("재개할 질문 세션이 없습니다.")
-            fields = {q["field"] for q in json.loads(question[1])}
+            fields = {q["field"] for q in question.questions}
             if set(answers) != fields or any(
                 not isinstance(v, str) or not v.strip() or len(v) > 500 for v in answers.values()
             ):
                 raise ValueError("답변 항목·길이가 잘못되었습니다.")
-            return json.loads(row[0]), question[0]
+            return row.state, question.question_session_id
 
     return await run_in_thread(load)
 

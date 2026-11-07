@@ -1,7 +1,6 @@
 """지도·규제 원문을 읽기 도구로 감싸고 서버에서 fact를 등록합니다."""
 
 import asyncio
-import json
 import os
 import uuid
 from collections import Counter
@@ -31,7 +30,7 @@ def _place_facts(scope, response_id, documents):
     with open_stores(scope.path) as st:
         rows = st.raw.response_rows(response_id)
 
-        refs = {canonical_json(json.loads(r[1])): r[0] for r in rows}
+        refs = {canonical_json(r.value): r.raw_row_id for r in rows}
         facts = {}
         for doc in documents:
             fields = []
@@ -251,9 +250,8 @@ def _regulation(scope, site, scan):
 
 def _stored_regulation(scope):
     with open_stores(scope.path) as st:
-        rows = st.raw.latest_regulation_rows(scope.request_id, scope.snapshot_id)
-    if rows:
-        raw = json.loads(rows[0][0])
+        raw = st.raw.latest_regulation(scope.request_id, scope.snapshot_id)
+    if raw is not None:
         if raw.get("status") in {"ok", "error"} and "queried_at" in raw:
             return raw
     return None

@@ -1,7 +1,5 @@
 """PR3에 저장한 점수와 사실을 현재 스냅샷 범위에서 읽습니다."""
 
-import json
-
 from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
 from app.domain.contracts import (
@@ -42,7 +40,7 @@ def _scorecards(scope, input):
                 summarize(r["code"], r["items"], r["regulation"]),
                 judge(requirements.get(r["code"], {}), answers),
             )
-            for r in json.loads(snapshot[1])
+            for r in snapshot.rows
         ]
         rows.sort(key=lambda r: (r["regulation"] == "금지" or r["space"]["excluded"], rank_key(r)))
         if input.industry_codes:
@@ -57,14 +55,14 @@ def _scorecards(scope, input):
             else:
                 items = [
                     ScoreItem(
-                        item=r[0],
-                        status="not_applicable" if r[1] == "n.a." else r[1],
-                        grade=r[2],
-                        points=r[3],
-                        fact_ids=json.loads(r[4]),
-                        scoring=row["items"][r[0]].get("scoring"),
+                        item=r.item,
+                        status="not_applicable" if r.status == "n.a." else r.status,
+                        grade=r.grade,
+                        points=r.points,
+                        fact_ids=r.fact_ids,
+                        scoring=row["items"][r.item].get("scoring"),
                     )
-                    for r in st.scores.industry_scores(snapshot[0], row["code"])
+                    for r in st.scores.industry_scores(snapshot.score_snapshot_id, row["code"])
                 ]
                 details.append(Scorecard(**fields, items=items))
     return ScorecardResult(
@@ -93,25 +91,25 @@ def _facts(scope, input):
         records_page = records[offset : offset + input.limit]
         facts = [
             FactView(
-                fact_id=r["fact_id"],
-                source=r["source"],
-                metric=r["metric"],
-                value=json.loads(r["value_json"]),
-                unit=r["unit"],
-                period=r["period"],
-                spatial_scope=json.loads(r["spatial_scope_json"]),
-                industry_code=r["industry_code"],
-                status="not_applicable" if r["status"] == "n.a." else r["status"],
-                citable=bool(r["citable"]),
-                calc_version=r["calc_version"],
+                fact_id=r.fact_id,
+                source=r.source,
+                metric=r.metric,
+                value=r.value,
+                unit=r.unit,
+                period=r.period,
+                spatial_scope=r.spatial_scope,
+                industry_code=r.industry_code,
+                status="not_applicable" if r.status == "n.a." else r.status,
+                citable=r.citable,
+                calc_version=r.calc_version,
                 provenance_ref=(
                     "fact_parents:"
-                    if r["metric"] == "space_fit"
+                    if r.metric == "space_fit"
                     else "local_fact_lineage:"
-                    if r["local_lineage"]
+                    if r.local_lineage
                     else "fact_sources:"
                 )
-                + r["fact_id"],
+                + r.fact_id,
             )
             for r in records_page
         ]

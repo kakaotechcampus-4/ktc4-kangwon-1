@@ -2,7 +2,6 @@
 
 import csv
 import io
-import json
 import os
 import uuid
 
@@ -114,11 +113,10 @@ def snapshot_config(scope, *, local=False):
         profile_refs = {}
         shared = []
         for row in st.raw.baseline_rows(scope.snapshot_id):
-            value = json.loads(row[1])
-            if value.get("industry_code"):
-                profile_refs[value["industry_code"]] = row[0]
+            if row.value.get("industry_code"):
+                profile_refs[row.value["industry_code"]] = row.raw_row_id
             else:
-                shared.append(row[0])
+                shared.append(row.raw_row_id)
     return {r["industry_code"]: r for r in profiles}, hashes, (shared, profile_refs)
 
 
@@ -175,7 +173,7 @@ def persist_space_requirements(scope):
     )
     with open_stores(scope.path) as st:
         references = {
-            json.loads(row[1])["industry_code"]: row[0] for row in st.raw.response_rows(response_id)
+            row.value["industry_code"]: row.raw_row_id for row in st.raw.response_rows(response_id)
         }
         for row in rows:
             register_fact(
@@ -299,32 +297,30 @@ def persist_report(scope, report, lineage, responses, version=None):
                     )
                     facts_by_item[(row["code"], item)].append(scale)
         st.scores.insert_score_snapshot(
-            (
-                score_id,
-                scope.request_id,
-                scope.snapshot_id,
-                scope.run_id,
-                "v0.8",
-                code90.METHOD if any("code90" in row for row in report["rows"]) else CALC_VERSION,
-                canonical_json(report["rows"]),
-                canonical_json([r["code"] for r in report["top5"]]),
-                "unreviewed",
-                utc_now_iso(),
-            ),
+            score_snapshot_id=score_id,
+            request_id=scope.request_id,
+            snapshot_id=scope.snapshot_id,
+            run_id=scope.run_id,
+            rubric_version="v0.8",
+            calc_version=code90.METHOD
+            if any("code90" in row for row in report["rows"])
+            else CALC_VERSION,
+            summary_text=canonical_json(report["rows"]),
+            top5_text=canonical_json([r["code"] for r in report["top5"]]),
+            review_state="unreviewed",
+            created_at=utc_now_iso(),
         )
         for row in report["rows"]:
             for item, score in row["items"].items():
                 st.scores.insert_score(
-                    (
-                        score_id,
-                        row["code"],
-                        item,
-                        WEIGHTS[item],
-                        score["status"],
-                        score["grade"],
-                        score["points"],
-                        canonical_json(facts_by_item[(row["code"], item)]),
-                    ),
+                    score_snapshot_id=score_id,
+                    industry_code=row["code"],
+                    item=item,
+                    weight=WEIGHTS[item],
+                    status=score["status"],
+                    grade=score["grade"],
+                    points=score["points"],
+                    fact_ids_text=canonical_json(facts_by_item[(row["code"], item)]),
                 )
     return score_id
 

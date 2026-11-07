@@ -76,17 +76,17 @@ def _table(rows, columns):
 def _score_items(scope, score_snapshot_id, codes):
     with open_stores(scope.path) as st:
         rows = st.scores.scores_for_industries(score_snapshot_id, codes)
-        snapshot = st.scores.snapshot_summary_json(score_snapshot_id)
-    calculations = {r["code"]: r["items"] for r in json.loads(snapshot or "[]")}
+        snapshot = st.scores.score_rows(score_snapshot_id)
+    calculations = {r["code"]: r["items"] for r in snapshot or []}
     found = {code: {} for code in codes}
-    for code, item, status, grade, points, fact_ids in rows:
-        scoring = calculations.get(code, {}).get(item, {}).get("scoring")
-        found[code][item] = {
-            "item": item,
-            "status": status,
-            "grade": grade,
-            "points": points,
-            "fact_ids": json.loads(fact_ids),
+    for score in rows:
+        scoring = calculations.get(score.industry_code, {}).get(score.item, {}).get("scoring")
+        found[score.industry_code][score.item] = {
+            "item": score.item,
+            "status": score.status,
+            "grade": score.grade,
+            "points": score.points,
+            "fact_ids": score.fact_ids,
             "scoring": [scoring["weight"], round(scoring["points"], 6), scoring["estimated"]]
             if scoring
             else None,
@@ -148,18 +148,16 @@ def review_packet(scope, draft):
             order += next((e["fact_ids"] for e in items[code] if e["item"] == item), [])
     order = list(dict.fromkeys(order))
     rows = fact_rows(scope, set(order))
-    usable = [f for f in order if rows[f]["status"] == "observed" and rows[f]["citable"]]
+    usable = [f for f in order if rows[f].status == "observed" and rows[f].citable]
     allowed = set(usable)
     scopes = {}
     facts = []
     for fid in usable:
         row = rows[fid]
-        fact = {key: row[key] for key in FACT_COLUMNS[:6]}
-        fact["spatial_scope_ref"] = scopes.setdefault(
-            row["spatial_scope_json"], f"scope_{len(scopes)}"
-        )
-        if len(row["value_json"]) <= MAX_VALUE_CHARS:
-            fact["value"] = json.loads(row["value_json"])
+        fact = {key: getattr(row, key) for key in FACT_COLUMNS[:6]}
+        fact["spatial_scope_ref"] = scopes.setdefault(row.spatial_key, f"scope_{len(scopes)}")
+        if len(row.value_text) <= MAX_VALUE_CHARS:
+            fact["value"] = row.value
         facts.append(fact)
     packet = {
         "draft_id": draft.report_id,

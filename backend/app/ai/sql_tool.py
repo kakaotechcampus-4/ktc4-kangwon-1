@@ -124,8 +124,8 @@ def _query(scope, input):
                 else None
             )
             facts = []
-            if original and view and original[1] == VIEWS[view]:
-                raw = json.loads(original[0])
+            if original and view and original.source == VIEWS[view]:
+                raw = original.value
                 for alias, field in projection.items():
                     if field not in FIELDS or alias not in value_map:
                         continue

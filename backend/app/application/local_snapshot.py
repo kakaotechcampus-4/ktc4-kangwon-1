@@ -56,7 +56,7 @@ def persist_local(task, scope, adapter, data=None, observations=None):
     report = evaluate(data, profile_rows=profiles)
     with open_stores(scope.path) as st:
         map_rows = st.raw.map_row_ids(scope.request_id, scope.snapshot_id)
-    score_id = persist_report(scope, report, {"map": [row[0] for row in map_rows]}, [], metadata)
+    score_id = persist_report(scope, report, {"map": map_rows}, [], metadata)
     return data, report, score_id
 
 

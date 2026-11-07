@@ -24,3 +24,8 @@ def _request_row(db: sqlite3.Connection, request_id: str) -> sqlite3.Row | None:
 def _require_changed(changed, message="실행 중인 요청이 없습니다.") -> None:
     if changed.rowcount != 1:
         raise ValueError(message)
+
+
+def begin_immediate(db):
+    if not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")

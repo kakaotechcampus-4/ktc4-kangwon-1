@@ -92,5 +92,5 @@ def expand_spatial_scope(scope, records):
         return
     spatial = json.loads(snapshot["scope_json"])
     for row in records:
-        if row.get("local_lineage"):
-            row["spatial_scope_json"] = canonical_json(spatial | {"snapshot_id": scope.snapshot_id})
+        if row.local_lineage:
+            row.spatial_key = canonical_json(spatial | {"snapshot_id": scope.snapshot_id})

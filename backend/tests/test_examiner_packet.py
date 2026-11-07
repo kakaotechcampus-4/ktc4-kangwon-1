@@ -12,6 +12,7 @@ from app.domain.text import has_digit
 from app.infrastructure.persistence.connection import connect
 from app.shared.canonical import canonical_json
 from tests import test_agentic_runtime as fixtures
+from tests.fact_fixture import fact_record
 
 ALIAS = re.compile(r"^[0-9a-f]{8}$")
 FACT = {name: index for index, name in enumerate(examiner.FACT_COLUMNS)}
@@ -23,18 +24,19 @@ def fact_id(index):
 
 
 def row(fid, **changes):
-    return {
-        "fact_id": fid,
-        "source": "commercial_area",
-        "metric": "store_count",
-        "industry_code": "I201",
-        "unit": "개",
-        "period": "2023Q4",
-        "status": "observed",
-        "citable": 1,
-        "value_json": json.dumps("값" * 200, ensure_ascii=False),
-        "spatial_scope_json": '{"radius_m":500}',
-    } | changes
+    return fact_record(
+        fid,
+        **{
+            "source": "commercial_area",
+            "metric": "store_count",
+            "industry_code": "I201",
+            "unit": "개",
+            "period": "2023Q4",
+            "value_text": json.dumps("값" * 200, ensure_ascii=False),
+            "spatial_key": '{"radius_m":500}',
+        }
+        | changes,
+    )
 
 
 def draft(segments):
@@ -134,7 +136,7 @@ class ExaminerPacketLimitTests(unittest.TestCase):
 
     def test_long_value_is_left_for_reading(self):
         ids = [fact_id(0)]
-        rows = {ids[0]: row(ids[0], value_json=json.dumps(list(range(400))))}
+        rows = {ids[0]: row(ids[0], value_text=json.dumps(list(range(400))))}
         _, _, packet = self.build(1, rows)
         self.assertIsNone(packet["facts"][0][FACT["value"]])
         self.assertIn("null", packet["note"])

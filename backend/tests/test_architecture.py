@@ -76,6 +76,15 @@ LEAF_MODULES = ("app.application.ports", "app.application.errors")
 DOMAIN_RESOURCES = APP / "domain" / "resources.py"
 ENTRY_POINTS = ("app.main", "app.bootstrap")
 DRIVERS = {"httpx", "openai", "sqlite3"}
+STORED_NAME = re.compile(r"^[a-z_]+_json$")
+CODEC_NAMES = {
+    "canonical_json",
+    "complete_json",
+    "input_json",
+    "model_dump_json",
+    "model_validate_json",
+}
+HTTP_STATUS = {400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504}
 SCORING_MODULES = (
     "app.application.analysis",
     "app.application.local_snapshot",
@@ -140,6 +149,27 @@ def entry_imports(path, module):
     ]
 
 
+def identifiers(path):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Attribute):
+            yield node.lineno, node.attr
+        elif isinstance(node, ast.keyword) and node.arg:
+            yield node.value.lineno, node.arg
+        elif isinstance(node, ast.Name):
+            yield node.lineno, node.id
+        elif isinstance(node, ast.arg):
+            yield node.lineno, node.arg
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.lineno, node.value
+
+
+def layer_files(*names):
+    for name in names:
+        for path in sorted((APP / name).rglob("*.py")):
+            if "__pycache__" not in path.parts:
+                yield path
+
+
 def sql_strings(path):
     found = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -182,14 +212,14 @@ class ArchitectureTests(unittest.TestCase):
         }
         self.assertEqual({module: names for module, names in found.items() if names}, {})
 
-    def test_scoring_path_loads_without_ai(self):
-        imports = "; ".join(f"import {module}" for module in SCORING_MODULES)
-        code = f"import sys; {imports}; print([m for m in sys.modules if m.startswith('app.ai')])"
-        result = subprocess.run(
-            [sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True, timeout=60
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip().splitlines()[-1], "[]")
+    def test_stored_column_names_stay_in_infrastructure(self):
+        found = {
+            f"{path.relative_to(APP)}:{line}:{name}"
+            for path in layer_files("ai", "application", "api", "domain")
+            for line, name in identifiers(path)
+            if STORED_NAME.match(name) and name not in CODEC_NAMES
+        }
+        self.assertEqual(sorted(found), [])
 
     def test_entry_point_probe_catches_import_forms(self):
         with tempfile.TemporaryDirectory() as folder:

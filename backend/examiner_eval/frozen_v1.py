@@ -93,18 +93,16 @@ def review_packet(scope, draft):
             order += next((e["fact_ids"] for e in items[code] if e["item"] == item), [])
     order = list(dict.fromkeys(order))
     rows = fact_rows(scope, set(order))
-    usable = [f for f in order if rows[f]["status"] == "observed" and rows[f]["citable"]]
+    usable = [f for f in order if rows[f].status == "observed" and rows[f].citable]
     allowed = set(usable)
     scopes = {}
     facts = []
     for fid in usable:
         row = rows[fid]
-        fact = {key: row[key] for key in FACT_COLUMNS[:6]}
-        fact["spatial_scope_ref"] = scopes.setdefault(
-            row["spatial_scope_json"], f"scope_{len(scopes)}"
-        )
-        if len(row["value_json"]) <= MAX_VALUE_CHARS:
-            fact["value"] = json.loads(row["value_json"])
+        fact = {key: getattr(row, key) for key in FACT_COLUMNS[:6]}
+        fact["spatial_scope_ref"] = scopes.setdefault(row.spatial_key, f"scope_{len(scopes)}")
+        if len(row.value_text) <= MAX_VALUE_CHARS:
+            fact["value"] = row.value
         facts.append(fact)
     packet = {
         "draft_id": draft.report_id,

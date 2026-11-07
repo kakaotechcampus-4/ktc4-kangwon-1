@@ -1,14 +1,14 @@
 """문장 조각의 fact 값을 사람이 읽는 글자로 바꾸는지 확인합니다."""
 
-import json
 import unittest
 from types import SimpleNamespace
 
 from app.domain.report import join_segments, limitation_segments, render_segment
+from tests.fact_fixture import fact_record
 
 
 def fact(metric, value, unit=""):
-    return {"metric": metric, "value_json": json.dumps(value), "unit": unit}
+    return fact_record(metric=metric, value=value, unit=unit)
 
 
 def text_segment():

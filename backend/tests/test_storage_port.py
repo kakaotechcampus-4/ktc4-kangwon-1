@@ -1,5 +1,6 @@
 import inspect
 import unittest
+from typing import Any
 
 from app.application.ports import storage as port
 from app.infrastructure.persistence import provenance
@@ -67,6 +68,18 @@ class StoragePortTests(unittest.TestCase):
     def test_path_stores_match_repository(self):
         for protocol, modules in PATHED.items():
             self.check(protocol, modules, bound=False)
+
+    def test_stores_do_not_return_untyped_rows(self):
+        stores = [*BOUND, *PATHED, port.Stores, port.Storage]
+        untyped = [
+            f"{store.__name__}.{name}"
+            for store in stores
+            for name, value in vars(store).items()
+            if callable(value)
+            and not name.startswith("_")
+            and inspect.signature(value).return_annotation is Any
+        ]
+        self.assertEqual(untyped, [])
 
     def test_pin_provenance_matches_without_connection(self):
         self.assertEqual(

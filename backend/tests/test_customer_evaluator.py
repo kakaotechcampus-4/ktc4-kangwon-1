@@ -8,6 +8,7 @@ from app.ai.evaluators import review
 from app.domain.contracts import ReviewIssue, SubmitDraftInput, SubmitLInput
 from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
+from tests.fact_fixture import fact_record
 
 
 class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
@@ -69,7 +70,7 @@ class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
         packet = {"draft_id": loop.done.report_id, "facts": [{"fact_id": self.fid}]}
-        rows = {self.fid: {"citable": citable, "status": "observed"}}
+        rows = {self.fid: fact_record(self.fid, citable=citable)}
         with (
             patch(
                 "app.ai.customer_rubric.code_checks",

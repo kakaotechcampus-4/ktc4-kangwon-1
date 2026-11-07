@@ -1,7 +1,6 @@
 """로컬 채점 전에 필수 시설·보호구역을 한 번 관측합니다."""
 
 import csv
-import json
 
 from app.application.map_regulation import SharedTools, check_regulation, map_search
 from app.application.ports.places import EducationZoneError, MapApiError, places
@@ -32,14 +31,14 @@ def _facility_places(scope, reply, category):
     places = {}
     with open_stores(scope.path) as st:
         for place in reply.data.places:
-            row = st.facts.fact_value_json(
-                place.distance_fact_id, scope.request_id, scope.snapshot_id
+            found = st.facts.facts_by_ids(
+                scope.request_id, scope.snapshot_id, [place.distance_fact_id]
             )
-            if row is None:
+            if not found:
                 raise ValueError("시설 거리 fact가 현재 요청에 없습니다.")
             places[place.place_id] = {
                 "category_code": category if place.match_status == "category_match" else None,
-                "distance_m": json.loads(row),
+                "distance_m": found[0].value,
             }
     return places
 

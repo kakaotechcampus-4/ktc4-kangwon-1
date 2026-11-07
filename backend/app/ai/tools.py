@@ -18,7 +18,7 @@ from app.domain.contracts import (
     error,
     tool_definitions,
 )
-from app.shared.canonical import canonical_hash, canonical_json
+from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
 from app.shared.scrub import env_secrets, scrub
@@ -62,40 +62,38 @@ def validation_message(model, failure):
 def _audit(scope, call_id, actor, name, arguments, reply):
     with open_stores(scope.path) as st:
         st.agentic.insert_tool_call(
-            (
-                call_id,
-                scope.request_id,
-                scope.snapshot_id,
-                scope.run_id,
-                actor,
-                name,
-                canonical_json(scrub(arguments, env_secrets())),
-                reply.model_dump_json(),
-                utc_now_iso(),
-            ),
+            tool_call_id=call_id,
+            request_id=scope.request_id,
+            snapshot_id=scope.snapshot_id,
+            run_id=scope.run_id,
+            actor=actor,
+            tool_name=name,
+            arguments=scrub(arguments, env_secrets()),
+            reply_text=reply.model_dump_json(),
+            created_at=utc_now_iso(),
         )
 
 
 def previous_reply(scope, actor, name, signature):
     with open_stores(scope.path) as st:
         rows = st.agentic.tool_call_history(scope.request_id, scope.snapshot_id, actor, name)
-    for arguments, reply in rows:
+    for row in rows:
         try:
-            validated = TOOL_INPUTS[name].model_validate_json(arguments)
+            validated = TOOL_INPUTS[name].model_validate_json(row.arguments_text)
         except ValidationError:
             continue
         if (
             canonical_hash([actor, name, validated.model_dump(mode="json"), scope.snapshot_id])
             == signature
         ):
-            return ToolReply.model_validate_json(reply)
+            return ToolReply.model_validate_json(row.reply_text)
     return None
 
 
 def space_revision(scope):
     with open_stores(scope.path) as st:
-        rows = st.facts.current_space_fit_ids(scope.request_id, scope.snapshot_id)
-    return canonical_hash([row[0] for row in rows])
+        fact_ids = st.facts.current_space_fit_ids(scope.request_id, scope.snapshot_id)
+    return canonical_hash(fact_ids)
 
 
 class ToolExecutor:

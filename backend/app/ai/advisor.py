@@ -1,7 +1,6 @@
 """decision이 선택한 근거만 사용하는 자문과 감사 기록입니다."""
 
 import asyncio
-import json
 import uuid
 
 from pydantic import ValidationError
@@ -35,7 +34,7 @@ async def ask_advisor(loop, input):
         facts = await run_in_thread(fact_rows, loop.scope, input.fact_ids)
     except ReportInvalid:
         return error("UNKNOWN_FACT", "현재 요청의 fact만 자문에 전달할 수 있습니다.")
-    if any(f["status"] != "observed" or not f["citable"] for f in facts.values()):
+    if any(f.status != "observed" or not f.citable for f in facts.values()):
         return error("UNCITABLE", "관측된 fact만 자문에 전달할 수 있습니다.")
     consult_id = "consult_" + str(uuid.uuid4())
     receipt = {}
@@ -46,14 +45,14 @@ async def ask_advisor(loop, input):
         "industry_codes": input.industry_codes,
         "facts": [
             {
-                "fact_id": f["fact_id"],
-                "metric": f["metric"],
-                "value": json.loads(f["value_json"]),
-                "unit": f["unit"],
-                "status": f["status"],
-                "citable": bool(f["citable"]),
-                "period": f["period"],
-                "spatial_scope": json.loads(f["spatial_scope_json"]),
+                "fact_id": f.fact_id,
+                "metric": f.metric,
+                "value": f.value,
+                "unit": f.unit,
+                "status": f.status,
+                "citable": f.citable,
+                "period": f.period,
+                "spatial_scope": f.spatial_scope,
             }
             for f in facts.values()
         ],
@@ -107,17 +106,15 @@ def save_advisor(loop, input, answer, receipt, settings):
     )
     with open_stores(loop.scope.path) as st:
         st.agentic.insert_advisor_consult(
-            (
-                answer.consult_id,
-                loop.scope.request_id,
-                loop.scope.snapshot_id,
-                input.question,
-                canonical_json(input.fact_ids),
-                actual,
-                family,
-                canonical_json(receipt.get("usage")),
-                answer.model_dump_json(),
-                answer.status,
-                utc_now_iso(),
-            ),
+            consult_id=answer.consult_id,
+            request_id=loop.scope.request_id,
+            snapshot_id=loop.scope.snapshot_id,
+            question=input.question,
+            fact_ids=input.fact_ids,
+            model=actual,
+            family=family,
+            usage=receipt.get("usage"),
+            answer_text=answer.model_dump_json(),
+            status=answer.status,
+            created_at=utc_now_iso(),
         )

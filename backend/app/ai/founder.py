@@ -1,7 +1,5 @@
 """임차인이 받은 초안과 운영 근거를 비교하도록 제한된 크기의 패킷을 만듭니다."""
 
-import json
-
 from app.ai.aliases import encode
 from app.ai.landlord import _facts
 from app.application.ports.storage import open_stores
@@ -56,22 +54,22 @@ def review_packet(scope, draft):
     # 요청·스냅샷 격리와 현재 공간 비교 선택은 기존 읽기 경로를 재사용합니다.
     rows = _facts(scope, codes)
     with open_stores(scope.path) as st:
-        stored = st.scores.scoped_snapshot_summary(
+        stored = st.scores.scoped_score_rows(
             payload["score_snapshot_id"], scope.request_id, scope.snapshot_id
         )
     if stored is None:
         raise ValueError("초안의 점수표가 없습니다.")
-    spaces = {r["code"]: r.get("space", {}) for r in json.loads(stored[0])}
-    observed = {r["fact_id"]: r for r in rows if r["status"] == "observed" and r["citable"]}
+    spaces = {r["code"]: r.get("space", {}) for r in stored}
+    observed = {r.fact_id: r for r in rows if r.status == "observed" and r.citable}
     evidence = {}
     for code in codes:
         evidence[code] = {
             name: {
                 "fact_ids": [
-                    r["fact_id"]
+                    r.fact_id
                     for metric in metrics
                     for r in observed.values()
-                    if r["industry_code"] in (None, code) and (r["source"], r["metric"]) == metric
+                    if r.industry_code in (None, code) and (r.source, r.metric) == metric
                 ]
             }
             for name, metrics in GROUPS.items()
@@ -108,9 +106,9 @@ def review_packet(scope, draft):
     )
     cited_rows = fact_rows(scope, set(cited))
     observed.update(
-        {fid: r for fid, r in cited_rows.items() if r["status"] == "observed" and r["citable"]}
+        {fid: r for fid, r in cited_rows.items() if r.status == "observed" and r.citable}
     )
-    order = [fid for fid, r in observed.items() if r["source"] == "user"]
+    order = [fid for fid, r in observed.items() if r.source == "user"]
     # 한 후보의 상세 자료가 다른 후보의 지속성·경쟁 근거를 밀어내지 않게 배치합니다.
     for index in range(
         max(
@@ -126,14 +124,13 @@ def review_packet(scope, draft):
     scopes = {}
     for fid in dict.fromkeys(order):
         row = observed[fid]
-        spatial = row["spatial_scope_json"]
-        ref = scopes.setdefault(spatial, f"scope_{len(scopes)}")
-        packet["spatial_scopes"][ref] = json.loads(spatial)
+        ref = scopes.setdefault(row.spatial_key, f"scope_{len(scopes)}")
+        packet["spatial_scopes"][ref] = row.spatial_scope
         fact = {
-            key: row[key]
+            key: getattr(row, key)
             for key in ("fact_id", "industry_code", "source", "metric", "period", "unit")
         }
-        fact.update(spatial_scope_ref=ref, value=json.loads(row["value_json"]))
+        fact.update(spatial_scope_ref=ref, value=row.value)
         packet["facts"].append(fact)
     packet = encode(scope, packet)
     _trim_packet(packet)

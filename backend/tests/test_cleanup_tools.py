@@ -28,6 +28,7 @@ from app.infrastructure.persistence.provenance import save_snapshot
 from app.infrastructure.persistence.raw_capture import capture_scope
 from app.infrastructure.persistence.raw_query import _authorizer
 from app.shared.scrub import env_secrets, scrub, scrub_text
+from tests.fact_fixture import fact_record
 
 
 class BudgetBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -186,10 +187,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_overlap_and_other_industry_fact_rejected(self):
         ids = ["f_" + str(uuid.uuid4()) for _ in range(2)]
-        facts = {
-            f: {"status": "observed", "citable": 1, "metric": "lq", "industry_code": "I201"}
-            for f in ids
-        }
+        facts = {f: fact_record(f, metric="lq", industry_code="I201") for f in ids}
         _audit(
             self.scope,
             "call",
@@ -211,7 +209,7 @@ class CleanupToolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ReportInvalid, "중복"):
             self.validate(proposal, facts)
         proposal = self.proposal(ids)
-        facts[ids[0]]["industry_code"] = "I202"
+        facts[ids[0]].industry_code = "I202"
         with self.assertRaisesRegex(ReportInvalid, "업종"):
             self.validate(proposal, facts)
 

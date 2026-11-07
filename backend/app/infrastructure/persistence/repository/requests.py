@@ -106,9 +106,9 @@ def fail_interrupted(*, db_path=None):
     return changed.rowcount
 
 
-def save_outcome(request_id, *, result_json=None, completed_at=None, db_path=None):
+def save_outcome(request_id, *, result_text=None, completed_at=None, db_path=None):
     with connect(db_path) as db:
-        if result_json is None:
+        if result_text is None:
             db.execute(
                 "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id=?",
                 (request_id,),
@@ -118,16 +118,16 @@ def save_outcome(request_id, *, result_json=None, completed_at=None, db_path=Non
                 "UPDATE analysis_requests SET "
                 "status='completed',result_json=?,completed_at=? WHERE "
                 "request_id=?",
-                (result_json, completed_at, request_id),
+                (result_text, completed_at, request_id),
             )
 
 
-def record_failure(request_id, *, error_json, diagnostics_json, failed_at, db_path=None):
+def record_failure(request_id, *, error_text, diagnostics_text, failed_at, db_path=None):
     with connect(db_path) as db:
         changed = db.execute(
             "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
             "WHERE request_id=? AND status IN ('pending','running','waiting_for_input')",
-            (error_json, failed_at, request_id),
+            (error_text, failed_at, request_id),
         )
         if changed.rowcount != 1:
             raise ValueError("종료할 수 있는 요청이 없습니다.")
@@ -135,5 +135,5 @@ def record_failure(request_id, *, error_json, diagnostics_json, failed_at, db_pa
             "INSERT INTO decision_failures(request_id,failed_at,error_json,"
             "diagnostics_json) "
             "VALUES(?,?,?,?)",
-            (request_id, failed_at, error_json, diagnostics_json),
+            (request_id, failed_at, error_text, diagnostics_text),
         )

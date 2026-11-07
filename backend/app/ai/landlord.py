@@ -1,7 +1,5 @@
 """임대인 검토에 필요한 기존 사실을 새 수집 없이 제한된 크기로 제공합니다."""
 
-import json
-
 from app.ai.aliases import encode
 from app.application.ports.storage import open_stores, storage
 from app.domain.industries.catalog import INDUSTRIES
@@ -41,7 +39,7 @@ GROUPS = {
 def _facts(scope, codes):
     storage().provenance.validate_snapshot(scope)
     with open_stores(scope.path) as st:
-        rows = [dict(r) for r in st.facts.review_facts(scope.request_id, scope.snapshot_id, codes)]
+        rows = st.facts.review_facts(scope.request_id, scope.snapshot_id, codes)
     storage().provenance.expand_spatial_scope(scope, rows)
     return rows
 
@@ -57,13 +55,13 @@ def review_packet(scope, draft):
             matching = [
                 r
                 for r in rows
-                if r["industry_code"] in (None, code) and (r["source"], r["metric"]) in metrics
+                if r.industry_code in (None, code) and (r.source, r.metric) in metrics
             ]
             matching.sort(
                 key=lambda r: (
-                    metrics.index((r["source"], r["metric"])),
-                    r["industry_code"] is None,
-                    r["fact_id"],
+                    metrics.index((r.source, r.metric)),
+                    r.industry_code is None,
+                    r.fact_id,
                 )
             )
             groups[code][name] = matching
@@ -73,8 +71,8 @@ def review_packet(scope, draft):
         "evidence": {
             code: {
                 name: {
-                    "observed_count": sum(r["status"] == "observed" and r["citable"] for r in rs),
-                    "unknown_count": sum(r["status"] == "unknown" for r in rs),
+                    "observed_count": sum(r.status == "observed" and r.citable for r in rs),
+                    "unknown_count": sum(r.status == "unknown" for r in rs),
                     "fact_ids": [],
                 }
                 for name, rs in named.items()
@@ -110,22 +108,22 @@ def review_packet(scope, draft):
     scopes = {}
 
     def add(row, group_ids=None):
-        fid = row["fact_id"]
+        fid = row.fact_id
         if fid in supplied:
             if group_ids is not None:
                 group_ids.append(fid)
             return
-        if row["status"] != "observed" or not row["citable"]:
+        if row.status != "observed" or not row.citable:
             return
-        spatial = row["spatial_scope_json"]
+        spatial = row.spatial_key
         new_scope = spatial not in scopes
         ref = scopes.setdefault(spatial, f"scope_{len(scopes)}")
-        packet["spatial_scopes"][ref] = json.loads(spatial)
+        packet["spatial_scopes"][ref] = row.spatial_scope
         fact = {
-            key: row[key]
+            key: getattr(row, key)
             for key in ("fact_id", "source", "metric", "industry_code", "unit", "period", "status")
         }
-        fact.update(value=json.loads(row["value_json"]), citable=True, spatial_scope_ref=ref)
+        fact.update(value=row.value, citable=True, spatial_scope_ref=ref)
         packet["facts"].append(fact)
         if group_ids is not None:
             group_ids.append(fid)
@@ -140,7 +138,7 @@ def review_packet(scope, draft):
             scopes.pop(spatial)
 
     for row in rows:
-        if row["source"] == "user":
+        if row.source == "user":
             add(row)
     # 한 후보가 지면을 독점하지 않도록 같은 우선순위의 자료를 후보별로 교차 배치합니다.
     for name, index in (
@@ -154,7 +152,7 @@ def review_packet(scope, draft):
         ("demand", 2),
     ):
         for code, named in groups.items():
-            observed = [r for r in named[name] if r["status"] == "observed" and r["citable"]]
+            observed = [r for r in named[name] if r.status == "observed" and r.citable]
             if index < len(observed):
                 add(observed[index], context["evidence"][code][name]["fact_ids"])
     encoded = encode(scope, packet)

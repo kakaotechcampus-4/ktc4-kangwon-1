@@ -1,6 +1,5 @@
 """업종 공간 요건을 명시된 임대인 답변과만 대조합니다."""
 
-import json
 from contextlib import nullcontext
 
 from app.application.facts import register_fact
@@ -18,13 +17,12 @@ def rule_answers(scope, *, stores=None):
     with open_stores(scope.path) if stores is None else nullcontext(stores) as st:
         rows = st.facts.user_space_answers(scope.request_id, scope.snapshot_id)
     answers, candidates = {}, {}
-    for fact_id, metric, raw, unit in rows:
-        value = json.loads(raw)
-        if metric == "existing_facilities":
-            if isinstance(value, dict) and unit == CONFIRMED_UNIT:
-                answers.setdefault("confirmed_facilities", value)
+    for row in rows:
+        if row.metric == "existing_facilities":
+            if isinstance(row.value, dict) and row.unit == CONFIRMED_UNIT:
+                answers.setdefault("confirmed_facilities", row.value)
         else:
-            candidates.setdefault(metric, []).append((fact_id, value))
+            candidates.setdefault(row.metric, []).append((row.fact_id, row.value))
     for metric, found in candidates.items():
         chosen = chosen_answer(metric, found)
         if readable_answer(metric, chosen[1]):
@@ -38,21 +36,20 @@ def ensure_space_fits(scope, *, stores=None):
         st.begin_immediate()
         profiles, answers, answer_ids, candidates = {}, {}, {}, {}
         for row in st.facts.space_fit_inputs(scope.request_id, scope.snapshot_id):
-            if row[2] == "industry_profile" and row[3] == "space_requirements":
-                profiles.setdefault(row[1], (row[0], json.loads(row[4])))
-            elif row[2] == "user" and row[3] in {
+            if row.source == "industry_profile" and row.metric == "space_requirements":
+                profiles.setdefault(row.industry_code, (row.fact_id, row.value))
+            elif row.source == "user" and row.metric in {
                 "floor",
                 "exclusive_area",
                 "existing_facilities",
                 "space_condition",
             }:
-                value = json.loads(row[4])
                 key = (
                     "confirmed_facilities"
-                    if row[3] == "existing_facilities" and isinstance(value, dict)
-                    else row[3]
+                    if row.metric == "existing_facilities" and isinstance(row.value, dict)
+                    else row.metric
                 )
-                candidates.setdefault(key, []).append((row[0], value))
+                candidates.setdefault(key, []).append((row.fact_id, row.value))
         for metric, rows in candidates.items():
             if metric in {"floor", "exclusive_area"}:
                 chosen = chosen_answer(metric, rows)

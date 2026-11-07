@@ -1,4 +1,3 @@
-import json
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.contracts import (
@@ -32,18 +31,17 @@ def l_grade(factors):
 
 
 def rule_scored_space(fact, component, industry_code):
-    metric = fact.get("metric")
+    metric = fact.metric
     if metric == "space_fit":
         if component == "floor":
             return True
         level = load_requirements().get(industry_code, {}).get(f"{component}_needed")
         return component in FACILITY_NAMES and level in RULE_FACILITY_LEVELS
-    if fact.get("source") != "user":
+    if fact.source != "user":
         return False
     if metric == "floor":
         return True
-    raw = fact.get("value_json")
-    return metric == "existing_facilities" and raw is not None and isinstance(json.loads(raw), dict)
+    return metric == "existing_facilities" and isinstance(fact.value, dict)
 
 
 def industry_ranking(rows, excluded_codes):
@@ -166,16 +164,16 @@ def render_segment(segment, facts):
     if segment.type == "text":
         return segment.text
     fact = facts[segment.fact_id]
-    value = json.loads(fact["value_json"])
+    value = fact.value
     if segment.format == "text":
-        if fact["metric"] == "existing_facilities" and isinstance(value, dict):
+        if fact.metric == "existing_facilities" and isinstance(value, dict):
             return " · ".join(
                 f"{name} {FACILITY_STATE_TEXT[value[key]]}"
                 for key, name in FACILITY_NAMES.items()
                 if value.get(key) in FACILITY_STATE_TEXT
             )
         if isinstance(value, dict):
-            return space_fit_text(value) if fact["metric"] == "space_fit" else "확인 불가"
+            return space_fit_text(value) if fact.metric == "space_fit" else "확인 불가"
         if isinstance(value, list):
             items = [text_value(item) for item in value]
             return ", ".join(items) if items and None not in items else "확인 불가"
@@ -184,9 +182,9 @@ def render_segment(segment, facts):
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ReportInvalid("숫자 형식에 맞지 않는 fact입니다.")
     if segment.format == "percent":
-        if fact["unit"] not in {"%", "비율"}:
+        if fact.unit not in {"%", "비율"}:
             raise ReportInvalid("백분율 단위가 아닙니다.")
-        return fixed(value * 100 if fact["unit"] == "비율" else value, 1) + "%"
+        return fixed(value * 100 if fact.unit == "비율" else value, 1) + "%"
     if segment.format == "count":
         return grouped(value)
     if segment.format == "distance":
@@ -200,7 +198,7 @@ def join_segments(segments, facts):
     for segment in segments:
         piece = render_segment(segment, facts)
         kind = segment.type
-        if kind == "fact" and facts[segment.fact_id]["metric"] == "space_fit":
+        if kind == "fact" and facts[segment.fact_id].metric == "space_fit":
             kind = "space_fit"
         touching = joined[-1:].strip() and piece[:1].strip() and piece[0] not in ".,!?;:)]…"
         gap = (

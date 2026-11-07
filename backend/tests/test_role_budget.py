@@ -15,6 +15,7 @@ from app.domain.contracts import FactsResult, ToolReply, error
 from app.infrastructure.mock import call
 from app.shared.canonical import canonical_json
 from tests import test_space_fit as space_fixtures
+from tests.fact_fixture import fact_record
 
 
 class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
@@ -423,7 +424,7 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch(
                 "app.ai.evaluators.fact_rows",
-                return_value={fact_id: {"citable": True, "status": "observed"}},
+                return_value={fact_id: fact_record(fact_id)},
             ),
             patch("app.ai.evaluators.save_review"),
             patch("app.ai.tools._audit"),

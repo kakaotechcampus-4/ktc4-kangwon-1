@@ -6,7 +6,7 @@ from contextlib import nullcontext
 
 from app.application.ports.storage import open_stores
 from app.domain.facts import CALC_VERSION, fact_identity, is_citable
-from app.shared.canonical import canonical_hash, canonical_json
+from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
 
 
@@ -75,10 +75,10 @@ def register_fact(
         for parent_id in parent_fact_ids:
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            parent = st.facts.fact_scope_row(parent_id, scope.request_id, scope.snapshot_id)
-            if parent is None or parent[0] not in (None, industry_code):
+            parent = st.facts.fact_scope(parent_id, scope.request_id, scope.snapshot_id)
+            if parent is None or parent.industry_code not in (None, industry_code):
                 raise ValueError("부모 fact의 요청·스냅샷·업종이 다릅니다.")
-            if status == "observed" and (parent[1] != "observed" or not parent[2]):
+            if status == "observed" and (parent.status != "observed" or not parent.citable):
                 raise ValueError("관측 비교에는 인용 가능한 부모 fact가 필요합니다.")
         citable = is_citable(
             status,
@@ -94,38 +94,28 @@ def register_fact(
             return old
         fact_id = "f_" + str(uuid.uuid4())
         st.facts.insert_fact(
-            (
-                fact_id,
-                scope.request_id,
-                scope.snapshot_id,
-                industry_code,
-                source,
-                metric,
-                canonical_json(value),
-                unit,
-                period,
-                canonical_json(
-                    {"snapshot_id": scope.snapshot_id}
-                    | (
-                        {}
-                        if local
-                        else comparison.get("input_versions", {}).get("spatial_scope", {})
-                    )
-                ),
-                canonical_json(
-                    comparison
-                    | {"response_ids": list(response_ids)}
-                    | ({"parent_fact_ids": parent_fact_ids} if parent_fact_ids else {})
-                ),
-                status,
-                int(citable),
-                CALC_VERSION,
-                canonical_hash({"rows": row_ids, "parents": parent_fact_ids})
-                if parent_fact_ids
-                else canonical_hash(row_ids),
-                identity_hash,
-                utc_now_iso(),
-            ),
+            fact_id=fact_id,
+            request_id=scope.request_id,
+            snapshot_id=scope.snapshot_id,
+            industry_code=industry_code,
+            source=source,
+            metric=metric,
+            value=value,
+            unit=unit,
+            period=period,
+            spatial_scope={"snapshot_id": scope.snapshot_id}
+            | ({} if local else comparison.get("input_versions", {}).get("spatial_scope", {})),
+            comparison=comparison
+            | {"response_ids": list(response_ids)}
+            | ({"parent_fact_ids": parent_fact_ids} if parent_fact_ids else {}),
+            status=status,
+            citable=citable,
+            calc_version=CALC_VERSION,
+            lineage_hash=canonical_hash({"rows": row_ids, "parents": parent_fact_ids})
+            if parent_fact_ids
+            else canonical_hash(row_ids),
+            identity_hash=identity_hash,
+            created_at=utc_now_iso(),
         )
         if local:
             ref = st.pin_provenance(
@@ -140,9 +130,7 @@ def register_fact(
         for offset in range(0, len(row_ids), 400):
             if scope.cancelled.is_set():
                 raise asyncio.CancelledError()
-            st.facts.insert_fact_sources(
-                [(fact_id, row, field_pointer) for row in row_ids[offset : offset + 400]]
-            )
+            st.facts.insert_fact_sources(fact_id, row_ids[offset : offset + 400], field_pointer)
         if parent_fact_ids:
-            st.facts.insert_fact_parents([(fact_id, parent_id) for parent_id in parent_fact_ids])
+            st.facts.insert_fact_parents(fact_id, parent_fact_ids)
     return fact_id

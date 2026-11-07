@@ -95,15 +95,13 @@ submit_draft(phase=draft)로 제출하세요. 모델은 점수·배지를 제출
 def _save(scope, state, status, result_model=None):
     with open_stores(scope.path) as st:
         st.agentic.save_run(
-            (
-                scope.request_id,
-                scope.snapshot_id,
-                scope.run_id,
-                status,
-                canonical_json(state),
-                result_model.model_dump_json() if result_model else None,
-                utc_now_iso(),
-            ),
+            request_id=scope.request_id,
+            snapshot_id=scope.snapshot_id,
+            run_id=scope.run_id,
+            status=status,
+            state=state,
+            result_text=result_model.model_dump_json() if result_model else None,
+            updated_at=utc_now_iso(),
         )
 
 

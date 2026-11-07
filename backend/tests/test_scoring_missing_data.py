@@ -16,6 +16,7 @@ from app.domain.report import ReportInvalid
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.raw_capture import capture_scope
 from app.infrastructure.persistence.repository import create_request
+from tests.fact_fixture import fact_record
 
 
 class MissingDataTests(unittest.TestCase):
@@ -135,7 +136,7 @@ class MissingDataTests(unittest.TestCase):
                 self.subTest(status=status),
                 patch(
                     "app.application.report.fact_rows",
-                    return_value={"f": {"status": status, "citable": citable}},
+                    return_value={"f": fact_record("f", status=status, citable=citable)},
                 ),
             ):
                 with self.assertRaisesRegex(ReportInvalid, "미확인 fact"):

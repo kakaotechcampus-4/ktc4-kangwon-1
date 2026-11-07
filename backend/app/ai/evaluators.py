@@ -62,13 +62,11 @@ def _without_fit_checks(definitions):
 def save_review(scope, review):
     with open_stores(scope.path) as st:
         st.agentic.insert_review(
-            (
-                scope.request_id,
-                scope.snapshot_id,
-                review.actor,
-                review.model_dump_json(),
-                utc_now_iso(),
-            ),
+            request_id=scope.request_id,
+            snapshot_id=scope.snapshot_id,
+            actor=review.actor,
+            review_text=review.model_dump_json(),
+            created_at=utc_now_iso(),
         )
 
 
@@ -207,7 +205,7 @@ async def review(loop, actor, executor, draft):
                         "숫자(연령대·층수 포함)는 문장에 쓰지 말고 fact 근거로 인용하세요."
                     )
                 facts = await run_in_thread(fact_rows, loop.scope, set(issue.fact_ids))
-                if any(not f["citable"] or f["status"] != "observed" for f in facts.values()):
+                if any(not f.citable or f.status != "observed" for f in facts.values()):
                     raise ReportInvalid("관측된 인용 가능 근거로 바꾸세요.")
             except ReportInvalid as exc:
                 rejected.append({"issue_id": issue.issue_id, "reason": str(exc)})

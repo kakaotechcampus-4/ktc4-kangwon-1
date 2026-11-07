@@ -1,7 +1,5 @@
 """단순 판단 입력을 기존 검증용 L 기록으로 변환합니다."""
 
-import json
-
 from app.ai.aliases import decode
 from app.application.ports.storage import open_stores
 from app.application.report import RULE_SPACE_MESSAGE, fact_rows
@@ -16,10 +14,10 @@ def build_record(scope, raw, base_id, base_rows):
     facts = fact_rows(scope, ids)
     with open_stores(scope.path) as st:
         calls = [
-            row[0]
-            for row in st.agentic.decision_tool_calls(scope.request_id, scope.snapshot_id)
-            if json.loads(row[1])["status"] in {"ok", "partial"}
-            and any(fid in row[1] for fid in ids)
+            call.tool_call_id
+            for call in st.agentic.decision_tool_calls(scope.request_id, scope.snapshot_id)
+            if call.reply["status"] in {"ok", "partial"}
+            and any(fid in call.reply_text for fid in ids)
         ]
     factors = []
     inputs = [(f.fact_id, f.direction, f.severe) for f in item.factors]
@@ -32,8 +30,8 @@ def build_record(scope, raw, base_id, base_rows):
             "확인한 새 근거의 "
             + {"favorable": "유리 요인", "adverse": "불리 요인", "neutral": "중립 검토"}[direction]
         )
-        if fact["metric"] == "space_fit":
-            value = json.loads(fact["value_json"])
+        if fact.metric == "space_fit":
+            value = fact.value
             wanted = (
                 {"일치"}
                 if direction == "favorable"
@@ -67,8 +65,8 @@ def build_record(scope, raw, base_id, base_rows):
                 + " 조건 "
                 + value[component]
             )
-        elif fact["source"] == "user":
-            value = str(json.loads(fact["value_json"]))
+        elif fact.source == "user":
+            value = str(fact.value)
             claim = "·".join(word for word in ("주방", "배기") if word in value) + claim
         factors.append(
             {

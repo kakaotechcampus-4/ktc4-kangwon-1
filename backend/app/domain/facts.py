@@ -1,3 +1,31 @@
+import json
+from dataclasses import dataclass
+
+
+@dataclass
+class FactRecord:
+    fact_id: str
+    industry_code: str | None
+    source: str
+    metric: str
+    unit: str
+    period: str
+    status: str
+    citable: bool
+    calc_version: str
+    local_lineage: bool
+    value_text: str
+    spatial_key: str
+
+    @property
+    def value(self):
+        return json.loads(self.value_text)
+
+    @property
+    def spatial_scope(self):
+        return json.loads(self.spatial_key)
+
+
 METRICS = {
     "D1": ("pattern_fit_index", "배수", "floating_population"),
     "D2": ("day_fit_index", "배수", "floating_population"),

@@ -53,7 +53,7 @@ def save_user_facts(scope, answers, question_id, saved):
     with open_stores(scope.path) as st:
         st.begin_immediate()
         question = st.agentic.question_status(question_id)
-        if question is None or question[0] != "waiting":
+        if question is None or question != "waiting":
             raise AnalysisConflictError("이미 답변한 질문입니다.")
         response = scope.record_sync(
             source="user",
@@ -110,9 +110,9 @@ def save_user_facts(scope, answers, question_id, saved):
             scope.request_id,
             scope.snapshot_id,
             question_id,
-            canonical_json({k: v for k, v in body.items() if k != "tool_call_id"}),
+            {k: v for k, v in body.items() if k != "tool_call_id"},
         )
-        st.agentic.mark_question_answered(question_id, canonical_json(answers))
-        st.agentic.resume_run(scope.request_id, scope.snapshot_id, canonical_json(saved))
+        st.agentic.mark_question_answered(question_id, answers)
+        st.agentic.resume_run(scope.request_id, scope.snapshot_id, saved)
         st.agentic.resume_request(scope.request_id)
     return saved

@@ -1,4 +1,6 @@
+import json
 from dataclasses import dataclass
+from typing import Any
 
 from app.domain.schemas import FactView, Site
 
@@ -31,3 +33,84 @@ class SnapshotFacts:
 
     snapshot_id: str | None
     facts: list[FactView]
+
+
+@dataclass(frozen=True)
+class ToolCallRecord:
+    tool_call_id: str
+    reply_text: str
+
+    @property
+    def reply(self) -> dict[str, Any]:
+        return json.loads(self.reply_text)
+
+
+@dataclass(frozen=True)
+class ToolCallHistory:
+    arguments_text: str
+    reply_text: str
+
+
+@dataclass(frozen=True)
+class RunState:
+    state: dict[str, Any]
+    status: str
+
+
+@dataclass(frozen=True)
+class QuestionSession:
+    question_session_id: str
+    questions: list[dict[str, Any]]
+    status: str
+
+
+@dataclass(frozen=True)
+class FactScope:
+    industry_code: str | None
+    status: str
+    citable: bool
+
+
+@dataclass(frozen=True)
+class SpaceFitInput:
+    fact_id: str
+    industry_code: str | None
+    source: str
+    metric: str
+    value: Any
+
+
+@dataclass(frozen=True)
+class SpaceAnswer:
+    fact_id: str
+    metric: str
+    value: Any
+    unit: str
+
+
+@dataclass(frozen=True)
+class ScoreSnapshot:
+    score_snapshot_id: str
+    rows: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class ItemScore:
+    industry_code: str
+    item: str
+    status: str
+    grade: int | None
+    points: float | None
+    fact_ids: list[str]
+
+
+@dataclass(frozen=True)
+class RawRow:
+    raw_row_id: str
+    value: Any
+
+
+@dataclass(frozen=True)
+class RawRowSource:
+    value: Any
+    source: str

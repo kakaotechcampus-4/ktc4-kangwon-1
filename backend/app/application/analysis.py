@@ -77,7 +77,7 @@ def _persist_outcome(path, request_id, outcome):
     else:
         storage().requests.save_outcome(
             request_id,
-            result_json=outcome.result.model_dump_json(),
+            result_text=outcome.result.model_dump_json(),
             completed_at=utc_now_iso(),
             db_path=path,
         )
@@ -122,8 +122,8 @@ async def _failure(path, request_id, exc, stage, timings=None):
         failed_at = utc_now_iso()
         storage().requests.record_failure(
             request_id,
-            error_json=error.model_dump_json(),
-            diagnostics_json=json.dumps(diagnostics, ensure_ascii=False),
+            error_text=error.model_dump_json(),
+            diagnostics_text=json.dumps(diagnostics, ensure_ascii=False),
             failed_at=failed_at,
             db_path=path,
         )

@@ -7,8 +7,6 @@ L의 수요 지표 중복은 validate_l_records가 이미 거절하므로 문항
 SQLite 읽기는 호출자가 스레드로 격리합니다.
 """
 
-import json
-
 from app.application.ports.storage import open_stores
 from app.domain.contracts import CustomerCandidateScore, CustomerCheck, CustomerRubric, ReviewIssue
 from app.domain.scoring import WEIGHTS
@@ -123,15 +121,12 @@ def _cited(segments):
 def load(scope, draft):
     """점수표 문항·문항별 fact·인용 가능 여부를 한 번에 읽습니다."""
     with open_stores(scope.path) as st:
-        summary = st.scores.snapshot_summary_json(draft.score_snapshot_id)
+        summary = st.scores.score_rows(draft.score_snapshot_id)
         if summary is None:
             raise ValueError("초안의 점수표가 없습니다.")
-        item_facts = {
-            (code, item): json.loads(ids)
-            for code, item, ids in st.scores.item_fact_ids(draft.score_snapshot_id)
-        }
+        item_facts = st.scores.item_fact_ids(draft.score_snapshot_id)
         citable = st.facts.citable_fact_ids(scope.request_id, scope.snapshot_id)
-    rows = {row["code"]: row for row in json.loads(summary)}
+    rows = {row["code"]: row for row in summary}
     return rows, item_facts, citable
 
 
@@ -257,11 +252,11 @@ def packet(scope, draft, scored, issues):
     for fid, row in sorted(fact_rows(scope, ids).items()):
         fact = {
             "fact_id": fid,
-            "source": row["source"],
-            "metric": row["metric"],
-            "unit": row["unit"],
-            "industry_code": row["industry_code"],
-            "value": json.loads(row["value_json"]),
+            "source": row.source,
+            "metric": row.metric,
+            "unit": row.unit,
+            "industry_code": row.industry_code,
+            "value": row.value,
         }
         if len(canonical_json(fact["value"])) > 500:
             fact.pop("value")

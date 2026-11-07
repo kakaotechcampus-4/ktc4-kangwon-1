@@ -10,6 +10,7 @@ from app.ai.evaluators import PERSONAS
 from app.domain.contracts import SubmitDraftInput, SubmitLInput
 from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
+from tests.fact_fixture import fact_record
 
 
 class ReviewTests(unittest.IsolatedAsyncioTestCase):
@@ -73,7 +74,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "app.ai.evaluators.fact_rows",
-                return_value={fid: {"citable": True, "status": "observed"}},
+                return_value={fid: fact_record(fid)},
             ),
         ):
             result = await review(

@@ -29,7 +29,7 @@ from app.infrastructure.persistence.repository import (
     sessions,
     users,
 )
-from app.infrastructure.persistence.repository.agentic import begin_immediate
+from app.infrastructure.persistence.repository.common import begin_immediate
 
 
 class _Bound:
