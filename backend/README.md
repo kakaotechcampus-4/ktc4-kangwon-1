@@ -67,10 +67,11 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 ```text
 app/
   main.py          앱 조립(설정·DB·작업 슬롯·라우터)
+  bootstrap.py     창구(application/ports)에 구현 연결: 저장·시장 자료·LLM·장소·현장·신원·데모·판단 엔진
   api/v1/          HTTP 경계와 작업 슬롯. application만 부릅니다
-  application/     분석 실행·재개·인증·작업, fact·스냅숏·리포트 확정, 로컬 자료 채점
+  application/     분석 실행·재개·인증·작업, fact·스냅숏·리포트 확정, 로컬 자료 채점. ports/에 바깥 창구 정의
   ai/              decision 도구 루프, 자문, 질문, 평가자 4명, 도구 실행
-  domain/          공개 계약(schemas·contracts), 채점(scoring·code90·공간 규칙), 51업종·기준값
+  domain/          공개 계약(schemas·contracts), 채점(scoring·code90·공간 규칙), 리포트 문장 규칙, 51업종·기준값
   infrastructure/  요청 DB(persistence), 시장 자료(market_data), 외부 API(clients), LLM, 설정·mock
   shared/          canonical JSON·시각·스레드 격리·비밀값 마스킹·로그 정제
 scripts/           자료 갱신, 기준선 생성, 재현 검증

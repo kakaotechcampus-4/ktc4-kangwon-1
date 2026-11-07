@@ -2,7 +2,7 @@
 
 단일 decision의 지도 도구가 주변 업종·시설을 확인할 때 쓰는 비동기 클라이언트와 코드 규칙입니다.
 도구 연결과 fact 등록은 `app/ai/map_regulation.py`, 이 폴더에는
-[client.py](client.py), [config.py](config.py), [matching.py](matching.py)를 둡니다.
+[client.py](client.py), [config.py](config.py)를 둡니다. 일치 규칙은 [domain/place_matching.py](../../../domain/place_matching.py)에 있습니다.
 
 카카오 장소 원문을 보존하고, 분류·업종 검색어로 `category_match`, `name_match`, `unknown`을 구분합니다.
 LLM으로 장소를 매핑하지 않습니다. 규칙 일치는 실제 경쟁점이나 입점 가능성의 확정 판정이 아닙니다.

@@ -10,7 +10,7 @@
 
 | 모듈 | 역할 |
 | --- | --- |
-| [models.py](models.py) · [schemas.py](schemas.py) | 원문 파싱과 계산 자료 형태 |
+| [schemas.py](schemas.py) · [인구 기록 모델](../../../domain/population.py) | 계산 자료 형태와 원문 파싱 |
 | [metrics.py](metrics.py) · [population.py](population.py) | 규모·분포·추세·상주/직장 계산 |
 | [geo.py](geo.py) | 반경과 상권 겹침 |
 | [baseline.py](../../../domain/baselines/floating_population.py) | 서울 규모·시간대·연령 기준선 |

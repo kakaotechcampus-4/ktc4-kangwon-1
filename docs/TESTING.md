@@ -54,7 +54,7 @@ AST의 함수 시작~끝 물리 행 수(주석·빈 줄 포함), 100줄 초과 �
 | --- | --- | ---: | ---: |
 | app/domain/scoring.py | score_item | 78 | 282 |
 | app/infrastructure/market_data/business_lifecycle/preprocess.py | aggregate_rows | 67 | 189 |
-| app/application/inputs.py | format_inputs | 106 | 188 |
+| app/infrastructure/market_data/inputs.py | format_inputs | 106 | 188 |
 | app/ai/sql_tool.py | _query | 234 | 173 |
 | app/application/facts.py | register_fact | 15 | 162 |
 | app/ai/evaluators.py | review | 156 | 155 |
