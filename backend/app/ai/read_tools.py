@@ -13,7 +13,7 @@ from app.domain.contracts import (
     ScorecardSummary,
     ScoreItem,
 )
-from app.domain.scoring import apply_space, rank_key, summarize
+from app.domain.scoring import apply_space, rank_key, score_summary, summarize
 from app.domain.space_rules import judge, load_requirements
 from app.shared.concurrency import run_in_thread
 
@@ -128,27 +128,3 @@ async def get_scorecard(scope, input):
 
 async def get_facts(scope, input):
     return await run_in_thread(_facts, scope, input)
-
-
-def score_summary(row):
-    fields = dict(
-        industry_code=row["code"],
-        code_points=row.get("code90", {}).get(
-            "code_points", row["lower"] - (row["items"]["L"]["points"] or 0)
-        ),
-        L_points=row["items"]["L"]["points"],
-        L_status=row["items"]["L"]["status"],
-        A=row["applicable_weight"],
-        B=row["lower"],
-        H=row["upper"],
-        lower_ratio=row["lower_ratio"],
-        upper_ratio=row["upper_ratio"],
-        coverage=row["coverage"],
-        demand_coverage=row["d_coverage"],
-        competition_coverage=row["c_coverage"],
-        G=row["regulation"],
-        badge=row["badge"],
-        confirmation_conditions=row["confirmation_conditions"],
-        calculation=row.get("code90"),
-    )
-    return fields

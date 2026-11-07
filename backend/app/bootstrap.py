@@ -1,3 +1,5 @@
+from app.ai.engine import AgenticDecisions
+from app.application.ports.decision import decision
 from app.application.ports.llm import llm
 from app.application.ports.market import market
 from app.application.ports.places import places
@@ -13,6 +15,7 @@ def wire() -> None:
     market.configure(SeoulMarket())
     llm.configure(OpenAICompatibleModel())
     places.configure(PlaceServices())
+    decision.configure(AgenticDecisions())
 
 
 wire()

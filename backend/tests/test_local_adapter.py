@@ -279,11 +279,11 @@ class LocalAdapterTests(unittest.TestCase):
                     )
                     with (
                         patch(
-                            "app.application.analysis.DecisionLoop.create",
+                            "app.ai.runtime.DecisionLoop.create",
                             AsyncMock(return_value=loop),
                         ),
                         patch(
-                            "app.application.analysis.collect_preflight",
+                            "app.ai.engine.collect_preflight",
                             AsyncMock(return_value=({}, None)),
                         ),
                     ):

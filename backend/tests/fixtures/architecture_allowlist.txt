@@ -1,8 +1,3 @@
-app.ai.sql_tool -> app.infrastructure.persistence.connection
-app.application.analysis -> app.ai.budget
-app.application.analysis -> app.ai.preflight
-app.application.analysis -> app.ai.questions
-app.application.analysis -> app.ai.runtime
 app.application.analysis -> app.infrastructure.clients.address
 app.application.analysis -> app.infrastructure.config
 app.application.analysis -> app.infrastructure.mock
@@ -11,4 +6,3 @@ app.application.auth -> app.infrastructure.clients.mailer
 app.application.auth -> app.infrastructure.config
 app.application.building -> app.infrastructure.clients.building_registry
 app.application.building -> app.infrastructure.mock
-app.application.report -> app.ai.read_tools

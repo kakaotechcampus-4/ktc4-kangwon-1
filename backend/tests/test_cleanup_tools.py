@@ -11,12 +11,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.ai.budget import RuntimeBudget
-from app.ai.sql_tool import LOCAL_VIEWS, _authorizer, error, query_raw
+from app.ai.sql_tool import error, query_raw
 from app.ai.tools import ToolExecutor, _audit
 from app.application.local_snapshot import register_cell
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.report import ReportInvalid, finalize, validate_l_records
 from app.domain.contracts import LRecord, ReportProposal, ReviewResolution, ToolReply
+from app.domain.raw_views import LOCAL_VIEWS
 from app.domain.schemas import Site
 from app.domain.text import has_digit
 from app.infrastructure.market_data.local.adapter import LocalAdapter
@@ -24,6 +25,7 @@ from app.infrastructure.market_data.local.database import LocalDataDB
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.provenance import save_snapshot
 from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.raw_query import _authorizer
 from app.shared.scrub import env_secrets, scrub, scrub_text
 
 

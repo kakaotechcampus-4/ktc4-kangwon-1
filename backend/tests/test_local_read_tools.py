@@ -169,7 +169,9 @@ class LocalReadTests(unittest.IsolatedAsyncioTestCase):
                     scope, "SELECT store_count FROM v_raw_lifecycle WHERE request_id='other'"
                 )
                 self.assertEqual(foreign.data.rows, [])
-                with patch("app.ai.sql_tool.monotonic", side_effect=[0, 3]):
+                with patch(
+                    "app.infrastructure.persistence.raw_query.monotonic", side_effect=[0, 3]
+                ):
                     timeout = await query_raw(scope, "SELECT count(*) FROM v_raw_lifecycle")
                 self.assertEqual(timeout.error.code, "SQL_TIMEOUT")
 

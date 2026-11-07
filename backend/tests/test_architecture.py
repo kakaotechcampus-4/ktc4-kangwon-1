@@ -28,7 +28,7 @@ SQL = re.compile(
     r"RELEASE|WITH|CREATE|DROP|ALTER|PRAGMA)\b\s+\S",
     re.IGNORECASE,
 )
-SQL_OUTSIDE_INFRASTRUCTURE = {"app/ai/sql_tool.py"}
+SQL_OUTSIDE_INFRASTRUCTURE: set[str] = set()
 DOMAIN_FORBIDDEN_IMPORTS = {
     "asyncio",
     "contextvars",

@@ -16,7 +16,7 @@ from app.application.ports.storage import (
     Stores,
     UserStore,
 )
-from app.infrastructure.persistence import provenance, raw_capture
+from app.infrastructure.persistence import provenance, raw_capture, raw_query
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.repository import (
     agentic,
@@ -77,6 +77,7 @@ class SqliteStorage:
     capture = staticmethod(raw_capture.capture_scope)
     resume_scope = staticmethod(raw_capture.CaptureScope)
     current_capture = staticmethod(raw_capture.current_capture)
+    raw_query = staticmethod(raw_query.run_query)
 
     @contextmanager
     def stores(self, path: str | Path | None, *, immediate: bool = False) -> Iterator[Stores]:

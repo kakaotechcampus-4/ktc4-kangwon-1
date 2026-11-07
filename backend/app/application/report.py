@@ -5,7 +5,6 @@ import uuid
 from copy import deepcopy
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.ai.read_tools import score_summary
 from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
 from app.domain.code90 import METHOD
@@ -22,7 +21,15 @@ from app.domain.contracts import (
 )
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.schemas import DecisionResult
-from app.domain.scoring import WEIGHTS, apply_space, rank_candidates, rank_key, result, summarize
+from app.domain.scoring import (
+    WEIGHTS,
+    apply_space,
+    rank_candidates,
+    rank_key,
+    result,
+    score_summary,
+    summarize,
+)
 from app.domain.space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, judge, load_requirements
 from app.domain.text import has_digit
 from app.shared.clock import utc_now_iso

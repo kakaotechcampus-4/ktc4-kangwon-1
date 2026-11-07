@@ -47,6 +47,8 @@ main.py          조립 지점. 설정·DB·라우터를 연결한다
 - 시장 자료(원문→계산 변환, 로컬 자료, 참고 분포 버전)는 `application/ports/market.py`의 `market()` 창구로 씁니다. 구현은 `infrastructure/market_data/service.py`입니다.
 - 모델 호출은 `application/ports/llm.py`의 `llm()` 창구(`complete_json`·`complete_tools`·호출 기록·연결 세션)로 합니다. 호출 예산(`llm_budget.py`)·설정(`llm_settings.py`)·오류 형식(`LLMResponseError`·`LLMHTTPError`)도 같은 폴더에 있어 ai와 인프라가 함께 씁니다. 녹화 재생이 오류 클래스 이름으로 맞추므로 이름을 바꾸지 않습니다.
 - 지도 장소 검색과 교육환경보호구역 조회는 `application/ports/places.py`의 `places()` 창구로 합니다. 구현은 `infrastructure/clients/places.py`입니다. 지도 매칭 규칙(`domain/place_matching.py`)과 다각형 판정(`domain/geo.py`)은 순수 계산이라 domain에 둡니다.
+- application은 ai를 직접 import하지 않고 `application/ports/decision.py`의 `decision()` 창구(예산·사전 수집·공간 답 저장·판단 루프 생성/재개)로 부릅니다. 구현은 `ai/engine.py`입니다.
+- AI의 원문 SQL 조회는 입력 검증·응답 조립만 `ai/sql_tool.py`에 두고, 읽기 전용 연결·권한 검사·임시 뷰는 `infrastructure/persistence/raw_query.py`(`storage().raw_query`)가 맡습니다. 뷰 목록과 필드 정의는 `domain/raw_views.py`입니다. 그래서 SQL 문장은 인프라 밖에 없습니다.
 - 창구는 처음 쓰일 때 `app.bootstrap`을 불러 연결합니다. 그래서 계층 모듈은 `app.bootstrap`·`app.main`을 import하지 않습니다(`tests/test_architecture.py`).
 - 시험에서 저장소 함수를 바꿔치기할 때는 `repository/requests.py` 같은 하위 모듈을 patch합니다. 패키지 `repository`가 재수출한 이름을 patch하면 창구에는 반영되지 않습니다.
 

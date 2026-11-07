@@ -19,5 +19,12 @@ class AddressError(Exception):
         self.message = message
 
 
+class RawQueryRejected(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(f"[{code}] {message}")
+        self.code = code
+        self.message = message
+
+
 class RawStorageError(sqlite3.DatabaseError):
     """원문 저장 실패는 에이전트 실패로 변환하지 않고 서비스까지 전파합니다."""

@@ -16,7 +16,6 @@ from app.ai.budget import RuntimeBudget
 from app.ai.evaluators import review
 from app.ai.l_input import build_record
 from app.ai.questions import LoopOutcome
-from app.ai.read_tools import score_summary
 from app.ai.sql_tool import error
 from app.ai.tools import ToolExecutor, validation_message
 from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
@@ -49,7 +48,7 @@ from app.domain.contracts import (
     ToolReply,
 )
 from app.domain.industries.catalog import INDUSTRIES
-from app.domain.scoring import rank_candidates
+from app.domain.scoring import rank_candidates, score_summary
 from app.shared.canonical import canonical_json
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread

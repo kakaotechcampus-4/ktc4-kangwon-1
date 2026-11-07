@@ -7,12 +7,9 @@ import re
 import uuid
 from time import monotonic
 
-from app.ai.budget import RuntimeBudget
-from app.ai.preflight import collect_preflight
-from app.ai.questions import save_confirmed_space
-from app.ai.runtime import DecisionLoop
 from app.application.errors import INTERRUPTED_MESSAGE, AnalysisConflictError
 from app.application.local_snapshot import persist_local
+from app.application.ports.decision import decision
 from app.application.ports.llm import llm, with_llm_session
 from app.application.ports.market import market
 from app.application.ports.storage import storage
@@ -152,7 +149,7 @@ async def _collect_and_score(scope, task, adapter):
     if adapter is None:
         await persist_snapshot_scores(task)
         return {}, None
-    observations, shared = await collect_preflight(scope, task.site)
+    observations, shared = await decision().preflight(scope, task.site)
     data, _, _ = await run_in_thread(persist_local, task, scope, adapter, None, observations)
     return data, shared
 
@@ -192,7 +189,7 @@ async def execute_agentic_analysis(
                 request_id, address, radius_m=radius_m, db_path=path
             )
         )
-    budget = RuntimeBudget(measurement=measurement)
+    budget = decision().budget(measurement=measurement)
     recorder = _make_recorder(request_id, recording_path, measurement)
     limit = MEASURING_COLLECT_TIMEOUT_SECONDS if measurement else COLLECT_TIMEOUT_SECONDS
     stage, started, timings = "수집", monotonic(), {}
@@ -209,7 +206,7 @@ async def execute_agentic_analysis(
                 stage, started = "조회·채점" if adapter is not None else "채점", monotonic()
                 data, shared = await _collect_and_score(scope, task, adapter)
                 confirmed = (
-                    await run_in_thread(save_confirmed_space, scope, confirmed_space)
+                    await run_in_thread(decision().confirm_space, scope, confirmed_space)
                     if confirmed_space
                     else None
                 )
@@ -217,7 +214,7 @@ async def execute_agentic_analysis(
                 timings[stage] = monotonic() - started
             stage, started = "루프", monotonic()
             await _event(path, request_id, "local_data", "completed")
-            loop = await DecisionLoop.create(
+            loop = await decision().create(
                 scope,
                 task.site,
                 generate=generate,
@@ -263,13 +260,13 @@ async def resume_agentic_analysis(
     )
     scope = storage().resume_scope(request_id, path, context.run_id, context.snapshot_id)
     try:
-        resume_state = await DecisionLoop.validate_resume(scope, answers)
+        resume_state = await decision().validate_resume(scope, answers)
     except ValueError as exc:
         raise AnalysisConflictError(str(exc)) from None
     recorder = _make_recorder(request_id, recording_path, measurement)
     try:
         await run_in_thread(storage().provenance.validate_snapshot, scope)
-        loop = await DecisionLoop.resume(
+        loop = await decision().resume(
             scope,
             context.site,
             answers,

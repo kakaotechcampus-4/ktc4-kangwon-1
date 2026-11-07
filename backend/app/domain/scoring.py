@@ -574,3 +574,27 @@ def evaluate(
         "top5_status": "v0.8 관측 보존 · S2_half 90점+기존 L→coverage→코드 순 검토 후보",
         "badges": dict(Counter(r["badge"] for r in rows)),
     }
+
+
+def score_summary(row):
+    fields = dict(
+        industry_code=row["code"],
+        code_points=row.get("code90", {}).get(
+            "code_points", row["lower"] - (row["items"]["L"]["points"] or 0)
+        ),
+        L_points=row["items"]["L"]["points"],
+        L_status=row["items"]["L"]["status"],
+        A=row["applicable_weight"],
+        B=row["lower"],
+        H=row["upper"],
+        lower_ratio=row["lower_ratio"],
+        upper_ratio=row["upper_ratio"],
+        coverage=row["coverage"],
+        demand_coverage=row["d_coverage"],
+        competition_coverage=row["c_coverage"],
+        G=row["regulation"],
+        badge=row["badge"],
+        confirmation_conditions=row["confirmation_conditions"],
+        calculation=row.get("code90"),
+    )
+    return fields

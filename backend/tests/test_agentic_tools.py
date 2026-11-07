@@ -99,7 +99,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_sql_timeout(self):
         from app.ai.sql_tool import query_raw
 
-        with patch("app.ai.sql_tool.monotonic", side_effect=[0, 0, 3, 3, 3]):
+        with patch(
+            "app.infrastructure.persistence.raw_query.monotonic", side_effect=[0, 0, 3, 3, 3]
+        ):
             reply = await query_raw(
                 self.scope,
                 "SELECT sum(a.store_count*b.store_count) "
@@ -172,7 +174,8 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_all_views_are_request_scoped(self):
-        from app.ai.sql_tool import VIEWS, query_raw
+        from app.ai.sql_tool import query_raw
+        from app.domain.raw_views import VIEWS
 
         for view, source in VIEWS.items():
             await self.scope.record(
