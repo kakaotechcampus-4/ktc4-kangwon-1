@@ -253,6 +253,33 @@ class ArchitectureTests(unittest.TestCase):
                     found.add(f"{path.relative_to(APP)}:{node.lineno}:{name}")
         self.assertEqual(sorted(found), [])
 
+    def test_scoring_path_runs_without_ai(self):
+        imports = "; ".join(f"import {module}" for module in SCORING_MODULES)
+        code = (
+            f"import sys; {imports}; "
+            "from app.application.ports.market import market; "
+            "from app.application.ports.places import places; "
+            "from app.application.ports.storage import storage; "
+            "storage(); market(); places(); "
+            "print([m for m in sys.modules if m.startswith('app.ai') or m == 'openai'])"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "[]")
+
+    def test_server_start_loads_every_implementation(self):
+        code = (
+            "import sys; from app.main import create_app; create_app(load_env=False); "
+            "print('app.ai.runtime' in sys.modules, 'openai' in sys.modules)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True, timeout=120
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "True True")
+
     def test_entry_point_probe_catches_import_forms(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "probe.py"

@@ -2,7 +2,6 @@
 
 import asyncio
 import uuid
-from collections import Counter
 from dataclasses import dataclass, field
 
 from app.application.facts import register_fact
@@ -270,11 +269,8 @@ async def check_regulation(scope, site, shared):
 
 
 @dataclass
-class SharedTools:
+class Observations:
     measurement: bool = False
-    calls: Counter = field(default_factory=Counter)
-    seen: set = field(default_factory=set)
-    replies: dict = field(default_factory=dict)
     map_cache: dict = field(default_factory=dict)
     map_keys: set = field(default_factory=set)
     map_http: int = 0
@@ -282,4 +278,3 @@ class SharedTools:
     regulation_lookup: object = None
     regulation_scan: object = None
     regulation: object = None
-    observation_lock: asyncio.Lock = field(default_factory=asyncio.Lock)

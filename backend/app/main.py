@@ -19,7 +19,7 @@ from app.api.v1.jobs import health as api_health
 from app.application.jobs import AnalysisJobRegistry
 from app.application.ports.identity import AuthSettings, KakaoOAuthSettings, MailSettings
 from app.application.services import Services
-from app.bootstrap import wire
+from app.bootstrap import load_all, wire
 from app.infrastructure.config import load_environment
 from app.infrastructure.market_data.local.score_reference import warm_reference
 from app.infrastructure.persistence import repository
@@ -72,6 +72,7 @@ def create_app(
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
     protect_http_query_logs()
     wire()
+    load_all()
     if load_env:
         load_environment()
     app = FastAPI(

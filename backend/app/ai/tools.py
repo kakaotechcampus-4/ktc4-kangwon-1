@@ -1,13 +1,16 @@
 """요청별 읽기 도구 권한·횟수·중복·감사 기록의 공통 실행 경계입니다."""
 
+import asyncio
 import uuid
+from collections import Counter
+from dataclasses import dataclass, field
 
 from pydantic import TypeAdapter, ValidationError
 
 from app.ai.aliases import decode, decode_report
 from app.ai.read_tools import InvalidCursor, get_facts, get_scorecard
 from app.ai.sql_tool import query_raw
-from app.application.map_regulation import SharedTools, check_regulation, map_search
+from app.application.map_regulation import Observations, check_regulation, map_search
 from app.application.ports.places import MapApiError
 from app.application.ports.storage import open_stores
 from app.domain.contracts import (
@@ -57,6 +60,14 @@ def validation_message(model, failure):
         rule = " " + str(context["error"])[:120] if detail["type"] == "value_error" else ""
         issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum + rule)
     return ("입력 오류: " + "; ".join(issues))[:400]
+
+
+@dataclass
+class SharedTools(Observations):
+    calls: Counter = field(default_factory=Counter)
+    seen: set = field(default_factory=set)
+    replies: dict = field(default_factory=dict)
+    observation_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def _audit(scope, call_id, actor, name, arguments, reply):

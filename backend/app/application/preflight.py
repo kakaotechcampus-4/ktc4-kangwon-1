@@ -2,7 +2,7 @@
 
 import csv
 
-from app.application.map_regulation import SharedTools, check_regulation, map_search
+from app.application.map_regulation import Observations, check_regulation, map_search
 from app.application.ports.places import EducationZoneError, MapApiError, places
 from app.application.ports.storage import open_stores
 from app.domain.contracts import MapSearchInput, error
@@ -44,7 +44,7 @@ def _facility_places(scope, reply, category):
 
 
 async def collect_preflight(scope, site, shared=None):
-    shared = shared or SharedTools()
+    shared = shared or Observations()
     shared.regulation_lookup = shared.regulation_lookup or _education_lookup
     queries, places, limitations = {}, {}, []
     for category, radius in await run_in_thread(facility_requests):
