@@ -28,7 +28,7 @@ docs/       규칙 문서 (컨벤션 · Git · API 계약)
 
 ## 반드시 지킬 것
 
-1. **공개 결과는 `backend/app/domain/schemas.py`, 도구 입력·응답은 `backend/app/domain/contracts.py`가 기준이다.**
+1. **공개 결과는 `backend/app/domain/schemas.py`, 판단·근거 형식은 `backend/app/domain/contracts.py`, 도구 입력·응답은 `backend/app/ai/tool_contracts.py`가 기준이다.**
    `AnalysisTask`·`AgentAnalysis`는 수집·계산 경계에도 사용합니다. HTTP 요청·응답 모델은
    `app/api/v1/`에 있습니다. 계약 변경은 호출자·화면에 영향을 주므로 PR에서 합의합니다.
    자료 DB는 수집·활성화용이며 요청 DB에는 버전 참조·근거·판단·질문 이력을 저장합니다.

@@ -175,7 +175,7 @@ class LocalAdapterTests(unittest.TestCase):
                             unit="텍스트",
                         )
                         from app.ai.read_tools import get_facts
-                        from app.domain.contracts import GetFactsInput
+                        from app.ai.tool_contracts import GetFactsInput
 
                         reply = await get_facts(scope, GetFactsInput(fact_ids=[fact]))
                         self.assertEqual(reply.facts[0].spatial_scope["radius_m"], 500)
@@ -271,8 +271,9 @@ class LocalAdapterTests(unittest.TestCase):
                             model_dump_json=lambda: '{"request_id":"local-service"}'
                         ),
                     )
+                    limitations = []
                     loop = SimpleNamespace(
-                        state={"limitations": []},
+                        begin=lambda items, timings: limitations.extend(items),
                         run=AsyncMock(return_value=outcome),
                         review_and_finalize=AsyncMock(return_value=outcome),
                         save=AsyncMock(),
@@ -295,7 +296,7 @@ class LocalAdapterTests(unittest.TestCase):
                             request_id="local-service",
                         )
                     self.assertEqual(received.status, "draft_available")
-                    self.assertIn("서울 밖 점포 미반영", loop.state["limitations"])
+                    self.assertIn("서울 밖 점포 미반영", limitations)
                     with connect(path) as con:
                         self.assertEqual(
                             con.execute(

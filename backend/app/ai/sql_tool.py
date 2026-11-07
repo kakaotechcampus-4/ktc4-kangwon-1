@@ -3,11 +3,12 @@
 import json
 import re
 
+from app.ai.tool_contracts import QueryRawInput, RawQueryResult, RawQueryRow
 from app.application.errors import RawQueryRejected
 from app.application.facts import register_fact
 from app.application.local_snapshot import register_cell
 from app.application.ports.storage import open_stores, storage
-from app.domain.contracts import QueryRawInput, RawQueryResult, RawQueryRow, ToolReply, error
+from app.domain.contracts import ToolReply, error
 from app.domain.raw_views import FIELDS, LINEAGE_COLUMN, LOCAL_VIEWS, VERSION_COLUMN, VIEWS
 from app.shared.concurrency import run_in_thread
 

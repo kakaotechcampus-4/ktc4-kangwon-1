@@ -13,13 +13,9 @@ from pydantic import ValidationError
 
 from app.ai import customer_rubric
 from app.ai.evaluators import PERSONAS
-from app.domain.contracts import (
-    CustomerCheck,
-    FactReferenceSegment,
-    FitCheck,
-    SubmitDraftInput,
-    SubmitLInput,
-)
+from app.ai.tool_contracts import FitCheck, SubmitDraftInput, SubmitLInput
+from app.domain import customer_rubric as rubric_rules
+from app.domain.contracts import CustomerCheck, FactReferenceSegment
 from app.domain.industries.catalog import INDUSTRIES
 from tests import test_agentic_runtime as fixtures
 
@@ -40,7 +36,7 @@ class Site:
     def __init__(self, code, grades, d3_value=None):
         self.code = code
         self.items, self.facts = {}, {}
-        for item in customer_rubric.DEMAND:
+        for item in rubric_rules.DEMAND:
             grade = grades.get(item)
             if grade == "n.a.":
                 self.items[item] = {"status": "n.a.", "grade": None}
@@ -182,7 +178,7 @@ class CustomerCheckTests(unittest.TestCase):
         self.assertEqual(CustomerCheck(status="observed", points=15, **base).points, 15)
 
     def test_all_demand_items_not_applicable(self):
-        site = Site(CODES[0], dict.fromkeys(customer_rubric.DEMAND, "n.a."))
+        site = Site(CODES[0], dict.fromkeys(rubric_rules.DEMAND, "n.a."))
         scored, issues, _ = run([site])
         self.assertEqual(checks(scored)["K1"].status, "not_applicable")
         self.assertEqual(issues, [])
@@ -191,7 +187,7 @@ class CustomerCheckTests(unittest.TestCase):
 class FinishTests(unittest.TestCase):
     def finish(self, sites, fit=(), model_issues=()):
         scored, issues, citable = run(sites)
-        return customer_rubric.finish(scored, issues, list(fit), model_issues, citable)
+        return rubric_rules.finish(scored, issues, list(fit), model_issues, citable)
 
     def test_agree_with_supported_fit(self):
         site = Site(CODES[0], {"D1": 3, "D2": 3, "D3": 3, "D4": 2})
@@ -213,7 +209,7 @@ class FinishTests(unittest.TestCase):
         self.assertIsNone(k6.points)
 
     def test_no_candidates_is_conditional(self):
-        verdict, issues, rubric = customer_rubric.finish([], [], [], [], set())
+        verdict, issues, rubric = rubric_rules.finish([], [], [], [], set())
         self.assertEqual(verdict, "conditional")
         self.assertIsNone(rubric.ratio)
         self.assertEqual(issues, [])
@@ -230,7 +226,7 @@ class FinishTests(unittest.TestCase):
         site.reasons = [site.facts["D2"], site.facts["D3"]]
         site.risks = [site.facts["D2"], site.facts["D3"]]
         verdict, _, rubric = self.finish([site])
-        self.assertGreaterEqual(rubric.ratio, customer_rubric.AGREE)
+        self.assertGreaterEqual(rubric.ratio, rubric_rules.AGREE)
         self.assertEqual(checks([(1, CODES[0], rubric.candidates[0].checks)])["K3"].points, 0)
         self.assertEqual(verdict, "conditional")
 

@@ -9,8 +9,9 @@ from app.ai.aliases import decode
 from app.ai.evaluators import PERSONAS, review
 from app.ai.landlord import MAX_PACKET_CHARS, review_packet
 from app.ai.runtime import DecisionLoop
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
 from app.application.facts import register_fact
-from app.domain.contracts import SubmitDraftInput, SubmitLInput, TextSegment
+from app.domain.contracts import TextSegment
 from app.infrastructure.persistence.connection import connect
 from app.infrastructure.persistence.raw_capture import capture_scope
 from app.infrastructure.persistence.repository import create_request

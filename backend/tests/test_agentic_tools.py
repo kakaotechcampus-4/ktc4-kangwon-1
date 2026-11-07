@@ -217,8 +217,8 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(reply.data.contains_verified)
 
     async def test_stored_score_and_facts_are_typed(self):
+        from app.ai.tool_contracts import FactsResult, ScorecardResult
         from app.application.snapshot import persist_report
-        from app.domain.contracts import FactsResult, ScorecardResult
         from app.domain.scoring import WEIGHTS, result, summarize
 
         items = {key: result(key) for key in WEIGHTS}
@@ -239,8 +239,8 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(unknown.error.code, "INVALID_ARGUMENT")
 
     async def test_scorecard_exposes_source_limits_without_inventing_scores(self):
+        from app.ai.tool_contracts import ScorecardResult
         from app.application.snapshot import persist_report
-        from app.domain.contracts import ScorecardResult
         from app.domain.scoring import WEIGHTS, result, summarize
 
         rows = [
@@ -266,9 +266,9 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(item.points)
 
     async def test_scorecard_follows_confirmed_space(self):
+        from app.ai.tool_contracts import ScorecardResult
         from app.application.answers import save_confirmed_space
         from app.application.snapshot import persist_report
-        from app.domain.contracts import ScorecardResult
         from app.domain.scoring import WEIGHTS, apply_space, result, summarize
         from app.domain.space_rules import judge, load_requirements
 

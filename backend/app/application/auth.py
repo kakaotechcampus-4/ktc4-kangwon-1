@@ -1,4 +1,4 @@
-"""가입·로그인·세션의 유스케이스입니다. SQLite 접근은 전부 to_thread로 격리합니다."""
+"""가입·로그인·세션의 유스케이스입니다. 저장 호출은 전부 to_thread로 격리합니다."""
 
 from __future__ import annotations
 

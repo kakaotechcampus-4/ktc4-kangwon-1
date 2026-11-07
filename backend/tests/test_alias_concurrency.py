@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from app.ai.aliases import encode
 from app.ai.evaluators import PERSONAS
-from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
 from app.infrastructure.llm.recording import CallRecording, ReplayGenerate
 from app.infrastructure.market_data.local.database import LocalDataDB
 from app.infrastructure.mock import call

@@ -378,8 +378,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
 
         from app.ai.runtime import DecisionLoop
+        from app.ai.tool_contracts import AskUserInput
         from app.application.analysis import resume_agentic_analysis
-        from app.domain.contracts import AskUserInput
         from app.domain.schemas import AnalysisTask
         from app.infrastructure.persistence.repository import mark_running, save_site
 

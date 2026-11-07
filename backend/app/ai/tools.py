@@ -10,17 +10,11 @@ from pydantic import TypeAdapter, ValidationError
 from app.ai.aliases import decode, decode_report
 from app.ai.read_tools import InvalidCursor, get_facts, get_scorecard
 from app.ai.sql_tool import query_raw
+from app.ai.tool_contracts import TOOL_INPUTS, tool_definitions
 from app.application.map_regulation import Observations, check_regulation, map_search
 from app.application.ports.places import MapApiError
 from app.application.ports.storage import open_stores
-from app.domain.contracts import (
-    EVALUATOR_ACTORS,
-    TOOL_INPUTS,
-    Actor,
-    ToolReply,
-    error,
-    tool_definitions,
-)
+from app.domain.contracts import EVALUATOR_ACTORS, Actor, ToolReply, error
 from app.shared.canonical import canonical_hash
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread

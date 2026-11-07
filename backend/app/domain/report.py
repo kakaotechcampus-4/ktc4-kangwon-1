@@ -12,6 +12,7 @@ from app.domain.scoring import rank_candidates, rank_key
 from app.domain.space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, load_requirements
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
+RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
 
 
 class ReportInvalid(ValueError):

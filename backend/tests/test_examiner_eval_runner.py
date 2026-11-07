@@ -18,8 +18,8 @@ from openai.types.chat import ChatCompletionMessage
 
 from app.ai import evaluators, examiner
 from app.ai.runtime import DecisionLoop
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
 from app.application.snapshot import persist_report
-from app.domain.contracts import SubmitDraftInput, SubmitLInput
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.schemas import Site
 from app.domain.scoring import WEIGHTS, result, summarize

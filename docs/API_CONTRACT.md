@@ -225,7 +225,7 @@ MOCK_MODE 또는 `?mock=true`면 외부 호출 없이 주소와 상관없이 성
 
 ## 현재 결과 형태
 
-공개 결과는 `backend/app/domain/schemas.py`의 DecisionResult, 도구 계약은 `backend/app/domain/contracts.py`를 따릅니다. 현재 `schema_version=2.0`, `rubric_version=v0.8`, `tool_contract_version=3`입니다. 과거 전환 계획의 계약 버전은 이력 문서에 남깁니다.
+공개 결과는 `backend/app/domain/schemas.py`의 DecisionResult, 도구 계약은 `backend/app/ai/tool_contracts.py`를 따릅니다. 현재 `schema_version=2.0`, `rubric_version=v0.8`, `tool_contract_version=3`입니다. 과거 전환 계획의 계약 버전은 이력 문서에 남깁니다.
 
 전환 후 GET `/api/v1/analyses/{id}`의 `result`는 다음 DecisionResult입니다. URL과 status/site/result/error envelope는 유지합니다. 구 결과·질문 세션은 DB 초기화로 폐기하며 변환/reader는 제공하지 않습니다. 다음 값은 실제 주소 분석이 아닌 목업이고, 평가자 전체 실패 시에도 평가 미완료를 표시해 검증된 결과를 제공하는 예입니다.
 

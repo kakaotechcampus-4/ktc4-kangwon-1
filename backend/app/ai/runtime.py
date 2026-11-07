@@ -15,8 +15,9 @@ from app.ai.aliases import encode, encode_messages, labels_periods
 from app.ai.budget import RuntimeBudget
 from app.ai.evaluators import review
 from app.ai.l_input import build_record
-from app.ai.questions import LoopOutcome
+from app.ai.tool_contracts import LInput, ScorecardResult, SubmitLResult, SubmitResult
 from app.ai.tools import ToolExecutor, validation_message
+from app.application.ports.decision import LoopOutcome
 from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
 from app.application.ports.llm_budget import BudgetExceeded, llm_scope
 from app.application.ports.llm_settings import LLMSettings
@@ -29,14 +30,10 @@ from app.domain.contracts import (
     EVALUATOR_ACTORS,
     EVALUATOR_COUNT,
     EvaluatorReview,
-    LInput,
     LRecord,
     MapResult,
     RegulationResult,
     ReportProposal,
-    ScorecardResult,
-    SubmitLResult,
-    SubmitResult,
     TextSegment,
     ToolReply,
     error,
@@ -224,6 +221,11 @@ class DecisionLoop:
         await run_in_thread(persist_space_requirements, scope)
         await run_in_thread(ensure_space_fits, scope)
         return cls(scope, site, base_id, rows, **kwargs)
+
+    def begin(self, limitations, timings):
+        self.state["limitations"].extend(limitations)
+        # 같은 dict 를 넘겨, 아래에서 기록하는 '루프' 시간까지 실패 진단에 함께 남습니다.
+        self.state["phase_seconds"] = timings
 
     def adopt_shared(self, shared):
         """수집 단계에서 이미 부른 지도·규제 결과를 루프가 이어받습니다.

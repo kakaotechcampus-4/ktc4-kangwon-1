@@ -5,7 +5,8 @@ import unittest
 from unittest.mock import patch
 
 from app.ai.evaluators import review
-from app.domain.contracts import ReviewIssue, SubmitDraftInput, SubmitLInput
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
+from app.domain.contracts import ReviewIssue
 from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
 from tests.fact_fixture import fact_record

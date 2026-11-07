@@ -11,12 +11,14 @@ from pydantic import ValidationError
 
 from app.ai import customer_rubric, examiner, founder, landlord
 from app.ai.aliases import encode, label_periods, labels_periods
+from app.ai.tool_contracts import ReviewRef
 from app.application.ports.llm import LLMHTTPError, LLMResponseError
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
 from app.application.report import fact_rows
-from app.domain.contracts import EvaluatorReview, ReviewRef, ToolReply, error
+from app.domain.contracts import EvaluatorReview, ToolReply, error
+from app.domain.customer_rubric import finish as finish_customer_review
 from app.domain.report import ReportInvalid
 from app.domain.text import has_digit
 from app.shared.canonical import canonical_json
@@ -347,7 +349,7 @@ async def review(loop, actor, executor, draft):
     if rubric is not None:
         # 모델이 실패해도 코드 채점·판정은 유효하므로 완료로 남기고 모델 상태를 따로 기록합니다.
         scored, code_issues, citable = rubric
-        verdict, issues, customer = customer_rubric.finish(
+        verdict, issues, customer = finish_customer_review(
             scored,
             code_issues,
             submitted_checks,

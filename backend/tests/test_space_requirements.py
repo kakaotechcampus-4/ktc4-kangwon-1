@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.ai.read_tools import get_facts
+from app.ai.tool_contracts import GetFactsInput
 from app.application.snapshot import persist_space_requirements
-from app.domain.contracts import GetFactsInput
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
 from app.infrastructure.persistence.connection import connect, initialize

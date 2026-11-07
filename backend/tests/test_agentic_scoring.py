@@ -260,7 +260,7 @@ class FactRegistryTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_unrelated_c1_is_cited_to_industry_profile(self):
-        from app.domain.contracts import ScoreItem
+        from app.ai.tool_contracts import ScoreItem
 
         task = AnalysisTask(
             request_id="facts",

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.ai import evaluators, examiner
-from app.domain.contracts import SubmitDraftInput, SubmitLInput
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
 from app.domain.text import has_digit
 from app.infrastructure.persistence.connection import connect
 from app.shared.canonical import canonical_json

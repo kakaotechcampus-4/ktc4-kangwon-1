@@ -1,22 +1,14 @@
 """임대인 질문과 답변 검증입니다."""
 
 import uuid
-from dataclasses import dataclass
 
+from app.ai.tool_contracts import QuestionSessionRef
 from app.application.answers import save_user_facts
+from app.application.ports.decision import LoopOutcome
 from app.application.ports.storage import open_stores
-from app.domain.contracts import QuestionSessionRef, ToolReply, error
+from app.domain.contracts import ToolReply, error
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
-
-
-@dataclass
-class LoopOutcome:
-    status: str
-    result: object = None
-    question_session_id: str | None = None
-    questions: list | None = None
-    budget: dict | None = None
 
 
 async def ask_user(loop, input):

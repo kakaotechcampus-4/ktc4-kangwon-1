@@ -1,16 +1,9 @@
 """PR3에 저장한 점수와 사실을 현재 스냅샷 범위에서 읽습니다."""
 
+from app.ai.tool_contracts import FactsResult, Scorecard, ScorecardResult, ScoreItem
 from app.application.ports.storage import open_stores, storage
 from app.application.space import rule_answers
-from app.domain.contracts import (
-    FactsResult,
-    FactView,
-    Scorecard,
-    ScorecardResult,
-    ScorecardSummary,
-    ScoreItem,
-    error,
-)
+from app.domain.contracts import FactView, ScorecardSummary, error
 from app.domain.scoring import apply_space, rank_key, score_summary, summarize
 from app.domain.space_rules import judge, load_requirements
 from app.shared.concurrency import run_in_thread

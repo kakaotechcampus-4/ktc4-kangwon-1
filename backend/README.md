@@ -22,18 +22,18 @@ Python 3.12 · FastAPI · Pydantic · sqlite3 · httpx / AsyncOpenAI
 
 ### 분기·예외·재개 코드 찾기
 
-행 번호는 2026-10-26 기준이며 함수명을 함께 표시했습니다. 내부 루프의 질문 기본값은 true지만 공개 API 기본값은 false이며 서비스가 명시적으로 전달합니다.
+내부 루프의 질문 기본값은 true지만 공개 API 기본값은 false이며 서비스가 명시적으로 전달합니다.
 
 | 상황 | 처리 | 코드 (`backend/` 기준) |
 | --- | --- | --- |
-| 도구 호출이 없거나 여러 개 | 모델 문장을 결과로 쓰지 않고 검증된 코드 점수로 대체 초안 생성 | `app/ai/runtime.py:697` run, `:578` fallback |
+| 도구 호출이 없거나 여러 개 | 모델 문장을 결과로 쓰지 않고 검증된 코드 점수로 대체 초안 생성 | `app/ai/runtime.py` run, fallback |
 | 호출·시간·토큰 예산 소진 | 미제출 L은 unknown, 기존 판단 보존 후 대체 초안 | `app/ai/budget.py` RuntimeBudget, `runtime.py` run/fallback |
 | 일시적 모델 오류 | 연결·시간 초과 및 지정 HTTP 오류만 상태에 기록하고 한 번 재시도 | `runtime.py` run의 model_retried 분기 |
 | 새 정보 없는 호출 | 중복 또는 오류가 연속 세 번이면 대체 초안(일반 모드) | `runtime.py` run의 no_progress 분기 |
-| 질문·재개 | 질문은 한 번, 확정 층·면적 재질문 차단. 같은 요청·자료 버전·예산으로 재개 | `app/ai/questions.py:28` ask_user, `:67` validate_resume, `:92` resume |
-| 평가자 검토 | 네 평가자를 병렬 실행하고 지적을 한 번 반영. 실패 슬롯도 결과에 남김 | `runtime.py:250` review_and_finalize, `app/ai/evaluators.py:156` review |
+| 질문·재개 | 질문은 한 번, 확정 층·면적 재질문 차단. 같은 요청·자료 버전·예산으로 재개 | `app/ai/questions.py` ask_user, validate_resume, resume |
+| 평가자 검토 | 네 평가자를 병렬 실행하고 지적을 한 번 반영. 실패 슬롯도 결과에 남김 | `runtime.py` review_and_finalize, `app/ai/evaluators.py` review |
 | 최종 반영 실패 | 유효 초안과 완료된 평가를 보존하고 반영 미완료 한계 표시 | `runtime.py` review_and_finalize |
-| 상태 저장·종료 | 요청 DB에 진행·질문·결과 저장. 계약·저장 실패는 failed로 기록 | `runtime.py:99` _save, `app/application/analysis.py` execute_agentic_analysis/resume_agentic_analysis |
+| 상태 저장·종료 | 요청 DB에 진행·질문·결과 저장. 계약·저장 실패는 failed로 기록 | `runtime.py` _save, `app/application/analysis.py` execute_agentic_analysis/resume_agentic_analysis |
 
 대체 초안(`draft_available`)은 성공한 모델 판단과 다릅니다. 서비스는 이후 평가·최종 단계를 실행하며 결과 한계와 평가 완료율을 함께 봐야 합니다. 역할별 40k 입력 예산에는 제출 전용 예외가 있어 엄격한 누적 상한은 아닙니다([실측](../docs/founder-live-report.md)).
 
@@ -69,9 +69,9 @@ app/
   main.py          앱 조립(설정·DB·작업 슬롯·라우터)
   bootstrap.py     창구(application/ports)에 구현 연결: 저장·시장 자료·LLM·장소·현장·신원·데모·판단 엔진
   api/v1/          HTTP 경계와 작업 슬롯. application만 부릅니다
-  application/     분석 실행·재개·인증·작업, fact·스냅숏·리포트 확정, 로컬 자료 채점. ports/에 바깥 창구 정의
-  ai/              decision 도구 루프, 자문, 질문, 평가자 4명, 도구 실행
-  domain/          공개 계약(schemas·contracts), 채점(scoring·code90·공간 규칙), 리포트 문장 규칙, 51업종·기준값
+  application/     분석 실행·재개·인증·작업, 사전 조회, fact·스냅숏·리포트 확정, 로컬 자료 채점. ports/에 바깥 창구 정의
+  ai/              decision 도구 루프, 자문, 질문, 평가자 4명, 도구 실행, 도구 계약
+  domain/          공개 계약(schemas·contracts), 채점(scoring·code90·공간 규칙·손님 평가표), 리포트 문장·L 기록 규칙, 51업종·기준값
   infrastructure/  요청 DB(persistence), 시장 자료(market_data), 외부 API(clients), LLM, 설정·mock
   shared/          canonical JSON·시각·스레드 격리·비밀값 마스킹·로그 정제
 scripts/           자료 갱신, 기준선 생성, 재현 검증

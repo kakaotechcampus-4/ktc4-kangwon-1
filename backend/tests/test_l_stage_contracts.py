@@ -4,21 +4,22 @@ import unittest
 
 from pydantic import ValidationError
 
+from app.ai import tool_contracts as tools
 from app.domain import contracts as c
 from app.domain.schemas import DecisionRequest
 
 
 class LStageContractTests(unittest.TestCase):
     def test_l_submission_is_separate_and_validates_rows_in_handler(self):
-        self.assertIn("submit_l", c.TOOL_INPUTS)
-        self.assertEqual(len(c.tool_definitions()), 10)
+        self.assertIn("submit_l", tools.TOOL_INPUTS)
+        self.assertEqual(len(tools.tool_definitions()), 10)
         self.assertNotIn("L_records", c.ReportProposal.model_fields)
-        self.assertTrue(c.SubmitLInput(L_records=[], finish=True).finish)
-        self.assertEqual(len(c.SubmitLInput(L_records=[{}] * 51).L_records), 51)
+        self.assertTrue(tools.SubmitLInput(L_records=[], finish=True).finish)
+        self.assertEqual(len(tools.SubmitLInput(L_records=[{}] * 51).L_records), 51)
         with self.assertRaises(ValidationError):
-            c.SubmitLInput(L_records=[])
+            tools.SubmitLInput(L_records=[])
         with self.assertRaises(ValidationError):
-            c.SubmitDraftInput(phase="draft", report={"L_records": []})
+            tools.SubmitDraftInput(phase="draft", report={"L_records": []})
 
     def test_all_industries_have_same_selection_contract(self):
         value = {
@@ -33,15 +34,15 @@ class LStageContractTests(unittest.TestCase):
         self.assertEqual(DecisionRequest.model_fields["tool_contract_version"].default, "3")
 
     def test_simple_row_has_no_model_grade_and_neutral_requires_evidence(self):
-        c.LInput(industry_code="I201", note="확인한 새 조건 없음")
-        c.LInput(industry_code="I201", neutral=True, fact_ids=["1234abcd"])
+        tools.LInput(industry_code="I201", note="확인한 새 조건 없음")
+        tools.LInput(industry_code="I201", neutral=True, fact_ids=["1234abcd"])
         for extra in ({"grade": 3}, {"status": "observed"}, {"note": "가" * 81}):
             with self.subTest(extra=extra), self.assertRaises(ValidationError):
-                c.LInput.model_validate({"industry_code": "I201"} | extra)
+                tools.LInput.model_validate({"industry_code": "I201"} | extra)
         with self.assertRaises(ValidationError):
-            c.LInput(industry_code="I201", neutral=True)
+            tools.LInput(industry_code="I201", neutral=True)
         with self.assertRaises(ValidationError):
-            c.LInput(
+            tools.LInput(
                 industry_code="I201",
                 neutral=True,
                 fact_ids=["1234abcd"],
@@ -49,8 +50,10 @@ class LStageContractTests(unittest.TestCase):
             )
 
     def test_only_common_fit_allows_bulk_industry_lookup(self):
-        c.GetFactsInput(source="industry_profile", metrics=["space_fit"], limit=51)
+        tools.GetFactsInput(source="industry_profile", metrics=["space_fit"], limit=51)
         with self.assertRaises(ValidationError):
-            c.GetFactsInput(source="commercial_area", metrics=["density_per_km2"])
+            tools.GetFactsInput(source="commercial_area", metrics=["density_per_km2"])
         with self.assertRaises(ValidationError):
-            c.GetFactsInput(source="industry_profile", metrics=["space_fit"], fact_ids=["f_bad"])
+            tools.GetFactsInput(
+                source="industry_profile", metrics=["space_fit"], fact_ids=["f_bad"]
+            )

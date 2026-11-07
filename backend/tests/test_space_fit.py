@@ -9,11 +9,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.ai.read_tools import get_facts
+from app.ai.tool_contracts import GetFactsInput
 from app.application.answers import save_user_facts
 from app.application.facts import register_fact
 from app.application.snapshot import persist_space_requirements
 from app.application.space import ensure_space_fits
-from app.domain.contracts import GetFactsInput
 from app.domain.space_fit import compare_space
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.raw_capture import capture_scope

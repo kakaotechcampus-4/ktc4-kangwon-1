@@ -14,6 +14,7 @@ from app.domain.contracts import (
     FinalCandidate,
 )
 from app.domain.report import (
+    RULE_SPACE_MESSAGE,
     ReportInvalid,
     code90_uses_metric,
     complete_l_records,
@@ -40,7 +41,6 @@ from app.domain.space_rules import judge, load_requirements
 from app.domain.text import has_digit
 from app.shared.clock import utc_now_iso
 
-RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
 NEW_METRICS = {
     "place_name",
     "kakao_category",

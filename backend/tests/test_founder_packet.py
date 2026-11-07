@@ -7,13 +7,8 @@ from types import SimpleNamespace
 from app.ai import evaluators
 from app.ai.aliases import decode
 from app.ai.runtime import DecisionLoop
-from app.domain.contracts import (
-    FactReferenceSegment,
-    ReviewIssue,
-    SubmitDraftInput,
-    SubmitLInput,
-    TextSegment,
-)
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
+from app.domain.contracts import FactReferenceSegment, ReviewIssue, TextSegment
 from app.domain.report import ReportInvalid
 from app.infrastructure.persistence.connection import connect
 from app.infrastructure.persistence.raw_capture import capture_scope

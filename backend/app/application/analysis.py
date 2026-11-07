@@ -232,9 +232,7 @@ async def execute_agentic_analysis(
             )
             if shared is not None:
                 loop.adopt_shared(shared)
-            loop.state["limitations"].extend(data.get("limitations", []))
-            # 같은 dict 를 넘겨, 아래에서 기록하는 '루프' 시간까지 실패 진단에 함께 남습니다.
-            loop.state["phase_seconds"] = timings
+            loop.begin(data.get("limitations", []), timings)
             outcome = await _finish_loop(loop)
             timings[stage] = monotonic() - started
             await loop.save(outcome.status, outcome.result)
