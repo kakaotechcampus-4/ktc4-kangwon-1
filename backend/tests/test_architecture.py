@@ -41,7 +41,38 @@ DOMAIN_FORBIDDEN_IMPORTS = {
     "threading",
     "urllib",
 }
-FILE_CALLS = {"open", "read_bytes", "read_text", "write_bytes", "write_text"}
+FILE_CALLS = {
+    "exists",
+    "glob",
+    "is_dir",
+    "is_file",
+    "iterdir",
+    "mkdir",
+    "open",
+    "read_bytes",
+    "read_csv",
+    "read_excel",
+    "read_json",
+    "read_parquet",
+    "read_text",
+    "rglob",
+    "rmdir",
+    "to_csv",
+    "to_excel",
+    "to_json",
+    "to_parquet",
+    "touch",
+    "unlink",
+    "write_bytes",
+    "write_text",
+}
+DOMAIN_FORBIDDEN_SHARED = {
+    "app.shared.concurrency",
+    "app.shared.logging",
+    "app.shared.scrub",
+    "app.shared.canonical.file_sha256",
+}
+LEAF_MODULES = ("app.application.ports", "app.application.errors")
 DOMAIN_RESOURCES = APP / "domain" / "resources.py"
 ENTRY_POINTS = ("app.main", "app.bootstrap")
 
@@ -195,10 +226,29 @@ class ArchitectureTests(unittest.TestCase):
                 if isinstance(node, ast.Import):
                     names = [alias.name for alias in node.names]
                 elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                    names = [node.module]
+                    names = [node.module, *(f"{node.module}.{a.name}" for a in node.names)]
                 for name in names:
                     with self.subTest(path=path.name, module=name):
                         self.assertNotIn(name.split(".")[0], DOMAIN_FORBIDDEN_IMPORTS)
+                        self.assertFalse(
+                            any(
+                                name == f or name.startswith(f"{f}.")
+                                for f in DOMAIN_FORBIDDEN_SHARED
+                            )
+                        )
+
+    def test_ports_and_errors_import_only_contracts(self):
+        allowed = (*LEAF_MODULES, "app.domain", "app.shared")
+        for path in APP.rglob("*.py"):
+            source = module_of(path)
+            if "__pycache__" in path.parts or not source.startswith(LEAF_MODULES):
+                continue
+            for target in targets(path, source):
+                if target.startswith("app."):
+                    with self.subTest(source=source, target=target):
+                        self.assertTrue(
+                            any(target == a or target.startswith(f"{a}.") for a in allowed)
+                        )
 
     def test_domain_reads_files_only_through_resources(self):
         for path in sorted((APP / "domain").rglob("*.py")):

@@ -42,17 +42,17 @@ main.py          조립 지점. 설정·DB·라우터를 연결한다
 - 수집 패키지(`infrastructure/market_data/*`) 안에서도 `client.py`는 외부 호출만, `metrics.py`는 순수 계산만 둡니다.
 - 방향 규칙은 `tests/test_architecture.py`가 검사합니다. 예외 목록 없이 위반 0건이어야 통과합니다.
 - 상대 import는 쓰지 않습니다(ruff TID252).
-- domain은 `os`·`sqlite3`·`httpx`·`asyncio`·`threading` 같은 I/O 모듈을 import하지 않습니다. 코드와 함께 배포되는 기준 CSV는 `domain/resources.py`의 `read_csv`로만 읽습니다. 서울 인구 스냅숏처럼 읽을 때 원문을 기록하는 자료는 호출하는 쪽이 함수로 넘깁니다(`evaluate(..., age_baseline=)`).
+- domain은 `os`·`sqlite3`·`httpx`·`asyncio`·`threading` 같은 I/O 모듈을 import하지 않습니다. 코드와 함께 배포되는 기준 CSV는 `domain/resources.py`의 `read_bundled_csv`로만 읽습니다. 서울 인구 스냅숏처럼 읽을 때 원문을 기록하는 자료는 호출하는 쪽이 함수로 넘깁니다(`evaluate(..., age_baseline=)`).
 - application·ai는 DB를 직접 열지 않고 `application/ports/storage.py`의 저장 창구(`open_stores(path)`, `storage().requests` 등)를 씁니다. sqlite 구현은 `infrastructure/persistence/stores.py`, 연결은 `app/bootstrap.py`가 합니다. 창구 정의는 저장소 함수 서명과 1:1이고 `tests/test_storage_port.py`가 검사합니다.
 - 시장 자료(원문→계산 변환, 로컬 자료, 참고 분포 버전)는 `application/ports/market.py`의 `market()` 창구로 씁니다. 구현은 `infrastructure/market_data/service.py`입니다.
 - 모델 호출은 `application/ports/llm.py`의 `llm()` 창구(`complete_json`·`complete_tools`·호출 기록·연결 세션)로 합니다. 호출 예산(`llm_budget.py`)·설정(`llm_settings.py`)·오류 형식(`LLMResponseError`·`LLMHTTPError`)도 같은 폴더에 있어 ai와 인프라가 함께 씁니다. 녹화 재생이 오류 클래스 이름으로 맞추므로 이름을 바꾸지 않습니다.
 - 지도 장소 검색과 교육환경보호구역 조회는 `application/ports/places.py`의 `places()` 창구로 합니다. 구현은 `infrastructure/clients/places.py`입니다. 지도 매칭 규칙(`domain/place_matching.py`)과 다각형 판정(`domain/geo.py`)은 순수 계산이라 domain에 둡니다.
-- application은 ai를 직접 import하지 않고 `application/ports/decision.py`의 `decision()` 창구(예산·사전 수집·공간 답 저장·판단 루프 생성/재개)로 부릅니다. 구현은 `ai/engine.py`입니다.
+- application은 ai를 직접 import하지 않고 `application/ports/decision.py`의 `decision()` 창구(예산·사전 수집·판단 루프 생성/재개 검증/재개)로 부릅니다. 구현은 `ai/engine.py`입니다.
 - AI의 원문 SQL 조회는 입력 검증·응답 조립만 `ai/sql_tool.py`에 두고, 읽기 전용 연결·권한 검사·임시 뷰는 `infrastructure/persistence/raw_query.py`(`storage().raw_query`)가 맡습니다. 뷰 목록과 필드 정의는 `domain/raw_views.py`입니다. 그래서 SQL 문장은 인프라 밖에 없습니다.
 - 주소 확인·건축물대장 조회는 `sites()`, 카카오 로그인·메일은 `identity()`, 데모 모드 대역은 `demo()` 창구로 부릅니다(`application/ports/`). 건축물대장 응답 모델은 `domain/building.py`입니다.
 - application 모듈에는 불러오기·저장만 두고, 같은 입력이면 같은 답을 내는 규칙은 domain에 둡니다: 리포트 문장·순위·조건 제외(`domain/report.py`), 공간 대조(`domain/space_fit.py`), fact 식별값·인용 가능 판정·지표 이름(`domain/facts.py`). 질문 답 저장은 `application/answers.py`입니다.
 - 창구는 처음 쓰일 때 `app.bootstrap`을 불러 연결합니다. 그래서 계층 모듈은 `app.bootstrap`·`app.main`을 import하지 않습니다(`tests/test_architecture.py`).
-- 시험에서 저장소 함수를 바꿔치기할 때는 `repository/requests.py` 같은 하위 모듈을 patch합니다. 패키지 `repository`가 재수출한 이름을 patch하면 창구에는 반영되지 않습니다.
+- 시험에서 저장소 함수를 바꿔치기할 때는 `repository/requests.py` 같은 하위 모듈을 patch합니다. 패키지 `repository`가 재수출한 이름을 patch하면 창구에는 반영되지 않습니다. 창구 구현 클래스가 클래스 속성으로 묶어 둔 함수(`stores.py`의 `initialize`·`capture`·`raw_query`, `llm/service.py`, `market_data/service.py`)는 정의한 모듈을 patch해도 반영되지 않으므로 `patch.object(llm(), "complete_json")`처럼 창구 객체를 patch합니다.
 
 **계산 함수는 순수하게 둡니다.** `metrics.py`가 네트워크를 모르기 때문에 시험이 빠르고 안정적입니다.
 

@@ -12,6 +12,7 @@ class PlaceServices:
 
     @staticmethod
     async def education_zones(latitude, longitude, *, retry=True, **kwargs):
-        if not retry:
-            kwargs["settings"] = replace(EducationZoneSettings.from_env(), max_retries=0)
-        return await find_education_zones(latitude, longitude, **kwargs)
+        if retry:
+            return await find_education_zones(latitude, longitude, **kwargs)
+        settings = replace(EducationZoneSettings.from_env(), max_retries=0)
+        return await find_education_zones(latitude, longitude, settings=settings, **kwargs)

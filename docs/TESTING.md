@@ -65,7 +65,7 @@ AST의 함수 시작~끝 물리 행 수(주석·빈 줄 포함), 100줄 초과 �
 | app/ai/landlord.py | review_packet | 63 | 115 |
 | app/infrastructure/persistence/raw_capture.py | _save_response | 82 | 113 |
 | app/ai/runtime.py | submit_l | 428 | 110 |
-| app/ai/sql_tool.py | local_views | 124 | 108 |
+| app/infrastructure/persistence/raw_query.py | local_views | 70 | 108 |
 | app/ai/runtime.py | __init__ | 118 | 103 |
 
 함수 분해·모듈 삭제는 이번 범위가 아니다. 채점·보고서·평가·스냅샷 담당자와 동작 보존 기준을 합의한 뒤 진행한다.

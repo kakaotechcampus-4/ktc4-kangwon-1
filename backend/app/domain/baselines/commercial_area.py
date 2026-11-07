@@ -29,7 +29,7 @@ from typing import Final
 
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
-from app.domain.resources import read_csv
+from app.domain.resources import read_bundled_csv
 from app.domain.stats import percentile_rank
 
 # 표본: 서울 상권 1,650곳 · 반경 500m · 소상공인 2026년 1분기 · 단위 개/km²
@@ -96,7 +96,7 @@ def load_density_percentiles(path: Path = DENSITY_PERCENTILES_PATH) -> dict[str,
     """검토된 51업종 CSV를 읽고 누락·중복·잘못된 경계표를 거절합니다."""
     steps = range(5, 100, 5)
     result = {}
-    fieldnames, rows = read_csv(path)
+    fieldnames, rows = read_bundled_csv(path)
     if fieldnames != ["industry_code", *(f"p{p}" for p in steps)]:
         raise ValueError("밀도 기준선 CSV 열이 일치하지 않습니다.")
     for row in rows:

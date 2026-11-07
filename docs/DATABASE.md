@@ -119,7 +119,7 @@ erDiagram
 
 `snapshots`는 요청 하나당 하나입니다. `local_snapshots`가 이 요청이 읽은 자료 버전 목록과 조회 범위를 기록해서, 활성 release가 바뀌어도 같은 요청은 같은 버전을 읽습니다.
 
-`config_hashes_json`(새 fact의 `input_versions`에도 들어감)의 키는 `industry_profile`·`code90`·`code90_reference`·`population_baseline`·`density_baseline`·`lifecycle_baseline`입니다. 값은 업종 프로필 CSV만 파일 해시이고, 나머지는 설정 행(방법·가중치·기준값·`REFERENCE_VERSION`)의 내용 해시라서 파일을 옮기거나 import 줄을 고쳐도 바뀌지 않습니다. 2026-11 구조 개편 전 결과는 `파일명+폴더명` 키와 파일 해시를 썼으며, 저장만 하고 다시 검증하지 않으므로 그대로 둡니다. 유동인구·밀도 기준선 행에는 계산 함수 버전(`METHOD`)도 들어가고, 기준선 모듈 코드가 바뀌면 `tests/test_snapshot_config_keys.py`가 버전을 올리라며 실패합니다. 2026-11-07 이 버전을 넣으면서 두 기준선 해시가 한 번 바뀌었습니다(이후 새 분석만 해당).
+`config_hashes_json`(새 fact의 `input_versions`에도 들어감)의 키는 `industry_profile`·`code90`·`code90_reference`·`population_baseline`·`density_baseline`·`lifecycle_baseline`입니다. 값은 업종 프로필 CSV만 파일 해시이고, 나머지는 설정 행(방법·가중치·기준값·`REFERENCE_VERSION`)의 내용 해시라서 파일을 옮기거나 import 줄을 고쳐도 바뀌지 않습니다. 2026-11 구조 개편 전 결과는 `파일명+폴더명` 키와 파일 해시를 썼으며, 저장만 하고 다시 검증하지 않으므로 그대로 둡니다. 유동인구·밀도 기준선 행에는 계산 함수 버전(`METHOD`)도 들어갑니다. 기준선 모듈의 코드·값, 그리고 가져다 쓰는 `stats.percentile_rank`·`population.TIME_BANDS`가 바뀌면 `tests/test_snapshot_config_keys.py`가 버전을 올리라며 실패합니다. 그 밖의 모듈에서 가져온 함수는 지문에 들어가지 않으니, 기준선 계산에 새 도우미를 쓰면 지문 대상에 함께 넣습니다. 2026-11-07 이 버전을 넣으면서 두 기준선 해시가 한 번 바뀌었습니다(이후 새 분석만 해당).
 
 ```mermaid
 erDiagram

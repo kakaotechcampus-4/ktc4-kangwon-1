@@ -20,7 +20,7 @@ from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTI
 from app.domain.industries import DATA_DIR
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.population import RESIDENT_KIND, WORKER_KIND, quarter_days
-from app.domain.resources import read_csv
+from app.domain.resources import read_bundled_csv
 from app.domain.space_rules import judge, load_requirements
 
 WEIGHTS = {
@@ -466,7 +466,7 @@ AGGLOMERATION_TYPES = ("모임형", "근처형", "무관")
 
 
 def profiles() -> dict:
-    _, rows = read_csv(DATA_DIR / "industry_profile.csv")
+    _, rows = read_bundled_csv(DATA_DIR / "industry_profile.csv")
     if any(r["reviewed_v2"] != "true" for r in rows):
         raise ValueError("미승인 프로필")
     for r in rows:

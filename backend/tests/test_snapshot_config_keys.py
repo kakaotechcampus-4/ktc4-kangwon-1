@@ -1,10 +1,12 @@
 import ast
 import hashlib
+import inspect
+import textwrap
 import unittest
 from pathlib import Path
 
 from app.application.snapshot import snapshot_config
-from app.domain import code90
+from app.domain import code90, population, stats
 from app.domain.baselines import commercial_area as density_baseline
 from app.domain.baselines import floating_population as population_baseline
 from app.infrastructure.market_data.local import score_reference
@@ -12,8 +14,8 @@ from app.shared.canonical import canonical_hash
 
 CODE90_LOGIC = "92394464"
 REFERENCE_LOGIC = "ca2260a8"
-POPULATION_LOGIC = "72429f98"
-DENSITY_LOGIC = "d6eee7bb"
+POPULATION_LOGIC = "6297a169"
+DENSITY_LOGIC = "34664b8b"
 
 
 def logic_fingerprint(module):
@@ -34,6 +36,20 @@ def logic_fingerprint(module):
             ] or [ast.Pass()]
     dump = ast.dump(ast.Module(body=body, type_ignores=[]))
     return hashlib.sha256(dump.encode("utf-8")).hexdigest()[:8]
+
+
+def baseline_fingerprint(module, *helpers):
+    parts = [logic_fingerprint(module)]
+    for helper in helpers:
+        if callable(helper):
+            node = ast.parse(textwrap.dedent(inspect.getsource(helper))).body[0]
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                node.body = node.body[1:] or [ast.Pass()]
+            parts.append(ast.dump(node))
+        else:
+            parts.append(repr(helper))
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:8]
 
 
 class SnapshotConfigKeyTests(unittest.TestCase):
@@ -90,14 +106,14 @@ class SnapshotConfigKeyTests(unittest.TestCase):
             "참고 분포 계산이 바뀌었습니다. REFERENCE_VERSION을 올리고 이 지문을 갱신하세요.",
         )
         self.assertEqual(
-            logic_fingerprint(population_baseline),
+            baseline_fingerprint(population_baseline, stats.percentile_rank, population.TIME_BANDS),
             POPULATION_LOGIC,
-            "유동인구 기준선이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
+            "유동인구 기준선 코드·값이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
         )
         self.assertEqual(
-            logic_fingerprint(density_baseline),
+            baseline_fingerprint(density_baseline, stats.percentile_rank),
             DENSITY_LOGIC,
-            "밀도 기준선이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
+            "밀도 기준선 코드·값이 바뀌었습니다. METHOD를 올리고 이 지문을 갱신하세요.",
         )
 
     def test_population_row_carries_method(self):

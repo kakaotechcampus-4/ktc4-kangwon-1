@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import cache
 
 from app.domain.industries import DATA_DIR
-from app.domain.resources import read_csv
+from app.domain.resources import read_bundled_csv
 from app.domain.space_values import GROUND_LEVELS, area_fit, floor_number
 
 FACILITY_NAMES = {"kitchen": "주방", "ventilation": "배기(덕트)", "water_supply": "급배수"}
@@ -23,7 +23,7 @@ class SpaceJudgement:
 
 @cache
 def load_requirements() -> dict[str, dict]:
-    _, rows = read_csv(DATA_DIR / "industry_space_requirements.csv")
+    _, rows = read_bundled_csv(DATA_DIR / "industry_space_requirements.csv")
     return {row["industry_code"]: row for row in rows}
 
 

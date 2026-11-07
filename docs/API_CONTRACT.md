@@ -1186,6 +1186,6 @@ G·C4는 채점 전 코드가 관측한다. 외부 실패는 해당 항목만 un
 
 `tool_definitions()`는 Chat Completions의 `{type:"function", function:{name,description,parameters,strict:false}}` 10개를 반환합니다. Pydantic `$defs/$ref`를 로컬로 펼치고 title/default/discriminator를 제거하며, discriminator의 oneOf를 anyOf로 바꿉니다. enum·pattern·길이·개수·숫자 상한·additionalProperties:false는 유지합니다. optional 필드와 params 자유형 때문에 공급자의 엄격 스키마 모드를 강제하지 않습니다.
 
-get_facts/map_search의 배타 조건·상세 limit는 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. SQL 권한·시간은 `sql_tool.py`, fact 소유·숫자 슬롯·L 정합성과 점수 재계산은 `report.py`에서 별도로 검증합니다.
+get_facts/map_search의 배타 조건·상세 limit는 Pydantic 경계에서 검증합니다. 이는 엘리스 OpenAI 호환 **요청 형태의 로컬 검증**이며 공급자가 모든 JSON Schema 키워드를 지원한다는 실호출 증명이 아닙니다. SQL 권한·시간은 `infrastructure/persistence/raw_query.py`(입력 검증과 응답은 `ai/sql_tool.py`), fact 소유·숫자 슬롯·L 정합성과 점수 재계산은 `report.py`에서 별도로 검증합니다.
 
 ReportProposal에는 review_resolutions를 두지 않습니다. 제출 입력 SubmitDraftInput에만 두며 서버가 채택한 반영 기록은 최종 DecisionResult.review_resolutions로 제공합니다.

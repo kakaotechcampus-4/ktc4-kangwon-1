@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 from app.domain.scoring import regulation, score_item, summarize
 
+AGES = ("10", "20", "30", "40", "50", "60")
+
 
 class RubricDryrunTests(unittest.TestCase):
     def test_v08_default_c1_half_power_and_missing_demand(self):
@@ -185,3 +187,35 @@ class RubricDryrunTests(unittest.TestCase):
         report = summarize("G204", items, "unknown")
         self.assertEqual(report["coverage"], 1)
         self.assertEqual(report["c_coverage"], 1)
+
+
+class SampleScoringTests(unittest.TestCase):
+    sample = {
+        "address": "시험",
+        "floating_population": {
+            "period_code": "20262",
+            "resident": {"period_code": "20262", "age_share": dict.fromkeys(AGES, 1 / 6)},
+            "population": {"age_share": dict.fromkeys(AGES, 1 / 6)},
+        },
+    }
+
+    def test_saved_samples_use_seoul_age_share(self):
+        from scripts import rubric_dryrun
+
+        with patch(
+            "scripts.rubric_dryrun.seoul_age_share", return_value=dict.fromkeys(AGES, 1 / 6)
+        ) as share:
+            rubric_dryrun.evaluate(self.sample)
+        share.assert_any_call("REPOP", "20262")
+
+    def test_sample_scripts_share_the_same_scoring(self):
+        from scripts import (
+            audit_c1_density,
+            rubric_dryrun,
+            validate_c1_alpha,
+            verify_rubric_reproduction,
+        )
+
+        for module in (audit_c1_density, validate_c1_alpha, verify_rubric_reproduction):
+            with self.subTest(module=module.__name__):
+                self.assertIs(module.evaluate, rubric_dryrun.evaluate)
