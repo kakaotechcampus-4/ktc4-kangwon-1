@@ -337,7 +337,7 @@ v0.6 당시 권고는 ③을 다음 검증 후보로 두되 기본 C1을 유지�
 | C4 구간 | t=d/dmax의 0.25/0.50/0.75/1.00 경계, 필수 시설 여러 개면 최저 등급 | 업종별 거리 등급을 직접 등록. 세밀하지만 51업종 전체 기준 검수가 필요 |
 | 복합 시간대 | 지정 시간대 합계의 상권별 일평균 분포 새 측정 | 단일 밴드 등급 평균 후 내림. 빠르지만 합계 규모 백분위와 동일하지 않음 |
 
-C1 서울 기준선은 `backend/app/agents/commercial_area/baseline.py`의 `SEOUL_INDUSTRY_DENSITY_PERCENTILES`(51업종·5~95 분위수)와 `industry_percentile(code, density)`에 반영했다. 기존 음식점 전체 밀도 상수는 보존한다. q의 분모는 해당 업종 표의 [50]이다. 중앙값 <0.01개/km²이면 C1 unknown(현재 S202만 해당)이며 점포 0이라는 이유로 자동 최고점 처리하지 않는다. 0.01은 출력 반올림 단위에 맞춘 사실상 0 경계로, 더 넓은 희소 기준은 시험 채점 후 검토한다. 대상 위치의 점포 0이라도 서울 중앙값이 유효하면 q=0 관측은 가능하다. 서울 밖은 이 기준을 적용하지 않는다.
+C1 서울 기준선은 `backend/app/domain/baselines/commercial_area.py`의 `SEOUL_INDUSTRY_DENSITY_PERCENTILES`(51업종·5~95 분위수)와 `industry_percentile(code, density)`에 반영했다. 기존 음식점 전체 밀도 상수는 보존한다. q의 분모는 해당 업종 표의 [50]이다. 중앙값 <0.01개/km²이면 C1 unknown(현재 S202만 해당)이며 점포 0이라는 이유로 자동 최고점 처리하지 않는다. 0.01은 출력 반올림 단위에 맞춘 사실상 0 경계로, 더 넓은 희소 기준은 시험 채점 후 검토한다. 대상 위치의 점포 0이라도 서울 중앙값이 유효하면 q=0 관측은 가능하다. 서울 밖은 이 기준을 적용하지 않는다.
 
 C4 v0.3: PK6 주차 연결을 모두 제거했다. G202·S203·S204·N109는 시설·거리 공란=C4 n.a.이다. 남은 6업종 연결은 G215→HP8 300m; P105·R102·G213→SC4 500m; G218→CT1·AT4 500m; I101→SW8·AT4 500m이다. 시설 여러 개는 최저 등급을 쓰며 검색 0건은 자동 0점·시설 부재로 확정하지 않는다.
 
@@ -347,7 +347,7 @@ C4 v0.3: PK6 주차 연결을 모두 제거했다. G202·S203·S204·N109는 시
 
 상권 내 업종 간 백분위와 "비교 업종 10개" 조건은 삭제한다. **분석기간 점포 수 합계(노출량) ≥40**(잠정), 완전한 기간, 유효 분모·매핑을 요구한다. 기존 avg_store_count×metadata.quarter_count로 노출량을 계산할 수 있으나 런타임 채점 연결은 새 계산 필요다. 개폐업 내부 종합 score·component_scores는 새 S 점수로 재사용하지 않는다.
 
-서울 기준값은 `backend/app/agents/business_lifecycle/baseline.py`의 `SEOUL_INDUSTRY_LIFECYCLE_BASELINE`이다. 측정 스크립트는 `backend/scripts/measure_lifecycle_baseline.py`. 공식 [점포-서울시 OA-22174](https://data.seoul.go.kr/dataList/OA-22174/S/1/datasetView.do), 서비스 **VwsmMegaStorW**, 2026-10-13 측정: 전체 2,200행·HTTP 3회·탐색/재시도 없음. 기본 분석과 맞춘 **2023Q3~2026Q2 12분기**만 골라 기존 _aggregate_rows를 그대로 사용했다. 건수를 합산한 뒤 비율을 계산하고, 응답 분기의 누락 원천만 0 보충한다. 전체 분기 응답 부재는 결측이다. 45개 서울 연결 서비스 업종 모두 data_complete=true이며 원문은 커밋하지 않는다.
+서울 기준값은 `backend/app/domain/baselines/business_lifecycle.py`의 `SEOUL_INDUSTRY_LIFECYCLE_BASELINE`이다. 측정 스크립트는 `backend/scripts/measure_lifecycle_baseline.py`. 공식 [점포-서울시 OA-22174](https://data.seoul.go.kr/dataList/OA-22174/S/1/datasetView.do), 서비스 **VwsmMegaStorW**, 2026-10-13 측정: 전체 2,200행·HTTP 3회·탐색/재시도 없음. 기본 분석과 맞춘 **2023Q3~2026Q2 12분기**만 골라 기존 _aggregate_rows를 그대로 사용했다. 건수를 합산한 뒤 비율을 계산하고, 응답 분기의 누락 원천만 0 보충한다. 전체 분기 응답 부재는 결측이다. 45개 서울 연결 서비스 업종 모두 data_complete=true이며 원문은 커밋하지 않는다.
 
 S1은 최근 4분기 폐업률, S2·S3은 전체 12분기 순증감률·회전율이다. 대상과 서울의 기준 종료 분기·분석 길이가 같아야 한다. 다른 기간이면 재측정한 상수가 필요하며 기존 값으로 대신하지 않는다. S1·S3 r=상권 지표/서울 같은 업종 지표는 낮을수록 좋다. **잠정 역방향 r 등급**은 <0.80→4, <0.95→3, <1.05→2, <1.20→1, ≥1.20→0이다. S2는 확정된 정규화 지수에 정방향 r 구간(0.80/0.95/1.05/1.20)을 사용한다. 서울 분모 0·null, 부족 노출량·불완전 관측은 unknown이다.
 

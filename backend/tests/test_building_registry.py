@@ -427,6 +427,11 @@ class BuildingRegistryApiTests(unittest.TestCase):
             "건축물대장 조회가 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.",
         )
 
+    def test_other_registry_failure_is_502_without_upstream_text(self):
+        response = self.get(BuildingRegistryError("UPSTREAM_FAILED", "외부 원문"))
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "건축물대장 조회에 실패했습니다.")
+
     def test_too_long_address_is_400(self):
         response = self.get(GeocodeError("ADDRESS_TOO_LONG", "x"))
         self.assertEqual(response.status_code, 400)

@@ -9,8 +9,8 @@
 결정 에이전트 프롬프트가 "필드 이름, 설명, 단위와 실제 값을 함께 읽습니다"로 동작하므로,
 **이 문서에 적힌 이름과 단위가 곧 인터페이스**입니다. 필드명을 바꿀 때는 결정 에이전트 담당과 함께 바꿉니다.
 
-- 자료 구조 전체: [`backend/app/agents/commercial_area/README.md`](../backend/app/infrastructure/market_data/commercial_area/README.md)
-- 수식 구현: `backend/app/agents/commercial_area/metrics.py`
+- 자료 구조 전체: [`backend/app/infrastructure/market_data/commercial_area/README.md`](../backend/app/infrastructure/market_data/commercial_area/README.md)
+- 수식 구현: `backend/app/infrastructure/market_data/commercial_area/metrics.py`
 - 논문 근거 상세: `부동산 agent/논문근거_경쟁지표.md` (팀 문서)
 
 이 문서의 모든 예시는 **실제 실행 결과**입니다 — 서울특별시 노원구 한글비석로 242, 반경 500m, 2026-09-11 조회.

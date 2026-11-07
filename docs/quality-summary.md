@@ -32,6 +32,6 @@
 | 코드 채점 백테스트 | `python -m backtest.run --help` | input·data·baselines·out 경로 필요. 주소·시설·규제 외부 호출이 가능하므로 별도 승인 후 실행 |
 | 전체 L 포함 백테스트 | `python -m backtest.full --help` | 별도 실자료·실행 예산 필요. `--real`, `--max-calls` 필수. 유료 호출 승인 없이 실행 금지 |
 | 녹화 재생 | `scripts/replay_agentic.py`와 테스트 `test_agentic_recording.py` | 원래 요청 DB·모델 녹화·고정 자료 버전 필요. 새 체크아웃만으로 실측 재현 불가 |
-| 채점·평가표 3종 | [decision 채점표](decision-prompt-rubric.md), [심사관](examiner-evaluator-rubric.md), [임차인](founder-evaluator-rubric.md) | 문서의 역할 범위와 실제 전용 패킷·연결 상태를 함께 확인. 임대인은 별도 평가표 문서 대신 [입력 보강 기록](landlord-context-live-report.md)과 `app/agentic/landlord.py`를 참고 |
+| 채점·평가표 3종 | [decision 채점표](decision-prompt-rubric.md), [심사관](examiner-evaluator-rubric.md), [임차인](founder-evaluator-rubric.md) | 문서의 역할 범위와 실제 전용 패킷·연결 상태를 함께 확인. 임대인은 별도 평가표 문서 대신 [입력 보강 기록](landlord-context-live-report.md)과 `app/ai/landlord.py`를 참고 |
 
 실제 주소·운영 답변이 들어간 표본을 이번에 fixture로 복사하지 않았다. 자동 회귀용 가상 자료는 기존 tests의 임시 DB·대역을 사용한다. 브라우저 E2E나 반복 실호출 품질 평가가 완료됐다는 뜻은 아니다.

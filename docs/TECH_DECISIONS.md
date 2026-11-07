@@ -9,18 +9,18 @@
 
 ## 가드레일 한눈에 — 현재 구현
 
-2026-10-26 코드 기준. 경로는 `backend/app/` 기준이다. 유효한 근거를 인용했다는 사실과 문장의 해석이 옳다는 것은 별개다.
+2026-10-26 코드 기준, 파일 위치는 2026-11-07 구조. 경로는 `backend/app/` 기준이다. 유효한 근거를 인용했다는 사실과 문장의 해석이 옳다는 것은 별개다.
 
 | 입력·모델 출력 | 서버 검증 | 실패 시 동작 | 근거 코드 |
 | --- | --- | --- | --- |
-| 도구 이름·입력 | actor별 허용 도구, Pydantic 필드·형식 검사 | 수정 가능한 도구 오류 반환 | `agentic/tools.py` execute/_reserve, `agentic/contracts.py` |
-| 숫자가 든 자유 문장 | `has_digit`, 값은 fact 슬롯으로 전달 | 보고서·지적 제출 거절 | `agentic/report.py` validate_proposal/finalize, `agentic/evaluators.py` |
-| fact_id 인용 | 현재 요청·스냅샷 존재, observed·citable, 후보 업종 일치 | 해당 제출 거절 | `agentic/report.py` fact_rows/validate_proposal/validate_l_records |
-| L 등급·선정 순위·도구 기록 | 기존 점수 스냅샷 대조, 성공 도구 기록 확인, 서버 등급 재계산 | 행별 거절·수정, 미제출은 이유와 함께 unknown | `agentic/l_input.py`, `agentic/report.py`, `agentic/runtime.py` submit_l |
-| 중복 근거·코드 채점 요인 재사용 | 같은 요인 중복·D/C/S와 규칙 채점 공간 조건의 L 재사용 거절 | L 행 거절 | `agentic/report.py` validate_l_records |
-| 규제·공간 조건 제외 | 규제 금지와 필수 공간 불충족 후보를 순위에서 제외 | 공간 제외는 condition_excluded로 별도 표시 | `agentic/scoring.py` rank_candidates, `agentic/report.py` condition_excluded/finalize |
-| 평가자 지적·반영 결정 | 사실 존재·역할별 제약·근거 검증, 지적마다 중복 없는 반영 결정 | 평가 실패를 동의로 보지 않고 완료율·한계 기록 | `agentic/evaluators.py`, `agentic/report.py` finalize |
-| 반복 호출·예산·시간 | 호출·역할·토큰·활성 시간 예산, 반복 호출 검출 | 검증된 대체 초안(draft_available), 한계 기록 | `agentic/budget.py`, `agentic/runtime.py` run/fallback |
+| 도구 이름·입력 | actor별 허용 도구, Pydantic 필드·형식 검사 | 수정 가능한 도구 오류 반환 | `ai/tools.py` execute/_reserve, `ai/tool_contracts.py` |
+| 숫자가 든 자유 문장 | `has_digit`, 값은 fact 슬롯으로 전달 | 보고서·지적 제출 거절 | `application/report.py` validate_proposal/finalize, `ai/evaluators.py` |
+| fact_id 인용 | 현재 요청·스냅샷 존재, observed·citable, 후보 업종 일치 | 해당 제출 거절 | `application/report.py` fact_rows/validate_proposal/validate_l_records |
+| L 등급·선정 순위·도구 기록 | 기존 점수 스냅샷 대조, 성공 도구 기록 확인, 서버 등급 재계산 | 행별 거절·수정, 미제출은 이유와 함께 unknown | `ai/l_input.py`, `application/report.py`, `ai/runtime.py` submit_l |
+| 중복 근거·코드 채점 요인 재사용 | 같은 요인 중복·D/C/S와 규칙 채점 공간 조건의 L 재사용 거절 | L 행 거절 | `application/report.py` validate_l_records |
+| 규제·공간 조건 제외 | 규제 금지와 필수 공간 불충족 후보를 순위에서 제외 | 공간 제외는 condition_excluded로 별도 표시 | `domain/scoring.py` rank_candidates, `application/report.py` condition_excluded/finalize |
+| 평가자 지적·반영 결정 | 사실 존재·역할별 제약·근거 검증, 지적마다 중복 없는 반영 결정 | 평가 실패를 동의로 보지 않고 완료율·한계 기록 | `ai/evaluators.py`, `application/report.py` finalize |
+| 반복 호출·예산·시간 | 호출·역할·토큰·활성 시간 예산, 반복 호출 검출 | 검증된 대체 초안(draft_available), 한계 기록 | `ai/budget.py`, `ai/runtime.py` run/fallback |
 | 동시 실행 접수 | 작업 슬롯 확보 후 접수 | 한도 초과 HTTP 429 | `api/v1/jobs.py`, `api/v1/analyses.py` |
 | URL·예외·저장 원문 | 앱 생성 시 httpx 로그 필터, 인증 쿼리·서울 경로 키 제거, 예외 원문 제거·저장 정제 | 정제한 기록만 남김 | `main.py`, `logging.py`, `storage/scrub.py` |
 

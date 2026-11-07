@@ -21,6 +21,20 @@ from tests.local_data_fixture import complete_versions
 
 
 class LocalAdapterTests(unittest.TestCase):
+    def test_cell_row_finds_named_values_and_reports_missing_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = LocalDataDB(Path(directory) / "market.sqlite3")
+            version = db.stage(
+                "stores",
+                "20262",
+                [{"row_key": "a", "payload": {"a": 1}, "latitude": 37.5, "longitude": 127.0}],
+                "first",
+            )
+            db.activate(complete_versions(db, [version], "20262"))
+            adapter = LocalAdapter(db.path)
+            self.assertEqual(adapter.cell_row("stores", version, "a").values["a"], 1)
+            self.assertIsNone(adapter.cell_row("stores", version, "없는 행"))
+
     def test_versions_are_pinned_and_vacuum(self):
         with tempfile.TemporaryDirectory() as directory:
             db = LocalDataDB(Path(directory) / "market.sqlite3")

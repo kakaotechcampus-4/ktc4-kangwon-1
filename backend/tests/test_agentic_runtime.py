@@ -437,6 +437,37 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.scope, [LRecord.model_validate(record)], loop.base_id, loop.base_rows
         )
 
+    async def test_L_advisor_consult_must_exist_in_this_request(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.storage import open_stores
+        from app.application.report import validate_l_records
+        from app.domain.contracts import LRecord
+        from app.domain.report import ReportInvalid
+
+        fact_id = await self.make_fact()
+        loop = await DecisionLoop.create(self.scope, self.site)
+        await loop.tools.execute("get_facts", {"fact_ids": [fact_id]})
+        record = self.l_record(loop, loop.base_rows[0]["code"], fact_id)
+        record["advisor_consult_ids"] = ["consult-1"]
+        parsed = [LRecord.model_validate(record)]
+        with self.assertRaisesRegex(ReportInvalid, "자문 기록"):
+            validate_l_records(self.scope, parsed, loop.base_id, loop.base_rows)
+        with open_stores(self.scope) as st:
+            st.agentic.insert_advisor_consult(
+                consult_id="consult-1",
+                request_id=self.scope.request_id,
+                snapshot_id=self.scope.snapshot_id,
+                question="질문",
+                fact_ids=[fact_id],
+                model="시험",
+                family="unknown",
+                usage=None,
+                answer_text="{}",
+                status="ok",
+                created_at="2026-11-07T00:00:00Z",
+            )
+        validate_l_records(self.scope, parsed, loop.base_id, loop.base_rows)
+
     def l_record(self, loop, code, fact_id, rank=None, basis=None):
         actual_rank = next(i for i, r in enumerate(loop.base_rows, 1) if r["code"] == code)
         return {

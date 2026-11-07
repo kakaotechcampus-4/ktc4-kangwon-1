@@ -17,7 +17,7 @@
 | 지시문 항목 중 서버가 이미 막는 것 | unknown 이유(report.py), L의 D/C/S 중복(report.py) |
 | query_raw 사용 | 0번 |
 
-## 전용 패킷 (`backend/app/agentic/examiner.py`)
+## 전용 패킷 (`backend/app/ai/examiner.py`)
 
 | 키 | 내용 |
 | --- | --- |
@@ -35,15 +35,15 @@
 - 값 원문이 500자를 넘는 카드는 value를 null로 두고 get_facts로 읽게 한다.
 - 별칭 변환 뒤 score_items·facts를 행으로 바꾼다. 키 반복을 없애 같은 카드 수를 담는다.
 - examiner에게 보내는 자료(전용 패킷, 도구 응답, 모델 호출 메시지)에서만 기간 코드를 풀어 쓴다(`aliases.label_periods`). `20231~20234` → "2023년 1분기~4분기", `20224~20234` → "2022년 4분기~2023년 4분기". 저장값과 모델이 보내는 값은 바꾸지 않는다. 다섯 자리 분기 코드를 모델이 "여러 해"로 잘못 읽어 헛지적을 냈기 때문이다(v0.2).
-- decision·founder·customer·landlord_advocate는 원래 분기 코드를 받는다(v0.3). 서버 숫자 검사(`app/text.py`)는 따로 선 분기 코드 `20231`은 통과시키지만 풀어 쓴 "2023년 1분기"는 숫자로 보고 거절한다. examiner persona에는 "기간은 말로 쓰라"는 안내가 있지만 다른 역할에는 없다.
+- decision·founder·customer·landlord_advocate는 원래 분기 코드를 받는다(v0.3). 서버 숫자 검사(`app/domain/text.py`)는 따로 선 분기 코드 `20231`은 통과시키지만 풀어 쓴 "2023년 1분기"는 숫자로 보고 거절한다. examiner persona에는 "기간은 말로 쓰라"는 안내가 있지만 다른 역할에는 없다.
 
 ## 다른 역할에도 영향을 주는 변경
 
 | 변경 | 위치 | 영향 |
 | --- | --- | --- |
-| 모델 서버 연결이 끊기거나 일시 오류(HTTP 429·502·503·504, 크레딧 소진 `insufficient_quota` 제외)가 나면 호출 예산 범위 안에서 1초·2초 쉬고 최대 두 번 다시 시도하고, 다시 시도한 호출도 예산에 센다 | `app/llm/client.py` | 모든 역할. 예산 범위 밖 호출은 그대로. decision 루프의 기존 재시도(분석당 1번)와 겹쳐 한 단계 최대 여섯 번 시도할 수 있다 |
-| 평가자 답이 길이 상한에서 잘리면 짧게 다시 제출하라는 안내와 함께 제출 기회를 주고, 세 번째면 REPORT_INVALID로 끝낸다 | `app/agentic/evaluators.py` | 평가자 넷. 잘림도 제출 실패 횟수에 들어가 종료 이벤트의 rejections에 잡힌다 |
-| 개폐업 근거의 기간을 실제 계산 구간으로 붙인다: 최근 한 해 폐업률·폐업률 배율은 마지막 4분기, 가장 이른 해 폐업률은 처음 4분기(분기가 4개 미만이면 전체 기간) | `app/agentic/snapshot.py`, `app/local_data/persistence.py` | 새로 저장되는 fact의 period만 바뀐다. 이미 저장된 fact는 그대로다 |
+| 모델 서버 연결이 끊기거나 일시 오류(HTTP 429·502·503·504, 크레딧 소진 `insufficient_quota` 제외)가 나면 호출 예산 범위 안에서 1초·2초 쉬고 최대 두 번 다시 시도하고, 다시 시도한 호출도 예산에 센다 | `app/infrastructure/llm/client.py` | 모든 역할. 예산 범위 밖 호출은 그대로. decision 루프의 기존 재시도(분석당 1번)와 겹쳐 한 단계 최대 여섯 번 시도할 수 있다 |
+| 평가자 답이 길이 상한에서 잘리면 짧게 다시 제출하라는 안내와 함께 제출 기회를 주고, 세 번째면 REPORT_INVALID로 끝낸다 | `app/ai/evaluators.py` | 평가자 넷. 잘림도 제출 실패 횟수에 들어가 종료 이벤트의 rejections에 잡힌다 |
+| 개폐업 근거의 기간을 실제 계산 구간으로 붙인다: 최근 한 해 폐업률·폐업률 배율은 마지막 4분기, 가장 이른 해 폐업률은 처음 4분기(분기가 4개 미만이면 전체 기간) | `app/application/snapshot.py`, `app/application/local_snapshot.py` | 새로 저장되는 fact의 period만 바뀐다. 이미 저장된 fact는 그대로다 |
 
 ## 고정 평가표 — 네 칸
 

@@ -43,6 +43,10 @@ class AliasConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                 db.execute("SELECT count(*) FROM fact_aliases").fetchone()[0], len(facts)
             )
 
+    async def test_fact_outside_snapshot_cannot_get_alias(self):
+        with self.assertRaisesRegex(ValueError, "요청에 없는 fact"):
+            encode(self.scope, {"fact_id": "없는 fact"})
+
     async def test_collision_limit_rolls_back_without_waiting_forever(self):
         first, second = list(self.profiles().values())[:2]
         existing = encode(self.scope, {"fact_id": first})["fact_id"]
