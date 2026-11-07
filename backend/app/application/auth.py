@@ -8,18 +8,18 @@ import sqlite3
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+from app.application.ports.identity import (
+    AuthSettings,
+    KakaoOAuthError,
+    KakaoOAuthSettings,
+    KakaoProfile,
+    MailError,
+    MailSettings,
+    identity,
+)
 from app.application.ports.storage import storage
 from app.domain.passwords import hash_password, validate_password, verify_password
 from app.domain.sessions import SESSION_TTL as SESSION_TTL
-from app.infrastructure.clients.kakao_oauth import (
-    KakaoOAuthError,
-    KakaoProfile,
-    exchange_token,
-    fetch_profile,
-)
-from app.infrastructure.clients.kakao_oauth import authorize_url as authorize_url
-from app.infrastructure.clients.mailer import MailError, reset_mail, send_mail, verification_mail
-from app.infrastructure.config import AuthSettings, KakaoOAuthSettings, MailSettings
 
 PROVIDER_KAKAO = "kakao"
 MAX_EMAIL_LENGTH = 254
@@ -65,6 +65,10 @@ def safe_next(path: str | None) -> str:
     if candidate.startswith(("//", "/\\")):
         return DEFAULT_NEXT
     return candidate
+
+
+def authorize_url(settings: KakaoOAuthSettings, *, state: str) -> str:
+    return identity().authorize_url(settings, state=state)
 
 
 def is_verified(user: dict[str, Any]) -> bool:
@@ -120,9 +124,11 @@ async def _send_verification(
     token = await asyncio.to_thread(
         storage().sessions.create_email_token, user_id, "verify_email", db_path=db_path
     )
-    subject, html = verification_mail(f"{auth.frontend_base_url}/verify-email?token={token}")
+    subject, html = identity().verification_mail(
+        f"{auth.frontend_base_url}/verify-email?token={token}"
+    )
     try:
-        await send_mail(email, subject, html, mail, client=client)
+        await identity().send_mail(email, subject, html, mail, client=client)
     except MailError:
         # 가입을 되돌리지 않습니다. 같은 주소로 다시 시도할 때 더 꼬입니다.
         return False
@@ -205,9 +211,9 @@ async def forgot_password(
     token = await asyncio.to_thread(
         storage().sessions.create_email_token, user["user_id"], "reset_password", db_path=db_path
     )
-    subject, html = reset_mail(f"{auth.frontend_base_url}/password/reset?token={token}")
+    subject, html = identity().reset_mail(f"{auth.frontend_base_url}/password/reset?token={token}")
     try:
-        await send_mail(email, subject, html, mail, client=client)
+        await identity().send_mail(email, subject, html, mail, client=client)
     except MailError:
         return
 
@@ -242,8 +248,8 @@ async def kakao_callback(
         raise AuthError("INVALID_STATE", "로그인 요청이 만료되었습니다. 다시 시도해 주세요.")
     if not code:
         raise KakaoOAuthError("KAKAO_TOKEN_REJECTED", "인가 코드가 없습니다.")
-    access_token = await exchange_token(code, kakao, client=client)
-    profile = await fetch_profile(access_token, kakao, client=client)
+    access_token = await identity().exchange_token(code, kakao, client=client)
+    profile = await identity().fetch_profile(access_token, kakao, client=client)
     user_id = await asyncio.to_thread(_resolve_social_user, profile, db_path)
     await asyncio.to_thread(storage().sessions.purge_expired, db_path=db_path)
     token, _ = await asyncio.to_thread(storage().sessions.create_session, user_id, db_path=db_path)

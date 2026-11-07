@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.v1.deps import current_user
 from app.api.v1.jobs import is_mock
-from app.application.building import BuildingLookupFailed, BuildingRegistry, lookup
+from app.application.building import BuildingLookupFailed, lookup
+from app.domain.building import BuildingRegistry
 
 router = APIRouter(prefix="/api/v1", tags=["building"])
 

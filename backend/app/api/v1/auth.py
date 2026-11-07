@@ -19,11 +19,11 @@ from app.application.auth import (
     SESSION_COOKIE_SAMESITE,
     SESSION_TTL,
     AuthError,
-    KakaoOAuthError,
     authorize_url,
     public_user,
     safe_next,
 )
+from app.application.ports.identity import KakaoOAuthError
 from app.domain.passwords import PasswordPolicyError
 
 EmailText = Annotated[str, AfterValidator(service.normalize_email)]

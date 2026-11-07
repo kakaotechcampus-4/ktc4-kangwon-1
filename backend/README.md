@@ -77,7 +77,7 @@ scripts/           자료 갱신, 기준선 생성, 재현 검증
 tests/             임시 DB와 API·모델 대역으로 도는 회귀 시험
 ```
 
-계층 방향은 `tests/test_architecture.py`가 검사합니다(domain → shared만, application → domain·shared, ai → application·domain·shared, infrastructure → domain·shared·application.ports·application.errors, api → application·domain·shared). 아직 남은 예외는 `tests/fixtures/architecture_allowlist.txt`에 있고 줄어들기만 합니다.
+계층 방향은 `tests/test_architecture.py`가 검사합니다(domain → shared만, application → domain·shared, ai → application·domain·shared, infrastructure → domain·shared·application.ports·application.errors, api → application·domain·shared). 예외는 없습니다.
 
 수집 클라이언트(`app/infrastructure/market_data/*/client.py`)는 자료 갱신과 기준선 연구에만 쓰며, 일반 분석 요청은 기본 자료 API를 다시 호출하지 않습니다.
 업종 체계와 매핑은 [업종 README](app/domain/industries/README.md), 인구·상권·지도 계산은 각 폴더의 README를 참고하세요.

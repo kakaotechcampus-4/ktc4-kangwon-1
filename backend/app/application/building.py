@@ -1,10 +1,7 @@
 from app.application.errors import ADDRESS_INPUT_ERRORS, AddressError
-from app.infrastructure.clients.building_registry import (
-    BuildingRegistry,
-    BuildingRegistryError,
-    lookup_building,
-)
-from app.infrastructure.mock import building_registry as mock_building_registry
+from app.application.ports.demo import demo
+from app.application.ports.sites import BuildingRegistryError, sites
+from app.domain.building import BuildingRegistry
 
 
 class BuildingLookupFailed(Exception):
@@ -16,9 +13,9 @@ class BuildingLookupFailed(Exception):
 
 async def lookup(address: str, *, mock: bool) -> BuildingRegistry:
     if mock:
-        return mock_building_registry()
+        return demo().building()
     try:
-        return await lookup_building(address)
+        return await sites().building(address)
     except AddressError as exc:
         invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise BuildingLookupFailed(

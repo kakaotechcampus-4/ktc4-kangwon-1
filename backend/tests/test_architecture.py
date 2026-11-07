@@ -8,7 +8,6 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
 APP = BACKEND / "app"
-ALLOWLIST = Path(__file__).parent / "fixtures" / "architecture_allowlist.txt"
 ALLOWED = {
     "domain": ("domain", "shared"),
     "shared": ("shared",),
@@ -28,7 +27,6 @@ SQL = re.compile(
     r"RELEASE|WITH|CREATE|DROP|ALTER|PRAGMA)\b\s+\S",
     re.IGNORECASE,
 )
-SQL_OUTSIDE_INFRASTRUCTURE: set[str] = set()
 DOMAIN_FORBIDDEN_IMPORTS = {
     "asyncio",
     "contextvars",
@@ -112,11 +110,8 @@ def sql_strings(path):
 
 
 class ArchitectureTests(unittest.TestCase):
-    def test_layer_rules_only_shrink(self):
-        current = violations()
-        listed = {line for line in ALLOWLIST.read_text(encoding="utf-8").splitlines() if line}
-        self.assertEqual(sorted(current - listed), [], "허용하지 않은 계층 방향입니다.")
-        self.assertEqual(sorted(listed - current), [], "고친 위반은 허용목록에서 지우세요.")
+    def test_layer_rules(self):
+        self.assertEqual(sorted(violations()), [], "허용하지 않은 계층 방향입니다.")
 
     def test_every_app_module_belongs_to_a_layer(self):
         loose = [
@@ -156,8 +151,7 @@ class ArchitectureTests(unittest.TestCase):
             and layer(module_of(path)) != "infrastructure"
             and sql_strings(path)
         }
-        self.assertEqual(sorted(outside - SQL_OUTSIDE_INFRASTRUCTURE), [])
-        self.assertEqual(sorted(SQL_OUTSIDE_INFRASTRUCTURE - outside), [])
+        self.assertEqual(sorted(outside), [])
 
     def test_sql_probe_catches_statement_forms(self):
         with tempfile.TemporaryDirectory() as folder:

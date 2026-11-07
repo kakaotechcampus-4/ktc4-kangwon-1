@@ -7,29 +7,11 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.infrastructure.config import KakaoOAuthSettings
+from app.application.ports.identity import KakaoOAuthError, KakaoOAuthSettings, KakaoProfile
 
 AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize"
 TOKEN_URL = "https://kauth.kakao.com/oauth/token"
 PROFILE_URL = "https://kapi.kakao.com/v2/user/me"
-
-
-class KakaoOAuthError(Exception):
-    def __init__(self, code: str, message: str):
-        super().__init__(f"[{code}] {message}")
-        self.code = code
-        self.message = message
-
-
-class KakaoProfile:
-    """카카오가 돌려준 신원입니다. 닉네임·사진은 선택 동의라 없을 수 있습니다."""
-
-    __slots__ = ("provider_user_id", "nickname", "profile_image_url")
-
-    def __init__(self, provider_user_id: str, nickname: str | None, profile_image_url: str | None):
-        self.provider_user_id = provider_user_id
-        self.nickname = nickname
-        self.profile_image_url = profile_image_url
 
 
 def _require(settings: KakaoOAuthSettings) -> tuple[str, str]:

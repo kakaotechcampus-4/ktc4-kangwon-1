@@ -1,8 +1,0 @@
-app.application.analysis -> app.infrastructure.clients.address
-app.application.analysis -> app.infrastructure.config
-app.application.analysis -> app.infrastructure.mock
-app.application.auth -> app.infrastructure.clients.kakao_oauth
-app.application.auth -> app.infrastructure.clients.mailer
-app.application.auth -> app.infrastructure.config
-app.application.building -> app.infrastructure.clients.building_registry
-app.application.building -> app.infrastructure.mock

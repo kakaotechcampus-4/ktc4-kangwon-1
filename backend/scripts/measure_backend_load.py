@@ -156,7 +156,7 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
     settings = ExecutionSettings(db_path=db_path, max_concurrency=2)
     with (
         patch("sqlite3.connect", side_effect=connect),
-        patch("app.application.analysis.dependencies", side_effect=dependencies),
+        patch("app.infrastructure.mock.dependencies", side_effect=dependencies),
         patch("openai.AsyncOpenAI", side_effect=AssertionError("실제 LLM 생성 금지")),
         patch.object(socket.socket, "connect", side_effect=AssertionError("외부 연결 금지")),
     ):

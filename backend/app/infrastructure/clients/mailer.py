@@ -6,19 +6,12 @@ from html import escape
 
 import httpx
 
-from app.infrastructure.config import MailSettings
+from app.application.ports.identity import MailError, MailSettings
 
 RESEND_URL = "https://api.resend.com/emails"
 
 VERIFY_SUBJECT = "[채움] 이메일 주소를 확인해 주세요"
 RESET_SUBJECT = "[채움] 비밀번호 재설정 안내"
-
-
-class MailError(Exception):
-    def __init__(self, code: str, message: str):
-        super().__init__(f"[{code}] {message}")
-        self.code = code
-        self.message = message
 
 
 def _body(title: str, lead: str, action: str, link: str, note: str) -> str:

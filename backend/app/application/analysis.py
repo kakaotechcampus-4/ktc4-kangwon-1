@@ -7,17 +7,21 @@ import re
 import uuid
 from time import monotonic
 
-from app.application.errors import INTERRUPTED_MESSAGE, AnalysisConflictError
+from app.application.errors import (
+    ADDRESS_INPUT_ERRORS,
+    INTERRUPTED_MESSAGE,
+    AddressError,
+    AnalysisConflictError,
+)
 from app.application.local_snapshot import persist_local
 from app.application.ports.decision import decision
+from app.application.ports.demo import demo
 from app.application.ports.llm import llm, with_llm_session
 from app.application.ports.market import market
+from app.application.ports.sites import sites
 from app.application.ports.storage import storage
 from app.application.snapshot import persist_snapshot_scores
 from app.domain.schemas import AgentError, AnalysisTask
-from app.infrastructure.clients.address import ADDRESS_INPUT_ERRORS, GeocodeError, resolve_site
-from app.infrastructure.config import BACKEND_DIR
-from app.infrastructure.mock import dependencies, generators
 from app.shared.clock import utc_now_iso
 from app.shared.concurrency import run_in_thread
 from app.shared.scrub import env_secrets, scrub_text
@@ -43,7 +47,7 @@ FAILURE_MESSAGES = {
 def public_failure(exc: BaseException, stage: str) -> AgentError:
     if isinstance(exc, asyncio.CancelledError):
         return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
-    if isinstance(exc, GeocodeError) and exc.code in ADDRESS_INPUT_ERRORS:
+    if isinstance(exc, AddressError) and exc.code in ADDRESS_INPUT_ERRORS:
         code = "ADDRESS_FAILED"
     elif stage == "루프":
         code = "AI_FAILED"
@@ -129,14 +133,12 @@ def _make_recorder(request_id, recording_path, measurement):
     """측정 모드이거나 기록 경로를 받았을 때만 모델 호출을 파일로 남깁니다."""
     if not (measurement or recording_path):
         return None
-    return llm().recording(
-        recording_path or BACKEND_DIR / "cache" / f"{request_id}-model-calls.json"
-    )
+    return llm().recording(request_id, recording_path)
 
 
 async def _resolve_and_save_site(path, request_id, address, radius_m, resolve):
     """주소를 좌표로 바꿔 저장하고, 이어지는 단계가 쓸 작업 단위를 돌려줍니다."""
-    site = await (resolve or resolve_site)(address)
+    site = await (resolve or sites().resolve)(address)
     task = AnalysisTask(request_id=request_id, site=site, radius_m=radius_m)
     await run_in_thread(lambda: storage().requests.save_site(task, db_path=path))
     await _event(path, request_id, "address", "completed")
@@ -289,8 +291,8 @@ async def resume_agentic_analysis(
 
 
 def mock_run_options(*, ask):
-    return dependencies(ask=ask)
+    return demo().run_options(ask=ask)
 
 
 def mock_resume_options():
-    return generators()
+    return demo().resume_options()

@@ -17,13 +17,9 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
 from app.application.jobs import AnalysisJobRegistry
+from app.application.ports.identity import AuthSettings, KakaoOAuthSettings, MailSettings
 from app.bootstrap import wire
-from app.infrastructure.config import (
-    AuthSettings,
-    KakaoOAuthSettings,
-    MailSettings,
-    load_environment,
-)
+from app.infrastructure.config import load_environment
 from app.infrastructure.market_data.local.score_reference import warm_reference
 from app.infrastructure.persistence import repository
 from app.infrastructure.persistence.connection import initialize

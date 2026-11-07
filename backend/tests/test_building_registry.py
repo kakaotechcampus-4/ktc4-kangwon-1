@@ -13,12 +13,9 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app import main
+from app.application.ports.sites import BuildingRegistryError
 from app.infrastructure.clients.address import GeocodeError
-from app.infrastructure.clients.building_registry import (
-    BuildingRegistryError,
-    BuildingRegistrySettings,
-    lookup_building,
-)
+from app.infrastructure.clients.building_registry import BuildingRegistrySettings, lookup_building
 from app.infrastructure.config import AddressSettings
 from app.infrastructure.settings import ExecutionSettings
 from tests.auth_fixture import login
@@ -394,7 +391,7 @@ def _logged_in_client(path):
 
 class BuildingRegistryApiTests(unittest.TestCase):
     def get(self, error=None, **params):
-        target = "app.application.building.lookup_building"
+        target = "app.infrastructure.clients.sites.lookup_building"
         with (
             tempfile.TemporaryDirectory() as folder,
             patch.dict(os.environ, {"MOCK_MODE": ""}),

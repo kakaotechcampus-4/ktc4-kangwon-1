@@ -4,14 +4,8 @@ import json
 
 from openai.types.chat import ChatCompletionMessage
 
+from app.domain.building import BuildingRegistry, BuildingTitle, FloorOverview, SewageFacility, Unit
 from app.domain.schemas import Site
-from app.infrastructure.clients.building_registry import (
-    BuildingRegistry,
-    BuildingTitle,
-    FloorOverview,
-    SewageFacility,
-    Unit,
-)
 
 
 def call(name, arguments):
@@ -166,3 +160,17 @@ def building_registry():
         ],
         sewage=[SewageFacility(method="하수종말처리장 연결", method_name="하수종말처리장연결")],
     )
+
+
+class MockDemo:
+    @staticmethod
+    def run_options(*, ask):
+        return dependencies(ask=ask)
+
+    @staticmethod
+    def resume_options():
+        return generators()
+
+    @staticmethod
+    def building():
+        return building_registry()

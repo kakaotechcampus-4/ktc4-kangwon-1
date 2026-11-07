@@ -11,7 +11,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.application.auth import SESSION_COOKIE_NAME
-from app.infrastructure.config import KakaoOAuthSettings
+from app.application.ports.identity import KakaoOAuthSettings
 from app.infrastructure.persistence.connection import connect
 from app.infrastructure.persistence.repository import sessions as session_repo
 from app.infrastructure.settings import ExecutionSettings
