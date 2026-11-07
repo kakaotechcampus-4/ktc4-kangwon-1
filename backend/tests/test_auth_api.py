@@ -100,6 +100,31 @@ class AuthApiTests(unittest.TestCase):
         )
         self.assertEqual(allowed.status_code, 200, allowed.text)
 
+    def test_resend_sends_new_link_until_verified(self):
+        self.signup()
+        first = self._link_token()
+        response = self.client.post("/api/v1/auth/verification/resend", headers=ORIGIN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"verification_sent": True})
+        second = self._link_token()
+        self.assertNotEqual(first, second)
+        verified = self.client.post(
+            "/api/v1/auth/verify-email", json={"token": second}, headers=ORIGIN
+        )
+        self.assertEqual(verified.status_code, 200)
+        again = self.client.post("/api/v1/auth/verification/resend", headers=ORIGIN)
+        self.assertEqual(again.status_code, 409)
+
+    def test_withdraw_ends_session_and_removes_login(self):
+        self.signup()
+        response = self.client.delete("/api/v1/auth/me", headers=ORIGIN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, 401)
+        login = self.client.post(
+            "/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD}, headers=ORIGIN
+        )
+        self.assertEqual(login.status_code, 401)
+
     def test_verification_token_is_single_use(self):
         self.signup()
         token = self._link_token()
