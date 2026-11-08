@@ -135,6 +135,7 @@ first_deploy_nginx_check_fails() {
   [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
   upstream_unchanged || fail "upstream 설정이 원래대로 돌아오지 않음"
   [ ! -L "$FAKE/current" ] || fail "current 링크가 남음 → $(readlink "$FAKE/current")"
+  [ -z "$(release_shas)" ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
   called "systemctl stop chaeum@8002" || fail "새 포트(8002)를 멈추지 않음"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
   not_called "systemctl stop chaeum@8001" || fail "구 버전 포트(8001)를 멈춤"
