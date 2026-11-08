@@ -4,7 +4,7 @@ set -euo pipefail
 DEPLOY_SH="$(dirname "$0")/../deploy.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-FAILURES=0
+FAILED=0
 
 mkdir -p "$WORK/release/backend" "$WORK/release/deploy"
 echo marker >"$WORK/release/backend/marker.txt"
@@ -40,27 +40,35 @@ run_deploy() {
     CHAEUM_ROOT="$FAKE" \
     CHAEUM_UPSTREAM_CONF="$FAKE/chaeum-upstream.conf" \
     CHAEUM_UNIT_DEST="$FAKE/chaeum@.service" \
-    CHAEUM_DEPLOY_LOG="$FAKE/deploy.log" \
-    bash "$DEPLOY_SH" "$1" test-bucket >/dev/null 2>&1
+    CHAEUM_DEPLOY_LOG=/dev/null \
+    bash "$DEPLOY_SH" "$1" test-bucket 2>&1 | sed 's/^/    │ /' >>"$FAKE/deploy.log"
 }
 
-current_release() { readlink -f "$FAKE/current"; }
-upstream_port() { grep -oE '127\.0\.0\.1:[0-9]+' "$FAKE/chaeum-upstream.conf" | cut -d: -f2; }
+current_release() { readlink -f "$FAKE/current" || true; }
+upstream_port() { grep -oE '127\.0\.0\.1:[0-9]+' "$FAKE/chaeum-upstream.conf" | cut -d: -f2 || true; }
+release_shas() { ls "$FAKE/releases" | cut -d- -f1 | paste -sd ' ' -; }
 save_upstream() { cp "$FAKE/chaeum-upstream.conf" "$FAKE/upstream.before"; }
 upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$FAKE/chaeum-upstream.conf"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
+not_called() { ! called "$1"; }
 
 fail() {
   echo "FAIL $SCENARIO: $1"
-  FAILURES=$((FAILURES + 1))
+  echo "$1" >>"$FAKE/failures"
 }
 
 scenario() {
   SCENARIO="$1"
-  local failures_before="$FAILURES"
   new_root
-  "$2"
-  if [ "$FAILURES" -eq "$failures_before" ]; then
+  set +e
+  (set -e; "$2")
+  local status=$?
+  set -e
+  [ "$status" -eq 0 ] || fail "시나리오가 도중에 멈춤(종료 코드 $status)"
+  if [ -s "$FAKE/failures" ]; then
+    FAILED=1
+    [ ! -f "$FAKE/deploy.log" ] || cat "$FAKE/deploy.log"
+  else
     echo "PASS $SCENARIO"
   fi
 }
@@ -85,15 +93,13 @@ same_commit_twice() {
 
 four_deploys() {
   local sha current
-  for sha in aaa1111 bbb2222 ccc3333 ddd4444; do
+  for sha in ccc3333 aaa1111 ddd4444 bbb2222; do
     run_deploy "$sha" || fail "$sha 배포가 실패함"
   done
-  local kept=("$FAKE"/releases/*)
   current="$(current_release)"
 
-  [ "${#kept[@]}" -eq 3 ] || fail "릴리스가 3개가 아니라 ${#kept[@]}개 남음"
-  [[ "${current##*/}" == ddd4444* ]] || fail "current가 마지막 배포를 가리키지 않음: ${current##*/}"
-  [ -d "$current" ] || fail "current가 가리키는 폴더가 지워짐"
+  [ "$(release_shas)" = "aaa1111 bbb2222 ddd4444" ] || fail "가장 먼저 배포한 ccc3333만 지워져야 하는데 남은 것: $(release_shas)"
+  [[ "${current##*/}" == bbb2222-* ]] || fail "current가 마지막 배포(bbb2222)를 가리키지 않음: ${current##*/}"
 }
 
 nginx_check_fails() {
@@ -107,6 +113,8 @@ nginx_check_fails() {
   upstream_unchanged || fail "upstream 설정이 원래대로 돌아오지 않음"
   [ "$(current_release)" = "$before" ] || fail "current가 실패 전 폴더로 돌아오지 않음"
   called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
+  not_called "systemctl reload nginx" || fail "nginx를 reload함"
+  not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
   [ ! -e "$FAKE/chaeum-upstream.conf.bak" ] || fail ".bak 파일이 남음"
 }
 
@@ -119,6 +127,8 @@ first_deploy_nginx_check_fails() {
   upstream_unchanged || fail "upstream 설정이 원래대로 돌아오지 않음"
   [ ! -L "$FAKE/current" ] || fail "current 링크가 남음 → $(readlink "$FAKE/current")"
   called "systemctl stop chaeum@8002" || fail "새 포트(8002)를 멈추지 않음"
+  not_called "systemctl reload nginx" || fail "nginx를 reload함"
+  not_called "systemctl stop chaeum@8001" || fail "구 버전 포트(8001)를 멈춤"
   [ ! -e "$FAKE/chaeum-upstream.conf.bak" ] || fail ".bak 파일이 남음"
 }
 
@@ -133,6 +143,8 @@ health_check_fails() {
   upstream_unchanged || fail "upstream 설정이 바뀜"
   [ "$(current_release)" = "$before" ] || fail "current가 실패 전 폴더로 돌아오지 않음"
   called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
+  not_called "systemctl reload nginx" || fail "nginx를 reload함"
+  not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
 }
 
 scenario "같은 커밋 두 번" same_commit_twice
@@ -141,4 +153,4 @@ scenario "nginx 검사 실패" nginx_check_fails
 scenario "첫 배포에서 nginx 검사 실패" first_deploy_nginx_check_fails
 scenario "헬스체크 실패" health_check_fails
 
-[ "$FAILURES" -eq 0 ] || exit 1
+[ "$FAILED" -eq 0 ] || exit 1
