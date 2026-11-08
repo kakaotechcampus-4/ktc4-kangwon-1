@@ -25,11 +25,16 @@ export function candidateScore(candidate: FinalCandidate): {
 /** 입점 전 확인할 문장 — 위험 요인, 확인 조건 문장, 서버가 붙인 확인 조건 순서. */
 export function candidateChecks(
   candidate: FinalCandidate,
-  facts: FactIndex
+  facts: FactIndex,
+  shownSpaceFits: Set<string> = new Set()
 ): string[] {
   const sentences = [
-    renderSegments(candidate.risks_segments, facts),
-    renderSegments(candidate.confirmation_conditions_segments, facts),
+    renderSegments(candidate.risks_segments, facts, shownSpaceFits),
+    renderSegments(
+      candidate.confirmation_conditions_segments,
+      facts,
+      shownSpaceFits
+    ),
     ...candidate.confirmation_conditions,
   ].map((text) => text.trim());
   return [...new Set(sentences.filter(Boolean))];

@@ -58,7 +58,7 @@ function textValue(value: JsonValue): string | null {
     return value;
   }
   if (typeof value === 'number') {
-    return String(value);
+    return Number.isInteger(value) ? String(value) : fixed(value, 2);
   }
   if (typeof value === 'boolean') {
     return value ? '예' : '아니요';
@@ -93,7 +93,16 @@ export function formatFact(
       }).join(' · ');
     }
     if (typeof value === 'object' && !Array.isArray(value)) {
-      return fact.metric === 'space_fit' ? spaceFitText(value) : null;
+      if (fact.metric === 'space_fit') {
+        return spaceFitText(value);
+      }
+      if (
+        fact.metric === 'space_requirements' &&
+        typeof value.area_band === 'string'
+      ) {
+        return `권장 면적 ${value.area_band}`;
+      }
+      return null;
     }
     if (Array.isArray(value)) {
       const items = value.map(textValue);
@@ -121,7 +130,8 @@ export function formatFact(
 /** 조각 목록을 한 문장으로. 찾을 수 없는 fact는 '확인 불가'로 표시한다. */
 export function renderSegments(
   segments: readonly FactSegment[],
-  facts: FactIndex
+  facts: FactIndex,
+  shownSpaceFits?: Set<string>
 ): string {
   let joined = '';
   let previous: 'text' | 'fact' | 'spaceFit' | null = null;
@@ -134,6 +144,12 @@ export function renderSegments(
       const fact = facts.get(segment.fact_id);
       kind = fact?.metric === 'space_fit' ? 'spaceFit' : 'fact';
       piece = (fact && formatFact(fact, segment.format)) ?? '확인 불가';
+      if (kind === 'spaceFit' && shownSpaceFits) {
+        if (shownSpaceFits.has(segment.fact_id)) {
+          piece = piece.replace(/ \(비교 신뢰도 [^)]+\)$/, '');
+        }
+        shownSpaceFits.add(segment.fact_id);
+      }
     }
     const touching =
       /\S$/.test(joined) && /^\S/.test(piece) && !/^[.,!?;:)\]…]/.test(piece);

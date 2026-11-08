@@ -1,4 +1,4 @@
-import type { DecisionResult, StoredAnalysis } from '@/lib/api/types';
+import type { DecisionResult, FactView, StoredAnalysis } from '@/lib/api/types';
 import type { VacancyInput } from '@/lib/api/resultStore';
 import { formatDay } from '@/lib/api/analysisStatus';
 
@@ -103,6 +103,28 @@ export function storedReport(detail: StoredAnalysis): StoredReport {
     };
   }
   return { kind: 'pending', requestId: detail.request_id };
+}
+
+export function confirmedSpace(facts: readonly FactView[]): {
+  areaM2: number | null;
+  floor: string | null;
+} {
+  const confirmed = (metric: string) =>
+    facts.find(
+      (fact) =>
+        fact.source === 'user' &&
+        fact.unit === '확인 화면 확정값' &&
+        fact.metric === metric
+    )?.value;
+  const area = confirmed('exclusive_area');
+  const areaText =
+    typeof area === 'string' ? /^(\d+(?:\.\d+)?)㎡$/.exec(area.trim()) : null;
+  const areaM2 = areaText ? Number.parseFloat(areaText[1]) : Number.NaN;
+  const floor = confirmed('floor');
+  return {
+    areaM2: Number.isFinite(areaM2) && areaM2 > 0 ? areaM2 : null,
+    floor: typeof floor === 'string' && floor.trim() ? floor.trim() : null,
+  };
 }
 
 export function isExampleReport(search: string): boolean {

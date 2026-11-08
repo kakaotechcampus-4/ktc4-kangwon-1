@@ -148,7 +148,9 @@ def text_value(value):
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        return str(int(value)) if value.is_integer() and abs(value) < 1e21 else repr(value)
+        if value.is_integer() and abs(value) < 1e21:
+            return str(int(value))
+        return fixed(value, 2) if abs(value) < 1e21 else repr(value)
     return None
 
 
@@ -174,7 +176,11 @@ def render_segment(segment, facts):
                 if value.get(key) in FACILITY_STATE_TEXT
             )
         if isinstance(value, dict):
-            return space_fit_text(value) if fact.metric == "space_fit" else "확인 불가"
+            if fact.metric == "space_fit":
+                return space_fit_text(value)
+            if fact.metric == "space_requirements" and isinstance(value.get("area_band"), str):
+                return f"권장 면적 {value['area_band']}"
+            return "확인 불가"
         if isinstance(value, list):
             items = [text_value(item) for item in value]
             return ", ".join(items) if items and None not in items else "확인 불가"
