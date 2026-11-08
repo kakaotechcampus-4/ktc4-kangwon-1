@@ -21,6 +21,7 @@ from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.repository import (
     agentic,
     analyses,
+    erasure,
     events,
     facts,
     raw,
@@ -68,7 +69,7 @@ class SqliteStores:
 
 
 class SqliteStorage:
-    requests = cast(RequestStore, _Modules(requests, analyses, events))
+    requests = cast(RequestStore, _Modules(requests, analyses, events, erasure))
     users = cast(UserStore, _Modules(users))
     sessions = cast(SessionStore, _Modules(sessions))
     provenance = cast(ProvenanceStore, _Modules(provenance))
