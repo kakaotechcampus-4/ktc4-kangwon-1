@@ -58,6 +58,8 @@ conf_d_files() { ls -A "$FAKE/conf.d" | paste -sd ' ' -; }
 reloaded_ports() { cut -d: -f2 "$FAKE/reloads.log" | paste -sd ' ' -; }
 save_upstream() { cp "$UPSTREAM" "$FAKE/upstream.before"; }
 upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
+save_unit() { cp "$FAKE/chaeum@.service" "$FAKE/unit.before"; }
+unit_unchanged() { cmp -s "$FAKE/unit.before" "$FAKE/chaeum@.service"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
 call_count() { grep -cxF "$1" "$FAKE/calls.log" || true; }
 not_called() { ! called "$1"; }
@@ -186,13 +188,13 @@ reload_fails() {
 changed_unit_rolled_back() {
   local status=0
   run_deploy abc1234 || fail "첫 배포가 실패함"
-  cp "$FAKE/chaeum@.service" "$FAKE/unit.before"
+  save_unit
   echo 'ExecStart=/bin/false' >"$FAKE/release/deploy/chaeum@.service"
   pack_release
   CURL_FAIL=1 run_deploy def5678 || status=$?
 
   [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
-  cmp -s "$FAKE/unit.before" "$FAKE/chaeum@.service" || fail "systemd 유닛이 원래대로 돌아오지 않음"
+  unit_unchanged || fail "systemd 유닛이 원래대로 돌아오지 않음"
   [ "$(call_count "systemctl daemon-reload")" -eq 2 ] || fail "유닛을 되돌린 뒤 daemon-reload하지 않음"
 }
 
@@ -200,9 +202,11 @@ failed_deploys_keep_last_good() {
   local good
   run_deploy aaa1111 || fail "첫 배포가 실패함"
   good="$(current_release)"
+  save_unit
   if CURL_FAIL=1 run_deploy bbb2222; then fail "헬스체크가 실패한 bbb2222가 성공으로 끝남"; fi
   if NGINX_TEST_FAIL=1 run_deploy ccc3333; then fail "nginx 검사가 실패한 ccc3333이 성공으로 끝남"; fi
   if PIP_FAIL=1 run_deploy ddd4444; then fail "의존성 설치가 실패한 ddd4444가 성공으로 끝남"; fi
+  unit_unchanged || fail "유닛을 건드리기 전에 실패했는데 systemd 유닛이 바뀌거나 지워짐"
   run_deploy eee5555 || fail "마지막 배포가 실패함"
 
   [ -d "$good" ] || fail "마지막 정상 릴리스(aaa1111)가 지워짐"
