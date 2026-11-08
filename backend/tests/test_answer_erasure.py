@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -11,7 +12,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.ai import read_tools
+from app.ai.tool_contracts import GetFactsInput
 from app.application.errors import AnalysisConflictError
+from app.domain.contracts import ToolReply
+from app.infrastructure.persistence.raw_capture import CaptureScope
 from app.infrastructure.persistence.repository import erasure
 from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
@@ -24,7 +29,28 @@ SENTINEL = "홍길동 010-1234-5678"
 MULTILINE = '홍길동 "010-1234-5678"\n두 번째 줄'
 SHARED = "같은 답 02-555-0000"
 VERDICT = "해당 없음"
+SHORT = "주방 없음"
+PHONE = "010-1234-5678"
+PHONE_NOTE = {"note": "연락처 010-1234-5678 로 연락"}
+FOOD = "음식점"
+FOOD_NOTE = {
+    "kakao_category": "음식점 > 한식",
+    "indsSclsNm": "한식 음식점",
+    "note": "일반음식점 허가",
+    "summary": "주변에 음식점이 많아요",
+}
 ERASED = "[삭제됨]"
+PROSE_TABLES = {
+    "agentic_reports",
+    "agentic_reviews",
+    "agentic_runs",
+    "analysis_events",
+    "analysis_requests",
+    "advisor_consults",
+    "decision_failures",
+    "tool_calls",
+}
+LABEL_KEY = re.compile(r"category|[a-z0-9](?:Nm|Cd)$|(?:^|_)(?:names?|ids?|codes?)$")
 REFUSED = "분석이 끝난 뒤에 지울 수 있습니다."
 OWNED = {
     "raw_payloads": "payload_hash IN (SELECT payload_hash FROM raw_responses WHERE request_id=:id)",
@@ -145,16 +171,29 @@ def _walk(path, value, fields, kept, answers):
     elif isinstance(value, str) and path[-1] in fields and _holds_answers(path):
         answers.append(value)
     else:
-        kept.append((path, json.dumps(value, ensure_ascii=False)))
+        kept.append((path, (type(value).__name__, value)))
 
 
-def _quoted(kept, answer):
-    whole = (answer, json.dumps(answer, ensure_ascii=False))
-    return {
-        path
-        for path, value in kept
-        if isinstance(value, str) and " " in value and answer in value and value not in whole
-    }
+def _word(answer):
+    tail = r"(?![0-9A-Za-z_])" if re.fullmatch(r"[0-9A-Za-z_]", answer[-1]) else ""
+    return re.compile(r"(?<![가-힣0-9A-Za-z_])" + re.escape(answer) + tail)
+
+
+def _quotable(path):
+    labels = [step for step in path if isinstance(step, str) and LABEL_KEY.search(step)]
+    return path[0] in PROSE_TABLES and not labels
+
+
+def _bad_changes(kept, after, answer):
+    word = _word(answer)
+    return [
+        (path, before, now)
+        for (path, before), (_, now) in zip(kept, after, strict=True)
+        if now != before
+        and not (
+            _quotable(path) and before[0] == "str" and now == ("str", word.sub(ERASED, before[1]))
+        )
+    ]
 
 
 def _holds_answers(path):
@@ -169,7 +208,7 @@ def _cell(path, value, user, fields, kept, answers):
         else:
             _walk(path, parsed, fields, kept, answers)
     else:
-        kept.append((path, value))
+        kept.append((path, (type(value).__name__, value)))
 
 
 def _projection(path, request_id):
@@ -216,6 +255,48 @@ def _answered_request(client, text):
     return waiting["request_id"]
 
 
+def _record_get_facts(path, request_id):
+    with closing(sqlite3.connect(path)) as db:
+        snapshot_id, run_id, state = db.execute(
+            "SELECT snapshot_id, run_id, state_json FROM agentic_runs WHERE request_id=?",
+            (request_id,),
+        ).fetchone()
+        fact_ids = [
+            fact_id
+            for (fact_id,) in db.execute(
+                "SELECT fact_id FROM facts WHERE request_id=? AND source='user'", (request_id,)
+            )
+        ]
+    scope = CaptureScope(request_id, Path(path), run_id, snapshot_id)
+    result = read_tools._facts(scope, GetFactsInput(fact_ids=fact_ids))
+    reply = ToolReply(status="ok", data=result).model_dump_json()
+    state = json.loads(state)
+    state["messages"].append({"role": "tool", "tool_call_id": "call_facts", "content": reply})
+    with closing(sqlite3.connect(path)) as db:
+        db.execute(
+            "INSERT INTO tool_calls(tool_call_id,request_id,snapshot_id,run_id,actor,tool_name,"
+            "input_json,reply_json,created_at) VALUES(?,?,?,?,'decision','get_facts',?,?,?)",
+            (
+                "call_facts_" + request_id,
+                request_id,
+                snapshot_id,
+                run_id,
+                json.dumps({"fact_ids": fact_ids}),
+                reply,
+                "2026-11-08T00:00:00+00:00",
+            ),
+        )
+        db.execute(
+            "UPDATE agentic_runs SET state_json=? WHERE request_id=?",
+            (json.dumps(state, ensure_ascii=False), request_id),
+        )
+        db.commit()
+
+
+def _notes(found):
+    return [e["detail"] for e in found["/events"]["events"] if e["stage"] == "note"]
+
+
 def _run_script(path, request_id):
     return subprocess.run(
         [sys.executable, str(SCRIPT), str(path), request_id],
@@ -247,7 +328,14 @@ class AnswerErasureTests(unittest.TestCase):
             cls.token_id = _answered_request(client, "floor")
             cls.verdict_id = _answered_request(client, VERDICT)
             cls.shared_ids = [_answered_request(client, SHARED) for _ in range(2)]
+            cls.short_id = _answered_request(client, SHORT)
+            cls.phone_id = _answered_request(client, PHONE)
+            cls.food_id = _answered_request(client, FOOD)
         _add_event(cls.template, cls.request_id, json.dumps({"note": SENTINEL}))
+        _add_event(cls.template, cls.phone_id, json.dumps(PHONE_NOTE, ensure_ascii=False))
+        _add_event(cls.template, cls.food_id, json.dumps(FOOD_NOTE, ensure_ascii=False))
+        for request_id in (cls.short_id, cls.phone_id):
+            _record_get_facts(cls.template, request_id)
 
     def setUp(self):
         directory = self.enterContext(tempfile.TemporaryDirectory())
@@ -303,22 +391,44 @@ class AnswerErasureTests(unittest.TestCase):
         self.read(self.multiline_id)
 
     def test_numbers_keys_and_enum_values_stay_byte_identical(self):
-        cases = ((self.number_id, "1"), (self.token_id, "floor"), (self.verdict_id, VERDICT))
+        cases = (
+            (self.number_id, "1"),
+            (self.token_id, "floor"),
+            (self.verdict_id, VERDICT),
+            (self.food_id, FOOD),
+        )
         for request_id, answer in cases:
             with self.subTest(answer=answer):
                 kept, answers = _projection(self.path, request_id)
                 self.assertEqual(set(answers), {answer})
                 self.assertGreater(erasure.erase_user_answers(request_id, db_path=self.path), 0)
                 after_kept, after_answers = _projection(self.path, request_id)
-                quoted = _quoted(kept, answer)
-                self.assertEqual(
-                    [item for item in after_kept if item[0] not in quoted],
-                    [item for item in kept if item[0] not in quoted],
-                )
+                self.assertEqual([path for path, _ in after_kept], [path for path, _ in kept])
+                self.assertEqual(_bad_changes(kept, after_kept, answer), [])
                 self.assertEqual(after_answers, [ERASED] * len(answers))
                 self.read(request_id)
         enums = [value for _, value in _projection(self.path, self.verdict_id)[0]]
-        self.assertIn(json.dumps(VERDICT, ensure_ascii=False), enums)
+        self.assertIn(("str", VERDICT), enums)
+
+    def test_korean_answer_is_not_cut_out_of_words_or_labels(self):
+        erasure.erase_user_answers(self.food_id, db_path=self.path)
+        found = self.read(self.food_id)
+        self.assertEqual(_notes(found), [FOOD_NOTE | {"summary": "주변에 [삭제됨]이 많아요"}])
+
+    def test_answers_copied_by_ai_tools_are_erased(self):
+        expected = {SHORT: [], PHONE: [{"note": "연락처 [삭제됨] 로 연락"}]}
+        for request_id, answer in ((self.short_id, SHORT), (self.phone_id, PHONE)):
+            with self.subTest(answer=answer):
+                with closing(sqlite3.connect(self.path)) as db:
+                    (reply,) = db.execute(
+                        "SELECT reply_json FROM tool_calls WHERE request_id=? "
+                        "AND tool_name='get_facts'",
+                        (request_id,),
+                    ).fetchone()
+                self.assertIn(answer, reply)
+                self.assertGreater(erasure.erase_user_answers(request_id, db_path=self.path), 0)
+                self.assertEqual(_hits(self.path, answer, request_id), 0)
+                self.assertEqual(_notes(self.read(request_id)), expected[answer])
 
     def test_shared_raw_payload_is_copied_not_changed(self):
         erased, other = self.shared_ids
@@ -335,18 +445,27 @@ class AnswerErasureTests(unittest.TestCase):
         self.read(erased)
 
     def test_unshared_original_payload_is_removed(self):
+        user_payload = "SELECT payload_hash FROM raw_responses WHERE request_id=? AND source='user'"
         with closing(sqlite3.connect(self.path)) as db:
-            payloads = db.execute("SELECT count(*) FROM raw_payloads").fetchone()[0]
+            (old,) = db.execute(user_payload, (self.request_id,)).fetchone()
         erasure.erase_user_answers(self.request_id, db_path=self.path)
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(
-                db.execute("SELECT count(*) FROM raw_payloads").fetchone()[0], payloads
+            (new,) = db.execute(user_payload, (self.request_id,)).fetchone()
+            stored = dict(
+                db.execute(
+                    "SELECT payload_hash, response_json FROM raw_payloads "
+                    "WHERE payload_hash IN (?, ?)",
+                    (old, new),
+                ).fetchall()
             )
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertNotEqual(new, old)
+        self.assertEqual(list(stored), [new])
+        self.assertEqual(canonical_hash(json.loads(stored[new])), new)
 
     def test_unfinished_request_is_refused(self):
         before, hits = _triggers(self.path), _hits(self.path, SENTINEL)
-        for status in ("pending", "running"):
+        for status in ("pending", "running", "waiting_for_input"):
             with self.subTest(status=status):
                 with closing(sqlite3.connect(self.path)) as db:
                     db.execute(

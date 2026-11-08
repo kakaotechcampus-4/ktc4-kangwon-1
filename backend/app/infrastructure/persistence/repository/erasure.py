@@ -10,9 +10,10 @@ from app.infrastructure.persistence.repository.common import _dumps, _text, begi
 from app.shared.canonical import canonical_hash, canonical_json
 
 _ERASED = "[삭제됨]"
-_UNFINISHED = frozenset({"pending", "running"})
+_UNFINISHED = frozenset({"pending", "running", "waiting_for_input"})
 _ESCAPE_DEPTH = 2
 _QUOTE_MIN_LENGTH = 3
+_PLAIN_QUOTE_MIN_LENGTH = 8
 _WHOLE_VALUE_MIN_LENGTH = 12
 _PAYLOADS = "raw_payloads"
 _ROWS = "raw_rows"
@@ -20,10 +21,12 @@ _ANSWER_KEYS = frozenset({"answers", "answers_json"})
 _PROSE_COLUMNS = frozenset({"question"})
 _FIXED_KEY = re.compile(
     r"(?:^|_)(?:id|ids|at|hash|key|code|codes|status|source|metric|field|unit|period|kind|"
-    r"type|stage|event|actor|role|phase|method|version|name|pointer)$"
+    r"type|stage|event|actor|role|phase|method|version|name|names|pointer)$"
+    r"|category|[a-z0-9](?:Nm|Cd)$"
 )
 _JSON_CHECK = re.compile(r'json_valid\(\s*"?(\w+)"?\s*\)')
 _WORD = re.compile(r"[0-9A-Za-z_]")
+_LETTER = re.compile(r"[가-힣0-9A-Za-z_]")
 
 
 @dataclass(frozen=True)
@@ -101,14 +104,15 @@ def _rule(db, request_id):
     quotes = tuple(
         _quote(text)
         for text in sorted(texts, key=lambda text: (-len(text), text))
-        if len(text) >= _QUOTE_MIN_LENGTH and any(char.isalpha() for char in text)
+        if len(text) >= _PLAIN_QUOTE_MIN_LENGTH
+        or (len(text) >= _QUOTE_MIN_LENGTH and any(char.isalpha() for char in text))
     )
     frozen = {field: frozenset(values) for field, values in answers.items()}
     return _Rule(frozen, texts, quotes, _needles(texts))
 
 
 def _quote(text):
-    head = r"(?<![0-9A-Za-z_])" if _WORD.fullmatch(text[0]) else ""
+    head = r"(?<![가-힣0-9A-Za-z_])" if _LETTER.fullmatch(text[0]) else ""
     tail = r"(?![0-9A-Za-z_])" if _WORD.fullmatch(text[-1]) else ""
     return re.compile(head + re.escape(text) + tail)
 
@@ -244,9 +248,14 @@ def _erase_cell(text, rule, column, origin):
 
 
 def _erase_value(value, rule, key, inside, prose):
+    if isinstance(value, dict | list) and _FIXED_KEY.search(key):
+        return value
     if isinstance(value, dict):
+        user = value.get("source") == "user"
         return {
-            name: _erase_value(item, rule, name, inside or name in _ANSWER_KEYS, prose)
+            name: _erase_answer(item, rule)
+            if user and name == "value"
+            else _erase_value(item, rule, name, inside or name in _ANSWER_KEYS, prose)
             for name, item in value.items()
         }
     if isinstance(value, list):
@@ -254,6 +263,14 @@ def _erase_value(value, rule, key, inside, prose):
     if isinstance(value, str):
         return _erase_string(value, rule, key, inside, prose)
     return value
+
+
+def _erase_answer(value, rule):
+    if isinstance(value, dict):
+        return {name: _erase_answer(item, rule) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_erase_answer(item, rule) for item in value]
+    return _ERASED if isinstance(value, str) and value in rule.texts else value
 
 
 def _erase_string(value, rule, key, inside, prose):
