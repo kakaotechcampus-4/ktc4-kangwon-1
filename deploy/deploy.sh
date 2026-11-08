@@ -16,16 +16,16 @@ BUCKET="${2:?사용법: deploy.sh <커밋SHA> <S3버킷>}"
 REGION="${AWS_REGION:-ap-northeast-2}"
 
 APP_USER=ubuntu
-ROOT=/opt/chaeum
+ROOT="${CHAEUM_ROOT:-/opt/chaeum}"
 RELEASES="$ROOT/releases"
 SHARED="$ROOT/shared"
 VENV="$SHARED/venv"
-UPSTREAM_CONF=/etc/nginx/conf.d/chaeum-upstream.conf
-UNIT_DEST=/etc/systemd/system/chaeum@.service
+UPSTREAM_CONF="${CHAEUM_UPSTREAM_CONF:-/etc/nginx/conf.d/chaeum-upstream.conf}"
+UNIT_DEST="${CHAEUM_UNIT_DEST:-/etc/systemd/system/chaeum@.service}"
 
 HEALTH_TIMEOUT=60   # 새 버전 기동을 기다리는 최대 시간(초)
 KEEP_RELEASES=3     # 롤백용으로 남겨 둘 릴리스 수
-LOG=/var/log/chaeum-deploy.log
+LOG="${CHAEUM_DEPLOY_LOG:-/var/log/chaeum-deploy.log}"
 
 # SSM 출력은 잘리므로 전체 기록은 파일에 남깁니다.
 exec > >(tee -a "$LOG") 2>&1
@@ -47,7 +47,7 @@ say "현재 $CURRENT_PORT 서비스 중 → 새 버전은 $NEW_PORT 에 띄웁�
 PREV_CURRENT="$(readlink -f "$ROOT/current" || true)"
 
 # ── 2. S3 에서 릴리스를 받아 푼다 ──────────────────────────────────────
-REL="$RELEASES/$SHA"
+REL="$RELEASES/$SHA-$(date +%Y%m%d%H%M%S)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -55,7 +55,6 @@ say "S3 에서 내려받는 중 — s3://$BUCKET/releases/$SHA.tar.gz"
 aws s3 cp "s3://$BUCKET/releases/$SHA.tar.gz" "$TMP/release.tar.gz" --region "$REGION" --quiet \
   || die "S3 다운로드 실패 (EC2 역할에 읽기 권한이 있는지 확인하세요)"
 
-rm -rf "$REL"
 mkdir -p "$REL"
 tar -xzf "$TMP/release.tar.gz" -C "$REL"
 [ -d "$REL/backend" ] || die "압축 안에 backend/ 가 없습니다"
