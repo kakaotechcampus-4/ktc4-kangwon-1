@@ -29,7 +29,7 @@ new_root() {
   fake bin/nginx '[ "${NGINX_TEST_FAIL:-}" != 1 ] && [ "$(ls "$FAKE/conf.d")" = chaeum-upstream.conf ]'
   fake bin/curl '[ "${CURL_FAIL:-}" != 1 ]'
   fake bin/sleep
-  fake bin/systemctl
+  fake bin/systemctl '[ "${SYSTEMCTL_FAIL:-}" != "$1" ]'
   fake bin/chown
   fake bin/journalctl
   fake shared/venv/bin/pip '[ "${PIP_FAIL:-}" != 1 ]'
@@ -54,6 +54,17 @@ upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
 not_called() { ! called "$1"; }
 logged() { grep -qF "$1" "$FAKE/deploy.log"; }
+
+expect_rolled_back_to() {
+  local before="$1" status="$2"
+  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
+  [ "$(current_release)" = "$before" ] || fail "current가 실패 전 폴더로 돌아오지 않음"
+  [ "$(release_shas)" = abc1234 ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
+  upstream_unchanged || fail "upstream 설정이 원래대로가 아님"
+  [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
+  called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
+  not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
+}
 
 fail() {
   echo "FAIL $SCENARIO: $1"
@@ -112,13 +123,8 @@ nginx_check_fails() {
   before="$(current_release)"
   NGINX_TEST_FAIL=1 run_deploy def5678 || status=$?
 
-  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
-  upstream_unchanged || fail "upstream 설정이 원래대로 돌아오지 않음"
-  [ "$(current_release)" = "$before" ] || fail "current가 실패 전 폴더로 돌아오지 않음"
-  called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
+  expect_rolled_back_to "$before" "$status"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
-  not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
-  [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
 }
 
 first_deploy_nginx_check_fails() {
@@ -142,12 +148,29 @@ health_check_fails() {
   before="$(current_release)"
   CURL_FAIL=1 run_deploy def5678 || status=$?
 
-  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
-  upstream_unchanged || fail "upstream 설정이 바뀜"
-  [ "$(current_release)" = "$before" ] || fail "current가 실패 전 폴더로 돌아오지 않음"
-  called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
+  expect_rolled_back_to "$before" "$status"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
-  not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
+}
+
+restart_fails() {
+  local before status=0
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  save_upstream
+  before="$(current_release)"
+  SYSTEMCTL_FAIL=restart run_deploy def5678 || status=$?
+
+  expect_rolled_back_to "$before" "$status"
+  not_called "systemctl reload nginx" || fail "nginx를 reload함"
+}
+
+reload_fails() {
+  local before status=0
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  save_upstream
+  before="$(current_release)"
+  SYSTEMCTL_FAIL=reload run_deploy def5678 || status=$?
+
+  expect_rolled_back_to "$before" "$status"
 }
 
 failed_deploys_keep_last_good() {
@@ -177,6 +200,8 @@ scenario "네 번 배포" four_deploys
 scenario "nginx 검사 실패" nginx_check_fails
 scenario "첫 배포에서 nginx 검사 실패" first_deploy_nginx_check_fails
 scenario "헬스체크 실패" health_check_fails
+scenario "새 포트 기동 실패" restart_fails
+scenario "nginx reload 실패" reload_fails
 scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
 scenario "upstream 설정에 포트가 없음" upstream_without_port
 

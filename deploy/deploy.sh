@@ -44,11 +44,12 @@ rollback() {
   rm -rf "$REL"
 }
 
+abort() { rollback; die "$*"; }
+
 replace_upstream() {
   local staged
   staged="$(dirname "$UPSTREAM_CONF")/.$(basename "$UPSTREAM_CONF").new"
-  cp -p "$1" "$staged"
-  mv -f "$staged" "$UPSTREAM_CONF"
+  cp -p "$1" "$staged" && mv -f "$staged" "$UPSTREAM_CONF"
 }
 
 # ── 1. 지금 서비스 중인 포트를 읽고, 쉬는 포트를 고른다 ────────────────
@@ -73,34 +74,36 @@ aws s3 cp "s3://$BUCKET/releases/$SHA.tar.gz" "$TMP/release.tar.gz" --region "$R
   || die "S3 다운로드 실패 (EC2 역할에 읽기 권한이 있는지 확인하세요)"
 
 mkdir -p "$REL"
-tar -xzf "$TMP/release.tar.gz" -C "$REL"
-[ -d "$REL/backend" ] || { rollback; die "압축 안에 backend/ 가 없습니다"; }
+tar -xzf "$TMP/release.tar.gz" -C "$REL" || abort "압축 풀기 실패"
+[ -d "$REL/backend" ] || abort "압축 안에 backend/ 가 없습니다"
 say "풀었습니다 — $REL"
 
 # ── 3. 공유 자료를 링크한다 (배포가 DB·캐시·키를 덮어쓰지 않게) ────────
-rm -rf "$REL/backend/storage" "$REL/backend/cache" "$REL/backend/.env" "$REL/backend/.venv"
-ln -s "$SHARED/storage" "$REL/backend/storage"
-ln -s "$SHARED/cache"   "$REL/backend/cache"
-ln -s "$SHARED/.env"    "$REL/backend/.env"
-chown -R "$APP_USER:$APP_USER" "$REL"
+rm -rf "$REL/backend/storage" "$REL/backend/cache" "$REL/backend/.env" "$REL/backend/.venv" \
+  && ln -s "$SHARED/storage" "$REL/backend/storage" \
+  && ln -s "$SHARED/cache"   "$REL/backend/cache" \
+  && ln -s "$SHARED/.env"    "$REL/backend/.env" \
+  && chown -R "$APP_USER:$APP_USER" "$REL" \
+  || abort "shared 링크 연결 실패"
 say "shared 링크 연결 — storage · cache · .env"
 
 # ── 4. 의존성 설치 ────────────────────────────────────────────────────
 say "의존성 설치 중 (몇 분 걸릴 수 있습니다)"
 sudo -u "$APP_USER" "$VENV/bin/pip" install -q -e "$REL/backend" \
-  || { rollback; die "의존성 설치 실패"; }
+  || abort "의존성 설치 실패"
 
 # ── 5. 유닛 파일을 릴리스의 것으로 갱신 ────────────────────────────────
 if [ -f "$REL/deploy/chaeum@.service" ]; then
-  install -m 644 "$REL/deploy/chaeum@.service" "$UNIT_DEST"
-  systemctl daemon-reload
+  install -m 644 "$REL/deploy/chaeum@.service" "$UNIT_DEST" && systemctl daemon-reload \
+    || abort "systemd 유닛 갱신 실패"
   say "systemd 유닛 갱신"
 fi
 
 # ── 6. current 를 새 릴리스로 돌리고 새 포트에 띄운다 ──────────────────
 # 이미 떠 있는 구 프로세스는 기동 시점에 경로가 확정돼 있어 영향받지 않습니다.
-ln -sfn "$REL" "$ROOT/current"
-systemctl restart "chaeum@$NEW_PORT"
+ln -sfn "$REL" "$ROOT/current" || abort "current 링크 전환 실패"
+systemctl restart "chaeum@$NEW_PORT" \
+  || abort "chaeum@$NEW_PORT 기동 실패 — 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 say "chaeum@$NEW_PORT 기동"
 
 # ── 7. 정상 기동 확인 — 여기가 안전장치 ────────────────────────────────
@@ -117,27 +120,28 @@ if [ "$HEALTHY" -ne 1 ]; then
   echo "✗ 새 버전이 뜨지 않았습니다. 전환하지 않고 중단합니다."
   echo "── 실패한 유닛 로그 ──"
   journalctl -u "chaeum@$NEW_PORT" -n 40 --no-pager || true
-  rollback
-  die "배포 중단 — 구 버전($CURRENT_PORT)이 계속 서비스합니다"
+  abort "배포 중단 — 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 fi
 say "헬스체크 통과"
 
 # ── 8. nginx 가 새 포트를 보게 전환 ────────────────────────────────────
 # 설정 파일 한 줄만 바꾸고 reload 합니다. 기존 연결은 유지되고 새 요청만 옮겨갑니다.
-cp -p "$UPSTREAM_CONF" "$TMP/upstream.before"
-cat > "$TMP/upstream.new" <<EOF
+cp -p "$UPSTREAM_CONF" "$TMP/upstream.before" || abort "upstream 설정 백업 실패"
+cat > "$TMP/upstream.new" <<EOF || abort "upstream 설정 쓰기 실패"
 # 배포 스크립트가 자동으로 씁니다. 손으로 고치지 마세요.
 upstream chaeum_backend {
     server 127.0.0.1:$NEW_PORT;
 }
 EOF
-replace_upstream "$TMP/upstream.new"
+replace_upstream "$TMP/upstream.new" || abort "upstream 설정 교체 실패"
 if ! nginx -t; then
   replace_upstream "$TMP/upstream.before"
-  rollback
-  die "nginx 설정 검사 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
+  abort "nginx 설정 검사 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 fi
-systemctl reload nginx
+if ! systemctl reload nginx; then
+  replace_upstream "$TMP/upstream.before"
+  abort "nginx reload 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
+fi
 say "전환 완료 — $CURRENT_PORT → $NEW_PORT"
 
 # ── 9. 구 버전 정지, 재부팅 시 올라올 쪽도 새 포트로 ───────────────────
