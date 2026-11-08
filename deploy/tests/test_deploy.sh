@@ -31,7 +31,7 @@ new_root() {
   fake bin/systemctl
   fake bin/chown
   fake bin/journalctl
-  fake shared/venv/bin/pip
+  fake shared/venv/bin/pip '[ "${PIP_FAIL:-}" != 1 ]'
 }
 
 run_deploy() {
@@ -147,10 +147,24 @@ health_check_fails() {
   not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
 }
 
+failed_deploys_keep_last_good() {
+  local good
+  run_deploy aaa1111 || fail "첫 배포가 실패함"
+  good="$(current_release)"
+  if CURL_FAIL=1 run_deploy bbb2222; then fail "헬스체크가 실패한 bbb2222가 성공으로 끝남"; fi
+  if NGINX_TEST_FAIL=1 run_deploy ccc3333; then fail "nginx 검사가 실패한 ccc3333이 성공으로 끝남"; fi
+  if PIP_FAIL=1 run_deploy ddd4444; then fail "의존성 설치가 실패한 ddd4444가 성공으로 끝남"; fi
+  run_deploy eee5555 || fail "마지막 배포가 실패함"
+
+  [ -d "$good" ] || fail "마지막 정상 릴리스(aaa1111)가 지워짐"
+  [ "$(release_shas)" = "aaa1111 eee5555" ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
+}
+
 scenario "같은 커밋 두 번" same_commit_twice
 scenario "네 번 배포" four_deploys
 scenario "nginx 검사 실패" nginx_check_fails
 scenario "첫 배포에서 nginx 검사 실패" first_deploy_nginx_check_fails
 scenario "헬스체크 실패" health_check_fails
+scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
 
 [ "$FAILED" -eq 0 ] || exit 1

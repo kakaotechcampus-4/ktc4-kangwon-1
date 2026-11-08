@@ -41,6 +41,7 @@ rollback() {
   else
     rm -f "$ROOT/current"
   fi
+  rm -rf "$REL"
 }
 
 # ── 1. 지금 서비스 중인 포트를 읽고, 쉬는 포트를 고른다 ────────────────
@@ -66,7 +67,7 @@ aws s3 cp "s3://$BUCKET/releases/$SHA.tar.gz" "$TMP/release.tar.gz" --region "$R
 
 mkdir -p "$REL"
 tar -xzf "$TMP/release.tar.gz" -C "$REL"
-[ -d "$REL/backend" ] || die "압축 안에 backend/ 가 없습니다"
+[ -d "$REL/backend" ] || { rollback; die "압축 안에 backend/ 가 없습니다"; }
 say "풀었습니다 — $REL"
 
 # ── 3. 공유 자료를 링크한다 (배포가 DB·캐시·키를 덮어쓰지 않게) ────────
@@ -80,7 +81,7 @@ say "shared 링크 연결 — storage · cache · .env"
 # ── 4. 의존성 설치 ────────────────────────────────────────────────────
 say "의존성 설치 중 (몇 분 걸릴 수 있습니다)"
 sudo -u "$APP_USER" "$VENV/bin/pip" install -q -e "$REL/backend" \
-  || die "의존성 설치 실패"
+  || { rollback; die "의존성 설치 실패"; }
 
 # ── 5. 유닛 파일을 릴리스의 것으로 갱신 ────────────────────────────────
 if [ -f "$REL/deploy/chaeum@.service" ]; then
