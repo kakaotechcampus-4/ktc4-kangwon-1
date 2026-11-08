@@ -19,9 +19,17 @@ from app.domain.geo import polygon_contains_point, to_epsg5181
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.industries.lookup import industry_terms
 from app.domain.place_matching import distance_m, match_place
-from app.domain.scoring import regulation
+from app.domain.scoring import regulation, unspecified_zone
 from app.shared.canonical import canonical_json
 from app.shared.concurrency import run_in_thread
+
+UNSPECIFIED_ZONE_NOTE = (
+    "교육환경보호구역 안이지만 절대·상대 구분이 없어 숙박·주점·오락 서비스를 금지로 처리했습니다. "
+    "절대보호구역(학교 출입문 50m 이내)이면 영업할 수 없고, "
+    "상대보호구역(학교 경계 200m 이내)이면 "
+    "교육감이 지역교육환경보호위원회 심의를 거쳐 허용해야 합니다. "
+    "어느 구역인지 관할 교육지원청에 먼저 확인해야 합니다."
+)
 
 
 def _place_facts(scope, response_id, documents):
@@ -242,6 +250,13 @@ def _regulation(scope, site, scan):
         industry_restrictions=restrictions,
         limitations=raw.get("warnings", [])
         + ([] if verified else ["보호구역 좌표 포함 여부를 확인하지 못했습니다."])
+        + (
+            [UNSPECIFIED_ZONE_NOTE]
+            if verified
+            and raw["status"] == "ok"
+            and unspecified_zone([str(z.get("name", "")) for z in effective["zones"]])
+            else []
+        )
         + ["건축물 용도는 확인하지 않았습니다."],
     )
 

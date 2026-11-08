@@ -161,6 +161,17 @@ describe('업종 비교 순위', () => {
     ]);
   });
 
+  it('규제 제외 설명은 보호구역 종류 확인과 심의 절차를 안내한다', () => {
+    const view = rankingView(base, indexFacts([]));
+    const regulated = view.groups.find(
+      (group) => group.title === '규제로 안 되는 업종'
+    );
+    expect(regulated?.description).toContain('절대보호구역');
+    expect(regulated?.description).toContain('상대보호구역');
+    expect(regulated?.description).toContain('심의');
+    expect(regulated?.description).toContain('교육지원청');
+  });
+
   it('점수는 보여 주지 않는다', () => {
     const text = JSON.stringify(rankingView(base, indexFacts([])));
     expect(text).not.toMatch(/점수|\d+점/);
