@@ -31,26 +31,14 @@ def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=
             )
 
 
-# 이 시각 이전에 만들어진 요청은 소유자 기록이 없습니다. 인증을 붙이기 전의 자료라
-# 조회를 막지 않습니다. 경계를 두지 않으면 앞으로 소유자 기록이 빠진 요청까지
-# 전부 공개돼 영구 구멍이 됩니다.
-LEGACY_OWNER_CUTOFF = "2026-10-27T00:00:00+00:00"
-
-
 def owner_of(request_id, *, db_path=None):
-    """소유자 user_id. 소유자가 없는 옛 요청이면 "legacy", 요청 자체가 없으면 None."""
+    """소유자 user_id. 소유자가 없거나 요청 자체가 없으면 None."""
     with connect(db_path) as db:
         row = db.execute(
-            "SELECT o.user_id AS user_id, r.created_at AS created_at"
-            " FROM analysis_requests r LEFT JOIN analysis_owners o USING(request_id)"
-            " WHERE r.request_id=?",
+            "SELECT user_id FROM analysis_owners WHERE request_id=?",
             (_text(request_id),),
         ).fetchone()
-    if row is None:
-        return None
-    if row["user_id"] is not None:
-        return str(row["user_id"])
-    return "legacy" if str(row["created_at"]) < LEGACY_OWNER_CUTOFF else None
+    return None if row is None else str(row["user_id"])
 
 
 def list_user_requests(user_id, *, limit=20, offset=0, db_path=None):
