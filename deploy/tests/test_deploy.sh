@@ -18,14 +18,15 @@ fake() {
 
 new_root() {
   FAKE="$(mktemp -d "$WORK/root.XXXXXX")"
-  mkdir -p "$FAKE"/{bin,releases,shared/{storage,cache,venv/bin}}
+  UPSTREAM="$FAKE/conf.d/chaeum-upstream.conf"
+  mkdir -p "$FAKE"/{bin,conf.d,releases,shared/{storage,cache,venv/bin}}
   : >"$FAKE/shared/.env"
-  echo 'server 127.0.0.1:8001;' >"$FAKE/chaeum-upstream.conf"
+  echo 'server 127.0.0.1:8001;' >"$UPSTREAM"
   tar -czf "$FAKE/release.tar.gz" -C "$WORK/release" backend deploy
 
   fake bin/aws 'cp "$FAKE/release.tar.gz" "$4"'
   fake bin/sudo 'shift 2; exec "$@"'
-  fake bin/nginx '[ "${NGINX_TEST_FAIL:-}" != 1 ]'
+  fake bin/nginx '[ "${NGINX_TEST_FAIL:-}" != 1 ] && [ "$(ls "$FAKE/conf.d")" = chaeum-upstream.conf ]'
   fake bin/curl '[ "${CURL_FAIL:-}" != 1 ]'
   fake bin/sleep
   fake bin/systemctl
@@ -38,17 +39,18 @@ run_deploy() {
   : >"$FAKE/calls.log"
   PATH="$FAKE/bin:$PATH" FAKE="$FAKE" \
     CHAEUM_ROOT="$FAKE" \
-    CHAEUM_UPSTREAM_CONF="$FAKE/chaeum-upstream.conf" \
+    CHAEUM_UPSTREAM_CONF="$UPSTREAM" \
     CHAEUM_UNIT_DEST="$FAKE/chaeum@.service" \
     CHAEUM_DEPLOY_LOG=/dev/null \
     bash "$DEPLOY_SH" "$1" test-bucket 2>&1 | sed 's/^/    │ /' >>"$FAKE/deploy.log"
 }
 
 current_release() { readlink -f "$FAKE/current" || true; }
-upstream_port() { grep -oE '127\.0\.0\.1:[0-9]+' "$FAKE/chaeum-upstream.conf" | cut -d: -f2 || true; }
+upstream_port() { grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM" | cut -d: -f2 || true; }
 release_shas() { ls "$FAKE/releases" | cut -d- -f1 | paste -sd ' ' -; }
-save_upstream() { cp "$FAKE/chaeum-upstream.conf" "$FAKE/upstream.before"; }
-upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$FAKE/chaeum-upstream.conf"; }
+conf_d_files() { ls -A "$FAKE/conf.d" | paste -sd ' ' -; }
+save_upstream() { cp "$UPSTREAM" "$FAKE/upstream.before"; }
+upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
 not_called() { ! called "$1"; }
 
@@ -88,7 +90,7 @@ same_commit_twice() {
   [ "$second" != "$first" ] || fail "두 번째 배포가 같은 폴더를 씀"
   [[ "${second##*/}" == abc1234-* ]] || fail "폴더 이름이 abc1234- 로 시작하지 않음: ${second##*/}"
   [ "$ports" = "8001→8002→8001" ] || fail "포트가 $ports 로 바뀜"
-  [ ! -e "$FAKE/chaeum-upstream.conf.bak" ] || fail ".bak 파일이 남음"
+  [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
 }
 
 four_deploys() {
@@ -115,7 +117,7 @@ nginx_check_fails() {
   called "systemctl stop chaeum@8001" || fail "새 포트(8001)를 멈추지 않음"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
   not_called "systemctl stop chaeum@8002" || fail "구 버전 포트(8002)를 멈춤"
-  [ ! -e "$FAKE/chaeum-upstream.conf.bak" ] || fail ".bak 파일이 남음"
+  [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
 }
 
 first_deploy_nginx_check_fails() {
@@ -129,7 +131,7 @@ first_deploy_nginx_check_fails() {
   called "systemctl stop chaeum@8002" || fail "새 포트(8002)를 멈추지 않음"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
   not_called "systemctl stop chaeum@8001" || fail "구 버전 포트(8001)를 멈춤"
-  [ ! -e "$FAKE/chaeum-upstream.conf.bak" ] || fail ".bak 파일이 남음"
+  [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
 }
 
 health_check_fails() {

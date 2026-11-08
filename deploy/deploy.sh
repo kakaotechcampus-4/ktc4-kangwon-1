@@ -44,6 +44,13 @@ rollback() {
   rm -rf "$REL"
 }
 
+replace_upstream() {
+  local staged
+  staged="$(dirname "$UPSTREAM_CONF")/.$(basename "$UPSTREAM_CONF").new"
+  cp -p "$1" "$staged"
+  mv -f "$staged" "$UPSTREAM_CONF"
+}
+
 # ── 1. 지금 서비스 중인 포트를 읽고, 쉬는 포트를 고른다 ────────────────
 [ -f "$UPSTREAM_CONF" ] || die "upstream 설정이 없습니다: $UPSTREAM_CONF"
 CURRENT_PORT="$(grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM_CONF" | head -1 | cut -d: -f2)"
@@ -117,19 +124,19 @@ say "헬스체크 통과"
 
 # ── 8. nginx 가 새 포트를 보게 전환 ────────────────────────────────────
 # 설정 파일 한 줄만 바꾸고 reload 합니다. 기존 연결은 유지되고 새 요청만 옮겨갑니다.
-cp -p "$UPSTREAM_CONF" "$UPSTREAM_CONF.bak"
-cat > "$UPSTREAM_CONF" <<EOF
+cp -p "$UPSTREAM_CONF" "$TMP/upstream.before"
+cat > "$TMP/upstream.new" <<EOF
 # 배포 스크립트가 자동으로 씁니다. 손으로 고치지 마세요.
 upstream chaeum_backend {
     server 127.0.0.1:$NEW_PORT;
 }
 EOF
+replace_upstream "$TMP/upstream.new"
 if ! nginx -t; then
-  mv "$UPSTREAM_CONF.bak" "$UPSTREAM_CONF"
+  replace_upstream "$TMP/upstream.before"
   rollback
   die "nginx 설정 검사 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 fi
-rm -f "$UPSTREAM_CONF.bak"
 systemctl reload nginx
 say "전환 완료 — $CURRENT_PORT → $NEW_PORT"
 
