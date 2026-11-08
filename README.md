@@ -85,7 +85,7 @@ HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없�
 | [백엔드 실행 분기표](backend/README.md#분기예외재개-코드-찾기) | 도구 루프·실패·평가·재개 위치 |
 | [docs/quality-summary.md](docs/quality-summary.md) | 실제 실행의 실패·개선 기록과 한계 |
 | [docs/TESTING.md](docs/TESTING.md) | 테스트 분류·커버리지·기술 부채 |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | 저장소로 확인한 배포 절차와 미확인 사항 |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 운영 주소·환경·배포 절차·되돌리기 |
 | [docs/archive/](docs/archive/README.md) | 이전 설계 기록 |
 
 실제 키, 주소별 실행 기록, 자료 DB, 원문 CSV는 커밋하지 않습니다.
