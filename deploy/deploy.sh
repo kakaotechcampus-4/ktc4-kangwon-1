@@ -36,6 +36,7 @@ die() { echo "✗ $*" >&2; exit 1; }
 
 rollback() {
   systemctl stop "chaeum@$NEW_PORT" || true
+  [ "$UNIT_CHANGED" -eq 0 ] || restore_unit
   if [ -n "$PREV_CURRENT" ]; then
     ln -sfn "$PREV_CURRENT" "$ROOT/current"
   else
@@ -45,6 +46,15 @@ rollback() {
 }
 
 abort() { rollback; die "$*"; }
+
+restore_unit() {
+  if [ -f "$TMP/unit.before" ]; then
+    cp -p "$TMP/unit.before" "$UNIT_DEST"
+  else
+    rm -f "$UNIT_DEST"
+  fi
+  systemctl daemon-reload || true
+}
 
 replace_upstream() {
   local staged
@@ -63,6 +73,7 @@ esac
 say "현재 $CURRENT_PORT 서비스 중 → 새 버전은 $NEW_PORT 에 띄웁니다"
 
 PREV_CURRENT="$(readlink -e "$ROOT/current" || true)"
+UNIT_CHANGED=0
 
 # ── 2. S3 에서 릴리스를 받아 푼다 ──────────────────────────────────────
 REL="$RELEASES/$SHA-$(date +%Y%m%d%H%M%S)"
@@ -94,6 +105,10 @@ sudo -u "$APP_USER" "$VENV/bin/pip" install -q -e "$REL/backend" \
 
 # ── 5. 유닛 파일을 릴리스의 것으로 갱신 ────────────────────────────────
 if [ -f "$REL/deploy/chaeum@.service" ]; then
+  if [ -f "$UNIT_DEST" ]; then
+    cp -p "$UNIT_DEST" "$TMP/unit.before" || abort "systemd 유닛 백업 실패"
+  fi
+  UNIT_CHANGED=1
   install -m 644 "$REL/deploy/chaeum@.service" "$UNIT_DEST" && systemctl daemon-reload \
     || abort "systemd 유닛 갱신 실패"
   say "systemd 유닛 갱신"

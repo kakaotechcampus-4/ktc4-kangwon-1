@@ -22,7 +22,8 @@ new_root() {
   mkdir -p "$FAKE"/{bin,conf.d,releases,shared/{storage,cache,venv/bin}}
   : >"$FAKE/shared/.env"
   echo 'server 127.0.0.1:8001;' >"$UPSTREAM"
-  tar -czf "$FAKE/release.tar.gz" -C "$WORK/release" backend deploy
+  cp -r "$WORK/release" "$FAKE/release"
+  pack_release
 
   fake bin/aws 'cp "$FAKE/release.tar.gz" "$4"'
   fake bin/sudo 'shift 2; exec "$@"'
@@ -35,6 +36,8 @@ new_root() {
   fake bin/journalctl
   fake shared/venv/bin/pip '[ "${PIP_FAIL:-}" != 1 ]'
 }
+
+pack_release() { tar -czf "$FAKE/release.tar.gz" -C "$FAKE/release" backend deploy; }
 
 run_deploy() {
   : >"$FAKE/calls.log"
@@ -55,6 +58,7 @@ reloaded_ports() { cut -d: -f2 "$FAKE/reloads.log" | paste -sd ' ' -; }
 save_upstream() { cp "$UPSTREAM" "$FAKE/upstream.before"; }
 upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
+call_count() { grep -cxF "$1" "$FAKE/calls.log" || true; }
 not_called() { ! called "$1"; }
 logged() { grep -qF "$1" "$FAKE/deploy.log"; }
 
@@ -139,6 +143,7 @@ first_deploy_nginx_check_fails() {
   upstream_unchanged || fail "upstream 설정이 원래대로 돌아오지 않음"
   [ ! -L "$FAKE/current" ] || fail "current 링크가 남음 → $(readlink "$FAKE/current")"
   [ -z "$(release_shas)" ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
+  [ ! -e "$FAKE/chaeum@.service" ] || fail "처음 설치한 systemd 유닛이 남음"
   called "systemctl stop chaeum@8002" || fail "새 포트(8002)를 멈추지 않음"
   not_called "systemctl reload nginx" || fail "nginx를 reload함"
   not_called "systemctl stop chaeum@8001" || fail "구 버전 포트(8001)를 멈춤"
@@ -178,6 +183,19 @@ reload_fails() {
   [ "$(reloaded_ports)" = "8001 8002" ] || fail "설정을 되돌린 뒤 다시 reload하지 않음(reload 때 포트: $(reloaded_ports))"
 }
 
+changed_unit_rolled_back() {
+  local status=0
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  cp "$FAKE/chaeum@.service" "$FAKE/unit.before"
+  echo 'ExecStart=/bin/false' >"$FAKE/release/deploy/chaeum@.service"
+  pack_release
+  CURL_FAIL=1 run_deploy def5678 || status=$?
+
+  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
+  cmp -s "$FAKE/unit.before" "$FAKE/chaeum@.service" || fail "systemd 유닛이 원래대로 돌아오지 않음"
+  [ "$(call_count "systemctl daemon-reload")" -eq 2 ] || fail "유닛을 되돌린 뒤 daemon-reload하지 않음"
+}
+
 failed_deploys_keep_last_good() {
   local good
   run_deploy aaa1111 || fail "첫 배포가 실패함"
@@ -207,6 +225,7 @@ scenario "첫 배포에서 nginx 검사 실패" first_deploy_nginx_check_fails
 scenario "헬스체크 실패" health_check_fails
 scenario "새 포트 기동 실패" restart_fails
 scenario "nginx reload 실패" reload_fails
+scenario "바뀐 systemd 유닛 되돌리기" changed_unit_rolled_back
 scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
 scenario "upstream 설정에 포트가 없음" upstream_without_port
 
