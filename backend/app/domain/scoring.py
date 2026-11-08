@@ -355,6 +355,10 @@ def score_item(
     )
 
 
+def unspecified_zone(names) -> bool:
+    return any("절대" not in n and "상대" not in n for n in names)
+
+
 def regulation(code: str, scan: dict) -> str:
     if scan.get("status") != "ok":
         return "unknown"
@@ -366,11 +370,7 @@ def regulation(code: str, scan: dict) -> str:
     if scan.get("contains_verified") is False:
         return "unknown"
     names = [str(z.get("name", "")) for z in zones]
-    absolute = any("절대" in n for n in names)
-    relative = any("상대" in n for n in names)
-    if not absolute and not relative:
-        return "unknown"
-    if absolute:
+    if any("절대" in n for n in names) or unspecified_zone(names):
         return "금지"
     return "조건부"
 

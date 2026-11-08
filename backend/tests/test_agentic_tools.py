@@ -442,6 +442,27 @@ class RawToolTests(unittest.IsolatedAsyncioTestCase):
             "해당 없음",
         )
 
+    async def test_unspecified_zone_blocks_and_explains(self):
+        tool = self.executor()
+        polygon = {
+            "type": "Polygon",
+            "coordinates": [
+                [[126.9, 37.4], [127.1, 37.4], [127.1, 37.6], [126.9, 37.6], [126.9, 37.4]]
+            ],
+        }
+        tool.shared.regulation_scan = {
+            "status": "ok",
+            "queried_at": "2026-11-08",
+            "zones": [{"name": "교육환경보호구역", "geometry": polygon}],
+        }
+        data = (await tool.execute("check_regulation", {})).data
+        self.assertTrue(data.contains_verified)
+        self.assertEqual(
+            next(r.status for r in data.industry_restrictions if r.industry_code == "R104"),
+            "금지",
+        )
+        self.assertTrue(any("상대보호구역" in text and "심의" in text for text in data.limitations))
+
 
 if __name__ == "__main__":
     unittest.main()
