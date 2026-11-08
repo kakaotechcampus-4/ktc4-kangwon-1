@@ -34,6 +34,15 @@ echo "══════════ $(date '+%F %T') 배포 시작 — $SHA ═
 say() { echo "▸ $*"; }
 die() { echo "✗ $*" >&2; exit 1; }
 
+rollback() {
+  systemctl stop "chaeum@$NEW_PORT" || true
+  if [ -n "$PREV_CURRENT" ]; then
+    ln -sfn "$PREV_CURRENT" "$ROOT/current"
+  else
+    rm -f "$ROOT/current"
+  fi
+}
+
 # ── 1. 지금 서비스 중인 포트를 읽고, 쉬는 포트를 고른다 ────────────────
 [ -f "$UPSTREAM_CONF" ] || die "upstream 설정이 없습니다: $UPSTREAM_CONF"
 CURRENT_PORT="$(grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM_CONF" | head -1 | cut -d: -f2)"
@@ -44,7 +53,7 @@ case "$CURRENT_PORT" in
 esac
 say "현재 $CURRENT_PORT 서비스 중 → 새 버전은 $NEW_PORT 에 띄웁니다"
 
-PREV_CURRENT="$(readlink -f "$ROOT/current" || true)"
+PREV_CURRENT="$(readlink -e "$ROOT/current" || true)"
 
 # ── 2. S3 에서 릴리스를 받아 푼다 ──────────────────────────────────────
 REL="$RELEASES/$SHA-$(date +%Y%m%d%H%M%S)"
@@ -100,21 +109,26 @@ if [ "$HEALTHY" -ne 1 ]; then
   echo "✗ 새 버전이 뜨지 않았습니다. 전환하지 않고 중단합니다."
   echo "── 실패한 유닛 로그 ──"
   journalctl -u "chaeum@$NEW_PORT" -n 40 --no-pager || true
-  systemctl stop "chaeum@$NEW_PORT" || true
-  [ -n "$PREV_CURRENT" ] && ln -sfn "$PREV_CURRENT" "$ROOT/current"
+  rollback
   die "배포 중단 — 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 fi
 say "헬스체크 통과"
 
 # ── 8. nginx 가 새 포트를 보게 전환 ────────────────────────────────────
 # 설정 파일 한 줄만 바꾸고 reload 합니다. 기존 연결은 유지되고 새 요청만 옮겨갑니다.
+cp -p "$UPSTREAM_CONF" "$UPSTREAM_CONF.bak"
 cat > "$UPSTREAM_CONF" <<EOF
 # 배포 스크립트가 자동으로 씁니다. 손으로 고치지 마세요.
 upstream chaeum_backend {
     server 127.0.0.1:$NEW_PORT;
 }
 EOF
-nginx -t || die "nginx 설정 검사 실패 — 전환하지 않았습니다"
+if ! nginx -t; then
+  mv "$UPSTREAM_CONF.bak" "$UPSTREAM_CONF"
+  rollback
+  die "nginx 설정 검사 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
+fi
+rm -f "$UPSTREAM_CONF.bak"
 systemctl reload nginx
 say "전환 완료 — $CURRENT_PORT → $NEW_PORT"
 
