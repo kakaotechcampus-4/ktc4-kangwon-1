@@ -53,7 +53,7 @@ replace_upstream() {
 
 # ── 1. 지금 서비스 중인 포트를 읽고, 쉬는 포트를 고른다 ────────────────
 [ -f "$UPSTREAM_CONF" ] || die "upstream 설정이 없습니다: $UPSTREAM_CONF"
-CURRENT_PORT="$(grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM_CONF" | head -1 | cut -d: -f2)"
+CURRENT_PORT="$(grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM_CONF" | head -1 | cut -d: -f2 || true)"
 case "$CURRENT_PORT" in
   8001) NEW_PORT=8002 ;;
   8002) NEW_PORT=8001 ;;

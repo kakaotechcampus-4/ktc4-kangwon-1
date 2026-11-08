@@ -53,6 +53,7 @@ save_upstream() { cp "$UPSTREAM" "$FAKE/upstream.before"; }
 upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
 not_called() { ! called "$1"; }
+logged() { grep -qF "$1" "$FAKE/deploy.log"; }
 
 fail() {
   echo "FAIL $SCENARIO: $1"
@@ -162,11 +163,21 @@ failed_deploys_keep_last_good() {
   [ "$(release_shas)" = "aaa1111 eee5555" ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
 }
 
+upstream_without_port() {
+  local status=0
+  echo 'upstream chaeum_backend {}' >"$UPSTREAM"
+  run_deploy abc1234 || status=$?
+
+  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
+  logged "upstream 포트를 해석할 수 없습니다" || fail "포트를 못 읽었다는 메시지가 기록에 없음"
+}
+
 scenario "같은 커밋 두 번" same_commit_twice
 scenario "네 번 배포" four_deploys
 scenario "nginx 검사 실패" nginx_check_fails
 scenario "첫 배포에서 nginx 검사 실패" first_deploy_nginx_check_fails
 scenario "헬스체크 실패" health_check_fails
 scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
+scenario "upstream 설정에 포트가 없음" upstream_without_port
 
 [ "$FAILED" -eq 0 ] || exit 1
