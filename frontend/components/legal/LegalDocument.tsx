@@ -19,20 +19,9 @@ export type LegalDoc = {
 
 const BODY = 'text-base leading-relaxed text-[#4B5866] break-keep';
 
-const WORD_JOINER = '\u2060';
-const NO_BREAK_SPACE = '\u00a0';
-const CLOSING_BEFORE_HANGUL = /([)\]】])(?=[가-힣])/g;
-const MIDDLE_DOT = /·/g;
-const PLACEHOLDER = /【[^】]*】/g;
-
-function keepTogether(text: string) {
-  return text
-    .replace(CLOSING_BEFORE_HANGUL, `$1${WORD_JOINER}`)
-    .replace(MIDDLE_DOT, `${WORD_JOINER}·${WORD_JOINER}`)
-    .replace(PLACEHOLDER, (placeholder) =>
-      placeholder.replace(/ /g, NO_BREAK_SPACE)
-    );
-}
+const WORD_GAP = /(\s+)(?![^【]*】)/;
+const KEEP_ON_ONE_LINE = /[)\]】·@]/;
+const EMAIL = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/;
 
 export default function LegalDocument({ doc }: { doc: LegalDoc }) {
   return (
@@ -59,71 +48,85 @@ export default function LegalDocument({ doc }: { doc: LegalDoc }) {
             {doc.title}
           </h1>
           <div className="flex flex-col gap-1">
-            <p className={BODY}>{keepTogether(doc.intro)}</p>
+            <p className={BODY}>
+              <Phrase text={doc.intro} />
+            </p>
             <p className="text-15 text-[#4B5866] break-keep">
               시행일 {doc.effectiveDate}
             </p>
           </div>
         </div>
 
-        {doc.sections.map((section) => (
-          <Card key={section.title} className="gap-4">
-            <h2
-              className="text-xl font-extrabold tracking-[-0.02em] break-keep"
-              style={{ color: colors.brand.dark }}
-            >
-              {section.title}
-            </h2>
-            {section.paragraphs?.map((text) => (
-              <p key={text} className={BODY}>
-                {keepTogether(text)}
-              </p>
-            ))}
-            {section.table ? (
-              <LegalTable title={section.title} table={section.table} />
-            ) : null}
-            {section.items ? (
-              <ul className={`flex list-disc flex-col gap-2 pl-5 ${BODY}`}>
-                {section.items.map((item) => (
-                  <li key={item}>{keepTogether(item)}</li>
-                ))}
-              </ul>
-            ) : null}
-          </Card>
-        ))}
+        {doc.sections.map((section, index) => {
+          const headingId = `legal-section-${index + 1}`;
+          return (
+            <Card key={section.title} className="gap-4">
+              <h2
+                id={headingId}
+                className="text-xl font-extrabold tracking-[-0.02em] break-keep"
+                style={{ color: colors.brand.dark }}
+              >
+                {section.title}
+              </h2>
+              {section.paragraphs?.map((text) => (
+                <p key={text} className={BODY}>
+                  <Phrase text={text} />
+                </p>
+              ))}
+              {section.table ? (
+                <LegalTable labelledBy={headingId} table={section.table} />
+              ) : null}
+              {section.items ? (
+                <ul className={`flex list-disc flex-col gap-2 pl-5 ${BODY}`}>
+                  {section.items.map((item) => (
+                    <li key={item}>
+                      <Phrase text={item} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Card>
+          );
+        })}
       </main>
     </div>
   );
 }
 
 function LegalTable({
-  title,
+  labelledBy,
   table,
 }: {
-  title: string;
+  labelledBy: string;
   table: NonNullable<LegalSection['table']>;
 }) {
   const line = { borderColor: colors.neutral.border };
   const heading = { color: colors.brand.dark };
+  const wide = table.head.length > 2;
+  const minWidth = wide ? 'min-w-[600px]' : '';
+  const headingWrap = wide ? 'whitespace-nowrap' : 'sm:whitespace-nowrap';
   return (
     <div
       role="region"
-      aria-label={title}
+      aria-labelledby={labelledBy}
       tabIndex={0}
       className="overflow-x-auto rounded-2xl border"
       style={line}
     >
-      <table className="w-full min-w-[600px] border-collapse text-left text-15 leading-relaxed text-[#4B5866] break-keep">
+      <table
+        aria-labelledby={labelledBy}
+        className={`w-full border-collapse text-left text-15 leading-relaxed text-[#4B5866] break-keep ${minWidth}`}
+      >
         <thead style={{ backgroundColor: colors.brand.wash }}>
           <tr>
             {table.head.map((cell) => (
               <th
                 key={cell}
                 scope="col"
-                className="px-4 py-3 font-bold whitespace-nowrap"
+                className={`px-4 py-3 font-bold ${headingWrap}`}
                 style={heading}
               >
-                {cell}
+                <Phrase text={cell} />
               </th>
             ))}
           </tr>
@@ -133,14 +136,14 @@ function LegalTable({
             <tr key={rowHeading} className="border-t" style={line}>
               <th
                 scope="row"
-                className="px-4 py-3 align-top font-bold whitespace-nowrap"
+                className={`px-4 py-3 align-top font-bold ${headingWrap}`}
                 style={heading}
               >
-                {keepTogether(rowHeading)}
+                <Phrase text={rowHeading} />
               </th>
               {cells.map((cell, index) => (
                 <td key={index} className="px-4 py-3 align-top">
-                  {keepTogether(cell)}
+                  <Phrase text={cell} />
                 </td>
               ))}
             </tr>
@@ -148,5 +151,34 @@ function LegalTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function Phrase({ text }: { text: string }) {
+  return text.split(WORD_GAP).map((word, index) =>
+    KEEP_ON_ONE_LINE.test(word) ? (
+      <span key={index} className="whitespace-nowrap">
+        {linkEmail(word)}
+      </span>
+    ) : (
+      word
+    )
+  );
+}
+
+function linkEmail(word: string) {
+  return word.split(EMAIL).map((part, index) =>
+    index % 2 === 1 ? (
+      <a
+        key={index}
+        href={`mailto:${part}`}
+        className="underline underline-offset-2"
+        style={{ color: colors.brand.primary }}
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
   );
 }

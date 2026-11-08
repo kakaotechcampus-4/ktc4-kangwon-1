@@ -4,6 +4,8 @@ import PrivacyPage from '@/app/privacy/page';
 
 vi.mock('@/components/layout/Header', () => ({ default: () => null }));
 
+const INVISIBLE_CODE_POINTS = [0x2060, 0x00a0];
+
 describe('개인정보 처리방침 화면', () => {
   it('제목과 보호책임자 연락처를 보여 준다', () => {
     render(<PrivacyPage />);
@@ -23,10 +25,48 @@ describe('개인정보 처리방침 화면', () => {
     expect(screen.getAllByRole('rowheader').length).toBeGreaterThan(0);
   });
 
-  it('괄호 뒤 조사, 가운뎃점으로 이은 말, 【】 자리 표시를 줄바꿈으로 가르지 않는다', () => {
+  it('표마다 섹션 제목을 표 이름으로 붙인다', () => {
     render(<PrivacyPage />);
-    expect(document.body.textContent).toContain('OpenAI)\u2060에게');
-    expect(document.body.textContent).toContain('로그아웃\u2060·\u2060탈퇴');
-    expect(document.body.textContent).toContain('【법률\u00a0검토\u00a0중】');
+    for (const name of [
+      '2. 처리하는 개인정보 항목과 근거',
+      '3. 보관 기간',
+      '5. 처리 위탁',
+      '6. 국외 이전',
+    ]) {
+      expect(screen.getByRole('table', { name })).toBeTruthy();
+    }
+  });
+
+  it('로그인 세션은 마지막으로 쓴 때부터 14일 뒤 만료된다고 알린다', () => {
+    render(<PrivacyPage />);
+    expect(document.body.textContent).toContain(
+      '마지막으로 쓴 때부터 14일이 지나면 만료됩니다'
+    );
+    expect(document.body.textContent).toContain(
+      '만든 시각, 만료 시각, 마지막으로 쓴 시각'
+    );
+  });
+
+  it('괄호·가운뎃점·자리 표시가 든 낱말은 한 줄로 묶고 보이지 않는 글자는 넣지 않는다', () => {
+    render(<PrivacyPage />);
+    for (const word of ['OpenAI)에게', '로그아웃·탈퇴', '【법률 검토 중】']) {
+      for (const element of screen.getAllByText(word)) {
+        expect(element.className).toContain('whitespace-nowrap');
+      }
+    }
+    const text = document.body.textContent ?? '';
+    const invisible = [...text].filter((char) =>
+      INVISIBLE_CODE_POINTS.includes(char.codePointAt(0) ?? 0)
+    );
+    expect(invisible).toEqual([]);
+  });
+
+  it('보호책임자 메일 주소를 메일 쓰기 링크로 보여 준다', () => {
+    render(<PrivacyPage />);
+    const links = screen.getAllByRole('link', { name: 'privacy@chaeum-ai.kr' });
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBe('mailto:privacy@chaeum-ai.kr');
+    }
   });
 });

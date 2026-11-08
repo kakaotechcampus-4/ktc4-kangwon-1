@@ -13,8 +13,15 @@ describe('이용약관 화면', () => {
     expect(document.body.textContent).toContain('만 14세');
   });
 
-  it('출시 전 초안임을 맨 위에 알린다', () => {
+  it('출시 전 초안임을 맨 위에 알리고 조항 열 개를 보여 준다', () => {
     render(<TermsPage />);
     expect(document.body.textContent).toContain('출시 전 법률 검토 중인 초안');
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(10);
+  });
+
+  it('탈퇴 요청 메일 주소를 메일 쓰기 링크로 보여 준다', () => {
+    render(<TermsPage />);
+    const link = screen.getByRole('link', { name: 'privacy@chaeum-ai.kr' });
+    expect(link.getAttribute('href')).toBe('mailto:privacy@chaeum-ai.kr');
   });
 });
