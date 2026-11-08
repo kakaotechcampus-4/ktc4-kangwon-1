@@ -186,14 +186,17 @@ reload_fails() {
 }
 
 changed_unit_rolled_back() {
-  local status=0
+  local before status=0
   run_deploy abc1234 || fail "첫 배포가 실패함"
+  save_upstream
   save_unit
+  before="$(current_release)"
   echo 'ExecStart=/bin/false' >"$FAKE/release/deploy/chaeum@.service"
   pack_release
   CURL_FAIL=1 run_deploy def5678 || status=$?
 
-  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
+  expect_rolled_back_to "$before" "$status"
+  logged "배포 중단 — 구 버전(8002)이 계속 서비스합니다" || fail "중단 메시지가 기록에 없음"
   unit_unchanged || fail "systemd 유닛이 원래대로 돌아오지 않음"
   [ "$(call_count "systemctl daemon-reload")" -eq 2 ] || fail "유닛을 되돌린 뒤 daemon-reload하지 않음"
 }

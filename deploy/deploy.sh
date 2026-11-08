@@ -36,13 +36,15 @@ die() { echo "✗ $*" >&2; exit 1; }
 
 rollback() {
   systemctl stop "chaeum@$NEW_PORT" || true
-  [ "$UNIT_CHANGED" -eq 0 ] || restore_unit
   if [ -n "$PREV_CURRENT" ]; then
     ln -sfn "$PREV_CURRENT" "$ROOT/current"
   else
     rm -f "$ROOT/current"
   fi
   rm -rf "$REL"
+  if [ "$UNIT_CHANGED" -eq 1 ]; then
+    restore_unit || true
+  fi
 }
 
 abort() { rollback; die "$*"; }
