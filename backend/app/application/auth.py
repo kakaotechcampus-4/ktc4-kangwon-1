@@ -86,7 +86,6 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "user_id": user["user_id"],
         "email": user.get("email"),
         "display_name": user.get("display_name"),
-        "profile_image_url": user.get("profile_image_url"),
         "email_verified": bool(user.get("email_verified_at")),
         "needs_verification": not is_verified(user),
         "created_at": user.get("created_at"),
@@ -263,8 +262,8 @@ def _resolve_social_user(profile: KakaoProfile, db_path) -> str:
     return storage().users.link_or_create_social_user(
         PROVIDER_KAKAO,
         profile.provider_user_id,
+        TERMS_VERSION,
         nickname=profile.nickname,
-        profile_image_url=profile.profile_image_url,
         db_path=db_path,
     )
 

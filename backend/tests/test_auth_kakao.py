@@ -100,6 +100,42 @@ class KakaoLoginTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIsNone(self.client.get("/api/v1/auth/me").json()["display_name"])
 
+    def test_new_kakao_user_records_terms_agreement(self):
+        self.callback(self.start())
+        with connect(self.path) as db:
+            user_id = db.execute("SELECT user_id FROM users").fetchone()["user_id"]
+            rows = [
+                tuple(row)
+                for row in db.execute(
+                    "SELECT user_id,terms_version,method FROM terms_agreements"
+                ).fetchall()
+            ]
+        self.assertEqual(rows, [(user_id, "v1", "kakao")])
+
+    def test_existing_kakao_user_logs_in_without_new_agreement(self):
+        with connect(self.path) as db:
+            db.execute(
+                "INSERT INTO users(user_id,display_name,profile_image_url,created_at,last_login_at)"
+                " VALUES('old','옛','https://img','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')"
+            )
+            db.execute(
+                "INSERT INTO user_identities(provider,provider_user_id,user_id,created_at)"
+                " VALUES('kakao',?, 'old','2026-01-01T00:00:00Z')",
+                (str(KAKAO_ID),),
+            )
+        callback = self.callback(self.start())
+        self.assertEqual(callback.status_code, 302)
+        with connect(self.path) as db:
+            agreement_count = db.execute("SELECT count(*) FROM terms_agreements").fetchone()[0]
+            stored = db.execute("SELECT profile_image_url FROM users").fetchone()[0]
+        self.assertEqual(agreement_count, 0)
+        self.assertIsNone(stored)
+
+    def test_me_has_no_profile_image_url(self):
+        self.callback(self.start())
+        me = self.client.get("/api/v1/auth/me")
+        self.assertNotIn("profile_image_url", me.json())
+
     # ── state ───────────────────────────────────────────────────────────
     def test_state_is_single_use(self):
         state = self.start()
