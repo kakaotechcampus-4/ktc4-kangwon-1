@@ -140,6 +140,7 @@ if ! nginx -t; then
 fi
 if ! systemctl reload nginx; then
   replace_upstream "$TMP/upstream.before"
+  systemctl reload nginx || true
   abort "nginx reload 실패 — 설정을 되돌렸고 구 버전($CURRENT_PORT)이 계속 서비스합니다"
 fi
 say "전환 완료 — $CURRENT_PORT → $NEW_PORT"

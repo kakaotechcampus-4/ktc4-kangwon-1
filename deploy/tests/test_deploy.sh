@@ -29,7 +29,8 @@ new_root() {
   fake bin/nginx '[ "${NGINX_TEST_FAIL:-}" != 1 ] && [ "$(ls "$FAKE/conf.d")" = chaeum-upstream.conf ]'
   fake bin/curl '[ "${CURL_FAIL:-}" != 1 ]'
   fake bin/sleep
-  fake bin/systemctl '[ "${SYSTEMCTL_FAIL:-}" != "$1" ]'
+  fake bin/systemctl '[ "$1" != reload ] || grep -oE "127\.0\.0\.1:[0-9]+" "$CHAEUM_UPSTREAM_CONF" >>"$FAKE/reloads.log"
+[ "${SYSTEMCTL_FAIL:-}" != "$1" ]'
   fake bin/chown
   fake bin/journalctl
   fake shared/venv/bin/pip '[ "${PIP_FAIL:-}" != 1 ]'
@@ -37,6 +38,7 @@ new_root() {
 
 run_deploy() {
   : >"$FAKE/calls.log"
+  : >"$FAKE/reloads.log"
   PATH="$FAKE/bin:$PATH" FAKE="$FAKE" \
     CHAEUM_ROOT="$FAKE" \
     CHAEUM_UPSTREAM_CONF="$UPSTREAM" \
@@ -49,6 +51,7 @@ current_release() { readlink -f "$FAKE/current" || true; }
 upstream_port() { grep -oE '127\.0\.0\.1:[0-9]+' "$UPSTREAM" | cut -d: -f2 || true; }
 release_shas() { ls "$FAKE/releases" | cut -d- -f1 | paste -sd ' ' -; }
 conf_d_files() { ls -A "$FAKE/conf.d" | paste -sd ' ' -; }
+reloaded_ports() { cut -d: -f2 "$FAKE/reloads.log" | paste -sd ' ' -; }
 save_upstream() { cp "$UPSTREAM" "$FAKE/upstream.before"; }
 upstream_unchanged() { cmp -s "$FAKE/upstream.before" "$UPSTREAM"; }
 called() { grep -qxF "$1" "$FAKE/calls.log"; }
@@ -172,6 +175,7 @@ reload_fails() {
   SYSTEMCTL_FAIL=reload run_deploy def5678 || status=$?
 
   expect_rolled_back_to "$before" "$status"
+  [ "$(reloaded_ports)" = "8001 8002" ] || fail "설정을 되돌린 뒤 다시 reload하지 않음(reload 때 포트: $(reloaded_ports))"
 }
 
 failed_deploys_keep_last_good() {
