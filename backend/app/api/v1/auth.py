@@ -45,7 +45,7 @@ class SignupBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailText
     password: str = Field(min_length=1, max_length=128)
-    display_name: str | None = Field(default=None, max_length=50)
+    agree_terms: bool = False
 
 
 class LoginBody(BaseModel):
@@ -109,14 +109,14 @@ async def signup(body: SignupBody, request: Request, response: Response):
         user_id, sent = await _service(request).signup(
             body.email,
             body.password,
-            body.display_name,
+            body.agree_terms,
             mail=mail,
             auth=auth,
         )
     except PasswordPolicyError as exc:
         raise HTTPException(422, str(exc)) from None
     except AuthError as exc:
-        raise HTTPException(409, exc.message) from None
+        raise HTTPException(422 if exc.code == "TERMS_REQUIRED" else 409, exc.message) from None
     token = await _service(request).login_after_signup(user_id)
     _set_session(response, token, request)
     return {"user_id": user_id, "verification_sent": sent}

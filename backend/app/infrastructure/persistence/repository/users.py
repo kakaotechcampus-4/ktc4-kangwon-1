@@ -34,16 +34,21 @@ def _normalize_email(email: str) -> str:
     return f"{local}@{domain.lower()}" if domain else local
 
 
-def create_email_user(email: str, password_hash: str, display_name: str | None, *, db_path=None):
+def create_email_user(email: str, password_hash: str, terms_version: str, *, db_path=None):
     """이메일 가입. 중복이면 EmailTaken이 올라옵니다."""
     user_id = uuid.uuid4().hex
     now = utc_now_iso()
     try:
         with connect(db_path) as db:
             db.execute(
-                "INSERT INTO users(user_id,email,password_hash,display_name,created_at,"
-                "last_login_at) VALUES(?,?,?,?,?,?)",
-                (user_id, _normalize_email(email), password_hash, display_name, now, now),
+                "INSERT INTO users(user_id,email,password_hash,created_at,last_login_at) "
+                "VALUES(?,?,?,?,?)",
+                (user_id, _normalize_email(email), password_hash, now, now),
+            )
+            db.execute(
+                "INSERT INTO terms_agreements(user_id,terms_version,method,agreed_at) "
+                "VALUES(?,?,'email',?)",
+                (user_id, terms_version, now),
             )
     except sqlite3.IntegrityError as exc:
         raise EmailTaken from exc
