@@ -19,6 +19,8 @@ import { colors } from '@/styles/tokens';
 
 const MIN_PASSWORD_LENGTH = 10;
 const TERMS_REQUIRED = '이용약관에 동의해 주세요.';
+const SERVER_TERMS_REQUIRED = '이용약관에 동의해야 가입할 수 있습니다.';
+const ERROR_ID = 'signup-error';
 
 export default function SignupPage() {
   return (
@@ -39,6 +41,7 @@ function SignupForm() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [termsMissing, setTermsMissing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   // 이미 가입된 주소는 이메일 칸 바로 아래에서 알려줘야 눈이 덜 헤맨다.
@@ -48,12 +51,12 @@ function SignupForm() {
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
   const mismatch = confirm.length > 0 && password !== confirm;
   const matched = confirm.length > 0 && password === confirm;
-  const termsMissing = error === TERMS_REQUIRED;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError('');
     setTakenEmail('');
+    setTermsMissing(false);
 
     if (!isEmailLike(email)) {
       setError('이메일 주소를 확인해 주세요.');
@@ -68,6 +71,7 @@ function SignupForm() {
       return;
     }
     if (!agreeTerms) {
+      setTermsMissing(true);
       setError(TERMS_REQUIRED);
       return;
     }
@@ -82,6 +86,11 @@ function SignupForm() {
       if (caught instanceof ApiError && caught.status === 409) {
         setTakenEmail(email);
       } else {
+        setTermsMissing(
+          caught instanceof ApiError &&
+            caught.status === 422 &&
+            caught.message === SERVER_TERMS_REQUIRED
+        );
         setError(
           caught instanceof ApiError
             ? caught.message
@@ -206,15 +215,17 @@ function SignupForm() {
             id="agree-terms"
             checked={agreeTerms}
             invalid={termsMissing}
+            describedBy={termsMissing ? ERROR_ID : undefined}
             onChange={(value) => {
               setAgreeTerms(value);
               if (termsMissing) {
+                setTermsMissing(false);
                 setError('');
               }
             }}
           >
-            만 14세 이상이며 <LegalLink href="/terms">이용약관</LegalLink>에
-            동의합니다 (필수)
+            만 14세 이상이며 <LegalLink href="/terms">이용약관</LegalLink>에{' '}
+            <span className="whitespace-nowrap">동의합니다 (필수)</span>
           </Checkbox>
           <p className="text-13 break-keep text-[#4B5866]">
             개인정보는 <LegalLink href="/privacy">개인정보 처리방침</LegalLink>
@@ -222,7 +233,11 @@ function SignupForm() {
           </p>
         </div>
 
-        {error ? <FormMessage tone="error">{error}</FormMessage> : null}
+        {error ? (
+          <FormMessage tone="error" id={ERROR_ID}>
+            {error}
+          </FormMessage>
+        ) : null}
 
         <Button type="submit" variant="primary" disabled={submitting}>
           {submitting ? '가입하는 중…' : '가입하기'}

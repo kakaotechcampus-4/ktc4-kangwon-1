@@ -9,12 +9,14 @@ export default function Checkbox({
   checked,
   onChange,
   invalid = false,
+  describedBy,
   children,
 }: {
   id: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   invalid?: boolean;
+  describedBy?: string;
   children: ReactNode;
 }) {
   return (
@@ -26,6 +28,7 @@ export default function Checkbox({
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
           aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           className="size-5 cursor-pointer appearance-none rounded-[5px] border-[1.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2453D6]"
           style={{
             backgroundColor: checked
@@ -35,7 +38,7 @@ export default function Checkbox({
               ? colors.status.notRecommend
               : checked
                 ? colors.brand.primary
-                : '#99A6B2',
+                : colors.text.tertiary,
           }}
         />
         {checked ? (

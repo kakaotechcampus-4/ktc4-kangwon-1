@@ -4,6 +4,8 @@ import LegalLink from '@/components/auth/LegalLink';
 import { kakaoLoginUrl } from '@/lib/api/auth';
 import { colors } from '@/styles/tokens';
 
+const NOTICE_ID = 'kakao-start-notice';
+
 /**
  * fetch가 아니라 주소창 이동이어야 한다. 쿠키는 백엔드가 직접 심으므로
  * 브라우저가 실제로 백엔드로 이동해야 하고, 그 뒤 카카오 동의 화면이 뜬다.
@@ -14,6 +16,7 @@ export default function KakaoButton({ next }: { next: string }) {
     <div className="flex flex-col gap-6">
       <button
         type="button"
+        aria-describedby={NOTICE_ID}
         onClick={() => {
           window.location.href = kakaoLoginUrl(next);
         }}
@@ -26,7 +29,7 @@ export default function KakaoButton({ next }: { next: string }) {
         <KakaoMark />
         카카오로 시작하기
       </button>
-      <p className="text-13 break-keep text-[#4B5866]">
+      <p id={NOTICE_ID} className="text-13 break-keep text-[#4B5866]">
         카카오로 시작하면 만 14세 이상이며{' '}
         <LegalLink href="/terms">이용약관</LegalLink>에 동의하고{' '}
         <LegalLink href="/privacy">개인정보 처리방침</LegalLink>을 확인한 것으로
