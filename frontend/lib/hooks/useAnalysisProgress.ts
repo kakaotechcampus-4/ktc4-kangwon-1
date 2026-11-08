@@ -15,6 +15,7 @@ import {
 import type {
   AnswerSubmission,
   DecisionResult,
+  StoredAnalysis,
   WaitingForInput,
 } from '@/lib/api/types';
 import type {
@@ -49,7 +50,8 @@ function markInitial(steps: ProgressStep[]): ProgressStep[] {
 
 export function useAnalysisProgress(
   requestId: string | null,
-  initialSteps: ProgressStep[]
+  initialSteps: ProgressStep[],
+  needDetail = false
 ) {
   const [steps, setSteps] = useState<ProgressStep[]>(() =>
     markInitial(initialSteps)
@@ -59,6 +61,8 @@ export function useAnalysisProgress(
   const [result, setResult] = useState<DecisionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<StoredAnalysis | null>(null);
+  const hasDetail = useRef(false);
   // 폴링을 다시 시작할 때마다 바뀌는 값. 이전 폴링 루프는 이 값이 달라지면 멈춘다.
   const [pollRun, setPollRun] = useState(0);
   const afterRef = useRef(0);
@@ -74,6 +78,8 @@ export function useAnalysisProgress(
       // 이벤트는 진행 표시용이고, 최종 상태는 GET 결과를 기준으로 한다.
       const detail = await getAnalysis(requestId as string);
       if (cancelled) return;
+      hasDetail.current = true;
+      setDetail(detail);
       if (detail.status === 'waiting_for_input' && detail.questions) {
         setWaiting(toWaiting(requestId as string, detail.questions));
         setStage('awaiting_input');
@@ -98,6 +104,16 @@ export function useAnalysisProgress(
         );
         if (cancelled) return;
         consecutiveErrors = 0;
+        if (needDetail && !hasDetail.current && !page.finished) {
+          hasDetail.current = true;
+          getAnalysis(requestId as string)
+            .then((found) => {
+              if (!cancelled) setDetail(found);
+            })
+            .catch(() => {
+              hasDetail.current = false;
+            });
+        }
         if (page.events.length) {
           setSteps((prev) => page.events.reduce(applyProgressEvent, prev));
           afterRef.current = page.next_after;
@@ -127,7 +143,7 @@ export function useAnalysisProgress(
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [requestId, pollRun]);
+  }, [requestId, pollRun, needDetail]);
 
   /** 질문 답변을 제출하고 진행 폴링을 다시 시작한다. */
   const submit = useCallback(async (submission: AnswerSubmission) => {
@@ -161,5 +177,5 @@ export function useAnalysisProgress(
     }
   }, []);
 
-  return { steps, stage, waiting, result, error, submitError, submit };
+  return { steps, stage, waiting, result, error, submitError, submit, detail };
 }

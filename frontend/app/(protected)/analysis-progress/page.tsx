@@ -29,6 +29,7 @@ import { demoClarifyingQuestions } from '@/lib/mockData/clarifyingDemo';
 import {
   loadConfirmedBuilding,
   ANALYSIS_RADIUS_M,
+  loadRequestId,
   loadVacancyInput,
   saveAnalysisResult,
   saveRequestId,
@@ -36,9 +37,14 @@ import {
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
   prefillAnswers,
+  liveProgressSite,
+  progressReportPath,
+  progressRestartPath,
+  progressSite,
   progressView,
   toAnswerSubmission,
   toClarifyingQuestions,
+  type ProgressSite,
 } from '@/lib/api/adapters/progress';
 import StateNotice from '@/components/ui/StateNotice';
 import { useAnalysisProgress } from '@/lib/hooks/useAnalysisProgress';
@@ -124,7 +130,45 @@ type KnownSite = {
   floor?: string;
   exclusiveArea?: string;
   parking?: string | null;
+  fromSession?: boolean;
 };
+
+const LOADING_SUMMARY: AnalysisSummary = {
+  ...mockAnalysisProgress.summary,
+  address: '불러오는 중',
+  floorAndUnit: '—',
+  exclusiveAreaText: '확인 안 됨',
+};
+
+function toKnownSite(prev: KnownSite, site: ProgressSite): KnownSite {
+  const area = site.areaM2;
+  return {
+    summary: {
+      ...prev.summary,
+      address: site.address,
+      floorAndUnit: site.floorUnit.trim() || '—',
+      radiusM: ANALYSIS_RADIUS_M,
+      exclusiveAreaText:
+        area === null
+          ? '확인 안 됨'
+          : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
+    },
+    floor: normalizeFloor(site.floorUnit) ?? undefined,
+    exclusiveArea: area === null ? undefined : `${area}㎡`,
+    parking: site.parking,
+    fromSession: site.fromSession,
+  };
+}
+
+function readSession(requestId: string | null) {
+  const building = loadConfirmedBuilding();
+  return {
+    requestId: requestId ? loadRequestId() : null,
+    input: loadVacancyInput(),
+    areaM2: building?.exclusiveAreaM2.value ?? null,
+    parking: building?.parking.value ?? null,
+  };
+}
 
 function useKnownSite(): KnownSite {
   const [known, setKnown] = useState<KnownSite>({
@@ -132,29 +176,12 @@ function useKnownSite(): KnownSite {
   });
 
   useEffect(() => {
-    const input = loadVacancyInput();
-    if (!input) {
-      return;
+    const local = progressSite(null, readSession(null), null);
+    if (local) {
+      // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setKnown((prev) => toKnownSite(prev, local));
     }
-    const building = loadConfirmedBuilding();
-    const area = building?.exclusiveAreaM2.value ?? null;
-    // sessionStorage는 브라우저 전용이라 마운트 후 한 번만 읽는다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setKnown((prev) => ({
-      summary: {
-        ...prev.summary,
-        address: input.roadAddress,
-        floorAndUnit: input.floorUnit.trim() || '—',
-        radiusM: ANALYSIS_RADIUS_M,
-        exclusiveAreaText:
-          area === null
-            ? '확인 안 됨'
-            : `약 ${Math.round(area / PYEONG_M2)}평 (${formatArea(area)})`,
-      },
-      floor: normalizeFloor(input.floorUnit) ?? undefined,
-      exclusiveArea: area === null ? undefined : `${area}㎡`,
-      parking: building?.parking.value ?? null,
-    }));
   }, []);
 
   return known;
@@ -269,9 +296,14 @@ function MockProgress() {
 /** 실제 백엔드 진행 이벤트를 폴링한다(?id=요청 ID). */
 function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
-  const known = useKnownSite();
-  const { steps, stage, waiting, result, error, submitError, submit } =
-    useAnalysisProgress(requestId, mockAnalysisProgress.steps);
+  const [session] = useState(() => readSession(requestId));
+  const fromSession = progressSite(requestId, session, null) !== null;
+  const { steps, stage, waiting, result, error, submitError, submit, detail } =
+    useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
+  const site = liveProgressSite(requestId, session, detail, stage === 'failed');
+  const known: KnownSite = site
+    ? toKnownSite({ summary: LOADING_SUMMARY }, site)
+    : { summary: LOADING_SUMMARY };
 
   const questions = useMemo(
     () => (waiting ? toClarifyingQuestions(waiting) : []),
@@ -291,11 +323,11 @@ function LiveProgress({ requestId }: { requestId: string }) {
 
   // 완료되면 리포트가 읽을 수 있게 결과를 저장한다.
   useEffect(() => {
-    if (result) {
+    if (result && fromSession) {
       saveAnalysisResult(result);
       saveRequestId(requestId);
     }
-  }, [result, requestId]);
+  }, [result, requestId, fromSession]);
 
   function handleAnswersSubmit(answers: ClarifyingAnswers) {
     // 백엔드는 질문별 답만 받는다(자유 입력 "추가 조건"을 받을 필드가 없다).
@@ -315,8 +347,10 @@ function LiveProgress({ requestId }: { requestId: string }) {
       error={error}
       submitError={submitError}
       onSubmit={handleAnswersSubmit}
-      onViewReport={() => router.replace(REPORT_PATH)}
-      onRestart={() => router.replace('/building-confirm')}
+      onViewReport={() =>
+        router.replace(progressReportPath(requestId, fromSession))
+      }
+      onRestart={() => router.replace(progressRestartPath(fromSession))}
       showNote={false}
     />
   );

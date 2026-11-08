@@ -3,16 +3,16 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from app.address import resolve_site
-from app.agentic.preflight import collect_preflight
-from app.concurrency import run_in_thread
-from app.db import repository
-from app.db.connection import initialize
-from app.llm.session import with_client_session
-from app.local_data.adapter import LocalAdapter
-from app.local_data.persistence import persist_local
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import capture_scope
+from app.application.local_snapshot import persist_local
+from app.application.preflight import collect_preflight
+from app.domain.schemas import AnalysisTask, Site
+from app.infrastructure.clients.address import resolve_site
+from app.infrastructure.llm.session import with_client_session
+from app.infrastructure.market_data.local.adapter import LocalAdapter
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.shared.concurrency import run_in_thread
 
 RADIUS_M = 500
 

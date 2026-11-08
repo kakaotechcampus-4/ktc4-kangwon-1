@@ -4,21 +4,16 @@ import asyncio
 import unittest
 from types import SimpleNamespace
 
-from app.agentic import evaluators
-from app.agentic.aliases import decode
-from app.agentic.contracts import (
-    FactReferenceSegment,
-    ReviewIssue,
-    SubmitDraftInput,
-    SubmitLInput,
-    TextSegment,
-)
-from app.agentic.report import ReportInvalid
-from app.agentic.runtime import DecisionLoop
-from app.canonical import canonical_json
-from app.db.connection import connect
-from app.db.repository import create_request
-from app.storage.raw import capture_scope
+from app.ai import evaluators
+from app.ai.aliases import decode
+from app.ai.runtime import DecisionLoop
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
+from app.domain.contracts import FactReferenceSegment, ReviewIssue, TextSegment
+from app.domain.report import ReportInvalid
+from app.infrastructure.persistence.connection import connect
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
+from app.shared.canonical import canonical_json
 from tests import test_agentic_runtime as fixtures
 from tests import test_landlord_context as context_fixtures
 
@@ -46,7 +41,7 @@ class FounderPacketTests(unittest.IsolatedAsyncioTestCase):
         return loop, loop.done
 
     async def packet(self, draft):
-        from app.agentic import founder
+        from app.ai import founder
 
         return await asyncio.to_thread(founder.review_packet, self.scope, draft)
 
@@ -102,7 +97,7 @@ class FounderPacketTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("value", card)
 
     async def test_confirmed_values_keep_states_and_other_request_is_not_read(self):
-        from app.agentic.questions import save_confirmed_space
+        from app.application.answers import save_confirmed_space
 
         _, draft = await self.draft()
         values = {
@@ -242,7 +237,7 @@ class FounderPacketTests(unittest.IsolatedAsyncioTestCase):
 
 class FounderIssueTests(unittest.TestCase):
     def test_overflow_removes_competition_then_continuity_and_preserves_space(self):
-        from app.agentic.founder import _trim_packet
+        from app.ai.founder import _trim_packet
 
         for padding, removed in ((8500, {"competition"}), (10000, {"competition", "continuity"})):
             with self.subTest(padding=padding):
@@ -291,7 +286,7 @@ class FounderIssueTests(unittest.TestCase):
                 )
 
     def test_only_visible_claims_or_action_conditions_are_allowed(self):
-        from app.agentic.founder import validate_issue
+        from app.ai.founder import validate_issue
 
         packet = {
             "candidates": [

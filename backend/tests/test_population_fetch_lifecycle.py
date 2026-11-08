@@ -7,8 +7,11 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.floating_population.client import SeoulOpenApiError, SeoulOpenDataClient
-from app.agents.floating_population.config import Settings
+from app.infrastructure.market_data.floating_population.client import (
+    SeoulOpenApiError,
+    SeoulOpenDataClient,
+)
+from app.infrastructure.market_data.floating_population.config import Settings
 
 
 class PopulationFetchLifecycleTests(unittest.IsolatedAsyncioTestCase):

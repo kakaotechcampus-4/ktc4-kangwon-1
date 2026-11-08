@@ -1,13 +1,13 @@
 """규칙이 채점하는 공간 근거를 L이 다시 쓰지 못하게 막는 판정을 검증합니다."""
 
-import json
 import unittest
 
-from app.agentic.report import rule_scored_space
+from app.domain.report import rule_scored_space
+from tests.fact_fixture import fact_record
 
 
 def fact(metric, source="industry_profile", value=None):
-    return {"metric": metric, "source": source, "value_json": json.dumps(value)}
+    return fact_record(metric=metric, source=source, value=value)
 
 
 class RuleScoredSpaceTests(unittest.TestCase):
@@ -37,8 +37,12 @@ class RuleScoredSpaceTests(unittest.TestCase):
         self.assertFalse(rule_scored_space(free_text, None, "I201"))
 
     def test_partial_fact_rows_without_source_are_untouched(self):
-        self.assertFalse(rule_scored_space({"metric": "lq"}, None, "I201"))
-        self.assertFalse(rule_scored_space({"metric": "existing_facilities"}, None, "I201"))
+        self.assertFalse(rule_scored_space(fact_record(metric="lq"), None, "I201"))
+        self.assertFalse(
+            rule_scored_space(
+                fact_record(metric="existing_facilities", source="user"), None, "I201"
+            )
+        )
 
     def test_other_facts_are_untouched(self):
         self.assertFalse(rule_scored_space(fact("place_name", "map", "가게"), None, "I201"))

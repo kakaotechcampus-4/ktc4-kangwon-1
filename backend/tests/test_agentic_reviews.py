@@ -2,13 +2,15 @@
 
 import asyncio
 import json
+import sqlite3
 import unittest
 from unittest.mock import patch
 
-from app.agentic.contracts import SubmitDraftInput, SubmitLInput
-from app.agentic.evaluators import PERSONAS
-from app.db.connection import connect
+from app.ai.evaluators import PERSONAS
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
+from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
+from tests.fact_fixture import fact_record
 
 
 class ReviewTests(unittest.IsolatedAsyncioTestCase):
@@ -17,7 +19,7 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def test_invalid_issue_does_not_discard_valid_issue(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         replies = []
 
@@ -61,18 +63,18 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        from app.agentic.evaluators import review
+        from app.ai.evaluators import review
 
         with connect(self.scope.path) as db:
             fid = db.execute("SELECT fact_id FROM facts LIMIT 1").fetchone()[0]
         with (
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value={"draft_id": loop.done.report_id, "facts": [{"fact_id": fid}]},
             ),
             patch(
-                "app.agentic.evaluators.fact_rows",
-                return_value={fid: {"citable": True, "status": "observed"}},
+                "app.ai.evaluators.fact_rows",
+                return_value={fid: fact_record(fid)},
             ),
         ):
             result = await review(
@@ -83,8 +85,120 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replies[0]["data"]["accepted"], ["valid"])
         self.assertEqual(replies[0]["data"]["rejected"][0]["issue_id"], "invalid")
 
+    async def run_truncated_review(self, truncations):
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(
+                (
+                    [d["function"]["name"] for d in definitions],
+                    messages[-1]["content"] if messages[-1]["role"] == "user" else "",
+                )
+            )
+            if len(seen) <= truncations:
+                raise LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")
+            payload = json.loads(messages[1]["content"])
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        with patch(
+            "app.ai.examiner.review_packet",
+            return_value={"draft_id": loop.done.report_id, "facts": []},
+        ):
+            result = await review(
+                loop, "examiner", loop.evaluator_executors()["examiner"], loop.done
+            )
+        return result, seen
+
+    async def test_truncated_answer_gets_a_shorter_resubmit_chance(self):
+        result, seen = await self.run_truncated_review(truncations=1)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(seen[1][0], ["submit_review"])
+        self.assertIn("잘렸", seen[1][1])
+
+    async def test_three_truncations_end_as_failure(self):
+        result, seen = await self.run_truncated_review(truncations=3)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "REPORT_INVALID")
+        self.assertEqual(len(seen), 3)
+
+    async def periods_seen(self, actor):
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
+
+        db = sqlite3.connect(self.path)
+        db.row_factory = sqlite3.Row
+        try:
+            with db:
+                row = dict(db.execute("SELECT * FROM facts LIMIT 1").fetchone())
+                row.update(
+                    fact_id="f_00000000-0000-4000-8000-0000000000aa",
+                    identity_hash="period-check",
+                    period="20231~20234",
+                    status="observed",
+                    citable=1,
+                    value_json="1.5",
+                )
+                db.execute(
+                    f"INSERT INTO facts({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                    list(row.values()),
+                )
+        finally:
+            db.close()
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(messages)
+            payload = json.loads(messages[1]["content"])
+            if len(seen) == 1:
+                return self.message("get_facts", {"fact_ids": [payload["facts"][0]["fact_id"]]})
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        packet = {
+            "draft_id": loop.done.report_id,
+            "facts": [
+                {"fact_id": "f_00000000-0000-4000-8000-0000000000aa", "period": "20231~20234"}
+            ],
+        }
+        target = {
+            "examiner": "app.ai.examiner.review_packet",
+            "founder": "app.ai.founder.review_packet",
+        }[actor]
+        with patch(target, return_value=packet):
+            await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
+        first = json.loads(seen[0][1]["content"])["facts"][0]["period"]
+        reply = next(m["content"] for m in reversed(seen[1]) if m["role"] == "tool")
+        return first, reply
+
+    async def test_examiner_sees_spelled_out_periods(self):
+        first, reply = await self.periods_seen("examiner")
+        self.assertEqual(first, "2023년 1분기~4분기")
+        self.assertIn("2023년 1분기~4분기", reply)
+
+    async def test_other_evaluators_keep_period_codes(self):
+        first, reply = await self.periods_seen("founder")
+        self.assertEqual(first, "20231~20234")
+        self.assertIn("20231~20234", reply)
+        self.assertNotIn("2023년", reply)
+
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         entered = set()
         ready = asyncio.Event()

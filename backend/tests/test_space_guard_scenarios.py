@@ -10,14 +10,14 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.agentic import scoring
-from app.agentic.scoring import evaluate, profiles, result
-from app.agentic.space_rules import load_requirements
-from app.agents.commercial_area.baseline import SEOUL_INDUSTRY_DENSITY_PERCENTILES
-from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES
+from app.domain import scoring
+from app.domain.baselines.commercial_area import SEOUL_INDUSTRY_DENSITY_PERCENTILES
+from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES
+from app.domain.schemas import DecisionResult
+from app.domain.scoring import evaluate, profiles, result
+from app.domain.space_rules import load_requirements
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.schemas import DecisionResult
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 
@@ -34,7 +34,7 @@ def raised(grades):
             return result("C1", grades[code], reason="시험용 고정 등급", agglomeration="무관")
         return REAL_SCORE_ITEM(item, profile, code, *args, **kwargs)
 
-    return patch("app.agentic.scoring.score_item", side_effect=score_item)
+    return patch("app.domain.scoring.score_item", side_effect=score_item)
 
 
 class ServicePathScenarioTests(unittest.TestCase):
@@ -97,7 +97,8 @@ class ServicePathScenarioTests(unittest.TestCase):
         self.assertEqual(excluded["S203"].score_rank, 1)
 
     def test_upper_floor_lowers_ground_preferred_by_floor(self):
-        self.enterContext(raised({"G202": 4}))
+        # 새 환산 배점에서 두 후보의 차이는 9점: 2층 -5점은 유지, 4층 -10점은 역전입니다.
+        self.enterContext(raised({"G202": 4, "L102": 4}))
         plain = DecisionResult.model_validate(self.run_analysis())
         self.assertEqual(self.codes(plain)[0], "G202")
         second = DecisionResult.model_validate(self.run_analysis(floor="2층"))

@@ -2,8 +2,8 @@
 
 import unittest
 
-from app.agentic.scoring import WEIGHTS, rank_candidates, result, summarize
-from app.agentic.scoring import regulation as judge_regulation
+from app.domain.scoring import WEIGHTS, rank_candidates, result, summarize
+from app.domain.scoring import regulation as judge_regulation
 
 ABSOLUTE = {"status": "ok", "zones": [{"name": "절대보호구역"}]}
 RELATIVE = {"status": "ok", "zones": [{"name": "상대보호구역"}]}

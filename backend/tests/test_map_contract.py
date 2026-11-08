@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.agentic.contracts import MapSearchInput
+from app.domain.contracts import MapSearchInput
 
 
 class MapContractTests(unittest.TestCase):

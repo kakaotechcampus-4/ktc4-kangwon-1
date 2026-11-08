@@ -13,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.config import load_environment
-from app.services.analysis import execute_agentic_analysis
+from app.application.analysis import execute_agentic_analysis
+from app.infrastructure.config import load_environment
 from backtest.baselines import swapped
 from backtest.catalog import develop_code, invalid_rows, read_sample, row_key
 from backtest.history import HistoryDataError, check_history_db

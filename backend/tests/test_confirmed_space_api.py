@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.api.v1.analyses import analysis_runner
+from app.infrastructure.settings import ExecutionSettings
 from app.main import create_app
-from app.services.settings import ExecutionSettings
 from tests.auth_fixture import login
 
 

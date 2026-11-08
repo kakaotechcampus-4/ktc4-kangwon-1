@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.services.settings import ExecutionSettings
+from app.infrastructure.settings import ExecutionSettings
 
 
 class ExecutionSettingsTests(unittest.TestCase):

@@ -68,6 +68,15 @@ export interface FinalCandidate {
   industry_code: string;
   industry_name: string;
   code_points: number;
+  // 새 계산이 있는 보고서만 포함한다. B/H는 원래 관측 점수 범위로 보존한다.
+  calculation?: {
+    method: 'S2_half-v1';
+    code_points: number;
+    ranking_points: number;
+    applicable_weight: number;
+    raw_points: number;
+    estimated_points: number;
+  } | null;
   // L 미확인이면 null이다(0점이 아니다).
   L_points: number | null;
   L_status: 'observed' | 'unknown';
@@ -100,6 +109,18 @@ export interface ConditionExcludedCandidate {
   industry_name: string;
   reasons: string[];
   score_rank: number;
+}
+
+export interface RankedIndustry {
+  industry_code: string;
+  industry_name: string;
+  rank: number;
+  ai_excluded: boolean;
+}
+
+export interface RegulationExcludedIndustry {
+  industry_code: string;
+  industry_name: string;
 }
 
 export interface NewFactor {
@@ -183,6 +204,8 @@ export interface DecisionResult {
   top5: FinalCandidate[];
   excluded_candidates: FinalCandidate[];
   condition_excluded?: ConditionExcludedCandidate[];
+  ranking?: RankedIndustry[];
+  regulation_excluded?: RegulationExcludedIndustry[];
   // 보고서가 인용한 fact만 담는다. 차트용 전체 fact는 getAnalysisFacts로 받는다.
   facts: FactView[];
   L_records: LRecord[];

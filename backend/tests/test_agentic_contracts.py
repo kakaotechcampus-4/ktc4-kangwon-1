@@ -7,9 +7,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from app import schemas as s
-from app.agentic import contracts as c
-from app.industries.catalog import INDUSTRIES
+from app.ai import tool_contracts as tools
+from app.domain import contracts as c
+from app.domain import schemas as s
+from app.domain.industries.catalog import INDUSTRIES
 
 FACT = "f_12345678-1234-4234-8234-123456789abc"
 
@@ -17,26 +18,28 @@ FACT = "f_12345678-1234-4234-8234-123456789abc"
 class AgenticContractsTests(unittest.TestCase):
     def test_input_roundtrips(self):
         examples = {
-            c.GetScorecardInput: {},
-            c.GetFactsInput: {"fact_ids": [FACT]},
-            c.QueryRawInput: {"sql": "SELECT raw_row_id FROM v_raw_stores", "max_rows": 50},
+            tools.GetScorecardInput: {},
+            tools.GetFactsInput: {"fact_ids": [FACT]},
+            tools.QueryRawInput: {"sql": "SELECT raw_row_id FROM v_raw_stores", "max_rows": 50},
             c.MapSearchInput: {"facility_code": "SC4", "radius_m": 500},
-            c.CheckRegulationInput: {},
-            c.AskAdvisorInput: {"question": "상충 해석", "fact_ids": [FACT]},
-            c.AskUserInput: {
+            tools.CheckRegulationInput: {},
+            tools.AskAdvisorInput: {"question": "상충 해석", "fact_ids": [FACT]},
+            tools.AskUserInput: {
                 "questions": [{"field": "floor", "question": "몇 층인가요?", "reason": "동선 확인"}]
             },
-            c.SubmitDraftInput: {
+            tools.SubmitDraftInput: {
                 "phase": "draft",
                 "report": {"summary_segments": [{"type": "text", "text": "초안"}]},
             },
-            c.SubmitReviewInput: {"draft_id": "draft", "verdict": "agree", "issues": []},
-            c.SubmitLInput: {"L_records": [{"industry_code": "I201", "note": "추가 조건 없음"}]},
-            c.LInput: {
+            tools.SubmitReviewInput: {"draft_id": "draft", "verdict": "agree", "issues": []},
+            tools.SubmitLInput: {
+                "L_records": [{"industry_code": "I201", "note": "추가 조건 없음"}]
+            },
+            tools.LInput: {
                 "industry_code": "I201",
                 "factors": [{"fact_id": "1234abcd", "direction": "favorable"}],
             },
-            c.LFactorInput: {"fact_id": "1234abcd", "direction": "adverse", "severe": True},
+            tools.LFactorInput: {"fact_id": "1234abcd", "direction": "adverse", "severe": True},
         }
         for model, value in examples.items():
             with self.subTest(model=model.__name__):
@@ -48,23 +51,25 @@ class AgenticContractsTests(unittest.TestCase):
     def test_bounds(self):
         examples = [
             (
-                c.AskUserInput,
+                tools.AskUserInput,
                 {"questions": [{"field": "floor", "question": "가" * 201, "reason": "근거"}]},
             ),
-            (c.GetFactsInput, {"fact_ids": [FACT] * 33}),
-            (c.GetScorecardInput, {"mode": "detail", "limit": 6}),
-            (c.QueryRawInput, {"sql": "SELECT 1", "max_rows": 51}),
-            (c.QueryRawInput, {"sql": "x" * 4001}),
+            (tools.GetFactsInput, {"fact_ids": [FACT] * 33}),
+            (tools.GetScorecardInput, {"mode": "detail", "limit": 6}),
+            (tools.QueryRawInput, {"sql": "SELECT 1", "max_rows": 51}),
+            (tools.QueryRawInput, {"sql": "x" * 4001}),
             (c.MapSearchInput, {"industry_code": "I201", "radius_m": 501}),
-            (c.AskAdvisorInput, {"question": "x" * 801, "fact_ids": [FACT]}),
-            (c.LInput, {"industry_code": "I201", "note": "가" * 81}),
+            (tools.AskAdvisorInput, {"question": "x" * 801, "fact_ids": [FACT]}),
+            (tools.LInput, {"industry_code": "I201", "note": "가" * 81}),
         ]
         for model, value in examples:
             with self.subTest(model=model.__name__), self.assertRaises(ValidationError):
                 model.model_validate(value)
 
     def test_exclusive_modes(self):
-        c.GetFactsInput(industry_code="I201", source="commercial_area", metrics=["density_per_km2"])
+        tools.GetFactsInput(
+            industry_code="I201", source="commercial_area", metrics=["density_per_km2"]
+        )
         for value in (
             {},
             {"fact_ids": [FACT], "source": "commercial_area", "metrics": ["density_per_km2"]},
@@ -72,7 +77,7 @@ class AgenticContractsTests(unittest.TestCase):
             {"source": "commercial_area", "metrics": ["density_per_km2"]},
         ):
             with self.subTest(value=value), self.assertRaises(ValidationError):
-                c.GetFactsInput.model_validate(value)
+                tools.GetFactsInput.model_validate(value)
         for value in (
             {"radius_m": 500},
             {"radius_m": 500, "industry_code": "I201", "facility_code": "SC4"},
@@ -113,9 +118,9 @@ class AgenticContractsTests(unittest.TestCase):
             c.Candidate.model_validate(candidate | {"points": 90})
 
     def test_tool_schemas(self):
-        definitions = c.tool_definitions()
+        definitions = tools.tool_definitions()
         self.assertEqual(len(definitions), 10)
-        self.assertEqual({d["function"]["name"] for d in definitions}, set(c.TOOL_INPUTS))
+        self.assertEqual({d["function"]["name"] for d in definitions}, set(tools.TOOL_INPUTS))
         forbidden = {"$defs", "$ref", "title", "default", "discriminator", "oneOf"}
 
         def check(value):
@@ -154,9 +159,9 @@ class AgenticContractsTests(unittest.TestCase):
         self.assertEqual(obj, c.FactView.model_validate_json(obj.model_dump_json()))
         with self.assertRaises(ValidationError):
             c.FactView.model_validate(fact | {"status": "unknown"})
-        c.ScoreItem(item="D1", status="unknown", grade=None, points=None, fact_ids=[])
+        tools.ScoreItem(item="D1", status="unknown", grade=None, points=None, fact_ids=[])
         with self.assertRaises(ValidationError):
-            c.ScoreItem(item="D1", status="unknown", grade=0, points=0.0, fact_ids=[])
+            tools.ScoreItem(item="D1", status="unknown", grade=0, points=0.0, fact_ids=[])
 
     def test_api_example(self):
         document = (Path(__file__).resolve().parents[2] / "docs/API_CONTRACT.md").read_text(
@@ -174,7 +179,7 @@ class AgenticContractsTests(unittest.TestCase):
         section = document.split("## 현재 결과 형태", 1)[1]
         result = json.loads(re.search(r"```json\s*(.*?)\s*```", section, re.S).group(1))
         final = result["top5"][0]
-        summary = {name: final[name] for name in c.ScorecardSummary.model_fields}
+        summary = {name: final[name] for name in tools.ScorecardSummary.model_fields}
         selection = {
             "basis": "all_industries",
             "code_score_snapshot_id": "scores",
@@ -249,9 +254,9 @@ class AgenticContractsTests(unittest.TestCase):
             c.ToolReply[c.MapResult]: {"status": "ok", "data": map_result},
             s.Evidence: {"fact_id": FACT},
             c.FactView: result["facts"][0],
-            c.ScoreItem: score,
-            c.ScorecardSummary: summary,
-            c.Scorecard: card,
+            tools.ScoreItem: score,
+            tools.ScorecardSummary: summary,
+            tools.Scorecard: card,
             c.TextSegment: {"type": "text", "text": "목업"},
             c.FactReferenceSegment: {"type": "fact", "fact_id": FACT, "format": "count"},
             c.Candidate: {"industry_code": "I201"},
@@ -265,14 +270,14 @@ class AgenticContractsTests(unittest.TestCase):
                 "reason": "근거 확인",
             },
             c.ReportProposal: {"candidates": [{"industry_code": "I201"}]},
-            c.SubmitLInput: {
+            tools.SubmitLInput: {
                 "L_records": [{"industry_code": "I201", "neutral": True, "fact_ids": ["1234abcd"]}]
             },
-            c.SubmitLResult: {"submitted_count": 1, "remaining_count": 50, "closed": False},
-            c.ScorecardResult: {"summaries": [summary]},
-            c.FactsResult: {"facts": result["facts"]},
-            c.RawQueryRow: raw_row,
-            c.RawQueryResult: {"columns": ["store_count"], "rows": [raw_row]},
+            tools.SubmitLResult: {"submitted_count": 1, "remaining_count": 50, "closed": False},
+            tools.ScorecardResult: {"summaries": [summary]},
+            tools.FactsResult: {"facts": result["facts"]},
+            tools.RawQueryRow: raw_row,
+            tools.RawQueryResult: {"columns": ["store_count"], "rows": [raw_row]},
             c.MapPlace: place,
             c.MapResult: map_result,
             c.IndustryRestriction: restriction,
@@ -290,14 +295,14 @@ class AgenticContractsTests(unittest.TestCase):
                 "status": "ok",
                 "interpretations": [interpretation],
             },
-            c.QuestionSessionRef: {"question_session_id": "q"},
-            c.SubmitResult: {
+            tools.QuestionSessionRef: {"question_session_id": "q"},
+            tools.SubmitResult: {
                 "report_id": "report",
                 "validation_status": "valid",
                 "rendered_preview_ref": "preview",
                 "score_snapshot_id": "scores",
             },
-            c.ReviewRef: {"review_id": "review"},
+            tools.ReviewRef: {"review_id": "review"},
             s.DecisionRequest: request,
             c.FinalCandidate: final,
             c.EvaluatorReview: result["evaluator_reviews"][0],
@@ -348,5 +353,5 @@ class AgenticContractsTests(unittest.TestCase):
         from pydantic import TypeAdapter
 
         adapter = TypeAdapter(ChatCompletionFunctionToolParam)
-        for definition in c.tool_definitions():
+        for definition in tools.tool_definitions():
             self.assertEqual(adapter.validate_python(definition), definition)

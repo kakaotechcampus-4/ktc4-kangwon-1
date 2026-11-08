@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -14,14 +16,19 @@ from app.api.v1 import router as v1_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.building import router as building_router
 from app.api.v1.jobs import health as api_health
-from app.config import AuthSettings, KakaoOAuthSettings, MailSettings, load_environment
-from app.db import repository
-from app.db.connection import initialize
-from app.logging import protect_http_query_logs
-from app.services.jobs import AnalysisJobRegistry
-from app.services.settings import ExecutionSettings
+from app.application.jobs import AnalysisJobRegistry
+from app.application.ports.identity import AuthSettings, KakaoOAuthSettings, MailSettings
+from app.application.services import Services
+from app.bootstrap import load_all, wire
+from app.infrastructure.config import load_environment
+from app.infrastructure.market_data.local.score_reference import warm_reference
+from app.infrastructure.persistence import repository
+from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.settings import ExecutionSettings
+from app.shared.logging import protect_http_query_logs
 
 DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+logger = logging.getLogger(__name__)
 
 
 def allowed_origins() -> list[str]:
@@ -33,12 +40,21 @@ def allowed_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+def _warm_reference() -> None:
+    try:
+        warm_reference()
+    except Exception:
+        logger.warning("경쟁 참고 분포를 미리 계산하지 못했습니다.", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     path = app.state.execution_settings.db_path
     await asyncio.to_thread(initialize, path)
     # 이전 프로세스가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
     await asyncio.to_thread(repository.fail_interrupted, db_path=path)
+    if app.state.execution_settings.warm_reference:
+        threading.Thread(target=_warm_reference, daemon=True).start()
     registry = app.state.job_registry
     try:
         yield
@@ -55,6 +71,8 @@ def create_app(
 ) -> FastAPI:
     """uvicorn --factory 진입점. 환경 → 실행 설정·CORS → lifespan DB 순서입니다."""
     protect_http_query_logs()
+    wire()
+    load_all()
     if load_env:
         load_environment()
     app = FastAPI(
@@ -64,8 +82,11 @@ def create_app(
         description="공실 주소를 받아 업종 추천 리포트를 돌려주는 API입니다.",
     )
     app.state.execution_settings = settings or ExecutionSettings.from_env()
-    app.state.recording_dir = recording_dir
-    app.state.measurement = measurement
+    app.state.services = Services(
+        app.state.execution_settings.db_path,
+        recording_dir=recording_dir,
+        measurement=measurement,
+    )
     app.state.job_registry = AnalysisJobRegistry(app.state.execution_settings.max_concurrency)
     app.state.auth_settings = AuthSettings.from_env()
     app.state.kakao_settings = KakaoOAuthSettings.from_env()

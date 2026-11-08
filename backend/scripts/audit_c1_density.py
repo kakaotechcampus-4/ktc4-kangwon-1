@@ -12,14 +12,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.commercial_area.baseline import (  # noqa: E402
+from app.domain.baselines.commercial_area import (  # noqa: E402
     SEOUL_INDUSTRY_DENSITY_PERCENTILES,
     industry_percentile,
 )
-from app.agents.commercial_area.client import to_store  # noqa: E402
-from app.agents.commercial_area.trade_areas import SeoulTradeArea, load_trade_areas  # noqa: E402
-from app.agents.floating_population.baseline import DAILY_TOTAL_PERCENTILES  # noqa: E402
-from app.geo import haversine_m, to_epsg5181  # noqa: E402
+from app.domain.baselines.floating_population import DAILY_TOTAL_PERCENTILES  # noqa: E402
+from app.domain.geo import haversine_m, to_epsg5181  # noqa: E402
+from app.infrastructure.market_data.commercial_area.client import to_store  # noqa: E402
+from app.infrastructure.market_data.commercial_area.trade_areas import (  # noqa: E402
+    SeoulTradeArea,
+    load_trade_areas,
+)
 from scripts.build_density_baseline import (  # noqa: E402
     area_km2,
     industry_counts,

@@ -3,7 +3,7 @@
 import math
 import unittest
 
-from app.agents.commercial_area.trade_areas import (
+from app.infrastructure.market_data.commercial_area.trade_areas import (
     DATA_PATH,
     build_trade_areas,
     load_trade_areas,

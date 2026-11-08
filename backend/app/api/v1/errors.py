@@ -4,11 +4,10 @@ import logging
 
 from fastapi import HTTPException
 
-from app.address import GeocodeError
-from app.errors import AnalysisConflictError as AnalysisConflictError
-from app.logging import log_exception
-
-from .jobs import request_headers
+from app.api.v1.jobs import request_headers
+from app.application.errors import ADDRESS_INPUT_ERRORS, AddressError
+from app.application.errors import AnalysisConflictError as AnalysisConflictError
+from app.shared.logging import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +17,8 @@ async def run_or_http(work, request_id, *, kind):
         return await work
     except HTTPException:
         raise
-    except GeocodeError as exc:
-        invalid = exc.code in {
-            "EMPTY_ADDRESS",
-            "NOT_FOUND",
-            "ADDRESS_AMBIGUOUS",
-            "ADDRESS_MISMATCH",
-        }
+    except AddressError as exc:
+        invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise HTTPException(
             400 if invalid else 502,
             "주소를 확인해 주세요." if invalid else "주소 조회 서비스에 실패했습니다.",

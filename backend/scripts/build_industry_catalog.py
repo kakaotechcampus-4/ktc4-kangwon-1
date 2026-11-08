@@ -1,4 +1,4 @@
-"""`app/industries/data/*.csv` 를 검증하고 `catalog.py` 를 생성한다.
+"""`app/domain/industries/data/*.csv` 를 검증하고 `catalog.py` 를 생성한다.
 
 CSV 가 깨져도 런타임까지 번지지 않게 하는 게 목적이다. 엑셀로 열었다 저장하면 인코딩이 cp949 로
 바뀌고 행이 날아가는 일이 실제로 있었다. 그래서 생성 단계에서 막는다.
@@ -23,12 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.industries import (  # noqa: E402
-    LEGACY70_LINK_PATH,
-    MASTER_PATH,
-    PACKAGE_DIR,
-    SEOUL_LINK_PATH,
-)
+from app.domain.industries import LEGACY70_LINK_PATH, MASTER_PATH, PACKAGE_DIR, SEOUL_LINK_PATH  # noqa: E402
+from app.infrastructure.config import BACKEND_DIR  # noqa: E402
 
 CATALOG_PATH = PACKAGE_DIR / "catalog.py"
 
@@ -158,9 +154,7 @@ def check_small(rows: list[dict[str, str]], master: dict[str, dict[str, str]]) -
     seen = set()
     targets: dict[str, set[str]] = {}
     split_middles = {r["source_middle_code"] for r in rows}
-    evidence_path = (
-        PACKAGE_DIR.parents[1] / "examples" / "schema_compare" / "upjong_small_official.csv"
-    )
+    evidence_path = BACKEND_DIR / "examples" / "schema_compare" / "upjong_small_official.csv"
     with evidence_path.open(encoding="utf-8-sig", newline="") as handle:
         official = {
             (r["indsMclsCd"], r["indsSclsCd"], r["indsSclsNm"]) for r in csv.DictReader(handle)

@@ -4,10 +4,12 @@ import json
 import unittest
 from unittest.mock import patch
 
-from app.agentic.contracts import ReviewIssue, SubmitDraftInput, SubmitLInput
-from app.agentic.evaluators import review
-from app.db.connection import connect
+from app.ai.evaluators import review
+from app.ai.tool_contracts import SubmitDraftInput, SubmitLInput
+from app.domain.contracts import ReviewIssue
+from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
+from tests.fact_fixture import fact_record
 
 
 class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
@@ -43,7 +45,7 @@ class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
         self, submissions, citable=True, code_issues=(), actor="customer", fail=None
     ):
         """submissions를 차례로 제출하고 (결과, 제출별 도구 응답, 도구 정의)를 돌려줍니다."""
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         replies, seen, queue = [], [], list(submissions)
 
@@ -69,15 +71,15 @@ class CustomerSubmitTests(unittest.IsolatedAsyncioTestCase):
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
         packet = {"draft_id": loop.done.report_id, "facts": [{"fact_id": self.fid}]}
-        rows = {self.fid: {"citable": citable, "status": "observed"}}
+        rows = {self.fid: fact_record(self.fid, citable=citable)}
         with (
             patch(
-                "app.agentic.customer_rubric.code_checks",
+                "app.ai.customer_rubric.code_checks",
                 return_value=([], list(code_issues), set()),
             ),
-            patch("app.agentic.customer_rubric.packet", return_value=packet),
-            patch("app.agentic.evaluators.review_packet", return_value=packet),
-            patch("app.agentic.evaluators.fact_rows", return_value=rows),
+            patch("app.ai.customer_rubric.packet", return_value=packet),
+            patch("app.ai.evaluators.review_packet", return_value=packet),
+            patch("app.ai.evaluators.fact_rows", return_value=rows),
         ):
             result = await review(loop, actor, loop.evaluator_executors()[actor], loop.done)
         return result, replies, seen[0] if seen else []

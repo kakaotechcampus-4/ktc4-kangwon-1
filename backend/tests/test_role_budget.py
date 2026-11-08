@@ -6,16 +6,17 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.agentic import evaluators
-from app.agentic.budget import RuntimeBudget
-from app.agentic.contracts import FactsResult, ToolReply
-from app.agentic.space import ensure_space_fits
-from app.agentic.sql_tool import error
-from app.agentic.tools import EVALUATORS, ToolExecutor
-from app.canonical import canonical_json
-from app.llm.budget import BudgetExceeded
-from app.services.mock import call
+from app.ai import evaluators
+from app.ai.budget import RuntimeBudget
+from app.ai.tool_contracts import FactsResult
+from app.ai.tools import EVALUATORS, ToolExecutor
+from app.application.ports.llm_budget import BudgetExceeded
+from app.application.space import ensure_space_fits
+from app.domain.contracts import ToolReply, error
+from app.infrastructure.mock import call
+from app.shared.canonical import canonical_json
 from tests import test_space_fit as space_fixtures
+from tests.fact_fixture import fact_record
 
 
 class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
@@ -117,12 +118,10 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
 
 class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        decode = patch("app.agentic.tools.decode", side_effect=lambda scope, value: value)
+        decode = patch("app.ai.tools.decode", side_effect=lambda scope, value: value)
         decode.start()
         self.addCleanup(decode.stop)
-        report = patch(
-            "app.agentic.tools.decode_report", side_effect=lambda scope, value: (value, [])
-        )
+        report = patch("app.ai.tools.decode_report", side_effect=lambda scope, value: (value, []))
         report.start()
         self.addCleanup(report.stop)
 
@@ -139,13 +138,13 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
             {definition["function"]["name"] for definition in founder.definitions()},
             {"get_scorecard", "get_facts", "query_raw", "submit_review"},
         )
-        with patch("app.agentic.tools._audit"):
+        with patch("app.ai.tools._audit"):
             denied = await self.executor().execute("query_raw", {"sql": "SELECT 1"})
         self.assertEqual(denied.error.code, "INVALID_ARGUMENT")
 
     async def test_get_facts_rule_message_names_the_broken_rule(self):
         executor = self.executor()
-        with patch("app.agentic.tools._audit"):
+        with patch("app.ai.tools._audit"):
             reply = await executor.execute("get_facts", {"source": "commercial_area"})
         self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
         self.assertIn("업종·출처·지표를 모두 지정해야 합니다.", reply.error.message)
@@ -164,7 +163,7 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 {definition["function"]["name"] for definition in executor.definitions()}, expected
             )
-            with patch("app.agentic.tools._audit"):
+            with patch("app.ai.tools._audit"):
                 for limit in (1, 2, 3):
                     self.assertEqual(
                         (await executor.execute("get_scorecard", {"limit": limit})).status, "ok"
@@ -187,7 +186,7 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
             handlers={"submit_l": AsyncMock(return_value=ToolReply(status="ok", data={}))},
         )
         executor.shared.calls[("decision", "total")] = 20
-        with patch("app.agentic.tools._audit"):
+        with patch("app.ai.tools._audit"):
             reply = await executor.execute("submit_l", {"L_records": [], "finish": True})
         self.assertEqual(reply.status, "ok")
         self.assertEqual(executor.shared.calls[("decision", "total")], 20)
@@ -201,7 +200,7 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
         )
         executor = self.executor("decision", handlers={"submit_l": handler})
         arguments = {"finish": True}
-        with patch("app.agentic.tools._audit"):
+        with patch("app.ai.tools._audit"):
             self.assertEqual((await executor.execute("submit_l", arguments)).status, "ok")
             repeated = await executor.execute("submit_l", arguments)
         self.assertEqual(repeated.error.code, "DUPLICATE_INDUSTRY")
@@ -215,7 +214,7 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
             "report": {"candidates": [{"industry_code": "I201"}] * 6},
             "secret-field-name": "secret-value",
         }
-        with patch("app.agentic.tools._audit"):
+        with patch("app.ai.tools._audit"):
             reply = await executor.execute("submit_draft", arguments)
         self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
         self.assertIn("report.candidates", reply.error.message)
@@ -228,7 +227,7 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
 
 class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        decode = patch("app.agentic.tools.decode", side_effect=lambda scope, value: value)
+        decode = patch("app.ai.tools.decode", side_effect=lambda scope, value: value)
         decode.start()
         self.addCleanup(decode.stop)
 
@@ -313,22 +312,22 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
 
         loop = SimpleNamespace(scope=scope, budget=budget, _model=model, event=AsyncMock())
         with (
-            patch("app.agentic.evaluators.fact_rows", return_value={}),
-            patch("app.agentic.evaluators.save_review"),
+            patch("app.ai.evaluators.fact_rows", return_value={}),
+            patch("app.ai.evaluators.save_review"),
             patch(
-                "app.agentic.landlord.review_packet",
+                "app.ai.landlord.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
-            patch("app.agentic.customer_rubric.code_checks", return_value=([], [], set())),
-            patch("app.agentic.customer_rubric.packet", return_value={"draft_id": "draft"}),
-            patch("app.agentic.tools._audit"),
-            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.customer_rubric.code_checks", return_value=([], [], set())),
+            patch("app.ai.customer_rubric.packet", return_value={"draft_id": "draft"}),
+            patch("app.ai.tools._audit"),
+            patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value),
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
             patch(
-                "app.agentic.founder.review_packet",
+                "app.ai.founder.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
         ):
@@ -368,15 +367,15 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         loop = SimpleNamespace(scope=scope, budget=budget, _model=model, event=AsyncMock())
         with (
             patch(
-                "app.agentic.tools.get_scorecard",
+                "app.ai.tools.get_scorecard",
                 AsyncMock(return_value=ToolReply(status="ok", data={})),
             ),
-            patch("app.agentic.evaluators.fact_rows", return_value={}),
-            patch("app.agentic.evaluators.save_review"),
-            patch("app.agentic.tools._audit"),
-            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.evaluators.fact_rows", return_value={}),
+            patch("app.ai.evaluators.save_review"),
+            patch("app.ai.tools._audit"),
+            patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value),
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
         ):
@@ -425,14 +424,14 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
         )
         with (
             patch(
-                "app.agentic.evaluators.fact_rows",
-                return_value={fact_id: {"citable": True, "status": "observed"}},
+                "app.ai.evaluators.fact_rows",
+                return_value={fact_id: fact_record(fact_id)},
             ),
-            patch("app.agentic.evaluators.save_review"),
-            patch("app.agentic.tools._audit"),
-            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.evaluators.save_review"),
+            patch("app.ai.tools._audit"),
+            patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value),
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
         ):
@@ -456,8 +455,8 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             scope=scope, budget=RuntimeBudget(), _model=AsyncMock(), event=AsyncMock()
         )
         with (
-            patch("app.agentic.examiner.review_packet", side_effect=ValueError("over")),
-            patch("app.agentic.evaluators.save_review"),
+            patch("app.ai.examiner.review_packet", side_effect=ValueError("over")),
+            patch("app.ai.evaluators.save_review"),
         ):
             result = await evaluators.review(
                 loop, "examiner", ToolExecutor(scope, None, actor="examiner"), self.draft()
@@ -488,7 +487,7 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             dict(original, industry_code=f"X{index:03}") for index in range(50)
         ] + [original]
         draft.model_dump.return_value = payload
-        with patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value):
+        with patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value):
             packet = evaluators.review_packet(None, draft)
         self.assertEqual(packet["L_counts"], {"3": 51})
         self.assertEqual(len(packet["candidate_factors"]), 1)
@@ -506,11 +505,11 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
             event=AsyncMock(),
         )
         with (
-            patch("app.agentic.evaluators.save_review"),
-            patch("app.agentic.tools._audit"),
-            patch("app.agentic.evaluators.encode", side_effect=lambda scope, value: value),
+            patch("app.ai.evaluators.save_review"),
+            patch("app.ai.tools._audit"),
+            patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value),
             patch(
-                "app.agentic.examiner.review_packet",
+                "app.ai.examiner.review_packet",
                 return_value=evaluators.compact_draft(self.draft()),
             ),
         ):
@@ -538,12 +537,12 @@ class SpaceFitCacheTests(unittest.IsolatedAsyncioTestCase):
     user_fact = space_fixtures.SpaceFitFactsTests.user_fact
 
     async def test_resume_gets_current_facts_and_same_revision_reuses_cache(self):
-        from app.agentic.read_tools import get_facts
+        from app.ai.read_tools import get_facts
 
         await asyncio.to_thread(ensure_space_fits, self.scope)
         executor = ToolExecutor(self.scope, None)
         arguments = {"source": "industry_profile", "metrics": ["space_fit"], "limit": 51}
-        with patch("app.agentic.tools.get_facts", wraps=get_facts) as read:
+        with patch("app.ai.tools.get_facts", wraps=get_facts) as read:
             initial = await executor.execute("get_facts", arguments)
             old_ids = {fact.fact_id for fact in FactsResult.model_validate(initial.data).facts}
             self.assertEqual(len(old_ids), 51)

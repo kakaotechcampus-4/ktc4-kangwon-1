@@ -9,9 +9,10 @@ from unittest.mock import patch
 
 import httpx
 
-from app.agents.map_analysis.client import MapApiError, PlaceClient
-from app.agents.map_analysis.config import Settings
-from app.schemas import Site
+from app.application.ports.places import MapApiError
+from app.domain.schemas import Site
+from app.infrastructure.market_data.map_analysis.client import PlaceClient
+from app.infrastructure.market_data.map_analysis.config import Settings
 
 HIT: dict[str, Any] = {
     "meta": {"total_count": 100, "pageable_count": 45, "is_end": False},
@@ -168,6 +169,33 @@ class MapAnalysisClientTests(unittest.IsolatedAsyncioTestCase):
             raise httpx.ConnectTimeout("timeout", request=request)
 
         await self.assert_code("UPSTREAM_TIMEOUT", handler)
+
+    async def test_corrupt_compressed_response_is_retried_then_succeeds(self):
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(1)
+            if len(attempts) == 1:
+                return httpx.Response(
+                    200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip")
+                )
+            return httpx.Response(200, json=HIT)
+
+        payload = await self.call(handler)
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(payload["meta"]["total_count"], 100)
+
+    async def test_repeated_corrupt_response_is_upstream_failed(self):
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(1)
+            return httpx.Response(
+                200, headers={"Content-Encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip")
+            )
+
+        await self.assert_code("UPSTREAM_FAILED", handler)
+        self.assertEqual(len(attempts), 3)
 
     # --- 설정 검증은 네트워크 전에 ---
 

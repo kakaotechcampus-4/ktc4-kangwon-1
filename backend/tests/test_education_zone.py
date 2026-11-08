@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app import education_zone as ez
+from app.infrastructure.clients import education_zone as ez
 
 LAT, LNG = 37.4784, 126.9516
 

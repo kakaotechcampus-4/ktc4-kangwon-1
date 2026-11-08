@@ -6,16 +6,19 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-from app.agents.business_lifecycle.client import get_recent_quarters
-from app.agents.business_lifecycle.preprocess import aggregate_rows
-from app.agents.commercial_area.client import check_header, extract_items
-from app.agents.commercial_area.metrics import haversine_m as old_distance
-from app.agents.floating_population.geo import overlapping_areas
-from app.agents.floating_population.metrics import aggregate, daily_benchmark, trend
-from app.agents.floating_population.population import age_share
-from app.db.connection import readonly
-from app.geo import haversine_m
-from app.seoul import previous_quarter, shift_quarter
+from app.domain.geo import haversine_m
+from app.domain.population import age_share
+from app.domain.quarters import get_recent_quarters, previous_quarter, shift_quarter
+from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows
+from app.infrastructure.market_data.commercial_area.client import check_header, extract_items
+from app.infrastructure.market_data.commercial_area.metrics import haversine_m as old_distance
+from app.infrastructure.market_data.floating_population.geo import overlapping_areas
+from app.infrastructure.market_data.floating_population.metrics import (
+    aggregate,
+    daily_benchmark,
+    trend,
+)
+from app.infrastructure.persistence.connection import readonly
 
 
 class SharedHelperTests(unittest.TestCase):

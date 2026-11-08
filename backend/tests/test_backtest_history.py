@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.local_data.database import LocalDataDB
+from app.infrastructure.market_data.local.database import LocalDataDB
 from backtest.history import HistoryDataError, check_history_db, main
 from tests.local_data_fixture import complete_versions
 

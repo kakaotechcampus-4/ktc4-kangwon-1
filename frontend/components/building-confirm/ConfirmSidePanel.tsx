@@ -48,11 +48,12 @@ const TONE_STYLES: Record<Judgement['tone'], { bg: string; color: string }> = {
 // 여백은 화면 폭에 따라 --card-pad로 바꾼다(Card 기본 p-7보다 style이 우선한다).
 const CARD_STYLE = {
   padding: 'var(--card-pad)',
-  borderRadius: '24px',
+  borderRadius: 'var(--side-card-radius)',
   borderWidth: '0px',
 };
 
-const CARD_CLASS = 'w-full gap-5 [--card-pad:20px] sm:[--card-pad:32px]';
+const CARD_CLASS =
+  'w-full gap-4 [--card-pad:16px] [--side-card-radius:18px] sm:gap-5 sm:[--card-pad:32px] sm:[--side-card-radius:24px]';
 
 /** 확인 화면 오른쪽 정적 안내 패널 2개. */
 export default function ConfirmSidePanel() {
@@ -60,11 +61,14 @@ export default function ConfirmSidePanel() {
     // 태블릿 폭에서는 카드 아래에 두 패널을 나란히, 넓은 화면에서는 오른쪽에 세로로 쌓는다.
     <div className="grid w-full items-start gap-6 md:grid-cols-2 lg:grid-cols-1">
       <Card className={CARD_CLASS} style={CARD_STYLE}>
-        <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
+        <p
+          className="text-lg font-bold sm:text-xl"
+          style={{ color: colors.text.primary }}
+        >
           왜 먼저 확인하나요?
         </p>
         <ul
-          className="flex list-disc flex-col gap-3 pl-5 text-base"
+          className="flex list-disc flex-col gap-2.5 pl-5 text-sm sm:gap-3 sm:text-base"
           style={{ color: colors.text.secondary }}
         >
           {REASONS.map((reason) => (
@@ -80,10 +84,13 @@ export default function ConfirmSidePanel() {
       </Card>
 
       <Card className={CARD_CLASS} style={CARD_STYLE}>
-        <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
+        <p
+          className="text-lg font-bold sm:text-xl"
+          style={{ color: colors.text.primary }}
+        >
           이 정보로 이런 걸 판단해요
         </p>
-        <ul className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-3 sm:gap-4">
           {JUDGEMENTS.map(({ tag, tone, text }) => (
             <li key={text} className="flex items-start gap-3">
               <span
@@ -96,7 +103,7 @@ export default function ConfirmSidePanel() {
                 {tag}
               </span>
               <p
-                className="text-15 leading-relaxed"
+                className="text-sm leading-relaxed sm:text-15"
                 style={{ color: colors.text.secondary }}
               >
                 {text}

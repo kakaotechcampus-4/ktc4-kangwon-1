@@ -11,11 +11,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.agents.commercial_area.client import StoreClient  # noqa: E402
-from app.agents.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
-from app.agents.commercial_area.industries import master_from_stores, write_master  # noqa: E402
-from app.agents.commercial_area.schemas import MiddleCode  # noqa: E402
-from app.industries import MASTER_PATH  # noqa: E402
+from app.domain.industries import MASTER_PATH  # noqa: E402
+from app.infrastructure.market_data.commercial_area.client import StoreClient  # noqa: E402
+from app.infrastructure.market_data.commercial_area.config import Settings, load_dotenv_if_present  # noqa: E402
+from app.infrastructure.market_data.commercial_area.industries import (  # noqa: E402
+    master_from_stores,
+    write_master,
+)
+from app.infrastructure.market_data.commercial_area.schemas import MiddleCode  # noqa: E402
 
 OFFICIAL_COLUMN_CANDIDATES = {
     "middle_code": ("중분류코드", "indsMclsCd", "상권업종중분류코드"),

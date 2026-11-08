@@ -5,8 +5,8 @@ import unittest
 
 import httpx
 
-from app.agents.commercial_area.client import StoreClient
-from app.agents.commercial_area.config import Settings
+from app.infrastructure.market_data.commercial_area.client import StoreClient
+from app.infrastructure.market_data.commercial_area.config import Settings
 
 
 class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):

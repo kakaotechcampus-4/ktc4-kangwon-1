@@ -3,8 +3,8 @@
 import unittest
 from unittest.mock import patch
 
-from app.agents.floating_population import baseline
-from app.agents.floating_population.models import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
+from app.domain.baselines import floating_population as baseline
+from app.domain.population import AGE_BANDS, DAYS, TIME_BANDS, FlpopRecord
 from scripts.measure_flpop_baseline import measure
 
 

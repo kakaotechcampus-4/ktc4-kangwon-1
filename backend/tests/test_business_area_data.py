@@ -4,14 +4,14 @@ import unittest
 from dataclasses import replace
 from unittest.mock import patch
 
-from app.agents.business_lifecycle.area_resolver import (
+from app.domain.schemas import Site
+from app.infrastructure.market_data.business_lifecycle.area_resolver import (
     BusinessAreaNoDataError,
     ShapeFeature,
     _feature_to_business_area,
     resolve_area,
 )
-from app.agents.business_lifecycle.config import Settings
-from app.schemas import Site
+from app.infrastructure.market_data.business_lifecycle.config import Settings
 
 
 class BusinessAreaDataTests(unittest.TestCase):
@@ -44,13 +44,16 @@ class NearestBusinessAreaTests(unittest.TestCase):
         )
         site = Site(input_address="대역", road_address="대역", latitude=37.5, longitude=127.0)
         with (
-            patch("app.agents.business_lifecycle.area_resolver.to_epsg5181", return_value=(0, 0)),
             patch(
-                "app.agents.business_lifecycle.area_resolver.load_shape_features",
+                "app.infrastructure.market_data.business_lifecycle.area_resolver.to_epsg5181",
+                return_value=(0, 0),
+            ),
+            patch(
+                "app.infrastructure.market_data.business_lifecycle.area_resolver.load_shape_features",
                 return_value=(feature,),
             ),
             patch(
-                "app.agents.business_lifecycle.area_resolver._feature_to_business_area",
+                "app.infrastructure.market_data.business_lifecycle.area_resolver._feature_to_business_area",
                 side_effect=lambda f, x, y: replace(
                     _feature_to_business_area(f, x, y), warning="기존 경고"
                 ),

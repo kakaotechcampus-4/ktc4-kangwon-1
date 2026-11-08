@@ -30,11 +30,11 @@ from app.api.v1.deps import (  # noqa: E402
     require_origin,
     verified_user,
 )
-from app.db import repository  # noqa: E402
-from app.db.repository import users as user_repo  # noqa: E402
+from app.infrastructure.mock import dependencies as mock_dependencies  # noqa: E402
+from app.infrastructure.persistence import repository  # noqa: E402
+from app.infrastructure.persistence.repository import users as user_repo  # noqa: E402
+from app.infrastructure.settings import ExecutionSettings  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.services.mock import dependencies as mock_dependencies  # noqa: E402
-from app.services.settings import ExecutionSettings  # noqa: E402
 
 
 def rss_bytes() -> int:
@@ -156,7 +156,7 @@ async def measure(scenario: str, concurrency: int, db_path: Path) -> dict:
     settings = ExecutionSettings(db_path=db_path, max_concurrency=2)
     with (
         patch("sqlite3.connect", side_effect=connect),
-        patch("app.api.v1.analyses.dependencies", side_effect=dependencies),
+        patch("app.infrastructure.mock.dependencies", side_effect=dependencies),
         patch("openai.AsyncOpenAI", side_effect=AssertionError("실제 LLM 생성 금지")),
         patch.object(socket.socket, "connect", side_effect=AssertionError("외부 연결 금지")),
     ):

@@ -26,13 +26,19 @@ import {
 } from '@/components/building-confirm/labels';
 import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
-import { startAnalysis } from '@/lib/api/analyses';
+import { AnalysisApiError, startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
+import { ApiError } from '@/lib/api/http';
+import {
+  LOOKUP_ERROR_NOTE,
+  emptyBuildingInfo,
+} from '@/lib/api/buildingRegistry';
 import {
   LOOKUP_ORDER,
   SEWAGE_OPTIONS,
   editField,
   fetchBuildingInfo,
+  mockBuildingRegistryPreview,
   normalizeFloor,
   type BuildingInfo,
   type LookupId,
@@ -75,6 +81,7 @@ export default function BuildingConfirmPage() {
   const [statuses, setStatuses] = useState(INITIAL_STATUSES);
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   // 전용면적 입력 중인 문자열("275." 같은 중간 값)을 숫자 필드와 따로 든다.
   const [areaText, setAreaText] = useState('');
@@ -85,12 +92,34 @@ export default function BuildingConfirmPage() {
   >({ ventilation: 'unknown', kitchen: 'unknown', water_supply: 'unknown' });
 
   useEffect(() => {
+    // 개발 화면 확인용: 실제 HUB 샘플 응답으로 출처 배지를 미리 볼 수 있다.
+    if (
+      process.env.NODE_ENV === 'development' &&
+      new URLSearchParams(window.location.search).get('previewHub') === '1'
+    ) {
+      const previewInput = {
+        roadAddress: mockProperty.address,
+        floorUnit: mockProperty.floorUnit,
+      };
+      const info = mockBuildingRegistryPreview();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInput(previewInput);
+      setStatuses(
+        Object.fromEntries(LOOKUP_ORDER.map((id) => [id, 'done'])) as Record<
+          LookupId,
+          LookupStatus
+        >
+      );
+      setBuilding(info);
+      setAreaText(info.exclusiveAreaM2.value?.toString() ?? '');
+      return;
+    }
+
     // 개발 환경에서 조회 중 화면을 고정해 디자인을 확인한다.
     if (
       process.env.NODE_ENV === 'development' &&
       new URLSearchParams(window.location.search).get('previewLoading') === '1'
     ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInput({
         roadAddress: mockProperty.address,
         floorUnit: mockProperty.floorUnit,
@@ -127,10 +156,25 @@ export default function BuildingConfirmPage() {
         }, CONFIRM_DELAY_MS);
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if ((error as { name?: unknown } | null)?.name === 'AbortError') {
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
+        if (error instanceof ApiError && error.status === 504) {
+          if (retryCount === 0) {
+            setTimedOut(true);
+            return;
+          }
+          setBuilding(
+            emptyBuildingInfo(
+              saved.roadAddress,
+              saved.floorUnit,
+              LOOKUP_ERROR_NOTE
+            )
+          );
+          setAreaText('');
+          return;
+        }
         setLoadError(
           error instanceof Error
             ? error.message
@@ -211,9 +255,9 @@ export default function BuildingConfirmPage() {
     } catch (error) {
       console.error('[BuildingConfirmPage] 분석 요청 실패:', error);
       alert(
-        error instanceof Error
+        error instanceof AnalysisApiError && error.status === 422
           ? error.message
-          : '분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+          : '잠시 후 다시 시도해주세요.'
       );
     } finally {
       setIsSubmitting(false);
@@ -229,8 +273,30 @@ export default function BuildingConfirmPage() {
     >
       <Header />
 
-      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-8 px-4 pt-16 pb-24 sm:px-8">
-        {!building ? (
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-5 px-3 pt-10 pb-16 sm:gap-8 sm:px-8 sm:pt-16 sm:pb-24">
+        {!building && timedOut && input ? (
+          <>
+            <StepIndicator currentStep={2} />
+            <LookupTimeoutNotice
+              onRetry={() => {
+                setTimedOut(false);
+                setStatuses(INITIAL_STATUSES);
+                setRetryCount((count) => count + 1);
+              }}
+              onManual={() => {
+                setTimedOut(false);
+                setBuilding(
+                  emptyBuildingInfo(
+                    input.roadAddress,
+                    input.floorUnit,
+                    LOOKUP_ERROR_NOTE
+                  )
+                );
+                setAreaText('');
+              }}
+            />
+          </>
+        ) : !building ? (
           <>
             <StepIndicator currentStep={2} />
             <BuildingLoading
@@ -257,14 +323,17 @@ export default function BuildingConfirmPage() {
             {/* 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다. */}
             <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_440px]">
               <Card
-                className="w-full gap-0"
+                className="w-full gap-0 [--building-radius:18px] sm:[--building-radius:24px]"
                 style={{
                   padding: 0,
-                  borderRadius: '24px',
+                  borderRadius: 'var(--building-radius)',
                   borderWidth: '0px',
                 }}
               >
-                <BuildingSummaryHeader building={building} />
+                <BuildingSummaryHeader
+                  building={building}
+                  address={input?.roadAddress ?? building.address}
+                />
 
                 <BuildingFieldRow
                   label="전용면적"
@@ -366,7 +435,7 @@ export default function BuildingConfirmPage() {
                           ),
                         })
                       }
-                      className="min-h-[52px] w-full max-w-72 rounded-lg border px-3.5 text-base"
+                      className="min-h-12 w-full max-w-72 rounded-lg border px-3 text-sm sm:min-h-[52px] sm:px-3.5 sm:text-base"
                       style={{
                         borderColor: colors.neutral.border,
                         backgroundColor: colors.neutral.white,
@@ -389,13 +458,13 @@ export default function BuildingConfirmPage() {
                 />
 
                 <div
-                  className="flex flex-col-reverse gap-3 px-5 py-6 sm:flex-row sm:justify-end sm:gap-4 sm:px-10 sm:py-8"
+                  className="flex flex-col-reverse gap-3 px-4 py-4 sm:flex-row sm:justify-end sm:gap-4 sm:px-10 sm:py-8"
                   style={{ borderTop: `1px solid ${colors.neutral.border}` }}
                 >
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-h-[60px] w-full sm:w-auto sm:min-w-[176px]"
+                    className="min-h-[52px] w-full sm:min-h-[60px] sm:w-auto sm:min-w-[176px]"
                     // Button 기본 text-sm이 클래스보다 우선 적용돼 글자 크기는 style로 준다.
                     style={{
                       fontSize: 'var(--text-base)',
@@ -410,7 +479,7 @@ export default function BuildingConfirmPage() {
                   <Button
                     type="button"
                     variant="primary"
-                    className="min-h-[60px] w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    className="min-h-[52px] w-full disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[60px] sm:w-auto"
                     style={{ fontSize: 'var(--text-base)' }}
                     disabled={isSubmitting || building.parking.value === null}
                     aria-describedby={
@@ -433,5 +502,39 @@ export default function BuildingConfirmPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function LookupTimeoutNotice({
+  onRetry,
+  onManual,
+}: {
+  onRetry: () => void;
+  onManual: () => void;
+}) {
+  return (
+    <Card className="mx-auto flex w-full max-w-[720px] flex-col gap-4 p-6 sm:p-8">
+      <h1
+        className="text-fluid-24-32 font-bold leading-snug break-keep"
+        style={{ color: colors.text.primary }}
+      >
+        건축물대장 조회가 오래 걸려 멈췄어요
+      </h1>
+      <p
+        className="text-base break-keep"
+        style={{ color: colors.text.secondary }}
+      >
+        공공데이터 서버가 느려요. 다시 조회하거나, 직접 입력해서 분석을 계속할
+        수 있어요.
+      </p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button type="button" variant="outline" onClick={onRetry}>
+          다시 조회
+        </Button>
+        <Button type="button" variant="primary" onClick={onManual}>
+          직접 입력하고 계속
+        </Button>
+      </div>
+    </Card>
   );
 }

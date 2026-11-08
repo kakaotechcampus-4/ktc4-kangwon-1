@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
 from backtest.measure import density_percentiles, load_baselines, save_baselines
 
 

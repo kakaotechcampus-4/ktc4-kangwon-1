@@ -9,9 +9,15 @@ from unittest.mock import patch
 
 import httpx
 
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.storage.raw import RawStorageError, capture_http, capture_scope, scoped_reader, scrub
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import (
+    RawStorageError,
+    capture_http,
+    capture_scope,
+    scoped_reader,
+    scrub,
+)
+from app.infrastructure.persistence.repository import create_request
 
 
 class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
@@ -138,7 +144,10 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM v_raw_stores").fetchone()[0], 0)
 
     async def test_csv_capture_even_when_parser_cache_is_warm(self):
-        from app.agents.floating_population.population import SNAPSHOT_PATHS, load_snapshot
+        from app.infrastructure.market_data.floating_population.population import (
+            SNAPSHOT_PATHS,
+            load_snapshot,
+        )
 
         load_snapshot("REPOP")
         async with capture_scope("one", self.path):
@@ -155,13 +164,16 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(args["quarter"])
 
     async def test_storage_failure_is_not_an_agent_result(self):
-        from app.services.analysis import execute_agentic_analysis
-        from app.services.mock import dependencies
+        from app.application.analysis import execute_agentic_analysis
+        from app.infrastructure.mock import dependencies
 
         mock = dependencies()
 
         async def broken(address):
-            with patch("app.storage.raw._save_response", side_effect=OSError("secret")):
+            with patch(
+                "app.infrastructure.persistence.raw_capture._save_response",
+                side_effect=OSError("secret"),
+            ):
                 await capture_http(
                     "commercial_area",
                     httpx.Response(
@@ -185,11 +197,13 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("secret", row[1])
 
     async def test_http_hooks_capture_before_field_reduction(self):
-        from app.agents.business_lifecycle.client import request_page
-        from app.agents.commercial_area.client import StoreClient
-        from app.agents.commercial_area.config import Settings as StoreSettings
-        from app.agents.floating_population.client import SeoulOpenDataClient
-        from app.agents.floating_population.config import Settings as PopulationSettings
+        from app.infrastructure.market_data.business_lifecycle.client import request_page
+        from app.infrastructure.market_data.commercial_area.client import StoreClient
+        from app.infrastructure.market_data.commercial_area.config import Settings as StoreSettings
+        from app.infrastructure.market_data.floating_population.client import SeoulOpenDataClient
+        from app.infrastructure.market_data.floating_population.config import (
+            Settings as PopulationSettings,
+        )
 
         def transport(request):
             if "openapi.seoul" in request.url.host:
@@ -257,11 +271,13 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM raw_rows").fetchone()[0], 3)
 
     async def test_snapshot_finish_failure_prevents_completion(self):
-        from app.services.analysis import execute_agentic_analysis
-        from app.services.mock import dependencies
+        from app.application.analysis import execute_agentic_analysis
+        from app.infrastructure.mock import dependencies
 
         with (
-            patch("app.storage.raw._finish", side_effect=OSError("secret")),
+            patch(
+                "app.infrastructure.persistence.raw_capture._finish", side_effect=OSError("secret")
+            ),
             self.assertRaises(RawStorageError),
         ):
             await execute_agentic_analysis(
@@ -295,7 +311,7 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancellation_waits_for_write_then_marks_partial(self):
         import threading
 
-        from app.storage import raw
+        from app.infrastructure.persistence import raw_capture as raw
 
         original = raw._save_response
         entered, release = threading.Event(), threading.Event()
@@ -309,7 +325,9 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             async with capture_scope("one", self.path) as scope:
                 await self.record(scope)
 
-        with patch("app.storage.raw._save_response", side_effect=blocked):
+        with patch(
+            "app.infrastructure.persistence.raw_capture._save_response", side_effect=blocked
+        ):
             task = asyncio.create_task(collect())
             self.assertTrue(await asyncio.to_thread(entered.wait, 5))
             task.cancel()
@@ -323,7 +341,7 @@ class RawCaptureTests(unittest.IsolatedAsyncioTestCase):
             )
 
     def test_storage_failure_in_mixed_exception_group(self):
-        from app.storage.raw import raise_storage_error
+        from app.infrastructure.persistence.raw_capture import raise_storage_error
 
         error = ExceptionGroup(
             "병렬 오류",

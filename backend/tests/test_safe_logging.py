@@ -3,7 +3,7 @@
 import logging
 import unittest
 
-from app.logging import log_exception
+from app.shared.logging import log_exception
 
 
 class SafeLoggingTests(unittest.TestCase):

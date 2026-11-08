@@ -6,10 +6,14 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from app.agentic.facts import register_fact
-from app.agentic.questions import save_confirmed_space
-from app.agentic.report import complete_l_records, load_base, recompute_l_scores
-from app.agentic.scoring import (
+from app.application.answers import save_confirmed_space
+from app.application.facts import register_fact
+from app.application.report import load_base, recompute_l_scores
+from app.application.snapshot import persist_report, persist_space_requirements
+from app.application.space import ensure_space_fits, rule_answers
+from app.domain.industries.catalog import INDUSTRIES
+from app.domain.report import complete_l_records
+from app.domain.scoring import (
     WEIGHTS,
     apply_space,
     evaluate,
@@ -18,13 +22,10 @@ from app.agentic.scoring import (
     result,
     summarize,
 )
-from app.agentic.snapshot import persist_report, persist_space_requirements
-from app.agentic.space import ensure_space_fits, rule_answers
-from app.agentic.space_rules import SpaceJudgement, judge, load_requirements
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.industries.catalog import INDUSTRIES
-from app.storage.raw import capture_scope
+from app.domain.space_rules import SpaceJudgement, judge, load_requirements
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import capture_scope
+from app.infrastructure.persistence.repository import create_request
 
 
 def space(adjustment=0, excluded=False, notes=()):

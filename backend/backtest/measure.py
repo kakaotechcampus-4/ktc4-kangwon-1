@@ -8,9 +8,9 @@ from types import ModuleType
 from typing import Any
 from unittest.mock import patch
 
-from app.agents.commercial_area.trade_areas import load_trade_areas
-from app.config import load_environment
-from app.industries.catalog import INDUSTRIES
+from app.domain.industries.catalog import INDUSTRIES
+from app.infrastructure.config import load_environment
+from app.infrastructure.market_data.commercial_area.trade_areas import load_trade_areas
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 SECTIONS = {"quarter", "lifecycle", "floating", "density"}

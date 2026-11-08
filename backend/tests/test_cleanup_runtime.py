@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from app.db.connection import connect
+from app.infrastructure.persistence.connection import connect
 from tests import test_agentic_runtime as fixtures
 
 
@@ -13,7 +13,7 @@ class CleanupRuntimeTests(unittest.IsolatedAsyncioTestCase):
     message = fixtures.RuntimeTests.message
 
     async def test_resume_value_error_is_saved_failed(self):
-        from app.services.analysis import execute_agentic_analysis, resume_agentic_analysis
+        from app.application.analysis import execute_agentic_analysis, resume_agentic_analysis
 
         async def resolve(address):
             return self.site
@@ -56,7 +56,7 @@ class CleanupRuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(detail[0]["exception_class"], "ValueError")
 
     async def test_question_definition_and_execution_are_both_disabled(self):
-        from app.agentic.runtime import DecisionLoop
+        from app.ai.runtime import DecisionLoop
 
         loop = await DecisionLoop.create(self.scope, self.site, allow_questions=False)
         self.assertNotIn("ask_user", [d["function"]["name"] for d in loop.definitions()])

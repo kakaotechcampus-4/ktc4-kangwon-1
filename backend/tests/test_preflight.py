@@ -7,18 +7,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.agentic.contracts import MapResult, ToolReply
-from app.agentic.preflight import FACILITIES, collect_preflight
-from app.agentic.runtime import DecisionLoop
-from app.agentic.scoring import evaluate
-from app.agentic.tools import SharedTools, ToolExecutor
-from app.agents.map_analysis.client import MapApiError
-from app.concurrency import run_in_thread
-from app.db.connection import connect, initialize
-from app.db.repository import create_request
-from app.local_data.persistence import persist_local
-from app.schemas import AnalysisTask, Site
-from app.storage.raw import RawStorageError, capture_scope
+from app.ai.runtime import DecisionLoop
+from app.ai.tools import SharedTools, ToolExecutor
+from app.application.local_snapshot import persist_local
+from app.application.ports.places import MapApiError
+from app.application.preflight import FACILITIES, collect_preflight
+from app.domain.contracts import MapResult, ToolReply
+from app.domain.schemas import AnalysisTask, Site
+from app.domain.scoring import evaluate
+from app.infrastructure.persistence.connection import connect, initialize
+from app.infrastructure.persistence.raw_capture import RawStorageError, capture_scope
+from app.infrastructure.persistence.repository import create_request
+from app.shared.concurrency import run_in_thread
 
 
 class PreflightTests(unittest.IsolatedAsyncioTestCase):
@@ -128,7 +128,7 @@ class PreflightTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.search_category.await_count, 5)
 
     async def test_regulation_failure_preserves_facilities(self):
-        from app.education_zone import EducationZoneError
+        from app.application.ports.places import EducationZoneError
 
         self.lookup.side_effect = EducationZoneError("CONFIG_ERROR", "실패")
         data, shared = await collect_preflight(self.scope, self.site, self.shared)
@@ -145,7 +145,7 @@ class PreflightTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_storage_and_contract_failures_propagate(self):
         for failure in (RawStorageError("저장 실패"), ValueError("계약 실패")):
-            with patch("app.agentic.preflight.map_search", side_effect=failure):
+            with patch("app.application.preflight.map_search", side_effect=failure):
                 with self.assertRaises(type(failure)):
                     await collect_preflight(self.scope, self.site, self.shared)
 

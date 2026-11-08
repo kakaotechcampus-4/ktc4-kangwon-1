@@ -6,15 +6,15 @@ from dataclasses import replace
 
 from test_commercial_area_metrics import sample_stores
 
-from app.agents.business_lifecycle.preprocess import aggregate_rows
-from app.agents.commercial_area.industries import map_stores
-from app.agents.commercial_area.metrics import count_by_middle
-from app.industries import DATA_DIR, lookup
+from app.domain.industries import DATA_DIR, lookup
+from app.infrastructure.market_data.business_lifecycle.preprocess import aggregate_rows
+from app.infrastructure.market_data.commercial_area.industries import map_stores
+from app.infrastructure.market_data.commercial_area.metrics import count_by_middle
 
 
 class Industry51MappingTests(unittest.TestCase):
     def test_split_catalog_is_generated_from_csv_and_missing_small_is_not_inferred(self):
-        from app.industries.catalog import EXCLUDED_SMALLS, MIDDLE_TO_INDUSTRY, SPLIT_MIDDLES
+        from app.domain.industries.catalog import EXCLUDED_SMALLS, MIDDLE_TO_INDUSTRY, SPLIT_MIDDLES
 
         with (DATA_DIR / "small_to_industry.csv").open(encoding="utf-8-sig", newline="") as f:
             rows = list(csv.DictReader(f))
