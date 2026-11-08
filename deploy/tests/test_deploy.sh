@@ -30,6 +30,7 @@ new_root() {
   fake bin/nginx '[ "${NGINX_TEST_FAIL:-}" != 1 ] && [ "$(ls "$FAKE/conf.d")" = chaeum-upstream.conf ]'
   fake bin/curl '[ "${CURL_FAIL:-}" != 1 ]'
   fake bin/sleep
+  fake bin/date 'if [ -n "${RELEASE_TIME:-}" ] && [ "$1" = +%Y%m%d%H%M%S ]; then echo "$RELEASE_TIME"; else exec /usr/bin/date "$@"; fi'
   fake bin/systemctl '[ "$1" != reload ] || grep -oE "127\.0\.0\.1:[0-9]+" "$CHAEUM_UPSTREAM_CONF" >>"$FAKE/reloads.log"
 [ "${SYSTEMCTL_FAIL:-}" != "$1" ]'
   fake bin/chown
@@ -97,17 +98,16 @@ scenario() {
 same_commit_twice() {
   local ports first second
   ports="$(upstream_port)"
-  run_deploy abc1234 || fail "첫 배포가 실패함"
+  RELEASE_TIME=20261109120000 run_deploy abc1234 || fail "첫 배포가 실패함"
   ports="$ports→$(upstream_port)"
   first="$(current_release)"
-  sleep 1
-  run_deploy abc1234 || fail "두 번째 배포가 실패함"
+  RELEASE_TIME=20261109120001 run_deploy abc1234 || fail "두 번째 배포가 실패함"
   ports="$ports→$(upstream_port)"
   second="$(current_release)"
 
   [ -f "$first/backend/marker.txt" ] || fail "첫 배포 폴더가 지워짐"
   [ "$second" != "$first" ] || fail "두 번째 배포가 같은 폴더를 씀"
-  [[ "${second##*/}" == abc1234-* ]] || fail "폴더 이름이 abc1234- 로 시작하지 않음: ${second##*/}"
+  [ "${second##*/}" = abc1234-20261109120001 ] || fail "폴더 이름이 <커밋>-<배포 시각>이 아님: ${second##*/}"
   [ "$ports" = "8001→8002→8001" ] || fail "포트가 $ports 로 바뀜"
   [ "$(conf_d_files)" = chaeum-upstream.conf ] || fail "conf.d에 다른 파일이 남음: $(conf_d_files)"
 }
@@ -209,6 +209,18 @@ failed_deploys_keep_last_good() {
   [ "$(release_shas)" = "aaa1111 eee5555" ] || fail "실패한 배포의 폴더가 남음: $(release_shas)"
 }
 
+existing_release_folder_kept() {
+  local first status=0
+  RELEASE_TIME=20261109120000 run_deploy abc1234 || fail "첫 배포가 실패함"
+  first="$(current_release)"
+  RELEASE_TIME=20261109120000 run_deploy abc1234 || status=$?
+
+  [ "$status" -ne 0 ] || fail "같은 이름의 폴더가 있는데 배포가 성공으로 끝남"
+  logged "릴리스 폴더를 새로 만들 수 없습니다" || fail "폴더를 만들 수 없다는 메시지가 기록에 없음"
+  [ "$(current_release)" = "$first" ] || fail "current가 바뀜"
+  [ -f "$first/backend/marker.txt" ] || fail "서비스 중인 폴더가 지워짐"
+}
+
 upstream_without_port() {
   local status=0
   echo 'upstream chaeum_backend {}' >"$UPSTREAM"
@@ -227,6 +239,7 @@ scenario "새 포트 기동 실패" restart_fails
 scenario "nginx reload 실패" reload_fails
 scenario "바뀐 systemd 유닛 되돌리기" changed_unit_rolled_back
 scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
+scenario "같은 이름의 릴리스 폴더가 이미 있음" existing_release_folder_kept
 scenario "upstream 설정에 포트가 없음" upstream_without_port
 
 [ "$FAILED" -eq 0 ] || exit 1

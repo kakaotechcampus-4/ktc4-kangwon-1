@@ -84,7 +84,8 @@ say "S3 에서 내려받는 중 — s3://$BUCKET/releases/$SHA.tar.gz"
 aws s3 cp "s3://$BUCKET/releases/$SHA.tar.gz" "$TMP/release.tar.gz" --region "$REGION" --quiet \
   || die "S3 다운로드 실패 (EC2 역할에 읽기 권한이 있는지 확인하세요)"
 
-mkdir -p "$REL"
+mkdir -p "$RELEASES"
+mkdir "$REL" || die "릴리스 폴더를 새로 만들 수 없습니다: $REL"
 tar -xzf "$TMP/release.tar.gz" -C "$REL" || abort "압축 풀기 실패"
 [ -d "$REL/backend" ] || abort "압축 안에 backend/ 가 없습니다"
 say "풀었습니다 — $REL"
