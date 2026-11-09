@@ -99,6 +99,28 @@ describe('새 질문 데이터에 따른 공통 UI', () => {
     expect(render()).not.toContain('이름·연락처 같은 개인정보는 적지 마세요.');
   });
 
+  it('개인정보 안내는 답 칸의 이름이 아니라 설명으로 연결한다', () => {
+    state.answers = {
+      'new-ventilation-question': { optionId: 'approval' },
+      'new-sign-question': { optionId: 'yes' },
+    };
+    const html = render();
+    const textarea = html.match(/<textarea[^>]*required=""[^>]*>/)?.[0] ?? '';
+    const textareaId = textarea.match(/\sid="([^"]+)"/)?.[1];
+    const describedBy = textarea.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(textareaId).toBeTruthy();
+    expect(describedBy).toBeTruthy();
+    const label = html.match(
+      new RegExp(`<label[^>]*for="${textareaId}"[^>]*>(.*?)</label>`)
+    )?.[1];
+    expect(label).toContain('협의할 내용을 적어주세요');
+    expect(label).not.toContain('개인정보');
+    const hint = html.match(
+      new RegExp(`<[a-z]+[^>]*id="${describedBy}"[^>]*>(.*?)</`)
+    )?.[1];
+    expect(hint).toBe('이름·연락처 같은 개인정보는 적지 마세요.');
+  });
+
   it('다른 선택지에는 상세 입력을 표시하지 않고 이전 상세 내용도 요약에서 제외한다', () => {
     state.answers = {
       'new-ventilation-question': {
