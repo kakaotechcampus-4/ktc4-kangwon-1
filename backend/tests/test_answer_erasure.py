@@ -347,6 +347,9 @@ class AnswerErasureTests(unittest.TestCase):
             cls.phone_id = _answered_request(client, PHONE)
             cls.food_id = _answered_request(client, FOOD)
             cls.space_id = _answered_request(client, SPACE_ANSWER, **SPACE)
+            cls.waiting_id = client.post(
+                "/api/v1/analyses?mock=true", json={"address": "시험", "allow_questions": True}
+            ).json()["request_id"]
         _add_event(cls.template, cls.request_id, json.dumps({"note": SENTINEL}))
         _add_event(cls.template, cls.phone_id, json.dumps(PHONE_NOTE, ensure_ascii=False))
         _add_event(cls.template, cls.food_id, json.dumps(FOOD_NOTE, ensure_ascii=False))
@@ -518,6 +521,13 @@ class AnswerErasureTests(unittest.TestCase):
                 self.assertIn(REFUSED, result.stderr)
                 self.assertEqual(_hits(self.path, SENTINEL), hits)
                 self.assertEqual(_triggers(self.path), before)
+
+    def test_waiting_request_without_answers_changes_nothing(self):
+        before = _triggers(self.path)
+        self.assertEqual(erasure.erase_user_answers(self.waiting_id, db_path=self.path), 0)
+        result = _run_script(self.path, self.waiting_id)
+        self.assertEqual((result.returncode, result.stdout), (0, "0\n"), result.stderr)
+        self.assertEqual(_triggers(self.path), before)
 
     def test_triggers_are_restored(self):
         before = _triggers(self.path)

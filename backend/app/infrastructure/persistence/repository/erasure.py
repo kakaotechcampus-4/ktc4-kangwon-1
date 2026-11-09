@@ -81,8 +81,6 @@ def _rule(db, request_id):
     ).fetchone()
     if row is None:
         return None
-    if row["status"] in _UNFINISHED:
-        raise AnalysisConflictError("분석이 끝난 뒤에 지울 수 있습니다.")
     pairs = [
         (field, value)
         for (text,) in db.execute(
@@ -93,6 +91,8 @@ def _rule(db, request_id):
     ]
     if not pairs:
         return None
+    if row["status"] in _UNFINISHED:
+        raise AnalysisConflictError("분석이 끝난 뒤에 지울 수 있습니다.")
     facts = frozenset(
         fact_id
         for (fact_id,) in db.execute(
