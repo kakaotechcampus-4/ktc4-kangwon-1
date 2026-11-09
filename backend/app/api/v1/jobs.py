@@ -56,7 +56,7 @@ def start_task(request: Request, request_id: str, work: Coroutine) -> asyncio.Ta
     except (JobLimitError, JobClosedError):
         raise HTTPException(
             429,
-            "동시에 실행할 수 있는 분석 수를 넘었습니다.",
+            "동시에 실행할 수 있는 분석 수를 넘었습니다. 30초 뒤에 다시 시도해 주세요.",
             headers=request_headers(request_id) | {"Retry-After": "30"},
         ) from None
 
