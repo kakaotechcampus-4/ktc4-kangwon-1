@@ -114,3 +114,12 @@ jobs:
           name: e2e-results
           path: frontend/test-results
           retention-days: 7
+
+  deploy-script:
+    name: 배포 스크립트 시험
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 테스트
+        run: bash deploy/tests/test_deploy.sh
