@@ -15,6 +15,16 @@ describe('findEasterEgg', () => {
     expect(findEasterEgg(address)?.id).toBe(id);
   });
 
+  it.each([
+    ['서울 강남구 삼성동 144-28 1층', 'samseong'],
+    ['판교역로 166 3층', 'pangyo'],
+    ['경기 성남시 분당구 판교역로 １６６', 'pangyo'],
+    ['삼성동 144–28', 'samseong'],
+    ['백현동 532번지', 'pangyo'],
+  ])('%s 는 %s 로 맞는다 (층·전각·긴 줄표)', (address, id) => {
+    expect(findEasterEgg(address)?.id).toBe(id);
+  });
+
   it('띄어쓰기가 달라도 맞는다', () => {
     expect(findEasterEgg('판교역로166')?.id).toBe('pangyo');
     expect(findEasterEgg('서울특별시 강남구 삼성동144-28')?.id).toBe(
@@ -29,6 +39,11 @@ describe('findEasterEgg', () => {
     '삼성동 144-280',
     '백현동 5321',
     '서울 강남구 테헤란로 152',
+    '판교역로 166번길 10',
+    '용봉로 77번길 5',
+    '대전 유성구 대학로 99번길 3',
+    '강원대학길 1번길',
+    '대구 북구 대학로 80번길 2',
     '',
   ])('%s 는 맞지 않는다', (address) => {
     expect(findEasterEgg(address)).toBeNull();

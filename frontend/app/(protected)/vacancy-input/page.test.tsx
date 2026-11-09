@@ -48,4 +48,33 @@ describe('공실 입력 제출', () => {
     });
     expect(router.push).toHaveBeenCalledWith('/building-confirm');
   });
+
+  it('팝업이 떠 있는 동안 다시 제출해도 넘어가지 않는다', async () => {
+    const user = await submit('대전광역시 유성구 대학로 99');
+
+    const input = screen.getByRole('textbox', { name: /도로명|주소/ });
+    await user.clear(input);
+    await user.type(input, '서울 강남구 테헤란로 152');
+    await user.click(screen.getByRole('button', { name: /다음|분석 시작/ }));
+
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(saveVacancyInput).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('Esc로 닫아도 원래 값으로 넘어간다', async () => {
+    const user = await submit('대전광역시 유성구 대학로 99');
+
+    await user.keyboard('{Escape}');
+
+    expect(saveVacancyInput).toHaveBeenCalledTimes(1);
+    expect(saveVacancyInput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roadAddress: '대전광역시 유성구 대학로 99',
+        floorUnit: '',
+      })
+    );
+    expect(router.push).toHaveBeenCalledWith('/building-confirm');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });

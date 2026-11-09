@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import type { EasterEgg } from '@/lib/easterEggs';
@@ -15,10 +15,28 @@ export default function EasterEggDialog({
   egg,
   onClose,
 }: EasterEggDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) {
+        return;
+      }
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])'
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
     document.addEventListener('keydown', handleKeyDown);
@@ -31,6 +49,7 @@ export default function EasterEggDialog({
       style={{ backgroundColor: `${colors.brand.dark}73` }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="안내"

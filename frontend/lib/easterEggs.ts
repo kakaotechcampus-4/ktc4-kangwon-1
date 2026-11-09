@@ -4,14 +4,16 @@ export type EasterEgg = {
   links: { label: string; href: string }[];
 };
 
-type EasterEggRule = EasterEgg & { pattern: RegExp };
+type EasterEggRule = EasterEgg & { patterns: RegExp[] };
 
-const NOT_FOLLOWED_BY_NUMBER = String.raw`(?![\d-])`;
+const DASHES = /[‐‑‒–—―−]/g;
 
-function addressPattern(...sources: string[]): RegExp {
-  return new RegExp(
-    sources.map((source) => `${source}${NOT_FOLLOWED_BY_NUMBER}`).join('|')
-  );
+function houseNumber(source: string): RegExp {
+  return new RegExp(String.raw`${source}(?![\d-])(?!\s*번길)`);
+}
+
+function addressPattern(...sources: string[]): RegExp[] {
+  return sources.map(houseNumber);
 }
 
 const HWAGAE_JANGTEO = {
@@ -22,7 +24,10 @@ const HWAGAE_JANGTEO = {
 const rules: EasterEggRule[] = [
   {
     id: 'pangyo',
-    pattern: addressPattern('판교역로166', '백현동532'),
+    patterns: addressPattern(
+      String.raw`판교역로\s*166`,
+      String.raw`백현동\s*532`
+    ),
     paragraphs: [
       '여기에 의심의 여지 없이 무언가 터가 좋습니다...',
       '풍수지리학적으로 노란색 IT 기업이 들어오면 승승장구 할 것입니다...',
@@ -32,7 +37,7 @@ const rules: EasterEggRule[] = [
   },
   {
     id: 'samseong',
-    pattern: addressPattern('삼성동144-28'),
+    patterns: addressPattern(String.raw`삼성동\s*144-28`),
     paragraphs: [
       '의심의 여지 없이 무언가 터가 좋습니다...',
       '풍수지리학적으로 보라색 IT 기업이 들어오면 승승장구 할 것입니다...',
@@ -42,7 +47,7 @@ const rules: EasterEggRule[] = [
   },
   {
     id: 'kangwon',
-    pattern: addressPattern('강원대학길1'),
+    patterns: addressPattern(String.raw`강원대학길\s*1`),
     paragraphs: [
       '무언가 큰 인물들이 나올 거 같습니다...',
       '이 출신 인물들은 꼭 노란색 혹은 보라색 IT 기업에서 스카우트 해야합니다',
@@ -51,7 +56,7 @@ const rules: EasterEggRule[] = [
   },
   {
     id: 'pusan',
-    pattern: addressPattern('부산대학로63번길2'),
+    patterns: addressPattern(String.raw`부산대학로\s*63번길\s*2`),
     paragraphs: [],
     links: [
       {
@@ -62,27 +67,39 @@ const rules: EasterEggRule[] = [
   },
   {
     id: 'kyungpook',
-    pattern: addressPattern('대구(광역시)?북구대학로80'),
+    patterns: addressPattern(String.raw`대구(?:광역시)?\s*북구\s*대학로\s*80`),
     paragraphs: [],
     links: [HWAGAE_JANGTEO],
   },
   {
     id: 'chonnam',
-    pattern: addressPattern('용봉로77'),
+    patterns: addressPattern(String.raw`용봉로\s*77`),
     paragraphs: [],
     links: [HWAGAE_JANGTEO],
   },
   {
     id: 'chungnam',
-    pattern: addressPattern('대전(광역시)?유성구대학로99'),
+    patterns: addressPattern(
+      String.raw`대전(?:광역시)?\s*유성구\s*대학로\s*99`
+    ),
     paragraphs: [],
     links: [{ label: '성심당 가 보기', href: 'https://www.sungsimdang.co.kr' }],
   },
 ];
 
+function normalize(address: string): string {
+  return address
+    .normalize('NFKC')
+    .replace(DASHES, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function findEasterEgg(address: string): EasterEgg | null {
-  const compact = address.replace(/\s+/g, '');
-  const rule = rules.find(({ pattern }) => pattern.test(compact));
+  const normalized = normalize(address);
+  const rule = rules.find(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(normalized))
+  );
   if (!rule) {
     return null;
   }

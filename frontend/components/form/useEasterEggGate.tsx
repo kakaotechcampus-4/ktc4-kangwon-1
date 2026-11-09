@@ -12,14 +12,20 @@ export function useEasterEggGate(): {
 } {
   const [pending, setPending] = useState<PendingEgg | null>(null);
 
-  const gate = useCallback((address: string, proceed: () => void) => {
-    const egg = findEasterEgg(address);
-    if (egg) {
-      setPending({ egg, proceed });
-    } else {
-      proceed();
-    }
-  }, []);
+  const gate = useCallback(
+    (address: string, proceed: () => void) => {
+      if (pending) {
+        return;
+      }
+      const egg = findEasterEgg(address);
+      if (egg) {
+        setPending({ egg, proceed });
+      } else {
+        proceed();
+      }
+    },
+    [pending]
+  );
 
   const close = useCallback(() => {
     if (pending) {

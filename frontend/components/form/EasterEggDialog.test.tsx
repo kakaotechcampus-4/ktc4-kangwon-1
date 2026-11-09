@@ -58,4 +58,21 @@ describe('EasterEggDialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('Tab과 Shift+Tab이 대화상자 안에서만 돈다', async () => {
+    const user = userEvent.setup();
+    render(<EasterEggDialog egg={egg} onClose={vi.fn()} />);
+    const link = screen.getByRole('link', { name: '들으러 가기' });
+    const confirm = screen.getByRole('button', { name: '확인' });
+
+    expect(document.activeElement).toBe(confirm);
+    await user.tab();
+    expect(document.activeElement).toBe(link);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(confirm);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(link);
+    await user.tab();
+    expect(document.activeElement).toBe(confirm);
+  });
 });
