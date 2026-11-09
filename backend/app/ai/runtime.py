@@ -18,7 +18,7 @@ from app.ai.l_input import build_record
 from app.ai.tool_contracts import LInput, ScorecardResult, SubmitLResult, SubmitResult
 from app.ai.tools import ToolExecutor, validation_message
 from app.application.ports.decision import LoopOutcome
-from app.application.ports.llm import LLMHTTPError, LLMResponseError, llm
+from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transient, llm
 from app.application.ports.llm_budget import BudgetExceeded, llm_scope
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
@@ -762,20 +762,12 @@ class DecisionLoop:
                     "호출·시간·토큰 예산 상한에 도달해 코드 점수로 마무리했습니다."
                 )
             except LLMResponseError as exc:
-                if exc.code in {"LLM_TIMEOUT", "LLM_CONNECTION_ERROR"} and not self.state.get(
-                    "model_retried"
-                ):
+                if is_transient(exc) and not self.state.get("model_retried"):
                     self.state["model_retried"] = True
                     continue
                 return await self.fallback("모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.")
             except LLMHTTPError as exc:
-                if exc.diagnostics.get("http_status") in {
-                    429,
-                    500,
-                    502,
-                    503,
-                    504,
-                } and not self.state.get("model_retried"):
+                if is_transient(exc) and not self.state.get("model_retried"):
                     self.state["model_retried"] = True
                     continue
                 return await self.fallback(
