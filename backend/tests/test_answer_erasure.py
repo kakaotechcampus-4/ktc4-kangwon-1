@@ -312,9 +312,9 @@ def _notes(found):
     return [e["detail"] for e in found["/events"]["events"] if e["stage"] == "note"]
 
 
-def _run_script(path, request_id):
+def _run_script(*args):
     return subprocess.run(
-        [sys.executable, str(SCRIPT), str(path), request_id],
+        [sys.executable, str(SCRIPT), *map(str, args)],
         cwd=BACKEND,
         capture_output=True,
         encoding="utf-8",
@@ -587,6 +587,16 @@ class AnswerErasureTests(unittest.TestCase):
         self.assertGreater(int(printed[0]), 0)
         self.assertEqual(_hits(self.path, SENTINEL), 0)
         self.assertEqual(run(self.request_id), ["0"])
+
+
+class EraseScriptUsageTests(unittest.TestCase):
+    def test_missing_arguments_print_usage(self):
+        for args in ((), ("storage/chaeum.sqlite3",)):
+            with self.subTest(args=args):
+                result = _run_script(*args)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertTrue(result.stderr.startswith("사용법: "), result.stderr)
 
 
 if __name__ == "__main__":
