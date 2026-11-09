@@ -1,5 +1,5 @@
 import { colors } from '@/styles/tokens';
-import SideCard from './SideCard';
+import SideCard from '@/components/building-confirm/SideCard';
 
 const REASONS = [
   '내 상가는 임대인이 가장 잘 알아요.',

@@ -1,6 +1,6 @@
 import { colors } from '@/styles/tokens';
 import type { BuildingField, BuildingInfo } from '@/lib/api/building';
-import AddressBanner from './AddressBanner';
+import AddressBanner from '@/components/building-confirm/AddressBanner';
 import { formatArea } from './labels';
 
 type BuildingSummaryHeaderProps = {

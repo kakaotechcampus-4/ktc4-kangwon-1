@@ -1,8 +1,6 @@
 import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 
-const dmMono = pretendard;
-
 type AddressBannerProps = {
   title: string;
   floorLabel: string;
@@ -52,7 +50,7 @@ export default function AddressBanner({
           {floorLabel}
         </span>
         <span
-          className={`${dmMono.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
+          className={`${pretendard.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
           style={{
             backgroundColor: `${colors.neutral.white}14`,
             color: '#7F9BDC',

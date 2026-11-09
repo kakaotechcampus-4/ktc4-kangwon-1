@@ -1,8 +1,8 @@
 import { ButtonLink } from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
-import AddressBanner from './AddressBanner';
-import ConfirmLayout from './ConfirmLayout';
-import SideCard from './SideCard';
+import AddressBanner from '@/components/building-confirm/AddressBanner';
+import ConfirmLayout from '@/components/building-confirm/ConfirmLayout';
+import SideCard from '@/components/building-confirm/SideCard';
 
 const SEOUL_ONLY_REASONS = [
   '상권·유동인구 자료가 서울시 열린데이터광장 자료예요.',
