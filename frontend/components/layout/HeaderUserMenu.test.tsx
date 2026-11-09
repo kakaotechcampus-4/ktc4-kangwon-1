@@ -81,6 +81,27 @@ describe('HeaderUserMenu', () => {
     ).toContain('🐻');
   });
 
+  it('표시 이름이 비어 있으면 이메일 첫 글자를 쓴다', () => {
+    signedIn('  ');
+    render(<HeaderUserMenu />);
+
+    const button = screen.getByRole('button', { name: '내 계정 메뉴' });
+    expect(button.textContent).toBe('Aa@b.com');
+  });
+
+  it('이름도 이메일도 없으면 내 계정으로 보인다', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      status: 'authenticated',
+      user: { display_name: '', email: '' },
+      clear,
+    } as unknown as ReturnType<typeof useAuth>);
+    render(<HeaderUserMenu />);
+
+    expect(
+      screen.getByRole('button', { name: '내 계정 메뉴' }).textContent
+    ).toBe('내내 계정');
+  });
+
   it('로그아웃을 누르면 logout이 불리고 홈으로 간다', async () => {
     const user = userEvent.setup();
     vi.mocked(logout).mockResolvedValue(undefined);

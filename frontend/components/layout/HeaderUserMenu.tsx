@@ -8,6 +8,12 @@ import { loginPath, logout } from '@/lib/api/auth';
 import { clearAnalysisResult, clearRequestId } from '@/lib/api/resultStore';
 import { colors } from '@/styles/tokens';
 
+const PHONE_SLOT = 'w-[63px]';
+
+function filled(value: string | null | undefined) {
+  return value?.trim() ? value : undefined;
+}
+
 export default function HeaderUserMenu() {
   const { status, user, clear } = useAuth();
   const pathname = usePathname();
@@ -41,7 +47,9 @@ export default function HeaderUserMenu() {
 
   // 로그인 여부를 확인하는 동안 자리를 비워 둔다. 버튼이 깜빡이며 바뀌지 않게.
   if (status === 'loading') {
-    return <div className="h-11 w-[63px] justify-self-end sm:w-[86px]" />;
+    return (
+      <div className={`h-11 justify-self-end ${PHONE_SLOT} sm:w-[86px]`} />
+    );
   }
 
   if (status === 'anonymous') {
@@ -59,7 +67,7 @@ export default function HeaderUserMenu() {
     );
   }
 
-  const name = user?.display_name ?? user?.email ?? '내 계정';
+  const name = filled(user?.display_name) ?? filled(user?.email) ?? '내 계정';
 
   async function handleLogout() {
     try {
@@ -75,7 +83,10 @@ export default function HeaderUserMenu() {
   }
 
   return (
-    <div ref={wrapper} className="relative justify-self-end">
+    <div
+      ref={wrapper}
+      className={`relative flex justify-end justify-self-end ${PHONE_SLOT} sm:w-auto`}
+    >
       <button
         ref={toggle}
         type="button"
