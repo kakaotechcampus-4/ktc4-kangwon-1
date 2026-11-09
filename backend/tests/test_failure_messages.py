@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from app.application.analysis import public_failure
+from app.application.errors import AddressError
 from app.infrastructure.clients.address import GeocodeError
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.repository import create_request, fail_interrupted, mark_running
@@ -29,6 +30,14 @@ class PublicFailureTests(unittest.TestCase):
             "수집",
             "ADDRESS_FAILED",
             "주소를 확인하지 못했어요. 주소를 다시 확인한 뒤 분석해 주세요.",
+        )
+
+    def test_outside_seoul_keeps_its_notice(self):
+        self.check(
+            AddressError("OUTSIDE_SEOUL", "x"),
+            "수집",
+            "OUTSIDE_SEOUL",
+            "지금은 서울 상가만 분석할 수 있어요.",
         )
 
     def test_address_service_outage_is_not_an_address_problem(self):

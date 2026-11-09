@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.api.v1.analyses import analysis_runner
+from app.application.errors import AddressError
 from app.domain.schemas import DecisionResult
 from app.infrastructure.clients.address import GeocodeError
 from app.infrastructure.persistence import repository
@@ -194,6 +195,23 @@ class PublicApiTests(unittest.TestCase):
                     self.assertEqual(response.status_code, expected, response.text)
                     self.assertNotIn("SECRET", response.text)
                     self.assertIn("x-request-id", response.headers)
+
+    def test_outside_seoul_is_422_with_notice(self):
+        async def fail(*args, **kwargs):
+            raise AddressError("OUTSIDE_SEOUL", "SECRET")
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "outside.sqlite3"
+            app = create_app(settings=ExecutionSettings(db_path=path), load_env=False)
+            login(app, path)
+            app.dependency_overrides[analysis_runner] = lambda: fail
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/v1/analyses?wait=true", json={"address": "부산 해운대구 해운대로 264"}
+                )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"], "지금은 서울 상가만 분석할 수 있어요.")
+        self.assertIn("x-request-id", response.headers)
 
     def test_facts_return_whole_snapshot_beyond_citations(self):
         with tempfile.TemporaryDirectory() as directory:
