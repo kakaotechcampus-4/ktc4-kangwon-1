@@ -72,6 +72,13 @@ export type BuildingInfo = {
   sewage: BuildingField<SewageTreatment>;
 };
 
+export class OutsideServiceAreaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OutsideServiceAreaError';
+  }
+}
+
 export type LookupId = 'title' | 'floor' | 'exclusiveArea' | 'sewage';
 export type LookupStatus = 'pending' | 'loading' | 'done' | 'failed';
 
@@ -191,14 +198,19 @@ export async function fetchBuildingInfo(
   }
   let registry: BuildingRegistryResponse | null = null;
   let note = LOOKUP_ERROR_NOTE;
-  let timedOut: ApiError | null = null;
+  let failure: Error | null = null;
   try {
     const response = await apiFetch(
       `/api/v1/building-registry?address=${encodeURIComponent(address)}`,
       { signal }
     );
     if (response.status === 504) {
-      timedOut = new ApiError(504, await readDetail(response));
+      failure = new ApiError(504, await readDetail(response));
+    } else if (response.status === 422) {
+      const { detail } = (await response.json()) as { detail?: unknown };
+      if (typeof detail === 'string') {
+        failure = new OutsideServiceAreaError(detail);
+      }
     } else if (response.ok) {
       registry = (await response.json()) as BuildingRegistryResponse;
     } else if (response.status === 400) {
@@ -209,8 +221,8 @@ export async function fetchBuildingInfo(
       throw error;
     }
   }
-  if (timedOut) {
-    throw timedOut;
+  if (failure) {
+    throw failure;
   }
   if (registry) {
     registry = { ...registry };

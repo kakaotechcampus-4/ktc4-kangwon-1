@@ -1,5 +1,5 @@
-import Card from '@/components/ui/Card';
 import { colors } from '@/styles/tokens';
+import SideCard from './SideCard';
 
 const REASONS = [
   '내 상가는 임대인이 가장 잘 알아요.',
@@ -45,51 +45,21 @@ const TONE_STYLES: Record<Judgement['tone'], { bg: string; color: string }> = {
   muted: { bg: colors.neutral.background, color: colors.text.secondary },
 };
 
-// 여백은 화면 폭에 따라 --card-pad로 바꾼다(Card 기본 p-7보다 style이 우선한다).
-const CARD_STYLE = {
-  padding: 'var(--card-pad)',
-  borderRadius: 'var(--side-card-radius)',
-  borderWidth: '0px',
-};
-
-const CARD_CLASS =
-  'w-full gap-4 [--card-pad:16px] [--side-card-radius:18px] sm:gap-5 sm:[--card-pad:32px] sm:[--side-card-radius:24px]';
-
 /** 확인 화면 오른쪽 정적 안내 패널 2개. */
 export default function ConfirmSidePanel() {
   return (
     // 태블릿 폭에서는 카드 아래에 두 패널을 나란히, 넓은 화면에서는 오른쪽에 세로로 쌓는다.
     <div className="grid w-full items-start gap-6 md:grid-cols-2 lg:grid-cols-1">
-      <Card className={CARD_CLASS} style={CARD_STYLE}>
-        <p
-          className="text-lg font-bold sm:text-xl"
-          style={{ color: colors.text.primary }}
-        >
-          왜 먼저 확인하나요?
-        </p>
-        <ul
-          className="flex list-disc flex-col gap-2.5 pl-5 text-sm sm:gap-3 sm:text-base"
-          style={{ color: colors.text.secondary }}
-        >
-          {REASONS.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+      <SideCard title="왜 먼저 확인하나요?" items={REASONS}>
         <p
           className="text-13 leading-relaxed"
           style={{ color: colors.text.tertiary }}
         >
           고친 값은 법적 판단의 근거가 아니라서 리포트에 “확인 필요”로 남겨요.
         </p>
-      </Card>
+      </SideCard>
 
-      <Card className={CARD_CLASS} style={CARD_STYLE}>
-        <p
-          className="text-lg font-bold sm:text-xl"
-          style={{ color: colors.text.primary }}
-        >
-          이 정보로 이런 걸 판단해요
-        </p>
+      <SideCard title="이 정보로 이런 걸 판단해요">
         <ul className="flex flex-col gap-3 sm:gap-4">
           {JUDGEMENTS.map(({ tag, tone, text }) => (
             <li key={text} className="flex items-start gap-3">
@@ -111,7 +81,7 @@ export default function ConfirmSidePanel() {
             </li>
           ))}
         </ul>
-      </Card>
+      </SideCard>
     </div>
   );
 }

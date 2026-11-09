@@ -31,7 +31,7 @@ export default function FlowPageTitle({
       >
         {title}
       </h1>
-      <p className="text-sm leading-relaxed text-[#4B5866] sm:text-base">
+      <p className="text-sm leading-relaxed break-keep text-[#4B5866] sm:text-base">
         {description}
       </p>
     </div>
