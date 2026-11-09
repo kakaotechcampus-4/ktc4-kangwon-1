@@ -21,7 +21,7 @@ describe('이용약관 화면', () => {
 
   it('탈퇴 요청 메일 주소를 메일 쓰기 링크로 보여 준다', () => {
     render(<TermsPage />);
-    const link = screen.getByRole('link', { name: 'privacy@chaeum-ai.kr' });
-    expect(link.getAttribute('href')).toBe('mailto:privacy@chaeum-ai.kr');
+    const link = screen.getByRole('link', { name: 'chaeum.ai@gmail.com' });
+    expect(link.getAttribute('href')).toBe('mailto:chaeum.ai@gmail.com');
   });
 });

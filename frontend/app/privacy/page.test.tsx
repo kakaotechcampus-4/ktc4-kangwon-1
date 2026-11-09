@@ -13,7 +13,7 @@ describe('개인정보 처리방침 화면', () => {
       screen.getByRole('heading', { level: 1, name: '개인정보 처리방침' })
     ).toBeTruthy();
     expect(document.body.textContent).toContain('최용빈');
-    expect(document.body.textContent).toContain('privacy@chaeum-ai.kr');
+    expect(document.body.textContent).toContain('chaeum.ai@gmail.com');
     expect(document.body.textContent).toContain('chaeum_session');
   });
 
@@ -116,10 +116,10 @@ describe('개인정보 처리방침 화면', () => {
 
   it('보호책임자 메일 주소를 메일 쓰기 링크로 보여 준다', () => {
     render(<PrivacyPage />);
-    const links = screen.getAllByRole('link', { name: 'privacy@chaeum-ai.kr' });
+    const links = screen.getAllByRole('link', { name: 'chaeum.ai@gmail.com' });
     expect(links).toHaveLength(2);
     for (const link of links) {
-      expect(link.getAttribute('href')).toBe('mailto:privacy@chaeum-ai.kr');
+      expect(link.getAttribute('href')).toBe('mailto:chaeum.ai@gmail.com');
     }
   });
 });
