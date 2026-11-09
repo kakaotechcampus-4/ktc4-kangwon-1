@@ -76,6 +76,18 @@ class LLMHTTPError(RuntimeError):
         }
 
 
+TRANSIENT_CODES = {"LLM_TIMEOUT", "LLM_CONNECTION_ERROR"}
+TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+
+
+def is_transient(exc: BaseException) -> bool:
+    if isinstance(exc, LLMResponseError):
+        return exc.code in TRANSIENT_CODES
+    if isinstance(exc, LLMHTTPError):
+        return exc.diagnostics.get("http_status") in TRANSIENT_HTTP_STATUSES
+    return False
+
+
 class Recorder(Protocol):
     async def record(
         self,

@@ -202,6 +202,43 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(output.result.limitations_segments)
 
+    async def test_decision_model_timeout_is_retried_once(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        calls = []
+
+        async def generate(messages, definitions, settings, receipt):
+            calls.append(messages)
+            if len(calls) == 1:
+                raise LLMResponseError("LLM_TIMEOUT")
+            return self.message("submit_draft", {"phase": "draft", "report": {}})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
+        output = await loop.run()
+        self.assertEqual(output.status, "draft_available")
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(loop.state["model_retried"])
+
+    async def test_decision_model_timeout_twice_falls_back(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        calls = []
+
+        async def generate(*args):
+            calls.append(1)
+            raise LLMResponseError("LLM_TIMEOUT")
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        output = await loop.run()
+        self.assertEqual(len(calls), 2)
+        self.assertIn(
+            "모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
+
     async def test_budget_fallback_has_unknown_L(self):
         from app.ai.runtime import DecisionLoop
 

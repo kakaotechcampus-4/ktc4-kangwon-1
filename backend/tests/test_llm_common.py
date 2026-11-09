@@ -173,6 +173,27 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.requests, [])
 
 
+class TransientErrorTests(unittest.TestCase):
+    def test_transient_codes_and_statuses(self):
+        from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transient
+
+        for exc in [
+            LLMResponseError("LLM_TIMEOUT"),
+            LLMResponseError("LLM_CONNECTION_ERROR"),
+            LLMHTTPError(429, {}),
+            LLMHTTPError(503, {}),
+        ]:
+            self.assertTrue(is_transient(exc), exc)
+        for exc in [
+            LLMResponseError("LLM_OUTPUT_LIMIT"),
+            LLMResponseError("LLM_INVALID_JSON"),
+            LLMHTTPError(400, {}),
+            TimeoutError(),
+            ValueError(),
+        ]:
+            self.assertFalse(is_transient(exc), exc)
+
+
 class EnvironmentTests(unittest.TestCase):
     def test_imports_do_not_load_environment_and_compatibility_aliases_use_backend_loader(self):
         self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/config.py").exists())
