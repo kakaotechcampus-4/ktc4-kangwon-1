@@ -119,6 +119,72 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
             )
         return result, seen
 
+    async def run_review_with_errors(self, errors):
+        from app.ai.evaluators import review
+        from app.ai.runtime import DecisionLoop
+
+        pending = list(errors)
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(json.loads(json.dumps(messages)))
+            if pending:
+                raise pending.pop(0)
+            payload = json.loads(messages[1]["content"])
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        with patch(
+            "app.ai.examiner.review_packet",
+            return_value={"draft_id": loop.done.report_id, "facts": []},
+        ):
+            result = await review(
+                loop, "examiner", loop.evaluator_executors()["examiner"], loop.done
+            )
+        return result, seen
+
+    async def test_transient_model_error_is_retried_once(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_review_with_errors([LLMResponseError("LLM_TIMEOUT")])
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+
+    async def test_http_503_is_retried_once(self):
+        from app.application.ports.llm import LLMHTTPError
+
+        result, seen = await self.run_review_with_errors([LLMHTTPError(503, {})])
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+
+    async def test_second_transient_error_fails(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_review_with_errors(
+            [LLMResponseError("LLM_TIMEOUT"), LLMResponseError("LLM_CONNECTION_ERROR")]
+        )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 2)
+
+    async def test_non_transient_error_is_not_retried(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_review_with_errors([LLMResponseError("LLM_INVALID_JSON")])
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(len(seen), 1)
+
+    async def test_retry_resends_same_messages(self):
+        from app.application.ports.llm import LLMResponseError
+
+        _, seen = await self.run_review_with_errors([LLMResponseError("LLM_TIMEOUT")])
+        self.assertEqual(seen[0], seen[1])
+
     async def test_truncated_answer_gets_a_shorter_resubmit_chance(self):
         result, seen = await self.run_truncated_review(truncations=1)
         self.assertEqual(result.status, "completed")

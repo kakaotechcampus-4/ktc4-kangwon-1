@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from app.ai import customer_rubric, examiner, founder, landlord
 from app.ai.aliases import encode, label_periods, labels_periods
 from app.ai.tool_contracts import ReviewRef
-from app.application.ports.llm import LLMHTTPError, LLMResponseError
+from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transient
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
@@ -173,6 +173,7 @@ async def review(loop, actor, executor, draft):
     accepted = {}
     reads = 0
     submit_failures = 0
+    retried = False
     model_calls = 0
     # 손님 평가자는 코드 채점(K1~K4)과 코드 지적을 먼저 만들고 모델에는 남은 지적 칸만 줍니다.
     rubric = None
@@ -276,8 +277,11 @@ async def review(loop, actor, executor, draft):
                     max(0.01, loop.budget.seconds_limit - loop.budget.active_seconds)
                 ):
                     message, _ = await loop._model(actor, messages, settings, definitions)
-            except LLMResponseError as exc:
-                if exc.code != "LLM_OUTPUT_LIMIT":
+            except (LLMResponseError, LLMHTTPError) as exc:
+                if is_transient(exc) and not retried:
+                    retried = True
+                    continue
+                if not isinstance(exc, LLMResponseError) or exc.code != "LLM_OUTPUT_LIMIT":
                     raise
                 submit_failures += 1
                 if submit_failures >= 3:
