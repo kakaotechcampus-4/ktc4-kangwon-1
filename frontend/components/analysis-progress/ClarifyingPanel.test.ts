@@ -86,6 +86,19 @@ describe('새 질문 데이터에 따른 공통 UI', () => {
     expect(submitDisabled(html)).toBe(false);
   });
 
+  it('상세 답 칸 아래에 개인정보 안내를 보여 주고 다른 선택지에는 보여 주지 않는다', () => {
+    state.answers = {
+      'new-ventilation-question': { optionId: 'approval' },
+      'new-sign-question': { optionId: 'yes' },
+    };
+    expect(render()).toContain('이름·연락처 같은 개인정보는 적지 마세요.');
+    state.answers = {
+      'new-ventilation-question': { optionId: 'ready' },
+      'new-sign-question': { optionId: 'yes' },
+    };
+    expect(render()).not.toContain('이름·연락처 같은 개인정보는 적지 마세요.');
+  });
+
   it('다른 선택지에는 상세 입력을 표시하지 않고 이전 상세 내용도 요약에서 제외한다', () => {
     state.answers = {
       'new-ventilation-question': {

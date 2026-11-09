@@ -315,13 +315,21 @@ function QuestionCard({
 
       {detailInput && (
         <label className="flex flex-col gap-2 sm:pl-11">
-          <span
-            className="text-sm font-semibold"
-            style={{ color: colors.text.secondary }}
-          >
-            {detailInput.label}{' '}
-            <span className="font-normal">
-              ({detailInput.required ? '필수' : '선택'})
+          <span className="flex flex-col gap-1">
+            <span
+              className="text-sm font-semibold"
+              style={{ color: colors.text.secondary }}
+            >
+              {detailInput.label}{' '}
+              <span className="font-normal">
+                ({detailInput.required ? '필수' : '선택'})
+              </span>
+            </span>
+            <span
+              className="break-keep text-13 font-normal"
+              style={{ color: colors.text.secondary }}
+            >
+              이름·연락처 같은 개인정보는 적지 마세요.
             </span>
           </span>
           <textarea
