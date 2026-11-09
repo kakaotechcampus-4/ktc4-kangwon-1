@@ -409,7 +409,7 @@ class AnswerErasureTests(unittest.TestCase):
         self.assertEqual([set(r["data"]["answers"].values()) for r in replies], [{ERASED}])
         self.read(self.multiline_id)
 
-    def test_numbers_keys_and_enum_values_stay_byte_identical(self):
+    def test_short_answers_leave_other_parsed_values_unchanged(self):
         cases = (
             (self.number_id, "1"),
             (self.token_id, "floor"),
