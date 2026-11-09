@@ -115,8 +115,11 @@ def _rule(db, request_id):
 
 
 def _quote(text):
-    head = r"(?<![가-힣0-9A-Za-z_])" if _LETTER.fullmatch(text[0]) else ""
-    tail = r"(?![0-9A-Za-z_])" if _WORD.fullmatch(text[-1]) else ""
+    head = ""
+    if _LETTER.fullmatch(text[0]):
+        joined = _WORD if text[0].isdigit() else _LETTER
+        head = f"(?<!{joined.pattern})"
+    tail = f"(?!{_WORD.pattern})" if _WORD.fullmatch(text[-1]) else ""
     return re.compile(head + re.escape(text) + tail)
 
 

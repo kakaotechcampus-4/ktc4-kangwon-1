@@ -458,6 +458,14 @@ class AnswerErasureTests(unittest.TestCase):
                 self.assertEqual(_hits(self.path, answer, request_id), 0)
                 self.assertEqual(_notes(self.read(request_id)), expected[answer])
 
+    def test_number_glued_to_korean_word_is_erased(self):
+        _add_event(self.path, self.phone_id, json.dumps({"note": f"전화{PHONE}로 연락"}))
+        erasure.erase_user_answers(self.phone_id, db_path=self.path)
+        self.assertEqual(
+            _notes(self.read(self.phone_id)),
+            [{"note": "연락처 [삭제됨] 로 연락"}, {"note": "전화[삭제됨]로 연락"}],
+        )
+
     def test_shared_raw_payload_is_copied_not_changed(self):
         erased, other = self.shared_ids
         self.assertEqual(_evidence(self.path, other), [(SHARED, SHARED)])
