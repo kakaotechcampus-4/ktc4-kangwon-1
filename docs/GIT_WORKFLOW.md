@@ -61,6 +61,8 @@ docs: 백엔드 README에 데이터 흐름 추가
 
 어떤 경우든 push 전에 [AGENTS.md](../AGENTS.md)의 "작업 전에 돌리는 것"을 로컬에서 돌립니다. develop은 곧 운영 배포입니다.
 
+develop은 강제 덮어쓰기(force push)와 브랜치 삭제가 막혀 있습니다. 일반 push와 PR 머지는 그대로 됩니다.
+
 ### 멘토 리뷰 PR — `develop → main` (주 1회)
 
 1. 매주 화요일쯤 팀장이 그 주 작업을 `develop → main` PR로 올립니다.
