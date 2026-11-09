@@ -63,9 +63,25 @@ describe('로그인 화면', () => {
     expect(screen.queryByText(RESET_DONE)).toBeNull();
   });
 
+  it('다시 시도하는 동안에는 완료 안내가 다시 보이지 않는다', async () => {
+    query.value = 'reset=done';
+    vi.mocked(login)
+      .mockRejectedValueOnce(
+        new ApiError(401, '이메일 또는 비밀번호가 맞지 않습니다.')
+      )
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(<LoginPage />);
+    await submitLogin();
+    await screen.findByRole('alert');
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: '로그인' }));
+    expect(screen.queryByText(RESET_DONE)).toBeNull();
+  });
+
   it('next가 있으면 로그인 뒤 그리로 간다', async () => {
     query.value = 'reset=done&next=/my/reports';
-    vi.mocked(login).mockResolvedValue(undefined as never);
+    vi.mocked(login).mockResolvedValue(undefined);
     render(<LoginPage />);
     await submitLogin();
     await vi.waitFor(() =>

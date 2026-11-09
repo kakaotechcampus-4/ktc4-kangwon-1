@@ -13,7 +13,7 @@ export default function FormMessage({
   return (
     <p
       role={tone === 'error' ? 'alert' : 'status'}
-      className="text-15"
+      className="text-15 break-keep wrap-anywhere"
       style={{
         color:
           tone === 'error' ? colors.status.notRecommend : colors.brand.primary,
