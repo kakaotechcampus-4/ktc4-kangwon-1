@@ -6,12 +6,14 @@ type ConfirmLayoutProps = {
   children: ReactNode;
   actions: ReactNode;
   aside: ReactNode;
+  notice?: ReactNode;
 };
 
 export default function ConfirmLayout({
   children,
   actions,
   aside,
+  notice,
 }: ConfirmLayoutProps) {
   return (
     // 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다.
@@ -31,6 +33,7 @@ export default function ConfirmLayout({
         >
           {actions}
         </div>
+        {notice}
       </Card>
       {aside}
     </div>

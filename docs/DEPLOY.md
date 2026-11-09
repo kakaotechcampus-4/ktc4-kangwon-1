@@ -21,7 +21,7 @@
 | --- | --- | --- | --- |
 | 로컬 | 개발자 PC — 백엔드 `uvicorn`, 프론트 `npm run dev` | 각자 `backend/.env`, 로컬 SQLite, 실제 LLM 키 | 개발 |
 | 화면 mock 모드 | 로컬 프론트, `NEXT_PUBLIC_MOCK_MODE=true` | 백엔드 없이 고정 데이터 | 화면 흐름 확인 |
-| CI | GitHub Actions `ci.yml` — 모든 PR, main·develop push | 백엔드 검사·시험, 프론트 검사·빌드, 브라우저 E2E(백엔드 `MOCK_MODE=1`, 실제 AI 호출 없음) | 머지 전 검사 |
+| CI | GitHub Actions `ci.yml` — 모든 PR, main·develop push | 백엔드 검사·시험, 프론트 검사·빌드, 배포 스크립트 시험, 브라우저 E2E(백엔드 `MOCK_MODE=1`, 실제 AI 호출 없음) | 머지 전 검사 |
 | PR 미리보기 | Vercel Preview — PR마다 미리보기 주소를 PR 댓글로 남김 | 화면 | 리뷰 |
 | 운영 | chaeum-ai.kr + EC2 | 서버 공유 저장소의 자료 DB·요청 DB, 서버 `.env` | 서비스 |
 
@@ -30,6 +30,7 @@
 ## 백엔드 배포 흐름
 
 develop에 push되면(또는 Actions에서 「배포」를 직접 실행하면) 자동으로 돕니다. 배포는 한 번에 하나만 실행됩니다.
+「배포」를 직접 다시 실행해도 배포마다 새 폴더를 쓰므로 서비스 중인 버전을 건드리지 않습니다.
 
 ```text
 검사: ruff · ruff format · mypy · unittest        ← 실패하면 여기서 멈추고 배포하지 않음
@@ -39,8 +40,9 @@ develop에 push되면(또는 Actions에서 「배포」를 직접 실행하면) 
     1. 지금 쉬는 포트(8001/8002)에 새 버전을 띄움
     2. 새 포트의 /health를 최대 60초 확인 — 실패하면 전환하지 않고 중단(구 버전이 계속 서비스)
     3. nginx가 새 포트를 보게 바꾸고 reload — 기존 연결은 유지, 새 요청만 옮겨 감
+       (설정 검사 nginx -t나 reload가 실패하면 설정과 current를 되돌리고 중단 — 구 버전이 계속 서비스)
     4. 구 버전 정지, 재부팅 때 올라올 쪽도 새 포트로
-    5. 릴리스는 최근 3개만 남김
+    5. 릴리스는 최근 3개만 남김(실패한 배포의 폴더는 실패할 때 바로 지움)
 → 외부에서 https://kangwon-1-chaeum.duckdns.org/health 200 확인 — 아니면 워크플로 실패로 표시
 ```
 
@@ -50,7 +52,7 @@ develop에 push되면(또는 Actions에서 「배포」를 직접 실행하면) 
 
 | 항목 | 값 |
 | --- | --- |
-| 설치 위치 | `/opt/chaeum` — `releases/<커밋>`, 지금 버전을 가리키는 `current` 링크, `shared` |
+| 설치 위치 | `/opt/chaeum` — `releases/<커밋>-<배포 시각>`, 지금 버전을 가리키는 `current` 링크, `shared` |
 | 공유 폴더 | `shared/.env` · `shared/storage` · `shared/cache` · `shared/venv` — 배포가 덮어쓰지 않고 릴리스에 링크로 연결 |
 | 요청 DB | `SQLITE_PATH=/opt/chaeum/shared/storage/chaeum.sqlite3` |
 | 자료 DB | `LOCAL_DATA_DB_PATH=/opt/chaeum/shared/storage/market_data.sqlite3` (서울 전체, 약 0.8GB) |

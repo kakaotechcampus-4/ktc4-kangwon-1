@@ -173,6 +173,54 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.requests, [])
 
 
+class TransientErrorTests(unittest.TestCase):
+    def test_transient_codes_and_statuses(self):
+        from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transient
+
+        quota = {"error": {"code": "insufficient_quota"}}
+        for exc in [
+            LLMResponseError("LLM_TIMEOUT"),
+            LLMResponseError("LLM_CONNECTION_ERROR"),
+            LLMHTTPError(429, {}),
+            LLMHTTPError(500, {}),
+            LLMHTTPError(502, {}),
+            LLMHTTPError(503, {}),
+            LLMHTTPError(504, {}),
+        ]:
+            self.assertTrue(is_transient(exc), exc)
+        for exc in [
+            LLMResponseError("LLM_OUTPUT_LIMIT"),
+            LLMResponseError("LLM_INVALID_JSON"),
+            LLMHTTPError(400, {}),
+            LLMHTTPError(429, quota),
+            TimeoutError(),
+            ValueError(),
+        ]:
+            self.assertFalse(is_transient(exc), exc)
+
+    def test_transport_retries_connection_errors_and_gateway_statuses_but_not_quota(self):
+        from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transport_retried
+
+        quota = {"error": {"code": "insufficient_quota"}}
+        for exc in [
+            LLMResponseError("LLM_CONNECTION_ERROR"),
+            LLMHTTPError(429, {}),
+            LLMHTTPError(502, {}),
+            LLMHTTPError(503, {}),
+            LLMHTTPError(504, {}),
+        ]:
+            self.assertTrue(is_transport_retried(exc), exc)
+        for exc in [
+            LLMResponseError("LLM_TIMEOUT"),
+            LLMResponseError("LLM_OUTPUT_LIMIT"),
+            LLMHTTPError(500, {}),
+            LLMHTTPError(400, {}),
+            LLMHTTPError(429, quota),
+            TimeoutError(),
+        ]:
+            self.assertFalse(is_transport_retried(exc), exc)
+
+
 class EnvironmentTests(unittest.TestCase):
     def test_imports_do_not_load_environment_and_compatibility_aliases_use_backend_loader(self):
         self.assertTrue((Path(__file__).parents[1] / "app/infrastructure/config.py").exists())

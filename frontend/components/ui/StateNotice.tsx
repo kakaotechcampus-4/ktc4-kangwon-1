@@ -10,30 +10,34 @@ export default function StateNotice({
   description,
   links,
   onRetry,
+  retryLabel = '다시 불러오기',
   busy = false,
 }: {
   title: string;
   description: string;
   links: NoticeLink[];
   onRetry?: () => void;
+  retryLabel?: string;
   busy?: boolean;
 }) {
   return (
     <Card className="items-start gap-4" role={busy ? 'status' : undefined}>
       <p
-        className="text-xl font-extrabold tracking-[-0.02em]"
+        className="text-xl font-extrabold tracking-[-0.02em] break-keep wrap-anywhere"
         style={{ color: colors.brand.dark }}
       >
         {title}
       </p>
       {description ? (
-        <p className="text-15 text-[#4B5866]">{description}</p>
+        <p className="text-15 break-keep wrap-anywhere text-[#4B5866]">
+          {description}
+        </p>
       ) : null}
       {onRetry || links.length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {onRetry ? (
             <Button type="button" variant="primary" onClick={onRetry}>
-              다시 불러오기
+              {retryLabel}
             </Button>
           ) : null}
           {links.map((link, index) => (

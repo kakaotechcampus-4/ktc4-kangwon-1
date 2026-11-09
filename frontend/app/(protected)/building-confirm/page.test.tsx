@@ -95,19 +95,39 @@ describe('상가 정보 확인 화면', () => {
     );
   });
 
-  it('분석 시작이 거절되면 잠시 후 다시 시도하라고 알린다', async () => {
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  it('동시 실행으로 거절되면 서버 안내를 화면에 남기고 머무른다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 서버가 다시 시도할 시점까지 적어 보내므로 그대로 보여 준다.
+    const notice =
+      '동시에 실행할 수 있는 분석 수를 넘었습니다. 30초 뒤에 다시 시도해 주세요.';
     vi.mocked(startAnalysis).mockRejectedValue(
-      new ApiError(429, '동시에 실행할 수 있는 분석 수를 넘었습니다.')
+      new AnalysisApiError(429, notice)
     );
     render(<BuildingConfirmPage />);
     const { user, start } = await chooseParking();
     await user.click(start);
-    await waitFor(() =>
-      expect(alert).toHaveBeenCalledWith('잠시 후 다시 시도해주세요.')
-    );
+
+    expect(await screen.findByText(notice)).toBeTruthy();
+    // 입력을 그대로 두고 다시 누를 수 있어야 한다.
     expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: START })).toBeTruthy();
+  });
+
+  it('원인을 밝힐 수 없는 실패는 서버 원문을 감춘다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(startAnalysis).mockRejectedValue(
+      new AnalysisApiError(500, 'Internal Server Error')
+    );
+    render(<BuildingConfirmPage />);
+    const { user, start } = await chooseParking();
+    await user.click(start);
+
+    expect(
+      await screen.findByText(
+        '분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
+      )
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Internal Server Error');
   });
 
   it('건축물대장 조회가 오래 걸려 멈추면 안내와 다시 조회를 보여 준다', async () => {
@@ -143,8 +163,7 @@ describe('상가 정보 확인 화면', () => {
     expect(fetchBuildingInfo).toHaveBeenCalledTimes(1);
   });
 
-  it('입력값이 잘못돼 거절되면 입력을 확인하라고 알린다', async () => {
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  it('입력값이 잘못돼 거절되면 입력을 확인하라고 화면에 알린다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const message =
       '요청 값이 올바르지 않아 처리하지 못했어요. 입력한 정보를 확인해 주세요.';
@@ -154,7 +173,8 @@ describe('상가 정보 확인 화면', () => {
     render(<BuildingConfirmPage />);
     const { user, start } = await chooseParking();
     await user.click(start);
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(message));
+
+    expect(await screen.findByText(message)).toBeTruthy();
   });
 
   it('서울 밖 주소면 확인 카드 대신 다시 입력하라는 안내를 보여 준다', async () => {

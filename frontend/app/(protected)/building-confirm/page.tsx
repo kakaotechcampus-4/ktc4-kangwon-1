@@ -28,7 +28,7 @@ import {
 } from '@/components/building-confirm/labels';
 import type { FacilityKey, FacilityState } from '@/lib/api/types';
 import { colors } from '@/styles/tokens';
-import { AnalysisApiError, startAnalysis } from '@/lib/api/analyses';
+import { startAnalysis } from '@/lib/api/analyses';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import { ApiError } from '@/lib/api/http';
 import {
@@ -91,6 +91,9 @@ export default function BuildingConfirmPage() {
   const [areaText, setAreaText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 분석을 시작하지 못했을 때 버튼 아래에 띄우는 안내. 입력은 그대로 두고
+  // 다시 누르면 되는 실패라 화면을 떠나지 않는다.
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [facilities, setFacilities] = useState<
     Record<FacilityKey, FacilityState>
   >({ ventilation: 'unknown', kitchen: 'unknown', water_supply: 'unknown' });
@@ -237,6 +240,7 @@ export default function BuildingConfirmPage() {
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const fullAddress = input.floorUnit.trim()
         ? `${input.roadAddress} ${input.floorUnit}`
@@ -262,10 +266,17 @@ export default function BuildingConfirmPage() {
       router.push(`/analysis-progress?id=${encodeURIComponent(requestId)}`);
     } catch (error) {
       console.error('[BuildingConfirmPage] 분석 요청 실패:', error);
-      alert(
-        error instanceof AnalysisApiError && error.status === 422
+      // 429(동시 실행 초과)와 422(입력 거절)는 서버가 무엇을 해야 하는지까지
+      // 적어 보내므로 그대로 보여 준다. 나머지는 원문을 숨긴다.
+      // ApiError와 AnalysisApiError가 모양만 같고 따로 있어 status로만 본다.
+      const status =
+        error instanceof Error && 'status' in error
+          ? (error as { status: unknown }).status
+          : null;
+      setSubmitError(
+        (status === 422 || status === 429) && error instanceof Error
           ? error.message
-          : '잠시 후 다시 시도해주세요.'
+          : '분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
       );
     } finally {
       setIsSubmitting(false);
@@ -367,9 +378,14 @@ export default function BuildingConfirmPage() {
                     style={{ fontSize: 'var(--text-base)' }}
                     disabled={isSubmitting || building.parking.value === null}
                     aria-describedby={
-                      building.parking.value === null
-                        ? 'parking-required-hint'
-                        : undefined
+                      [
+                        building.parking.value === null
+                          ? 'parking-required-hint'
+                          : null,
+                        submitError ? 'submit-error' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined
                     }
                     onClick={handleConfirm}
                   >
@@ -378,6 +394,21 @@ export default function BuildingConfirmPage() {
                       : '맞아요 · 이대로 분석하기'}
                   </Button>
                 </>
+              }
+              notice={
+                submitError && (
+                  <p
+                    id="submit-error"
+                    role="status"
+                    className="mt-4 rounded-lg px-4 py-3 text-sm leading-relaxed"
+                    style={{
+                      background: colors.brand.wash,
+                      color: colors.text.primary,
+                    }}
+                  >
+                    {submitError}
+                  </p>
+                )
               }
             >
               <BuildingSummaryHeader
