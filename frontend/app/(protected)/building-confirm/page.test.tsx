@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BuildingConfirmPage from './page';
 import { AnalysisApiError, startAnalysis } from '@/lib/api/analyses';
-import { fetchBuildingInfo } from '@/lib/api/building';
+import { OutsideServiceAreaError, fetchBuildingInfo } from '@/lib/api/building';
 import {
   LOOKUP_ERROR_NOTE,
   emptyBuildingInfo,
@@ -175,6 +175,52 @@ describe('상가 정보 확인 화면', () => {
     await user.click(start);
 
     expect(await screen.findByText(message)).toBeTruthy();
+  });
+
+  it('서울 밖 주소면 확인 카드 대신 다시 입력하라는 안내를 보여 준다', async () => {
+    const busan = '부산 해운대구 해운대로 264';
+    saveVacancyInput({ roadAddress: busan, floorUnit: '1층' });
+    vi.mocked(fetchBuildingInfo).mockRejectedValueOnce(
+      new OutsideServiceAreaError('지금은 서울 상가만 분석할 수 있어요.')
+    );
+    render(<BuildingConfirmPage />);
+    expect(
+      await screen.findByRole('heading', { name: '이 주소는 분석할 수 없어요' })
+    ).toBeTruthy();
+    expect(
+      screen.getByText('채움은 지금 서울에 있는 상가만 분석해요.')
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('heading', {
+        name: '지금은 서울 상가만 분석할 수 있어요',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        '상권·인구 자료가 서울시 공공데이터라서 서울 밖 주소는 정확하게 분석할 수 없어요. 서울에 있는 상가 주소로 다시 입력해 주세요.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: busan })).toBeTruthy();
+    expect(screen.getByText('서울 밖 주소')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('link', { name: '주소 다시 입력하기' })
+        .getAttribute('href')
+    ).toBe('/vacancy-input');
+    expect(
+      screen.getByRole('link', { name: '홈으로' }).getAttribute('href')
+    ).toBe('/');
+    expect(
+      screen.queryByRole('button', { name: /이대로 분석하기/ })
+    ).toBeNull();
+    expect(screen.getByText('왜 서울만 분석하나요?')).toBeTruthy();
+    for (const reason of [
+      '상권·유동인구 자료가 서울시 열린데이터광장 자료예요.',
+      '서울 밖은 같은 기준의 자료가 없어 결과를 믿기 어려워요.',
+      '다른 지역은 아직 준비 중이에요.',
+    ]) {
+      expect(screen.getByText(reason)).toBeTruthy();
+    }
   });
 
   it('다시 조회도 오래 걸리면 직접 입력 화면으로 넘어간다', async () => {

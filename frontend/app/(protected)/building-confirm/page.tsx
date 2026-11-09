@@ -15,8 +15,10 @@ import BuildingSummaryHeader from '@/components/building-confirm/BuildingSummary
 import BuildingFieldRow from '@/components/building-confirm/BuildingFieldRow';
 import ParkingSelector from '@/components/building-confirm/ParkingSelector';
 import SegmentedSelector from '@/components/building-confirm/SegmentedSelector';
+import ConfirmLayout from '@/components/building-confirm/ConfirmLayout';
 import ConfirmSidePanel from '@/components/building-confirm/ConfirmSidePanel';
 import FacilityRows from '@/components/building-confirm/FacilityRows';
+import OutsideSeoulNotice from '@/components/building-confirm/OutsideSeoulNotice';
 import {
   FACILITY_LABELS,
   FACILITY_SHORT_LABELS,
@@ -35,6 +37,7 @@ import {
 } from '@/lib/api/buildingRegistry';
 import {
   LOOKUP_ORDER,
+  OutsideServiceAreaError,
   SEWAGE_OPTIONS,
   editField,
   fetchBuildingInfo,
@@ -82,6 +85,7 @@ export default function BuildingConfirmPage() {
   const [building, setBuilding] = useState<BuildingInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [outsideSeoul, setOutsideSeoul] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   // 전용면적 입력 중인 문자열("275." 같은 중간 값)을 숫자 필드와 따로 든다.
   const [areaText, setAreaText] = useState('');
@@ -160,6 +164,10 @@ export default function BuildingConfirmPage() {
       })
       .catch((error: unknown) => {
         if ((error as { name?: unknown } | null)?.name === 'AbortError') {
+          return;
+        }
+        if (error instanceof OutsideServiceAreaError) {
+          setOutsideSeoul(true);
           return;
         }
         console.error('[BuildingConfirmPage] 건축물대장 조회 실패:', error);
@@ -285,7 +293,20 @@ export default function BuildingConfirmPage() {
       <Header />
 
       <main className="mx-auto flex w-full max-w-[1200px] flex-col items-start gap-5 px-3 pt-10 pb-16 sm:gap-8 sm:px-8 sm:pt-16 sm:pb-24">
-        {!building && timedOut && input ? (
+        {outsideSeoul && input ? (
+          <>
+            <FlowPageTitle
+              eyebrow="BUILDING CHECK"
+              title="이 주소는 분석할 수 없어요"
+              description="채움은 지금 서울에 있는 상가만 분석해요."
+            />
+            <StepIndicator currentStep={2} />
+            <OutsideSeoulNotice
+              address={input.roadAddress}
+              floorLabel={floorLabel}
+            />
+          </>
+        ) : !building && timedOut && input ? (
           <>
             <StepIndicator currentStep={2} />
             <LookupTimeoutNotice
@@ -331,147 +352,10 @@ export default function BuildingConfirmPage() {
             />
             <StepIndicator currentStep={2} />
 
-            {/* 좁은 화면에서는 안내 패널을 확인 카드 아래로 내린다. */}
-            <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 xl:grid-cols-[minmax(0,1fr)_440px]">
-              <Card
-                className="w-full gap-0 [--building-radius:18px] sm:[--building-radius:24px]"
-                style={{
-                  padding: 0,
-                  borderRadius: 'var(--building-radius)',
-                  borderWidth: '0px',
-                }}
-              >
-                <BuildingSummaryHeader
-                  building={building}
-                  address={input?.roadAddress ?? building.address}
-                />
-
-                <BuildingFieldRow
-                  label="전용면적"
-                  field={building.exclusiveAreaM2}
-                  format={formatArea}
-                  editable={
-                    isEditing || building.exclusiveAreaM2.registryValue === null
-                  }
-                  editor={
-                    <div className="flex items-center gap-2">
-                      <div className="w-full max-w-48">
-                        <Input
-                          inputMode="decimal"
-                          aria-label="전용면적"
-                          value={areaText}
-                          onChange={(event) =>
-                            handleAreaChange(event.target.value)
-                          }
-                          placeholder="예: 275.49"
-                        />
-                      </div>
-                      <span
-                        className="text-base"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        ㎡
-                      </span>
-                    </div>
-                  }
-                />
-
-                <BuildingFieldRow
-                  label="주차 가능 여부 (필수)"
-                  field={building.parking}
-                  format={(value) => PARKING_LABELS[value]}
-                  editable={
-                    isEditing || building.parking.registryValue === null
-                  }
-                  editor={
-                    <div className="flex flex-col gap-2">
-                      <ParkingSelector
-                        value={building.parking.value}
-                        onChange={(value) =>
-                          updateBuilding({
-                            parking: editField(building.parking, value),
-                          })
-                        }
-                      />
-                      {building.parking.value === null && (
-                        <p
-                          id="parking-required-hint"
-                          className="text-sm leading-relaxed"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          주차 가능 여부를 선택해 주세요. 잘 모르시면 ‘모름’을
-                          선택할 수 있어요.
-                        </p>
-                      )}
-                    </div>
-                  }
-                />
-
-                <BuildingFieldRow
-                  label="근린생활시설"
-                  field={building.facility}
-                  format={(value) => FACILITY_LABELS[value]}
-                  editable={
-                    isEditing || building.facility.registryValue === null
-                  }
-                  editor={
-                    <SegmentedSelector
-                      options={FACILITY_OPTIONS}
-                      value={building.facility.value}
-                      onChange={(value) =>
-                        updateBuilding({
-                          facility: editField(building.facility, value),
-                        })
-                      }
-                      ariaLabel="근린생활시설"
-                    />
-                  }
-                />
-
-                <BuildingFieldRow
-                  label="오수정화시설"
-                  field={building.sewage}
-                  format={(value) => value}
-                  editable={isEditing || building.sewage.registryValue === null}
-                  editor={
-                    <select
-                      aria-label="오수정화시설"
-                      value={building.sewage.value ?? ''}
-                      onChange={(event) =>
-                        updateBuilding({
-                          sewage: editField(
-                            building.sewage,
-                            (event.target.value ||
-                              null) as SewageTreatment | null
-                          ),
-                        })
-                      }
-                      className="min-h-12 w-full max-w-72 rounded-lg border px-3 text-sm sm:min-h-[52px] sm:px-3.5 sm:text-base"
-                      style={{
-                        borderColor: colors.neutral.border,
-                        backgroundColor: colors.neutral.white,
-                        color: colors.text.primary,
-                      }}
-                    >
-                      <option value="">선택해 주세요</option>
-                      {SEWAGE_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
-
-                <FacilityRows
-                  facilities={facilities}
-                  onChange={setFacilities}
-                />
-
-                <div
-                  className="flex flex-col-reverse gap-3 px-4 py-4 sm:flex-row sm:justify-end sm:gap-4 sm:px-10 sm:py-8"
-                  style={{ borderTop: `1px solid ${colors.neutral.border}` }}
-                >
+            <ConfirmLayout
+              aside={<ConfirmSidePanel />}
+              actions={
+                <>
                   <Button
                     type="button"
                     variant="outline"
@@ -509,8 +393,10 @@ export default function BuildingConfirmPage() {
                       ? '분석을 시작하고 있어요…'
                       : '맞아요 · 이대로 분석하기'}
                   </Button>
-                </div>
-                {submitError && (
+                </>
+              }
+              notice={
+                submitError && (
                   <p
                     id="submit-error"
                     role="status"
@@ -522,11 +408,128 @@ export default function BuildingConfirmPage() {
                   >
                     {submitError}
                   </p>
-                )}
-              </Card>
+                )
+              }
+            >
+              <BuildingSummaryHeader
+                building={building}
+                address={input?.roadAddress ?? building.address}
+              />
 
-              <ConfirmSidePanel />
-            </div>
+              <BuildingFieldRow
+                label="전용면적"
+                field={building.exclusiveAreaM2}
+                format={formatArea}
+                editable={
+                  isEditing || building.exclusiveAreaM2.registryValue === null
+                }
+                editor={
+                  <div className="flex items-center gap-2">
+                    <div className="w-full max-w-48">
+                      <Input
+                        inputMode="decimal"
+                        aria-label="전용면적"
+                        value={areaText}
+                        onChange={(event) =>
+                          handleAreaChange(event.target.value)
+                        }
+                        placeholder="예: 275.49"
+                      />
+                    </div>
+                    <span
+                      className="text-base"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      ㎡
+                    </span>
+                  </div>
+                }
+              />
+
+              <BuildingFieldRow
+                label="주차 가능 여부 (필수)"
+                field={building.parking}
+                format={(value) => PARKING_LABELS[value]}
+                editable={isEditing || building.parking.registryValue === null}
+                editor={
+                  <div className="flex flex-col gap-2">
+                    <ParkingSelector
+                      value={building.parking.value}
+                      onChange={(value) =>
+                        updateBuilding({
+                          parking: editField(building.parking, value),
+                        })
+                      }
+                    />
+                    {building.parking.value === null && (
+                      <p
+                        id="parking-required-hint"
+                        className="text-sm leading-relaxed"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        주차 가능 여부를 선택해 주세요. 잘 모르시면 ‘모름’을
+                        선택할 수 있어요.
+                      </p>
+                    )}
+                  </div>
+                }
+              />
+
+              <BuildingFieldRow
+                label="근린생활시설"
+                field={building.facility}
+                format={(value) => FACILITY_LABELS[value]}
+                editable={isEditing || building.facility.registryValue === null}
+                editor={
+                  <SegmentedSelector
+                    options={FACILITY_OPTIONS}
+                    value={building.facility.value}
+                    onChange={(value) =>
+                      updateBuilding({
+                        facility: editField(building.facility, value),
+                      })
+                    }
+                    ariaLabel="근린생활시설"
+                  />
+                }
+              />
+
+              <BuildingFieldRow
+                label="오수정화시설"
+                field={building.sewage}
+                format={(value) => value}
+                editable={isEditing || building.sewage.registryValue === null}
+                editor={
+                  <select
+                    aria-label="오수정화시설"
+                    value={building.sewage.value ?? ''}
+                    onChange={(event) =>
+                      updateBuilding({
+                        sewage: editField(
+                          building.sewage,
+                          (event.target.value || null) as SewageTreatment | null
+                        ),
+                      })
+                    }
+                    className="min-h-12 w-full max-w-72 rounded-lg border px-3 text-sm sm:min-h-[52px] sm:px-3.5 sm:text-base"
+                    style={{
+                      borderColor: colors.neutral.border,
+                      backgroundColor: colors.neutral.white,
+                      color: colors.text.primary,
+                    }}
+                  >
+                    <option value="">선택해 주세요</option>
+                    {SEWAGE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
+
+              <FacilityRows facilities={facilities} onChange={setFacilities} />
+            </ConfirmLayout>
           </>
         )}
       </main>

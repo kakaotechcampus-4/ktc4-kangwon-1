@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from app.application.errors import ADDRESS_INPUT_ERRORS as ADDRESS_INPUT_ERRORS
-from app.application.errors import AddressError
+from app.application.errors import OUTSIDE_SEOUL_MESSAGE, AddressError
 from app.domain.schemas import Site
 from app.infrastructure.config import AddressSettings
 
@@ -22,6 +22,7 @@ BASE_PATTERN = re.compile(
 )
 REGION_ALIASES = {
     "서울특별시": "서울",
+    "서울시": "서울",
     "부산광역시": "부산",
     "대구광역시": "대구",
     "인천광역시": "인천",
@@ -42,6 +43,8 @@ REGION_ALIASES = {
     "제주도": "제주",
     "제주특별자치도": "제주",
 }
+SEOUL_REGION_NAMES = frozenset({"서울", "서울특별시"})
+SEOUL_B_CODE_PREFIX = "11"
 
 
 class GeocodeError(AddressError):
@@ -116,6 +119,15 @@ def matched_addresses(address: str, doc: dict[str, Any]) -> tuple[str | None, st
     return road, jibun
 
 
+def in_seoul(document: dict[str, Any]) -> bool:
+    jibun = document.get("address")
+    code = jibun.get("b_code") if isinstance(jibun, dict) else None
+    if code:
+        return str(code).startswith(SEOUL_B_CODE_PREFIX)
+    road = document.get("road_address")
+    return isinstance(road, dict) and road.get("region_1depth_name") in SEOUL_REGION_NAMES
+
+
 async def resolve_site(
     address: str,
     settings: AddressSettings | None = None,
@@ -167,6 +179,8 @@ async def resolve_site(
         response.raise_for_status()
         doc = _candidate(response.json())
         road, jibun = matched_addresses(cleaned, doc)
+        if not in_seoul(doc):
+            raise GeocodeError("OUTSIDE_SEOUL", OUTSIDE_SEOUL_MESSAGE)
         if any(type(doc.get(key)) not in (str, int, float) for key in ("x", "y")):
             raise ValueError("좌표 형식이 잘못되었습니다.")
         site = Site(

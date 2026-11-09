@@ -12,6 +12,7 @@ from app.domain.building import BuildingRegistry
 router = APIRouter(prefix="/api/v1", tags=["building"])
 FAILURE_STATUS = {
     "invalid_address": 400,
+    "outside_seoul": 422,
     "address_service": 502,
     "rate_limit": 429,
     "timeout": 504,

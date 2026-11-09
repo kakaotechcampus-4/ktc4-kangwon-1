@@ -83,6 +83,42 @@ describe('분석 진행 화면', () => {
     expect(router.replace).toHaveBeenCalledWith('/vacancy-input');
   });
 
+  it('서울 밖 주소로 실패하면 다시 분석 대신 주소를 다시 입력하게 한다', async () => {
+    const message = '지금은 서울 상가만 분석할 수 있어요.';
+    progress({
+      stage: 'failed',
+      error: message,
+      detail: {
+        request_id: 'r1',
+        status: 'failed',
+        site: null,
+        result: null,
+        error: { code: 'OUTSIDE_SEOUL', message },
+        questions: null,
+        rendered: null,
+      },
+    });
+    render(<AnalysisProgressPage />);
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: '이 주소는 분석할 수 없어요',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByText('채움은 지금 서울에 있는 상가만 분석해요.')
+    ).toBeTruthy();
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(
+      screen
+        .getByRole('link', { name: '주소 다시 입력하기' })
+        .getAttribute('href')
+    ).toBe('/vacancy-input');
+    expect(screen.queryByRole('button', { name: '다시 분석하기' })).toBeNull();
+    expect(document.body.textContent).not.toContain('분석을 마치지 못했어요');
+    expect(document.body.textContent).not.toContain('다시 시도해 주세요');
+  });
+
   it('끝나면 이 분석 번호의 리포트를 연다', async () => {
     progress({
       stage: 'completed',

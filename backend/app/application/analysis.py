@@ -12,6 +12,7 @@ from app.application.answers import save_confirmed_space
 from app.application.errors import (
     ADDRESS_INPUT_ERRORS,
     INTERRUPTED_MESSAGE,
+    OUTSIDE_SEOUL_MESSAGE,
     AddressError,
     AnalysisConflictError,
 )
@@ -38,6 +39,7 @@ MEASURING_COLLECT_TIMEOUT_SECONDS = 600
 
 FAILURE_MESSAGES = {
     "ADDRESS_FAILED": "주소를 확인하지 못했어요. 주소를 다시 확인한 뒤 분석해 주세요.",
+    "OUTSIDE_SEOUL": OUTSIDE_SEOUL_MESSAGE,
     "AI_FAILED": "AI 분석이 끝나지 못했어요. 잠시 후 다시 분석해 주세요.",
     "DATA_TIMEOUT": (
         "주변 자료를 불러오는 데 시간이 너무 오래 걸렸어요. 잠시 후 다시 분석해 주세요."
@@ -50,7 +52,9 @@ FAILURE_MESSAGES = {
 def public_failure(exc: BaseException, stage: str) -> AgentError:
     if isinstance(exc, asyncio.CancelledError):
         return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
-    if isinstance(exc, AddressError) and exc.code in ADDRESS_INPUT_ERRORS:
+    if isinstance(exc, AddressError) and exc.code == "OUTSIDE_SEOUL":
+        code = "OUTSIDE_SEOUL"
+    elif isinstance(exc, AddressError) and exc.code in ADDRESS_INPUT_ERRORS:
         code = "ADDRESS_FAILED"
     elif stage == "루프":
         code = "AI_FAILED"

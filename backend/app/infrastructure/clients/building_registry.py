@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 
+from app.application.errors import OUTSIDE_SEOUL_MESSAGE
 from app.application.ports.sites import BuildingRegistryError
 from app.domain.building import (
     BuildingRegistry,
@@ -30,6 +31,7 @@ from app.infrastructure.clients.address import (
     KAKAO_ADDRESS_URL,
     GeocodeError,
     _candidate,
+    in_seoul,
     matched_addresses,
     split_detail,
 )
@@ -127,6 +129,8 @@ async def _parcel(
         response.raise_for_status()
         doc = _candidate(response.json())
         road_name, jibun_name = matched_addresses(address, doc)
+        if not in_seoul(doc):
+            raise GeocodeError("OUTSIDE_SEOUL", OUTSIDE_SEOUL_MESSAGE)
         jibun = doc.get("address")
         if not isinstance(jibun, dict):
             raise GeocodeError("NOT_FOUND", "지번 주소를 찾지 못했습니다.")

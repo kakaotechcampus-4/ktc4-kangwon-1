@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import Link from 'next/link';
+import type {
+  ButtonHTMLAttributes,
+  ComponentProps,
+  CSSProperties,
+  ReactNode,
+} from 'react';
 import { colors } from '@/styles/tokens';
 
 type ButtonVariant = 'primary' | 'outline';
@@ -7,6 +13,14 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   children: ReactNode;
 };
+
+type ButtonLinkProps = ComponentProps<typeof Link> & {
+  variant?: ButtonVariant;
+  children: ReactNode;
+};
+
+const baseClassName =
+  'inline-flex shrink-0 items-center justify-center rounded-xl text-sm transition-opacity hover:opacity-90';
 
 const variantClassNames: Record<ButtonVariant, string> = {
   primary: 'px-[28px] py-[14px] font-bold',
@@ -35,11 +49,29 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex shrink-0 items-center justify-center rounded-xl text-sm transition-opacity hover:opacity-90 ${variantClassNames[variant]} ${className}`}
+      className={`${baseClassName} ${variantClassNames[variant]} ${className}`}
       style={{ ...variantStyles[variant], ...style }}
       {...rest}
     >
       {children}
     </button>
+  );
+}
+
+export function ButtonLink({
+  variant = 'primary',
+  className = '',
+  style,
+  children,
+  ...rest
+}: ButtonLinkProps) {
+  return (
+    <Link
+      className={`${baseClassName} ${variantClassNames[variant]} ${className}`}
+      style={{ ...variantStyles[variant], ...style }}
+      {...rest}
+    >
+      {children}
+    </Link>
   );
 }
