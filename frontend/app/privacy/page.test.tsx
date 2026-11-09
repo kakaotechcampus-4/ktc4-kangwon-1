@@ -47,6 +47,17 @@ describe('개인정보 처리방침 화면', () => {
     );
   });
 
+  it('입력한 상가 주소는 서버 기록에서 가리지만 앞단 서버 기록에는 남을 수 있다고 알린다', () => {
+    render(<PrivacyPage />);
+    const text = document.body.textContent;
+    expect(text).toContain(
+      '주소에 실린 로그인 코드·토큰과 건물 정보를 찾으려고 입력한 상가 주소는 가려서 남깁니다.'
+    );
+    expect(text).toContain(
+      '앞단 서버(nginx)의 접속 기록에는 가리지 않은 인터넷 주소가 남아, 입력한 상가 주소도 함께 남을 수 있습니다.'
+    );
+  });
+
   it('괄호·가운뎃점·자리 표시가 든 낱말은 한 줄로 묶고 보이지 않는 글자는 넣지 않는다', () => {
     render(<PrivacyPage />);
     for (const word of ['OpenAI)에게', '로그아웃·탈퇴', '【법률 검토 중】']) {
