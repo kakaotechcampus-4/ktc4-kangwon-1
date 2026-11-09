@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from app.ai import read_tools
 from app.ai.tool_contracts import GetFactsInput
 from app.application.errors import AnalysisConflictError
+from app.application.space import CONFIRMED_UNIT
 from app.domain.contracts import ToolReply
 from app.infrastructure.persistence.raw_capture import CaptureScope
 from app.infrastructure.persistence.repository import erasure
@@ -39,6 +40,8 @@ FOOD_NOTE = {
     "note": "일반음식점 허가",
     "summary": "주변에 음식점이 많아요",
 }
+SPACE = {"floor": "지하 1층", "exclusive_area_m2": 84.5}
+SPACE_ANSWER = "김영희 010-2222-3333"
 ERASED = "[삭제됨]"
 PROSE_TABLES = {
     "agentic_reports",
@@ -73,6 +76,13 @@ LINKED = {
     "JOIN facts f USING(fact_id) WHERE f.request_id=? ORDER BY s.fact_id, s.field_pointer",
 }
 MOVED_COLUMNS = {("raw_responses", "payload_hash")}
+CONFIRMED_SPACE = (
+    "SELECT f.*, r.raw_json, p.response_id, b.response_json FROM facts f "
+    "JOIN fact_sources s USING(fact_id) JOIN raw_rows r USING(raw_row_id) "
+    "JOIN raw_payloads b ON b.payload_hash=r.payload_hash "
+    "JOIN raw_responses p ON p.payload_hash=b.payload_hash AND p.request_id=f.request_id "
+    "WHERE f.request_id=? AND f.unit=? ORDER BY f.fact_id, p.response_id"
+)
 
 
 def _escaped(text, ascii):
@@ -240,9 +250,14 @@ def _projection(path, request_id):
     return kept, answers
 
 
-def _answered_request(client, text):
+def _confirmed_space(path, request_id):
+    with closing(sqlite3.connect(path)) as db:
+        return db.execute(CONFIRMED_SPACE, (request_id, CONFIRMED_UNIT)).fetchall()
+
+
+def _answered_request(client, text, **space):
     waiting = client.post(
-        "/api/v1/analyses?mock=true", json={"address": "시험", "allow_questions": True}
+        "/api/v1/analyses?mock=true", json={"address": "시험", "allow_questions": True, **space}
     ).json()
     response = client.post(
         f"/api/v1/analyses/{waiting['request_id']}/answers?mock=true",
@@ -331,6 +346,7 @@ class AnswerErasureTests(unittest.TestCase):
             cls.short_id = _answered_request(client, SHORT)
             cls.phone_id = _answered_request(client, PHONE)
             cls.food_id = _answered_request(client, FOOD)
+            cls.space_id = _answered_request(client, SPACE_ANSWER, **SPACE)
         _add_event(cls.template, cls.request_id, json.dumps({"note": SENTINEL}))
         _add_event(cls.template, cls.phone_id, json.dumps(PHONE_NOTE, ensure_ascii=False))
         _add_event(cls.template, cls.food_id, json.dumps(FOOD_NOTE, ensure_ascii=False))
@@ -409,6 +425,18 @@ class AnswerErasureTests(unittest.TestCase):
                 self.read(request_id)
         enums = [value for _, value in _projection(self.path, self.verdict_id)[0]]
         self.assertIn(("str", VERDICT), enums)
+
+    def test_confirmed_floor_and_area_are_kept(self):
+        before = _confirmed_space(self.path, self.space_id)
+        self.assertEqual(len(before), 2)
+        self.assertGreater(erasure.erase_user_answers(self.space_id, db_path=self.path), 0)
+        self.assertEqual(_confirmed_space(self.path, self.space_id), before)
+        self.assertEqual(_hits(self.path, SPACE_ANSWER), 0)
+        facts = self.read(self.space_id)["/facts"]["facts"]
+        self.assertEqual(
+            {fact["metric"]: fact["value"] for fact in facts if fact["source"] == "user"},
+            {"floor": "지하 1층", "exclusive_area": "84.5㎡", "existing_facilities": ERASED},
+        )
 
     def test_korean_answer_is_not_cut_out_of_words_or_labels(self):
         erasure.erase_user_answers(self.food_id, db_path=self.path)

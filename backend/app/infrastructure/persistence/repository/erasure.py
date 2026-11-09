@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.application.errors import AnalysisConflictError
+from app.domain.facts import ANSWER_UNIT
 from app.infrastructure.persistence.connection import connect
 from app.infrastructure.persistence.repository.common import _dumps, _text, begin_immediate
 from app.shared.canonical import canonical_hash, canonical_json
@@ -17,6 +18,7 @@ _PLAIN_QUOTE_MIN_LENGTH = 8
 _WHOLE_VALUE_MIN_LENGTH = 12
 _PAYLOADS = "raw_payloads"
 _ROWS = "raw_rows"
+_FACTS = "facts"
 _ANSWER_KEYS = frozenset({"answers", "answers_json"})
 _PROSE_COLUMNS = frozenset({"question"})
 _FIXED_KEY = re.compile(
@@ -35,6 +37,7 @@ class _Rule:
     texts: frozenset[str]
     quotes: tuple[re.Pattern[str], ...]
     needles: tuple[str, ...]
+    facts: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -60,7 +63,7 @@ def erase_user_answers(request_id: str, *, db_path: str | Path | None = None) ->
         links = _links(db, tables)
         scopes = _scopes(db, tables, links)
         changes = _changes(db, request_id, scopes, rule)
-        payloads = _changed_payloads(db, request_id, rule)
+        payloads = _changed_payloads(db, rule)
         triggers = _triggers(db, _touched(changes, payloads, links))
         for name, _ in triggers:
             db.execute(f'DROP TRIGGER "{name}"')
@@ -81,22 +84,22 @@ def _rule(db, request_id):
     if row["status"] in _UNFINISHED:
         raise AnalysisConflictError("분석이 끝난 뒤에 지울 수 있습니다.")
     pairs = [
-        pair
+        (field, value)
         for (text,) in db.execute(
             "SELECT answers_json FROM agentic_questions WHERE request_id=?", (request_id,)
         ).fetchall()
-        for pair in json.loads(text).items()
+        for field, value in json.loads(text).items()
+        if isinstance(value, str) and value.strip()
     ]
-    pairs += [
-        (metric, json.loads(value))
-        for metric, value in db.execute(
-            "SELECT metric,value_json FROM facts WHERE request_id=? AND source='user'",
-            (request_id,),
-        ).fetchall()
-    ]
-    pairs = [(field, value) for field, value in pairs if isinstance(value, str) and value.strip()]
     if not pairs:
         return None
+    facts = frozenset(
+        fact_id
+        for (fact_id,) in db.execute(
+            "SELECT fact_id FROM facts WHERE request_id=? AND source='user' AND unit=?",
+            (request_id, ANSWER_UNIT),
+        ).fetchall()
+    )
     answers = {}
     for field, value in pairs:
         answers.setdefault(field, set()).add(value)
@@ -108,7 +111,7 @@ def _rule(db, request_id):
         or (len(text) >= _QUOTE_MIN_LENGTH and any(char.isalpha() for char in text))
     )
     frozen = {field: frozenset(values) for field, values in answers.items()}
-    return _Rule(frozen, texts, quotes, _needles(texts))
+    return _Rule(frozen, texts, quotes, _needles(texts), facts)
 
 
 def _quote(text):
@@ -202,8 +205,8 @@ def _changes(db, request_id, scopes, rule):
         columns = {} if table in (_PAYLOADS, _ROWS) else _erasable_columns(db, table)
         if not columns:
             continue
-        sourced = "source" in _column_names(db, table)
-        names = [*columns, *(["source"] if sourced else [])]
+        keyed = table == _FACTS
+        names = [*columns, *(["fact_id"] if keyed else [])]
         selected = ",".join(f'"{name}"' for name in names)
         match = " OR ".join(
             f'instr("{column}",:{name})>0' for column in columns for name in needles
@@ -212,8 +215,9 @@ def _changes(db, request_id, scopes, rule):
             f'SELECT rowid,{selected} FROM "{table}" WHERE ({scope}) AND ({match})',
             {"request_id": request_id, **needles},
         ).fetchall()
+        default = _DATA if "source" in _column_names(db, table) else _RECORD
         for row in rows:
-            origin = _RECORD if not sourced else _USER if row["source"] == "user" else _DATA
+            origin = _USER if keyed and row["fact_id"] in rule.facts else default
             values = _row_values(row, columns, rule, origin)
             if values:
                 changes.append((table, row[0], values))
@@ -251,7 +255,7 @@ def _erase_value(value, rule, key, inside, prose):
     if isinstance(value, dict | list) and _FIXED_KEY.search(key):
         return value
     if isinstance(value, dict):
-        user = value.get("source") == "user"
+        user = value.get("source") == "user" and value.get("fact_id") in rule.facts
         return {
             name: _erase_answer(item, rule)
             if user and name == "value"
@@ -301,12 +305,14 @@ def _container(value):
     return parsed if isinstance(parsed, dict | list) else None
 
 
-def _changed_payloads(db, request_id, rule):
+def _changed_payloads(db, rule):
     found = {}
+    marks = ",".join("?" for _ in rule.facts)
     for payload_hash, text in db.execute(
-        "SELECT DISTINCT b.payload_hash,b.response_json FROM raw_responses p "
-        "JOIN raw_payloads b USING(payload_hash) WHERE p.request_id=? AND p.source='user'",
-        (request_id,),
+        "SELECT DISTINCT b.payload_hash,b.response_json FROM fact_sources s "
+        "JOIN raw_rows r USING(raw_row_id) JOIN raw_payloads b USING(payload_hash) "
+        f"WHERE s.fact_id IN ({marks})",
+        sorted(rule.facts),
     ).fetchall():
         if not any(needle in text for needle in rule.needles):
             continue
