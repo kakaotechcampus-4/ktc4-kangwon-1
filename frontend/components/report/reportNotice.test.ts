@@ -79,6 +79,22 @@ describe('StateNotice', () => {
     expect(html).toContain('<button');
   });
 
+  it('다시 시도 버튼 글자는 따로 주지 않으면 다시 불러오기다', () => {
+    const notice = { title: '제목', description: '설명', links: [] };
+    const byDefault = renderToStaticMarkup(
+      createElement(StateNotice, { ...notice, onRetry: () => {} })
+    );
+    const labeled = renderToStaticMarkup(
+      createElement(StateNotice, {
+        ...notice,
+        onRetry: () => {},
+        retryLabel: '다시 시도',
+      })
+    );
+    expect(byDefault).toContain('>다시 불러오기</button>');
+    expect(labeled).toContain('>다시 시도</button>');
+  });
+
   it('받는 중이면 화면 읽기 프로그램에 상태로 알린다', () => {
     const html = renderToStaticMarkup(
       createElement(StateNotice, {

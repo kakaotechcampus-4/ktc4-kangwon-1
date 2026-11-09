@@ -10,12 +10,14 @@ export default function StateNotice({
   description,
   links,
   onRetry,
+  retryLabel = '다시 불러오기',
   busy = false,
 }: {
   title: string;
   description: string;
   links: NoticeLink[];
   onRetry?: () => void;
+  retryLabel?: string;
   busy?: boolean;
 }) {
   return (
@@ -33,7 +35,7 @@ export default function StateNotice({
         <div className="flex flex-wrap gap-3">
           {onRetry ? (
             <Button type="button" variant="primary" onClick={onRetry}>
-              다시 불러오기
+              {retryLabel}
             </Button>
           ) : null}
           {links.map((link, index) => (
