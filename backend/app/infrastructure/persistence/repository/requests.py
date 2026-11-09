@@ -12,7 +12,7 @@ def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=
     """요청과 소유자를 한 트랜잭션에 넣습니다.
 
     둘로 나누면 사이에서 죽었을 때 소유자 없는 요청이 생기고, 그런 요청은
-    옛 요청과 구분되지 않아 조회가 열려 버립니다.
+    요청한 사람도 열 수 없게 됩니다.
     """
     request_id, address = _text(request_id), _text(address)
     if radius_m is not None:
