@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import PrivacyPage from '@/app/privacy/page';
 
@@ -47,6 +47,33 @@ describe('개인정보 처리방침 화면', () => {
     );
   });
 
+  it('AI 모델 회사로 OpenAI와 함께 Anthropic을 알리고 정하지 못한 값은 확인 중으로 둔다', () => {
+    render(<PrivacyPage />);
+    expect(document.body.textContent).toContain(
+      'AI 제공자(엘리스, OpenAI, Anthropic)에게 이미 보낸 내용'
+    );
+    const entrusted = screen.getByRole('table', { name: '5. 처리 위탁' });
+    expect(
+      within(entrusted).getByRole('rowheader', { name: '엘리스' }).closest('tr')
+        ?.textContent
+    ).toContain('OpenAI·Anthropic');
+    const transfer = screen.getByRole('table', { name: '6. 국외 이전' });
+    expect(
+      within(transfer)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent)
+    ).toEqual(['구분', 'Vercel', 'Resend', 'OpenAI', 'Anthropic']);
+    for (const name of ['받는 회사 법인명', '받는 회사 연락처', '보관 기간']) {
+      const cells = within(transfer)
+        .getByRole('rowheader', { name })
+        .closest('tr')
+        ?.querySelectorAll('td');
+      expect([...(cells ?? [])].map((cell) => cell.textContent)).toEqual(
+        Array(4).fill('【확인 중】')
+      );
+    }
+  });
+
   it('입력한 상가 주소는 서버 기록에서 가리지만 앞단 서버 기록에는 남을 수 있다고 알린다', () => {
     render(<PrivacyPage />);
     const text = document.body.textContent;
@@ -60,7 +87,11 @@ describe('개인정보 처리방침 화면', () => {
 
   it('괄호·가운뎃점·자리 표시가 든 낱말은 한 줄로 묶고 보이지 않는 글자는 넣지 않는다', () => {
     render(<PrivacyPage />);
-    for (const word of ['OpenAI)에게', '로그아웃·탈퇴', '【법률 검토 중】']) {
+    for (const word of [
+      'Anthropic)에게',
+      '로그아웃·탈퇴',
+      '【법률 검토 중】',
+    ]) {
       for (const element of screen.getAllByText(word)) {
         expect(element.className).toContain('whitespace-nowrap');
       }
