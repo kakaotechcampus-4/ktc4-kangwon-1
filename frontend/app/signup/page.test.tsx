@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from '@/app/signup/page';
@@ -35,17 +35,21 @@ beforeEach(() => {
   refresh.mockResolvedValue(undefined);
 });
 
+function fill(label: string, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
 async function fillForm() {
   const user = userEvent.setup();
   render(<SignupPage />);
-  await user.type(screen.getByLabelText('이메일'), 'a');
+  fill('이메일', 'a');
   await user.selectOptions(
     screen.getByLabelText('이메일 도메인 선택'),
     '직접 입력'
   );
-  await user.type(screen.getByLabelText('이메일 도메인 직접 입력'), 'b.com');
-  await user.type(screen.getByLabelText('비밀번호'), '1234567890');
-  await user.type(screen.getByLabelText('비밀번호 확인'), '1234567890');
+  fill('이메일 도메인 직접 입력', 'b.com');
+  fill('비밀번호', '1234567890');
+  fill('비밀번호 확인', '1234567890');
   return user;
 }
 
