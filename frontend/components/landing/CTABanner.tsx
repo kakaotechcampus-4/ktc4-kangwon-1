@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEasterEggGate } from '@/components/form/useEasterEggGate';
 import { saveVacancyInput } from '@/lib/api/resultStore';
 import { colors } from '@/styles/tokens';
 
@@ -13,6 +14,7 @@ import { colors } from '@/styles/tokens';
 export default function CTABanner() {
   const router = useRouter();
   const [address, setAddress] = useState('');
+  const { gate, dialog } = useEasterEggGate();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,11 +22,13 @@ export default function CTABanner() {
       alert('주소를 입력해주세요');
       return;
     }
-    saveVacancyInput({
-      roadAddress: address.trim(),
-      floorUnit: '',
+    gate(address, () => {
+      saveVacancyInput({
+        roadAddress: address.trim(),
+        floorUnit: '',
+      });
+      router.push('/building-confirm');
     });
-    router.push('/building-confirm');
   }
 
   // 모바일은 흰 바탕에 입력과 버튼을 분리하고, 큰 화면은 연한 하늘색 카드로 묶는다.
@@ -85,6 +89,7 @@ export default function CTABanner() {
           </button>
         </form>
       </div>
+      {dialog}
     </section>
   );
 }
