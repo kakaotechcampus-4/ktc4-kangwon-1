@@ -236,7 +236,7 @@ def _row_values(row, columns, rule, origin):
         if is_json:
             new = _erase_cell(old, rule, column, origin)
         else:
-            new = _erase_string(old, rule, column, False, origin.prose)
+            new = _erase_string(old, rule, key=column, inside=False, prose=origin.prose)
         if new != old:
             values[column] = new
     return values
@@ -246,29 +246,32 @@ def _erase_cell(text, rule, column, origin):
     try:
         value = json.loads(text)
     except ValueError:
-        return _erase_string(text, rule, column, False, origin.prose)
-    if origin.answers and isinstance(value, str) and value in rule.texts:
-        return _dumps(_ERASED)
-    inside = origin.answers or column in _ANSWER_KEYS
-    erased = _erase_value(value, rule, column, inside, origin.prose)
+        return _erase_string(text, rule, key=column, inside=False, prose=origin.prose)
+    if origin.answers and isinstance(value, str):
+        erased = _erase_answer(value, rule)
+    else:
+        inside = origin.answers or column in _ANSWER_KEYS
+        erased = _erase_value(value, rule, key=column, inside=inside, prose=origin.prose)
     return text if erased == value else _dumps(erased)
 
 
-def _erase_value(value, rule, key, inside, prose):
-    if isinstance(value, dict | list) and _FIXED_KEY.search(key):
+def _erase_value(value, rule, *, inside, prose, key=None):
+    if isinstance(value, dict | list) and _fixed(key):
         return value
     if isinstance(value, dict):
         user = value.get("source") == "user" and value.get("fact_id") in rule.facts
         return {
             name: _erase_answer(item, rule)
             if user and name == "value"
-            else _erase_value(item, rule, name, inside or name in _ANSWER_KEYS, prose)
+            else _erase_value(
+                item, rule, key=name, inside=inside or name in _ANSWER_KEYS, prose=prose
+            )
             for name, item in value.items()
         }
     if isinstance(value, list):
-        return [_erase_value(item, rule, key, inside, prose) for item in value]
+        return [_erase_value(item, rule, key=key, inside=inside, prose=prose) for item in value]
     if isinstance(value, str):
-        return _erase_string(value, rule, key, inside, prose)
+        return _erase_string(value, rule, key=key, inside=inside, prose=prose)
     return value
 
 
@@ -280,14 +283,14 @@ def _erase_answer(value, rule):
     return _ERASED if isinstance(value, str) and value in rule.texts else value
 
 
-def _erase_string(value, rule, key, inside, prose):
+def _erase_string(value, rule, *, key, inside, prose):
     if inside and value in rule.answers.get(key, ()):
         return _ERASED
-    if _FIXED_KEY.search(key):
+    if _fixed(key):
         return value
     nested = _container(value)
     if nested is not None:
-        erased = _erase_value(nested, rule, "", False, prose)
+        erased = _erase_value(nested, rule, inside=False, prose=prose)
         return value if erased == nested else _dumps(erased)
     if not prose:
         return value
@@ -296,6 +299,10 @@ def _erase_string(value, rule, key, inside, prose):
     for quote in rule.quotes:
         value = quote.sub(_ERASED, value)
     return value
+
+
+def _fixed(key):
+    return key is not None and _FIXED_KEY.search(key) is not None
 
 
 def _container(value):
@@ -320,7 +327,7 @@ def _changed_payloads(db, rule):
         if not any(needle in text for needle in rule.needles):
             continue
         value = json.loads(text)
-        erased = _erase_value(value, rule, "", True, False)
+        erased = _erase_value(value, rule, inside=True, prose=False)
         if erased != value:
             found[payload_hash] = erased
     return found
@@ -377,7 +384,7 @@ def _copied_row(db, row, payload_hash, rule):
     ).fetchone()
     if found is not None:
         return found[0]
-    value = _erase_value(json.loads(row["raw_json"]), rule, "", True, False)
+    value = _erase_value(json.loads(row["raw_json"]), rule, inside=True, prose=False)
     raw_row_id = "rr_" + str(uuid.uuid4())
     db.execute(
         "INSERT INTO raw_rows(raw_row_id,payload_hash,row_index,natural_key,raw_json,row_hash) "
