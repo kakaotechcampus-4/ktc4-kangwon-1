@@ -385,14 +385,37 @@ erDiagram
 
 **탈퇴.** `facts`·`scores` 등에 삭제 금지 트리거가 걸려 있어 분석 자료는 지울 수 없습니다.
 탈퇴는 계정·세션·소유 연결만 지우는 **익명화**입니다. 카카오 액세스 토큰을 보관하지 않으므로
-카카오 쪽 연결 끊기는 하지 못합니다.
+카카오 쪽 연결 끊기는 하지 못합니다. 메일로 받은 탈퇴는 `scripts/withdraw_user.py <요청 DB 경로> <계정 번호>`로
+처리합니다(아래 절차). API 탈퇴(`DELETE /api/v1/auth/me`)와 같은 `users.delete_user`를 불러 메일 토큰·로그인 수단·약관 동의까지
+지우고 한 줄 결과를 출력합니다. 없는 계정이면 종료 코드 1입니다.
 
-**질문 답 지우기.** 메일로 요청을 받으면 그 요청 번호의 `analysis_owners` 주인이 메일 보낸 계정인지 먼저 확인하고,
-`backend` 폴더에서 `python scripts/erase_user_answers.py <요청 DB 경로> <요청 번호>`를 실행합니다. 그 요청의 질문 답 글만
+**질문 답 지우기.** `scripts/erase_user_answers.py <요청 DB 경로> <요청 번호>`는 그 요청의 질문 답 글만
 `[삭제됨]`으로 바꾸고(숫자·키·식별자·시각·상태 값은 그대로) 바꾼 행 수를 출력합니다(없는 요청이거나 지울 답이 없으면 0).
 답을 받은 뒤 분석이 아직 이어지는 중이면 아무것도 바꾸지 않고 종료 코드 1로 끝납니다. 다른 요청과 함께 쓰는 원문(`raw_payloads`)은 고치지 않고 이 요청 몫만 새 원문으로
-떼어 냅니다. 불변 트리거는 그 트랜잭션 안에서만 내렸다가 다시 걸고, 실패하면 모두 되돌립니다. 이미 AI 제공자에게 전달된 내용은
-지울 수 없습니다.
+떼어 냅니다. 불변 트리거는 그 트랜잭션 안에서만 내렸다가 다시 걸고, 실패하면 모두 되돌립니다. 확인 화면에서 확정한
+층·면적·설비는 질문 답이 아니라 그대로 둡니다. 이미 AI 제공자에게 전달된 내용은 지울 수 없습니다.
+
+**메일로 받은 요청 처리 절차.** 계정 설정 화면이 생기기 전까지 운영자가 서버에서 처리합니다.
+
+1. 계정을 찾습니다. 이메일 가입자는 가입한 주소에서 온 메일만 받고 `SELECT user_id FROM users WHERE email=?`로
+   찾습니다(도메인은 소문자로 저장). 카카오 가입자는 계정에 이메일이 없으므로 "내 분석 기록"에서 연 화면 주소의
+   `id=` 값(요청 번호)과 그 분석에 입력한 상가 주소를 받아,
+   `SELECT o.user_id, r.input_address FROM analysis_owners o JOIN analysis_requests r USING(request_id) WHERE o.request_id=?`의
+   주소와 맞을 때만 처리합니다.
+2. 질문 답도 지워 달라고 하면 탈퇴보다 먼저 지웁니다. 탈퇴하면 소유 연결이 끊겨 어느 분석이 그 사람 것인지 알 수 없습니다.
+   탈퇴 스크립트에 `--erase-answers`를 주면 그 계정의 분석마다 답을 먼저 지우고 탈퇴합니다. 답을 받은 뒤 아직 이어지는
+   분석이 있으면 탈퇴하지 않고 종료 코드 1로 끝나므로 분석이 끝난 뒤 다시 돌립니다.
+3. SSM으로 서버에 들어가 서비스와 같은 `ubuntu` 사용자로, 서버 가상환경의 파이썬으로 돌립니다. 다른 사용자로 돌리면 DB 옆
+   `-wal`·`-shm` 파일 권한이 꼬입니다. 요청 DB 경로는 서비스 설정의 `SQLITE_PATH`입니다.
+
+   ```bash
+   sudo -iu ubuntu
+   cd /opt/chaeum/current/backend
+   /opt/chaeum/shared/venv/bin/python scripts/erase_user_answers.py /opt/chaeum/shared/storage/chaeum.sqlite3 <요청 번호>
+   /opt/chaeum/shared/venv/bin/python scripts/withdraw_user.py /opt/chaeum/shared/storage/chaeum.sqlite3 <계정 번호> --erase-answers
+   ```
+
+4. 지우기는 한 트랜잭션 동안 요청 DB 쓰기 잠금을 잡아 그사이 분석 저장이 기다리므로, 사용이 적은 시간에 돌립니다.
 
 ### 계보: 숫자에서 원문까지
 
