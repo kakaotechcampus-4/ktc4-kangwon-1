@@ -302,8 +302,12 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             raise LLMHTTPError(429, {"error": {"code": "insufficient_quota"}})
 
         loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
-        await loop.run()
+        output = await loop.run()
         self.assertEqual(len(calls), 1)
+        self.assertIn(
+            "모델 서비스를 확인하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
 
     async def test_budget_fallback_has_unknown_L(self):
         from app.ai.runtime import DecisionLoop
