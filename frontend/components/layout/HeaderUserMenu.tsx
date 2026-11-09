@@ -41,7 +41,7 @@ export default function HeaderUserMenu() {
 
   // 로그인 여부를 확인하는 동안 자리를 비워 둔다. 버튼이 깜빡이며 바뀌지 않게.
   if (status === 'loading') {
-    return <div className="h-11 w-11 justify-self-end sm:w-[84px]" />;
+    return <div className="h-11 w-[63px] justify-self-end sm:w-[86px]" />;
   }
 
   if (status === 'anonymous') {
@@ -96,7 +96,7 @@ export default function HeaderUserMenu() {
             color: colors.neutral.white,
           }}
         >
-          {name.slice(0, 1).toUpperCase()}
+          {Array.from(name)[0].toUpperCase()}
         </span>
         <span className="hidden truncate sm:inline">{name}</span>
       </button>

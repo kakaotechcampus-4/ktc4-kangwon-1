@@ -54,10 +54,31 @@ describe('HeaderUserMenu', () => {
     const button = screen.getByRole('button', { name: '내 계정 메뉴' });
 
     await user.click(button);
+    screen.getByRole('menuitem', { name: '내 분석 기록' }).focus();
+    expect(document.activeElement).not.toBe(button);
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(button);
+  });
+
+  it('메뉴 밖을 누르면 닫힌다', async () => {
+    const user = userEvent.setup();
+    render(<HeaderUserMenu />);
+
+    await user.click(screen.getByRole('button', { name: '내 계정 메뉴' }));
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('이름이 이모지로 시작해도 첫 글자가 깨지지 않는다', () => {
+    signedIn('🐻곰돌이');
+    render(<HeaderUserMenu />);
+
+    expect(
+      screen.getByRole('button', { name: '내 계정 메뉴' }).textContent
+    ).toContain('🐻');
   });
 
   it('로그아웃을 누르면 logout이 불리고 홈으로 간다', async () => {
@@ -93,7 +114,7 @@ describe('HeaderUserMenu', () => {
     expect(name.classList.contains('sm:inline')).toBe(true);
   });
 
-  it('확인 중에는 좁은 화면에서 44px 자리만 비워 둔다', () => {
+  it('확인 중에는 좁은 화면에서 로그인 링크 폭만큼 자리를 비워 둔다', () => {
     vi.mocked(useAuth).mockReturnValue({
       status: 'loading',
       user: null,
@@ -102,7 +123,7 @@ describe('HeaderUserMenu', () => {
     const { container } = render(<HeaderUserMenu />);
 
     const placeholder = container.firstChild as HTMLElement;
-    expect(placeholder.classList.contains('w-11')).toBe(true);
-    expect(placeholder.classList.contains('sm:w-[84px]')).toBe(true);
+    expect(placeholder.classList.contains('w-[63px]')).toBe(true);
+    expect(placeholder.classList.contains('sm:w-[86px]')).toBe(true);
   });
 });
