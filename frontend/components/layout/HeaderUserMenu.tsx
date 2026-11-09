@@ -14,6 +14,7 @@ export default function HeaderUserMenu() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -24,20 +25,30 @@ export default function HeaderUserMenu() {
         setOpen(false);
       }
     }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggle.current?.focus();
+      }
+    }
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, [open]);
 
   // 로그인 여부를 확인하는 동안 자리를 비워 둔다. 버튼이 깜빡이며 바뀌지 않게.
   if (status === 'loading') {
-    return <div className="h-11 justify-self-end" style={{ width: 84 }} />;
+    return <div className="h-11 w-11 justify-self-end sm:w-[84px]" />;
   }
 
   if (status === 'anonymous') {
     return (
       <Link
         href={loginPath(pathname, window.location.search)}
-        className="inline-flex h-11 items-center justify-self-end rounded-md border-[1.5px] px-5 text-15 font-bold transition-colors hover:bg-white/60"
+        className="inline-flex h-11 items-center justify-self-end rounded-md border-[1.5px] px-3 text-15 font-bold transition-colors hover:bg-white/60 sm:px-5"
         style={{
           borderColor: colors.brand.dark,
           color: colors.brand.dark,
@@ -66,11 +77,13 @@ export default function HeaderUserMenu() {
   return (
     <div ref={wrapper} className="relative justify-self-end">
       <button
+        ref={toggle}
         type="button"
         onClick={() => setOpen((value) => !value)}
+        aria-label="내 계정 메뉴"
         aria-expanded={open}
         aria-haspopup="menu"
-        className="inline-flex h-11 max-w-[200px] items-center gap-2 rounded-md border-[1.5px] px-3 text-15 font-bold transition-colors hover:bg-white/60"
+        className="inline-flex h-11 w-11 max-w-[200px] items-center justify-center gap-2 rounded-md border-[1.5px] text-15 font-bold transition-colors hover:bg-white/60 sm:w-auto sm:px-3"
         style={{
           borderColor: colors.brand.dark,
           color: colors.brand.dark,
@@ -85,7 +98,7 @@ export default function HeaderUserMenu() {
         >
           {name.slice(0, 1).toUpperCase()}
         </span>
-        <span className="truncate">{name}</span>
+        <span className="hidden truncate sm:inline">{name}</span>
       </button>
 
       {open ? (
