@@ -12,7 +12,12 @@ from pydantic import ValidationError
 from app.ai import customer_rubric, examiner, founder, landlord
 from app.ai.aliases import encode, label_periods, labels_periods
 from app.ai.tool_contracts import ReviewRef
-from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transient
+from app.application.ports.llm import (
+    LLMHTTPError,
+    LLMResponseError,
+    is_transient,
+    is_transport_retried,
+)
 from app.application.ports.llm_budget import BudgetExceeded
 from app.application.ports.llm_settings import LLMSettings
 from app.application.ports.storage import open_stores
@@ -278,7 +283,7 @@ async def review(loop, actor, executor, draft):
                 ):
                     message, _ = await loop._model(actor, messages, settings, definitions)
             except (LLMResponseError, LLMHTTPError) as exc:
-                if is_transient(exc) and not retried:
+                if is_transient(exc) and not is_transport_retried(exc) and not retried:
                     retried = True
                     continue
                 if not isinstance(exc, LLMResponseError) or exc.code != "LLM_OUTPUT_LIMIT":
