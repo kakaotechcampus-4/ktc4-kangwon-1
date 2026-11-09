@@ -95,6 +95,18 @@ describe('StateNotice', () => {
     expect(labeled).toContain('>다시 시도</button>');
   });
 
+  it('띄어쓰기 없는 긴 서버 문구도 카드 안에서 줄을 바꿀 수 있다', () => {
+    const long = '서버가띄어쓰기없이보낸아주긴안내문장'.repeat(6);
+    const html = renderToStaticMarkup(
+      createElement(StateNotice, { title: long, description: long, links: [] })
+    );
+    const wrapping = new RegExp(
+      `class="[^"]*\\bbreak-keep wrap-anywhere\\b[^"]*"[^>]*>${long}<`,
+      'g'
+    );
+    expect(html.match(wrapping)).toHaveLength(2);
+  });
+
   it('받는 중이면 화면 읽기 프로그램에 상태로 알린다', () => {
     const html = renderToStaticMarkup(
       createElement(StateNotice, {

@@ -28,7 +28,7 @@ export default function NoticePage({
             {eyebrow}
           </p>
           <h1
-            className="font-extrabold tracking-[-0.04em] break-keep"
+            className="font-extrabold tracking-[-0.04em] break-keep wrap-anywhere"
             style={{
               color: colors.brand.dark,
               fontSize: 'clamp(26px, 3vw, 42px)',
@@ -36,7 +36,9 @@ export default function NoticePage({
           >
             {title}
           </h1>
-          <p className="text-base break-keep text-[#4B5866]">{description}</p>
+          <p className="text-base break-keep wrap-anywhere text-[#4B5866]">
+            {description}
+          </p>
         </div>
         {children}
       </main>

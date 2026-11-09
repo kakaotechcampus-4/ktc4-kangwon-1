@@ -58,7 +58,7 @@ const styles = {
     borderRadius: 24,
     border: `1px solid ${colors.neutral.border}`,
     backgroundColor: colors.neutral.white,
-    boxShadow: `0 18px 40px ${colors.brand.dark}0F`,
+    boxShadow: '0 18px 40px rgba(16, 35, 58, 0.06)',
   },
   cardTitle: {
     margin: 0,
@@ -75,7 +75,7 @@ const styles = {
     backgroundColor: colors.brand.primary,
     color: colors.neutral.white,
     fontWeight: 700,
-    boxShadow: `0 8px 18px ${colors.brand.primary}33`,
+    boxShadow: '0 8px 18px rgba(36, 83, 214, 0.2)',
   },
   home: {
     ...button,
