@@ -27,6 +27,7 @@ function LoginForm() {
   const router = useRouter();
   const { refresh } = useAuth();
   const next = safeNext(params.get('next'));
+  const resetDone = params.get('reset') === 'done';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -71,6 +72,12 @@ function LoginForm() {
         </>
       }
     >
+      {resetDone && !error ? (
+        <FormMessage tone="success">
+          비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요.
+        </FormMessage>
+      ) : null}
+
       <KakaoButton next={next} />
 
       <div className="flex items-center gap-3">
