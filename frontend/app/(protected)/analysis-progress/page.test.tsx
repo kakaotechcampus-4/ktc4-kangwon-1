@@ -42,6 +42,8 @@ function progress(overrides: Partial<Progress>) {
     submitError: null,
     submit: vi.fn(),
     detail: null,
+    disconnected: false,
+    reconnect: vi.fn(),
     ...overrides,
   } as Progress);
 }
@@ -81,6 +83,25 @@ describe('분석 진행 화면', () => {
       .setup()
       .click(screen.getByRole('button', { name: '다시 분석하기' }));
     expect(router.replace).toHaveBeenCalledWith('/vacancy-input');
+  });
+
+  it('연결이 끊기면 새 분석 대신 같은 분석에 다시 연결하게 한다', async () => {
+    const reconnect = vi.fn();
+    progress({ disconnected: true, reconnect });
+    render(<AnalysisProgressPage />);
+    expect(await screen.findByText('연결이 잠시 끊겼어요')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '다시 분석하기' })).toBeNull();
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: '지금 다시 연결' }));
+    expect(reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('연결이 이어져 있으면 끊김 안내를 띄우지 않는다', async () => {
+    progress({});
+    render(<AnalysisProgressPage />);
+    await screen.findAllByText(/분석/);
+    expect(screen.queryByText('연결이 잠시 끊겼어요')).toBeNull();
   });
 
   it('서울 밖 주소로 실패하면 다시 분석 대신 주소를 다시 입력하게 한다', async () => {

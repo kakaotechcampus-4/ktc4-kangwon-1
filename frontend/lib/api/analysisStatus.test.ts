@@ -49,7 +49,10 @@ describe('analysisLink', () => {
   });
 
   it('아직 도는 분석은 진행 화면으로 다시 들어간다', () => {
-    const progress = { label: '진행 상황 보기', href: '/analysis-progress?id=r1' };
+    const progress = {
+      label: '진행 상황 보기',
+      href: '/analysis-progress?id=r1',
+    };
     expect(analysisLink('r1', 'running')).toEqual(progress);
     expect(analysisLink('r1', 'pending')).toEqual(progress);
   });
