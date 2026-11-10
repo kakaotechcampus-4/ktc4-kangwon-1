@@ -203,10 +203,83 @@ class FinishTests(unittest.TestCase):
     def test_fit_without_citable_evidence_is_unknown(self):
         site = Site(CODES[0], {"D1": 3, "D2": 3, "D3": 3, "D4": 2})
         check = FitCheck(industry_code=CODES[0], points=0, fact_ids=[new_id()], reason="추정")
-        _, _, rubric = self.finish([site], [check])
+        verdict, _, rubric = self.finish([site], [check])
         k6 = rubric.candidates[0].checks[-1]
         self.assertEqual(k6.status, "unknown")
         self.assertIsNone(k6.points)
+        self.assertEqual(verdict, "conditional")
+
+    def test_missing_fit_blocks_agree_without_inventing_points(self):
+        site = Site(CODES[0], dict.fromkeys(rubric_rules.DEMAND, 3))
+        verdict, issues, rubric = self.finish([site])
+        candidate = rubric.candidates[0]
+        self.assertEqual(verdict, "conditional")
+        self.assertIn("미확인", rubric.verdict_basis)
+        # 확인된 문항의 점수는 보존하고, 없는 K6를 0점이나 만점으로 만들지 않습니다.
+        self.assertEqual((candidate.points, candidate.applicable_weight, rubric.ratio), (15, 15, 1))
+        self.assertEqual(candidate.checks[-1].status, "unknown")
+        self.assertIsNone(candidate.checks[-1].points)
+        self.assertEqual(issues, [])
+
+    def test_missing_fit_for_last_candidate_blocks_agree(self):
+        sites = [Site(code, dict.fromkeys(rubric_rules.DEMAND, 3)) for code in CODES]
+        fit = [
+            FitCheck(
+                industry_code=site.code,
+                points=40,
+                fact_ids=[site.facts["D1"]],
+                reason="근거와 맞음",
+            )
+            for site in sites[:-1]
+        ]
+        verdict, _, rubric = self.finish(sites, fit)
+        self.assertEqual(verdict, "conditional")
+        self.assertEqual(rubric.ratio, 1)
+        self.assertEqual(rubric.candidates[-1].checks[-1].status, "unknown")
+        self.assertTrue(all(c.checks[-1].status == "observed" for c in rubric.candidates[:-1]))
+
+    def test_failed_model_blocks_agree_with_saved_fit(self):
+        site = Site(CODES[0], dict.fromkeys(rubric_rules.DEMAND, 3))
+        check = FitCheck(
+            industry_code=site.code,
+            points=40,
+            fact_ids=[site.facts["D1"]],
+            reason="근거와 맞음",
+        )
+        verdict, _, rubric = self.finish([site], [check], model_issues=None)
+        self.assertEqual(verdict, "conditional")
+        self.assertIn("실패", rubric.verdict_basis)
+        self.assertEqual(rubric.model_status, "failed")
+        self.assertEqual(rubric.candidates[0].checks[-1].points, 40)
+        self.assertEqual(rubric.ratio, 1)
+
+    def test_all_candidates_with_supported_fit_can_agree(self):
+        sites = [Site(code, dict.fromkeys(rubric_rules.DEMAND, 3)) for code in CODES]
+        fit = [
+            FitCheck(
+                industry_code=site.code,
+                points=40,
+                fact_ids=[site.facts["D1"]],
+                reason="근거와 맞음",
+            )
+            for site in sites
+        ]
+        verdict, issues, rubric = self.finish(sites, fit)
+        self.assertEqual(verdict, "agree")
+        self.assertEqual(rubric.ratio, 1)
+        self.assertEqual(issues, [])
+
+    def test_low_supported_fit_still_opposes(self):
+        site = Site(CODES[0], dict.fromkeys(rubric_rules.DEMAND, 3))
+        check = FitCheck(
+            industry_code=site.code,
+            points=0,
+            fact_ids=[site.facts["D1"]],
+            reason="추천과 근거가 어긋남",
+        )
+        verdict, _, rubric = self.finish([site], [check])
+        self.assertEqual(verdict, "oppose")
+        self.assertEqual(rubric.candidates[0].checks[-1].points, 0)
 
     def test_no_candidates_is_conditional(self):
         verdict, issues, rubric = rubric_rules.finish([], [], [], [], set())

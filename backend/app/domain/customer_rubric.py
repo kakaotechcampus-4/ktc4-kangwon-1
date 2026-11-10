@@ -226,6 +226,14 @@ def finish(scored, code_issues, fit_checks, model_issues, citable):
                 else "후보 평균 득점률이 반대 기준 이하입니다."
             ),
         )
+    elif model_issues is None or any(c.checks[-1].status != "observed" for c in candidates):
+        # 확인된 일부 문항의 높은 비율만으로 미완료 모델 평가에 동의하지 않습니다.
+        verdict, basis = (
+            "conditional",
+            "모델 평가 제출이 실패해 조건부로 둡니다."
+            if model_issues is None
+            else "추천·근거 일치(K6) 평가가 미확인인 후보가 있어 조건부로 둡니다.",
+        )
     elif ratio >= AGREE and not zero:
         verdict, basis = "agree", "후보 평균 득점률이 동의 기준 이상이고 0점 항목이 없습니다."
     else:
