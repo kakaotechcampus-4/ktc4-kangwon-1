@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAnalysisProgress } from '@/lib/hooks/useAnalysisProgress';
 import { mockAnalysisProgress } from '@/lib/mockData/analysisProgress';
 import { AnalysisApiError, getAnalysisEvents } from '@/lib/api/analyses';
+import type { AnalysisEvents } from '@/lib/api/types';
 
 vi.mock('@/lib/api/analyses', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/analyses')>();
@@ -14,7 +15,13 @@ vi.mock('@/lib/api/analyses', async (importOriginal) => {
   };
 });
 
-const running = { events: [], finished: false, next_after: 0 };
+const running: AnalysisEvents = {
+  request_id: 'r1',
+  status: 'running',
+  events: [],
+  finished: false,
+  next_after: 0,
+};
 
 async function pollTimes(count: number) {
   for (let i = 0; i < count; i += 1) {
