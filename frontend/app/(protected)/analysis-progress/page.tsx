@@ -306,8 +306,18 @@ function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
   const [session] = useState(() => readSession(requestId));
   const fromSession = progressSite(requestId, session, null) !== null;
-  const { steps, stage, waiting, result, error, submitError, submit, detail } =
-    useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
+  const {
+    steps,
+    stage,
+    waiting,
+    result,
+    error,
+    submitError,
+    submit,
+    detail,
+    disconnected,
+    reconnect,
+  } = useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
   const site = liveProgressSite(requestId, session, detail, stage === 'failed');
   const known: KnownSite = site
     ? toKnownSite({ summary: LOADING_SUMMARY }, site)
@@ -363,6 +373,8 @@ function LiveProgress({ requestId }: { requestId: string }) {
       outsideSeoul={
         stage === 'failed' && detail?.error?.code === 'OUTSIDE_SEOUL'
       }
+      connectionLost={disconnected}
+      onReconnect={reconnect}
     />
   );
 }
@@ -381,6 +393,8 @@ function ProgressView({
   onRestart,
   showNote,
   outsideSeoul = false,
+  connectionLost = false,
+  onReconnect,
 }: {
   steps: ProgressStep[];
   stage: AnalysisStage;
@@ -395,6 +409,8 @@ function ProgressView({
   onRestart?: () => void;
   showNote?: boolean;
   outsideSeoul?: boolean;
+  connectionLost?: boolean;
+  onReconnect?: () => void;
 }) {
   const copy = outsideSeoul ? OUTSIDE_SEOUL_COPY : STAGE_COPY[stage];
   const toneColor = TONE_COLORS[copy.tone];
@@ -449,6 +465,17 @@ function ProgressView({
         </div>
 
         <StepIndicator currentStep={3} />
+
+        {connectionLost ? (
+          <StateNotice
+            title="연결이 잠시 끊겼어요"
+            description="분석은 서버에서 계속 진행되고 있어요. 이 화면이 같은 분석에 다시 연결하는 중이에요."
+            links={[]}
+            onRetry={onReconnect}
+            retryLabel="지금 다시 연결"
+            busy
+          />
+        ) : null}
 
         {/* 넓은 화면(xl)은 3컬럼: 진행 현황 · 질문·결과 · 분석 대상.
             태블릿·작은 노트북(md~lg)은 왼쪽에 진행 현황과 분석 대상을 쌓고 오른쪽에 질문·결과.
