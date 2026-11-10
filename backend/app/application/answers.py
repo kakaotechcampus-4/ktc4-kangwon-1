@@ -4,6 +4,7 @@ from app.application.errors import AnalysisConflictError
 from app.application.facts import register_fact
 from app.application.ports.storage import open_stores
 from app.application.space import CONFIRMED_UNIT, ensure_space_fits
+from app.domain.facts import ANSWER_UNIT
 from app.shared.canonical import canonical_json
 
 
@@ -79,7 +80,7 @@ def save_user_facts(scope, answers, question_id, saved):
                 source="user",
                 metric=metric,
                 value=value,
-                unit="임대인 답변",
+                unit=ANSWER_UNIT,
                 status="observed",
                 row_ids=[ref],
                 field_pointer="/" + field,

@@ -47,6 +47,7 @@ def fact_period(version, source, metric, default):
 
 
 CALC_VERSION = "rubric-v0.8-pr3-2"
+ANSWER_UNIT = "임대인 답변"
 
 
 def fact_identity(

@@ -429,3 +429,11 @@ CREATE TABLE IF NOT EXISTS analysis_owners (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_analysis_owners_user ON analysis_owners(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS terms_agreements (
+    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    terms_version TEXT NOT NULL,
+    method TEXT NOT NULL CHECK (method IN ('email', 'kakao')),
+    agreed_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, terms_version)
+);

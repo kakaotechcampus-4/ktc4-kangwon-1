@@ -30,6 +30,7 @@ from app.api.v1.deps import (  # noqa: E402
     require_origin,
     verified_user,
 )
+from app.domain.terms import TERMS_VERSION  # noqa: E402
 from app.infrastructure.mock import dependencies as mock_dependencies  # noqa: E402
 from app.infrastructure.persistence import repository  # noqa: E402
 from app.infrastructure.persistence.repository import users as user_repo  # noqa: E402
@@ -277,7 +278,7 @@ def main():
 def _measurement_user(db_path):
     """측정용 계정 하나. analysis_owners가 users를 참조해 실제 행이 있어야 합니다."""
     user_id = user_repo.create_email_user(
-        "load@measure.invalid", "scrypt$1$1$1$AA==$AA==", "측정", db_path=db_path
+        "load@measure.invalid", "scrypt$1$1$1$AA==$AA==", TERMS_VERSION, db_path=db_path
     )
     user_repo.mark_email_verified(user_id, db_path=db_path)
     user = user_repo.get_user(user_id, db_path=db_path)

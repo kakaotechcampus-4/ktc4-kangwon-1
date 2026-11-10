@@ -11,7 +11,6 @@ export type AuthUser = {
   user_id: string;
   email: string | null;
   display_name: string | null;
-  profile_image_url: string | null;
   email_verified: boolean;
   /** 이메일로 가입했는데 아직 메일 확인을 안 끝낸 상태. 분석 실행이 막힌다. */
   needs_verification: boolean;
@@ -48,14 +47,14 @@ export async function getMe(): Promise<AuthUser | null> {
 export async function signup(input: {
   email: string;
   password: string;
-  displayName?: string;
+  agreeTerms: boolean;
 }): Promise<{ verification_sent: boolean }> {
   return apiJson(
     '/api/v1/auth/signup',
     jsonInit('POST', {
       email: input.email,
       password: input.password,
-      ...(input.displayName ? { display_name: input.displayName } : {}),
+      agree_terms: input.agreeTerms,
     })
   );
 }

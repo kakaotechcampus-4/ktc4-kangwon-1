@@ -15,6 +15,7 @@ from typing import Any
 from app.api.v1.analyses import require_owner
 from app.api.v1.deps import current_user, optional_user, require_origin, verified_user
 from app.domain.passwords import hash_password
+from app.domain.terms import TERMS_VERSION
 from app.infrastructure.persistence.connection import initialize
 from app.infrastructure.persistence.repository import users as user_repo
 
@@ -23,16 +24,14 @@ TEST_PASSWORD = "testpassword1"
 ALLOWED_ORIGIN = "http://localhost:3000"
 
 
-def create_user(
-    db_path, *, email: str = TEST_EMAIL, verified: bool = True, name: str = "시험 사용자"
-) -> dict[str, Any]:
+def create_user(db_path, *, email: str = TEST_EMAIL, verified: bool = True) -> dict[str, Any]:
     """DB에 계정을 하나 만들고 행을 돌려줍니다. 같은 DB에 여러 번 불러도 괜찮습니다."""
     initialize(db_path)
     existing = user_repo.get_user_by_email(email, db_path=db_path)
     if existing is not None:
         return existing
     user_id = user_repo.create_email_user(
-        email, hash_password(TEST_PASSWORD), name, db_path=db_path
+        email, hash_password(TEST_PASSWORD), TERMS_VERSION, db_path=db_path
     )
     if verified:
         user_repo.mark_email_verified(user_id, db_path=db_path)

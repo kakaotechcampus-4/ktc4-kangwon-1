@@ -106,21 +106,17 @@ class OwnershipTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/analyses/nope").status_code, 404)
 
     # ── 인증 이전 자료 ──────────────────────────────────────────────────
-    def test_requests_from_before_auth_stay_readable(self):
+    def test_ownerless_requests_are_hidden_regardless_of_age(self):
         repository.create_request("legacy", "옛 요청", db_path=self.path)
         with connect(self.path) as db:
             db.execute(
                 "UPDATE analysis_requests SET created_at=? WHERE request_id='legacy'",
-                ("2026-01-01T00:00:00+00:00",),
+                ("2026-10-01T00:00:00+00:00",),
             )
+        self.assertEqual(self.client.get("/api/v1/analyses/legacy").status_code, 404)
         self.as_user(self.stranger)
-        self.assertEqual(self.client.get("/api/v1/analyses/legacy").status_code, 200)
-
-    def test_ownerless_request_made_after_the_cutoff_is_hidden(self):
-        # 소유자 기록이 빠진 새 요청까지 열어 두면 영구 구멍이 됩니다.
-        repository.create_request("orphan", "소유자 없음", db_path=self.path)
-        self.as_user(self.stranger)
-        self.assertEqual(self.client.get("/api/v1/analyses/orphan").status_code, 404)
+        self.assertEqual(self.client.get("/api/v1/analyses/legacy").status_code, 404)
+        self.assertIsNone(repository.owner_of("legacy", db_path=self.path))
 
     # ── 내 기록 ─────────────────────────────────────────────────────────
     def test_my_analyses_lists_only_my_own(self):

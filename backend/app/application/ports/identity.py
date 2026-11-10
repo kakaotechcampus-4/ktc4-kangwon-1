@@ -69,14 +69,13 @@ class KakaoOAuthError(Exception):
 
 
 class KakaoProfile:
-    """카카오가 돌려준 신원입니다. 닉네임·사진은 선택 동의라 없을 수 있습니다."""
+    """카카오가 돌려준 신원입니다. 닉네임은 선택 동의라 없을 수 있습니다."""
 
-    __slots__ = ("provider_user_id", "nickname", "profile_image_url")
+    __slots__ = ("provider_user_id", "nickname")
 
-    def __init__(self, provider_user_id: str, nickname: str | None, profile_image_url: str | None):
+    def __init__(self, provider_user_id: str, nickname: str | None):
         self.provider_user_id = provider_user_id
         self.nickname = nickname
-        self.profile_image_url = profile_image_url
 
 
 class MailError(Exception):

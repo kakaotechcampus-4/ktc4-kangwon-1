@@ -147,6 +147,45 @@ class SchemaVersionTests(unittest.TestCase):
                 "주소",
             )
 
+    def test_terms_table_is_added_to_a_version_six_database(self):
+        path = self.directory / "v6.sqlite3"
+        initialize(path)
+        with closing(sqlite3.connect(path)) as db:
+            db.execute(
+                "INSERT INTO users(user_id, created_at, last_login_at) VALUES ('u1', 't', 't')"
+            )
+            db.execute("DROP TABLE terms_agreements")
+            db.execute("PRAGMA user_version = 6")
+            db.commit()
+
+        initialize(path)
+
+        self.assertEqual(_user_version(path), 7)
+        with closing(sqlite3.connect(path)) as db:
+            tables = {
+                row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            user_count = db.execute("SELECT count(*) FROM users").fetchone()[0]
+        self.assertIn("terms_agreements", tables)
+        self.assertEqual(user_count, 1)
+
+    def test_deleting_user_cascades_terms_agreement(self):
+        path = self.directory / "cascade.sqlite3"
+        initialize(path)
+        with connect(path) as db:
+            db.execute(
+                "INSERT INTO users(user_id, created_at, last_login_at) VALUES ('u1', 't', 't')"
+            )
+            db.execute(
+                "INSERT INTO terms_agreements(user_id, terms_version, method, agreed_at)"
+                " VALUES ('u1', 'v1', 'email', 't')"
+            )
+        with connect(path) as db:
+            db.execute("DELETE FROM users WHERE user_id = 'u1'")
+        with connect(path) as db:
+            agreement_count = db.execute("SELECT count(*) FROM terms_agreements").fetchone()[0]
+        self.assertEqual(agreement_count, 0)
+
     def test_concurrent_initialize_is_idempotent(self):
         path = self.directory / "concurrent.sqlite3"
         with ThreadPoolExecutor(max_workers=4) as pool:
