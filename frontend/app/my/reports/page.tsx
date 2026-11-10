@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import RequireAuth from '@/components/auth/RequireAuth';
-import { useAuth } from '@/components/auth/AuthProvider';
 import FormMessage from '@/components/auth/FormMessage';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -18,6 +17,7 @@ import {
 } from '@/lib/api/auth';
 import { clearAnalysisResult, clearRequestId } from '@/lib/api/resultStore';
 import { WITHDRAWAL_EFFECT } from '@/lib/legal/terms';
+import { openFresh } from '@/lib/navigation';
 import {
   analysisLink,
   formatDay,
@@ -165,8 +165,6 @@ function MyReports() {
 const WITHDRAW_WORD = '탈퇴';
 
 function WithdrawSection() {
-  const router = useRouter();
-  const { clear } = useAuth();
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,8 +185,7 @@ function WithdrawSection() {
     }
     clearAnalysisResult();
     clearRequestId();
-    clear();
-    router.push('/?withdrawn=1');
+    openFresh('/?withdrawn=1');
   }
 
   return (
