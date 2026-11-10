@@ -4,6 +4,10 @@ import json
 import re
 
 from app.application.ports.storage import open_stores
+from app.application.space import CONFIRMED_UNIT
+from app.domain.report_input import normalize_report_input
+from app.domain.space_fit import chosen_answer
+from app.domain.space_values import readable_answer
 
 SINGLES = {"fact_id", "distance_fact_id"}
 LISTS = {"fact_ids", "reason_fact_ids", "selection_fact_ids"}
@@ -94,6 +98,22 @@ def decode(scope, value):
         return _walk(value, original)
 
 
+def confirmed_literals(scope):
+    """공간 판정과 같은 최신 답을 선택하며 확인 화면 확정값만 사용합니다."""
+    with open_stores(scope) as st:
+        answers = st.facts.user_space_answers(scope.request_id, scope.snapshot_id)
+    literals = {}
+    for metric in ("floor", "exclusive_area"):
+        rows = [row for row in answers if row.metric == metric]
+        if not rows:
+            continue
+        fid, value = chosen_answer(metric, [(row.fact_id, row.value) for row in rows])
+        unit = next(row.unit for row in rows if row.fact_id == fid)
+        if unit == CONFIRMED_UNIT and readable_answer(metric, value):
+            literals[re.sub(r"\s+", "", value)] = fid
+    return literals
+
+
 def decode_report(scope, arguments):
     """미존재 인용은 해당 문장/참조만 제거하고 나머지 보고서를 검증합니다."""
     warnings = []
@@ -133,4 +153,6 @@ def decode_report(scope, arguments):
         segments = cleaned.setdefault("limitations_segments", [])
         if isinstance(segments, list):
             segments.append({"type": "text", "text": "미등록 근거를 인용한 문장을 제외했습니다."})
-    return decode(scope, arguments | {"report": cleaned}), warnings
+    decoded = decode(scope, arguments | {"report": cleaned})
+    normalized, notes = normalize_report_input(decoded, confirmed_literals(scope))
+    return normalized, [*warnings, *notes]

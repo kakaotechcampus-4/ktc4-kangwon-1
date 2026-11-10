@@ -27,6 +27,7 @@ from app.domain.report import (
     rule_scored_space,
     segments,
 )
+from app.domain.report_input import numeric_text_paths
 from app.domain.schemas import DecisionResult
 from app.domain.scoring import (
     WEIGHTS,
@@ -207,8 +208,13 @@ def validate_proposal(scope, proposal):
     ids = {s.fact_id for s in segments(proposal) if s.type == "fact"}
     for candidate in proposal.candidates + proposal.excluded_candidates:
         ids.update(candidate.fact_ids)
-    if any(has_digit(s.text) for s in segments(proposal) if s.type == "text"):
-        raise ReportInvalid("문장 숫자는 fact 슬롯으로 제출해야 합니다.")
+    numeric_paths = numeric_text_paths(proposal.model_dump(mode="json"))
+    if numeric_paths:
+        raise ReportInvalid(
+            "문장 숫자는 fact 슬롯으로 제출해야 합니다. 수정 위치: "
+            + ", ".join(numeric_paths)
+            + '. 숫자 구절을 실제 fact_id와 format을 갖춘 type="fact" 참조로 바꾸세요.'
+        )
     facts = fact_rows(scope, ids)
     if any(f.status != "observed" or not f.citable for f in facts.values()):
         raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")

@@ -1,11 +1,14 @@
 """별칭과 행별 L 검증이 다른 업종을 막지 않는지 확인합니다."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.ai.aliases import decode, decode_report, encode
 from app.ai.runtime import DecisionLoop
+from app.application.answers import save_confirmed_space
 from app.application.facts import register_fact
 from app.application.snapshot import persist_report
 from app.domain.industries.catalog import INDUSTRIES
@@ -133,3 +136,95 @@ class SimpleLTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(body["report"]["summary_segments"]), 2)
         self.assertEqual(body["report"]["summary_segments"][1]["fact_id"], fid)
         self.assertIn("deadbeef", warnings[0])
+
+    async def test_report_fills_missing_format_for_registered_fact(self):
+        fid, short = await self.fact("G203")
+        await self.loop.tools.execute("submit_l", {"finish": True})
+        reply = await self.loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {"summary_segments": [{"type": "fact", "fact_id": short}]},
+            },
+        )
+        self.assertEqual(reply.status, "ok")
+        segment = self.loop.done.summary_segments[0]
+        self.assertEqual((segment.fact_id, segment.format), (fid, "text"))
+        self.assertTrue(any("표시 형식" in warning for warning in reply.warnings))
+        self.assertFalse(
+            any(
+                s.type == "text" and "미등록 근거" in s.text
+                for s in self.loop.done.limitations_segments
+            )
+        )
+
+    async def test_report_references_exact_confirmed_floor_and_area(self):
+        saved = save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "41㎡"})
+        await self.loop.tools.execute("submit_l", {"finish": True})
+        reply = await self.loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {
+                    "summary_segments": [{"type": "text", "text": "확인된 1층 공간은 41㎡입니다."}]
+                },
+            },
+        )
+        self.assertEqual(reply.status, "ok")
+        references = [s.fact_id for s in self.loop.done.summary_segments if s.type == "fact"]
+        self.assertEqual(
+            references, [saved["fact_ids"]["floor"], saved["fact_ids"]["exclusive_area"]]
+        )
+        self.assertFalse(
+            any(
+                char.isnumeric()
+                for s in self.loop.done.summary_segments
+                if s.type == "text"
+                for char in s.text
+            )
+        )
+        with connect(self.path) as db:
+            rendered = json.loads(
+                db.execute("SELECT rendered_json FROM agentic_reports").fetchone()[0]
+            )
+        self.assertIn("1층", rendered["summary"])
+        self.assertIn("41㎡", rendered["summary"])
+
+    async def test_unverified_report_numbers_stay_rejected(self):
+        save_confirmed_space(self.scope, {"floor": "1층", "exclusive_area": "41㎡"})
+        await self.loop.tools.execute("submit_l", {"finish": True})
+        for text in ("11층", "지하 1층", "-1층", "141㎡", "41.5㎡", "41평", "매출 41만원"):
+            with self.subTest(text=text):
+                reply = await self.loop.tools.execute(
+                    "submit_draft",
+                    {
+                        "phase": "draft",
+                        "report": {"summary_segments": [{"type": "text", "text": text}]},
+                    },
+                )
+                self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+                self.assertIn("summary_segments.0", reply.error.message)
+
+    async def test_report_does_not_reuse_older_confirmed_floor(self):
+        with patch("app.application.facts.utc_now_iso", return_value="2026-11-11T00:00:00Z"):
+            save_confirmed_space(self.scope, {"floor": "1층"})
+        with patch("app.application.facts.utc_now_iso", return_value="2026-11-11T00:00:01Z"):
+            latest = save_confirmed_space(self.scope, {"floor": "2층"})
+        await self.loop.tools.execute("submit_l", {"finish": True})
+        old_reply = await self.loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {"summary_segments": [{"type": "text", "text": "1층입니다."}]},
+            },
+        )
+        self.assertEqual(old_reply.error.code, "L_EVIDENCE_INVALID")
+        reply = await self.loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {"summary_segments": [{"type": "text", "text": "2층입니다."}]},
+            },
+        )
+        self.assertEqual(reply.status, "ok")
+        self.assertEqual(self.loop.done.summary_segments[0].fact_id, latest["fact_ids"]["floor"])
