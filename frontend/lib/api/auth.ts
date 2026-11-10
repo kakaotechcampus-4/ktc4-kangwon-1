@@ -67,6 +67,10 @@ export async function logout(): Promise<void> {
   await apiJson('/api/v1/auth/logout', { method: 'POST' });
 }
 
+export async function withdraw(): Promise<void> {
+  await apiJson('/api/v1/auth/me', { method: 'DELETE' });
+}
+
 export async function verifyEmail(token: string): Promise<void> {
   await apiJson('/api/v1/auth/verify-email', jsonInit('POST', { token }));
 }

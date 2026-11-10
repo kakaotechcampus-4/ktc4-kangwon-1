@@ -1,5 +1,8 @@
 import type { LegalDoc } from '@/components/legal/LegalDocument';
 
+export const WITHDRAWAL_EFFECT =
+  '탈퇴하면 계정과 로그인 수단, 로그인 세션은 바로 지웁니다. 분석 기록은 지울 수 없게 만들어져 있어 계정 연결만 끊고, 누구의 기록인지 알 수 없게 남깁니다.';
+
 export const TERMS: LegalDoc = {
   eyebrow: 'TERMS OF SERVICE',
   title: '이용약관',
@@ -68,7 +71,7 @@ export const TERMS: LegalDoc = {
       title: '제9조 (탈퇴)',
       items: [
         '이용자는 언제든 탈퇴할 수 있습니다. 내 분석 기록 화면 맨 아래의 탈퇴 버튼으로 탈퇴할 수 있습니다. 메일 인증을 마치지 않은 계정은 chaeum.ai@gmail.com으로 메일을 보내 요청해 주세요.',
-        '탈퇴하면 계정과 로그인 수단, 로그인 세션은 바로 지웁니다. 분석 기록은 지울 수 없게 만들어져 있어 계정 연결만 끊고, 누구의 기록인지 알 수 없게 남깁니다.',
+        WITHDRAWAL_EFFECT,
         '카카오 연결은 카카오 계정 설정에서 직접 끊어 주세요.',
       ],
     },

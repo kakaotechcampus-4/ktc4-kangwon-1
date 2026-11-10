@@ -5,6 +5,7 @@ import {
   loginPath,
   safeNext,
   signup,
+  withdraw,
 } from '@/lib/api/auth';
 
 afterEach(() => {
@@ -32,6 +33,33 @@ describe('signup', () => {
       password: '1234567890',
       agree_terms: true,
     });
+  });
+});
+
+describe('withdraw', () => {
+  it('내 계정 삭제 요청을 DELETE로 보낸다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ status: 'ok' }), { status: 200 })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await withdraw();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/auth/me')).toBe(true);
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('서버가 거절하면 서버 문장을 담아 실패한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: '다시 로그인해 주세요.' }), {
+          status: 401,
+        })
+      )
+    );
+    await expect(withdraw()).rejects.toThrow('다시 로그인해 주세요.');
   });
 });
 
