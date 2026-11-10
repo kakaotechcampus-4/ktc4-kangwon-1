@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.infrastructure.persistence.repository import requests as repo
 from app.infrastructure.persistence.connection import initialize
+from app.infrastructure.persistence.repository import requests as repo
 
 # 스키마가 result_json 안의 request_id와 행의 request_id가 같은지 검사합니다.
 RESULT = '{"request_id": "request", "run": "first"}'
