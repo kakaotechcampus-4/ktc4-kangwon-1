@@ -54,19 +54,48 @@ describe('개인정보 처리방침 화면', () => {
       '카카오로 가입했다면 계정에 메일 주소가 없으니, "내 분석 기록"에서 연 분석 화면의 인터넷 주소(링크)와 그 분석에 입력한 상가 주소를 함께 보내 주세요.'
     );
     expect(text).toContain(
-      '탈퇴하면서 질문 답 글도 지우려면 탈퇴를 요청할 때 함께 알려 주세요.'
+      '질문 답 글도 지우려면 탈퇴하기 전에 메일로 알려 주세요.'
     );
   });
 
-  it('AI 모델 회사로 OpenAI와 함께 Anthropic을 알리고 정하지 못한 값은 확인 중으로 둔다', () => {
+  it('탈퇴는 내 분석 기록 화면의 버튼으로 하고, 메일 인증 전 계정만 메일로 요청한다', () => {
+    render(<PrivacyPage />);
+    expect(document.body.textContent).toContain(
+      '탈퇴: 내 분석 기록 화면 맨 아래의 탈퇴 버튼으로 할 수 있습니다. 메일 인증을 마치지 않은 계정은 같은 메일로 요청해 주세요.'
+    );
+  });
+
+  it('운영자 이름과 시행일을 채운다', () => {
+    render(<PrivacyPage />);
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('권제후, 김온, 김은우, 김주현, 최용빈');
+    expect(text).not.toContain('강유비');
+    expect(text).not.toContain('김유비');
+    expect(text).not.toContain('【배포일】');
+    expect(text).toContain('2026년 11월 11일');
+  });
+
+  it('위탁·국외 이전 회사는 공개 문서로 확인한 값만 채우고 나머지는 확인 중으로 둔다', () => {
     render(<PrivacyPage />);
     expect(document.body.textContent).toContain(
       'AI 제공자(엘리스, OpenAI, Anthropic)에게 이미 보낸 내용'
     );
     const entrusted = screen.getByRole('table', { name: '5. 처리 위탁' });
     expect(
-      within(entrusted).getByRole('rowheader', { name: '엘리스' }).closest('tr')
-        ?.textContent
+      within(entrusted)
+        .getAllByRole('rowheader')
+        .map((cell) => cell.textContent)
+    ).toEqual([
+      'Amazon Web Services(계약 법인 【확인 중】)',
+      'Vercel Inc.',
+      'Plus Five Five, Inc.(Resend)',
+      'Elice Inc.(엘리스)',
+      '카카오',
+    ]);
+    expect(
+      within(entrusted)
+        .getByRole('rowheader', { name: 'Elice Inc.(엘리스)' })
+        .closest('tr')?.textContent
     ).toContain('OpenAI·Anthropic');
     const transfer = screen.getByRole('table', { name: '6. 국외 이전' });
     expect(
@@ -74,15 +103,31 @@ describe('개인정보 처리방침 화면', () => {
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent)
     ).toEqual(['구분', 'Vercel', 'Resend', 'OpenAI', 'Anthropic']);
-    for (const name of ['받는 회사 법인명', '받는 회사 연락처', '보관 기간']) {
-      const cells = within(transfer)
-        .getByRole('rowheader', { name })
-        .closest('tr')
-        ?.querySelectorAll('td');
-      expect([...(cells ?? [])].map((cell) => cell.textContent)).toEqual(
-        Array(4).fill('【확인 중】')
-      );
-    }
+    const row = (name: string) =>
+      [
+        ...(within(transfer)
+          .getByRole('rowheader', { name })
+          .closest('tr')
+          ?.querySelectorAll('td') ?? []),
+      ].map((cell) => cell.textContent);
+    expect(row('받는 회사 법인명')).toEqual([
+      'Vercel Inc.',
+      'Plus Five Five, Inc.(Resend 운영 회사)',
+      '【확인 중】',
+      'Anthropic PBC',
+    ]);
+    expect(row('받는 회사 연락처')).toEqual([
+      'privacy@vercel.com',
+      'support@resend.com',
+      '【확인 중】',
+      'privacy@anthropic.com',
+    ]);
+    expect(row('보관 기간')).toEqual([
+      '법적·계약상 의무를 지키는 데 필요한 최소 기간',
+      '메일 내용과 발송 기록 30일',
+      'API 요청·응답 최대 30일(남용 감시 기록)',
+      'API 요청·응답을 받은 때부터 30일 안에 삭제',
+    ]);
   });
 
   it('입력한 상가 주소는 서버 기록에서 가리지만 앞단 서버 기록에는 남을 수 있다고 알린다', () => {
