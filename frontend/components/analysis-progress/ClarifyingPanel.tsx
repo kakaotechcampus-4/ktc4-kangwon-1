@@ -242,6 +242,8 @@ function QuestionCard({
   const detailInput = selectedOption?.detailInput;
   const isAnswered = isAnswerComplete(question, answer);
   const reasonId = `reason-${question.questionId}`;
+  const detailId = `detail-${question.questionId}`;
+  const hintId = `detail-hint-${question.questionId}`;
 
   return (
     <div
@@ -314,17 +316,29 @@ function QuestionCard({
       </div>
 
       {detailInput && (
-        <label className="flex flex-col gap-2 sm:pl-11">
-          <span
-            className="text-sm font-semibold"
-            style={{ color: colors.text.secondary }}
-          >
-            {detailInput.label}{' '}
-            <span className="font-normal">
-              ({detailInput.required ? '필수' : '선택'})
+        <div className="flex flex-col gap-2 sm:pl-11">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={detailId}
+              className="text-sm font-semibold"
+              style={{ color: colors.text.secondary }}
+            >
+              {detailInput.label}{' '}
+              <span className="font-normal">
+                ({detailInput.required ? '필수' : '선택'})
+              </span>
+            </label>
+            <span
+              id={hintId}
+              className="break-keep text-13 font-normal"
+              style={{ color: colors.text.secondary }}
+            >
+              이름·연락처 같은 개인정보는 적지 마세요.
             </span>
-          </span>
+          </div>
           <textarea
+            id={detailId}
+            aria-describedby={hintId}
             required={detailInput.required}
             value={answer?.detail ?? ''}
             onChange={(event) => onDetailChange(event.target.value)}
@@ -338,7 +352,7 @@ function QuestionCard({
               outlineColor: colors.brand.primary,
             }}
           />
-        </label>
+        </div>
       )}
 
       <div className="flex flex-col gap-2.5 sm:pl-11">

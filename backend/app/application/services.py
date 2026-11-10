@@ -51,9 +51,9 @@ class AuthService:
     async def session_user(self, token):
         return await auth_cases.session_user(token, db_path=self._db_path)
 
-    async def signup(self, email, password, display_name, *, mail, auth):
+    async def signup(self, email, password, agree_terms, *, mail, auth):
         return await auth_cases.signup(
-            email, password, display_name, db_path=self._db_path, mail=mail, auth=auth
+            email, password, agree_terms, db_path=self._db_path, mail=mail, auth=auth
         )
 
     async def login_after_signup(self, user_id):

@@ -80,10 +80,10 @@ Set-Cookie: chaeum_session=<난수>; HttpOnly; Secure; SameSite=Lax; Path=/; Max
 
 | 엔드포인트 | 입력·응답 |
 | --- | --- |
-| POST /api/v1/auth/signup | email·password(10자 이상)·display_name. 201 `{user_id, verification_sent}`. 세션 쿠키를 함께 내려준다 |
+| POST /api/v1/auth/signup | email·password(10자 이상)·agree_terms(참). 동의 없으면 422. 201 `{user_id, verification_sent}`. 세션 쿠키를 함께 내려준다 |
 | POST /api/v1/auth/login | email·password. 200 `{status}`. 실패 401, 시도 과다 429 |
 | POST /api/v1/auth/logout | 세션 폐기. 200 |
-| GET /api/v1/auth/me | `{user_id, email, display_name, profile_image_url, email_verified, needs_verification, created_at}`. 비로그인 401 |
+| GET /api/v1/auth/me | `{user_id, email, display_name, email_verified, needs_verification, created_at}`. 비로그인 401 |
 | DELETE /api/v1/auth/me | 탈퇴. 200 |
 | POST /api/v1/auth/verify-email | `{token}`. 만료·재사용 400 |
 | POST /api/v1/auth/verification/resend | 로그인 필요. `{verification_sent}` |

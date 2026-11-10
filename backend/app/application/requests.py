@@ -22,12 +22,7 @@ def create(request_id, address, *, radius_m, user_id, db_path):
 
 def visible_to(request_id, user, *, db_path) -> bool:
     owner = storage().requests.owner_of(request_id, db_path=db_path)
-    if owner is None:
-        return False
-    # 인증을 붙이기 전에 쌓인 요청은 소유자가 없습니다. 그 자료만 열어 둡니다.
-    if owner == "legacy":
-        return True
-    return user is not None and user["user_id"] == owner
+    return owner is not None and user is not None and user["user_id"] == owner
 
 
 def detail(request_id, *, db_path):

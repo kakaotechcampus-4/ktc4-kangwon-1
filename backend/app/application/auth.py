@@ -20,6 +20,7 @@ from app.application.ports.identity import (
 from app.application.ports.storage import storage
 from app.domain.passwords import hash_password, validate_password, verify_password
 from app.domain.sessions import SESSION_TTL as SESSION_TTL
+from app.domain.terms import TERMS_VERSION
 
 PROVIDER_KAKAO = "kakao"
 MAX_EMAIL_LENGTH = 254
@@ -85,7 +86,6 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "user_id": user["user_id"],
         "email": user.get("email"),
         "display_name": user.get("display_name"),
-        "profile_image_url": user.get("profile_image_url"),
         "email_verified": bool(user.get("email_verified_at")),
         "needs_verification": not is_verified(user),
         "created_at": user.get("created_at"),
@@ -96,7 +96,7 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
 async def signup(
     email: str,
     password: str,
-    display_name: str | None,
+    agree_terms: bool,
     *,
     db_path=None,
     mail: MailSettings,
@@ -104,11 +104,13 @@ async def signup(
     client=None,
 ) -> tuple[str, bool]:
     """계정을 만들고 인증 메일을 보냅니다. 메일 실패해도 계정은 남깁니다."""
+    if not agree_terms:
+        raise AuthError("TERMS_REQUIRED", "이용약관에 동의해야 가입할 수 있습니다.")
     validate_password(password)
     digest = await asyncio.to_thread(hash_password, password)
     try:
         user_id = await asyncio.to_thread(
-            storage().users.create_email_user, email, digest, display_name, db_path=db_path
+            storage().users.create_email_user, email, digest, TERMS_VERSION, db_path=db_path
         )
     except EmailTaken as exc:
         raise AuthError("EMAIL_TAKEN", "이미 가입된 이메일입니다.") from exc
@@ -260,8 +262,8 @@ def _resolve_social_user(profile: KakaoProfile, db_path) -> str:
     return storage().users.link_or_create_social_user(
         PROVIDER_KAKAO,
         profile.provider_user_id,
+        TERMS_VERSION,
         nickname=profile.nickname,
-        profile_image_url=profile.profile_image_url,
         db_path=db_path,
     )
 

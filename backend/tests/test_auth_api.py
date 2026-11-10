@@ -4,8 +4,10 @@ tests/auth_fixture.py 는 의존성을 꺼 버려 current_user 의 실제 구현
 여기서는 오버라이드 없이 Set-Cookie 를 받아 그대로 다시 보냅니다.
 """
 
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
@@ -51,7 +53,7 @@ class AuthApiTests(unittest.TestCase):
     def signup(self, email=EMAIL, password=PASSWORD):
         return self.client.post(
             "/api/v1/auth/signup",
-            json={"email": email, "password": password, "display_name": "임대인"},
+            json={"email": email, "password": password, "agree_terms": True},
             headers=ORIGIN,
         )
 
@@ -68,6 +70,47 @@ class AuthApiTests(unittest.TestCase):
         self.assertFalse(body["email_verified"])
         self.assertTrue(body["needs_verification"])
         self.assertNotIn("password_hash", body)
+
+    def _rows(self, sql):
+        with closing(sqlite3.connect(self.path)) as db:
+            return db.execute(sql).fetchall()
+
+    def test_signup_without_terms_agreement_is_422(self):
+        response = self.client.post(
+            "/api/v1/auth/signup",
+            json={"email": EMAIL, "password": PASSWORD},
+            headers=ORIGIN,
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"], "이용약관에 동의해야 가입할 수 있습니다.")
+        self.assertEqual(self._rows("SELECT user_id FROM users"), [])
+
+    def test_signup_records_terms_agreement(self):
+        response = self.signup()
+        self.assertEqual(response.status_code, 201, response.text)
+        user_id = response.json()["user_id"]
+        rows = self._rows("SELECT user_id, terms_version, method FROM terms_agreements")
+        self.assertEqual(rows, [(user_id, "v1", "email")])
+
+    def test_signup_rejects_display_name(self):
+        response = self.client.post(
+            "/api/v1/auth/signup",
+            json={
+                "email": EMAIL,
+                "password": PASSWORD,
+                "agree_terms": True,
+                "display_name": "임대인",
+            },
+            headers=ORIGIN,
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_withdraw_removes_terms_agreement(self):
+        self.assertEqual(self.signup().status_code, 201)
+        response = self.client.delete("/api/v1/auth/me", headers=ORIGIN)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self._rows("SELECT * FROM terms_agreements"), [])
+        self.assertEqual(self._rows("SELECT * FROM users"), [])
 
     def test_duplicate_email_is_409(self):
         self.signup()

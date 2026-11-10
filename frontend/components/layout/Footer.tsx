@@ -6,6 +6,8 @@
  * 외부 자료 전체를 여기에 한 번 더 모은다. 이용조건은 각 자료 페이지에 적힌 그대로다.
  */
 
+import Link from 'next/link';
+
 type DataSource = {
   provider: string;
   name: string;
@@ -55,7 +57,24 @@ export default function Footer() {
     <footer className="w-full border-t border-[#EEF1F4] bg-white px-4 py-10 sm:px-8">
       <div className="mx-auto flex max-w-[1120px] flex-col gap-6 text-sm text-[#5B6470]">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-extrabold text-[#111827]">채움 · chum.ai</p>
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <p className="font-extrabold text-[#111827]">채움 · chum.ai</p>
+              <Link
+                href="/terms"
+                className="underline decoration-[#C9CED6] underline-offset-2 hover:text-[#111827]"
+              >
+                이용약관
+              </Link>
+              <Link
+                href="/privacy"
+                className="font-bold text-[#111827] underline decoration-[#C9CED6] underline-offset-2"
+              >
+                개인정보 처리방침
+              </Link>
+            </div>
+            <p className="break-keep">사업자 등록 전 시범 운영 중입니다.</p>
+          </div>
           <p>공간의 다음 가능성을 찾습니다. © 2026 chum.ai</p>
         </div>
         <section

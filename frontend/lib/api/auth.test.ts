@@ -1,10 +1,67 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   KAKAO_ERRORS,
   kakaoLoginUrl,
   loginPath,
   safeNext,
+  signup,
+  withdraw,
 } from '@/lib/api/auth';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('signup', () => {
+  it('서버가 받는 세 칸만 agree_terms 이름으로 보낸다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ user_id: 'u1', verification_sent: true }), {
+        status: 201,
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await signup({
+      email: 'a@b.com',
+      password: '1234567890',
+      agreeTerms: true,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/auth/signup')).toBe(true);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toStrictEqual({
+      email: 'a@b.com',
+      password: '1234567890',
+      agree_terms: true,
+    });
+  });
+});
+
+describe('withdraw', () => {
+  it('내 계정 삭제 요청을 DELETE로 보낸다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ status: 'ok' }), { status: 200 })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await withdraw();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/auth/me')).toBe(true);
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('서버가 거절하면 서버 문장을 담아 실패한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: '다시 로그인해 주세요.' }), {
+          status: 401,
+        })
+      )
+    );
+    await expect(withdraw()).rejects.toThrow('다시 로그인해 주세요.');
+  });
+});
 
 describe('loginPath', () => {
   it('로그인 뒤 돌아올 주소에 쿼리까지 담는다', () => {

@@ -108,7 +108,6 @@ def _profile(body: dict[str, Any]) -> KakaoProfile:
     return KakaoProfile(
         provider_user_id=str(raw_id).strip(),
         nickname=_text(profile.get("nickname")),
-        profile_image_url=_text(profile.get("profile_image_url")),
     )
 
 

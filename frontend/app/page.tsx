@@ -6,6 +6,7 @@ import TwoViews from '@/components/landing/TwoViews';
 import ReportPreview from '@/components/landing/ReportPreview';
 import Testimonials from '@/components/landing/Testimonials';
 import CTABanner from '@/components/landing/CTABanner';
+import WithdrawnNotice from '@/components/landing/WithdrawnNotice';
 
 export default function Home() {
   // 히어로 글자 묶음을 미리 받아 CHUM.AI 인트로가 바로 시작되게 한다(Hero.tsx 시작 신호).
@@ -17,6 +18,7 @@ export default function Home() {
   return (
     <div className="relative flex flex-1 flex-col bg-white">
       <Header overlay />
+      <WithdrawnNotice />
       <Hero />
       <TwoViews />
       {/*

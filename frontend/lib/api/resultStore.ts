@@ -124,3 +124,18 @@ export function loadConfirmedBuilding(): BuildingInfo | null {
     return null;
   }
 }
+
+const BROWSER_TRACE_KEYS = [
+  RESULT_STORAGE_KEY,
+  FACTS_STORAGE_KEY,
+  REQUEST_ID_STORAGE_KEY,
+  VACANCY_INPUT_STORAGE_KEY,
+  CONFIRMED_BUILDING_STORAGE_KEY,
+  'chaeum:clarifyingRecord',
+];
+
+export function clearBrowserTraces(): void {
+  for (const key of BROWSER_TRACE_KEYS) {
+    sessionStorage.removeItem(key);
+  }
+}
