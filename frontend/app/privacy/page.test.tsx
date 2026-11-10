@@ -54,7 +54,7 @@ describe('개인정보 처리방침 화면', () => {
       '카카오로 가입했다면 계정에 메일 주소가 없으니, "내 분석 기록"에서 연 분석 화면의 인터넷 주소(링크)와 그 분석에 입력한 상가 주소를 함께 보내 주세요.'
     );
     expect(text).toContain(
-      '질문 답 글도 지우려면 탈퇴하기 전에 메일로 알려 주세요.'
+      '질문 답 글까지 지우려면 탈퇴 버튼을 누르지 말고 메일로 요청해 주세요. 답 글을 지운 뒤 탈퇴까지 함께 처리합니다.'
     );
   });
 
@@ -90,8 +90,11 @@ describe('개인정보 처리방침 화면', () => {
       'Vercel Inc.',
       'Plus Five Five, Inc.(Resend)',
       'Elice Inc.(엘리스)',
-      '카카오',
+      '카카오(법인명 【확인 중】)',
     ]);
+    expect(document.body.textContent).toContain(
+      'OpenAI·Anthropic 칸은 엘리스가 두 회사의 API를 직접 쓴다는 전제로 적었으며, 실제 중계 경로는 【확인 중】입니다.'
+    );
     expect(
       within(entrusted)
         .getByRole('rowheader', { name: 'Elice Inc.(엘리스)' })

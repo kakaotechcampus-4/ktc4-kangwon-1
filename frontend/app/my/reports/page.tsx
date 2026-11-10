@@ -15,7 +15,7 @@ import {
   type MyAnalyses,
   type MyAnalysis,
 } from '@/lib/api/auth';
-import { clearAnalysisResult, clearRequestId } from '@/lib/api/resultStore';
+import { clearBrowserTraces } from '@/lib/api/resultStore';
 import { WITHDRAWAL_EFFECT } from '@/lib/legal/terms';
 import { openFresh } from '@/lib/navigation';
 import {
@@ -183,8 +183,7 @@ function WithdrawSection() {
       setBusy(false);
       return;
     }
-    clearAnalysisResult();
-    clearRequestId();
+    clearBrowserTraces();
     openFresh('/?withdrawn=1');
   }
 
@@ -203,8 +202,9 @@ function WithdrawSection() {
       </h2>
       <p className="text-sm break-keep text-[#4B5866]">{WITHDRAWAL_EFFECT}</p>
       <p className="text-sm break-keep text-[#4B5866]">
-        질문 답 글도 지우려면 탈퇴하기 전에 chaeum.ai@gmail.com으로 알려 주세요.
-        카카오 연결은 카카오 계정 설정에서 직접 끊어 주세요.
+        질문 답 글까지 지우려면 탈퇴 버튼을 누르지 말고 chaeum.ai@gmail.com으로
+        요청해 주세요. 답 글을 지운 뒤 탈퇴까지 함께 처리합니다. 카카오 연결은
+        카카오 계정 설정에서 직접 끊어 주세요.
       </p>
       <label
         htmlFor="withdraw-confirm"

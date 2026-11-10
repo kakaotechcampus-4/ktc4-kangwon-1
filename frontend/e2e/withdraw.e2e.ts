@@ -27,11 +27,14 @@ test('내 분석 기록에서 탈퇴하면 같은 계정으로 다시 로그인�
   await page.getByLabel('확인을 위해 "탈퇴"라고 입력해 주세요').fill('탈퇴');
   await withdrawButton.click();
 
-  await expect(page).toHaveURL(/\/\?withdrawn=1$/);
   await expect(
     page.getByText('탈퇴했어요. 계정과 로그인 정보를 지웠어요.')
   ).toBeVisible();
+  await expect(page).toHaveURL(/^http:\/\/localhost:3123\/$/);
   await expect(page.getByRole('link', { name: '로그인' })).toBeVisible();
+
+  await page.goBack();
+  await expect(page).not.toHaveURL(/\/my\/reports/);
 
   await logInAsWithdrawUser(page);
   await expect(page.getByRole('alert')).toBeVisible();

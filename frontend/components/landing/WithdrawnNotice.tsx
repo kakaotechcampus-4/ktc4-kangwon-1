@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 import { colors } from '@/styles/tokens';
 
@@ -16,6 +16,16 @@ export default function WithdrawnNotice() {
     serverWithdrawn
   );
   const [closed, setClosed] = useState(false);
+
+  useEffect(() => {
+    if (withdrawn) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        window.location.pathname + window.location.hash
+      );
+    }
+  }, [withdrawn]);
 
   if (!withdrawn || closed) {
     return null;

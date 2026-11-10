@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { loginPath, logout } from '@/lib/api/auth';
-import { clearAnalysisResult, clearRequestId } from '@/lib/api/resultStore';
+import { clearBrowserTraces } from '@/lib/api/resultStore';
+import { openFresh } from '@/lib/navigation';
 import { colors } from '@/styles/tokens';
 
 const PHONE_SLOT = 'w-[63px]';
@@ -15,9 +16,8 @@ function filled(value: string | null | undefined) {
 }
 
 export default function HeaderUserMenu() {
-  const { status, user, clear } = useAuth();
+  const { status, user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -74,11 +74,9 @@ export default function HeaderUserMenu() {
       await logout();
     } finally {
       // 서버 응답과 무관하게 이 브라우저에 남은 분석 흔적을 지운다.
-      clearAnalysisResult();
-      clearRequestId();
-      clear();
+      clearBrowserTraces();
       setOpen(false);
-      router.push('/');
+      openFresh('/');
     }
   }
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeaderUserMenu from '@/components/layout/HeaderUserMenu';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { logout } from '@/lib/api/auth';
+import { openFresh } from '@/lib/navigation';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -12,6 +13,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 vi.mock('@/components/auth/AuthProvider', () => ({ useAuth: vi.fn() }));
+vi.mock('@/lib/navigation', () => ({ openFresh: vi.fn() }));
 vi.mock('@/lib/api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/auth')>()),
   logout: vi.fn(),
@@ -102,17 +104,19 @@ describe('HeaderUserMenu', () => {
     ).toBe('내내 계정');
   });
 
-  it('로그아웃을 누르면 logout이 불리고 홈으로 간다', async () => {
+  it('로그아웃을 누르면 logout이 불리고 첫 화면을 새로 연다', async () => {
     const user = userEvent.setup();
     vi.mocked(logout).mockResolvedValue(undefined);
+    sessionStorage.setItem('chaeum:vacancyInput', 'x');
     render(<HeaderUserMenu />);
 
     await user.click(screen.getByRole('button', { name: '내 계정 메뉴' }));
     await user.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(clear).toHaveBeenCalled();
-    expect(router.push).toHaveBeenCalledWith('/');
+    expect(openFresh).toHaveBeenCalledWith('/');
+    expect(router.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('chaeum:vacancyInput')).toBeNull();
   });
 
   it('로그인 전에는 로그인 링크가 보인다', () => {

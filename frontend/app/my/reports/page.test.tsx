@@ -45,6 +45,15 @@ describe('내 분석 기록 화면의 탈퇴', () => {
     expect(await screen.findByText(WITHDRAWAL_EFFECT)).toBeTruthy();
   });
 
+  it('질문 답 글까지 지우려면 버튼 대신 메일로 요청하라고 알린다', async () => {
+    render(<MyReportsPage />);
+    expect(
+      await screen.findByText(
+        /질문 답 글까지 지우려면 탈퇴 버튼을 누르지 말고 chaeum\.ai@gmail\.com으로 요청해 주세요\. 답 글을 지운 뒤 탈퇴까지 함께 처리합니다\./
+      )
+    ).toBeTruthy();
+  });
+
   it('"탈퇴"를 입력하기 전에는 탈퇴 버튼이 꺼져 있다', async () => {
     render(<MyReportsPage />);
     const button = await screen.findByRole('button', { name: '탈퇴하기' });
@@ -55,6 +64,8 @@ describe('내 분석 기록 화면의 탈퇴', () => {
 
   it('탈퇴하면 첫 화면을 새로 열어 로그인 상태를 처음부터 다시 읽는다', async () => {
     vi.mocked(withdraw).mockResolvedValue();
+    sessionStorage.setItem('chaeum:vacancyInput', 'x');
+    sessionStorage.setItem('chaeum:confirmedBuilding', 'x');
     render(<MyReportsPage />);
     const user = await typeConfirm();
     await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
@@ -62,14 +73,18 @@ describe('내 분석 기록 화면의 탈퇴', () => {
     expect(openFresh).toHaveBeenCalledWith('/?withdrawn=1');
     expect(router.push).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('chaeum:vacancyInput')).toBeNull();
+    expect(sessionStorage.getItem('chaeum:confirmedBuilding')).toBeNull();
   });
 
   it('탈퇴가 실패하면 서버 문장을 보여 주고 이 화면에 머문다', async () => {
-    vi.mocked(withdraw).mockRejectedValue(new Error('다시 로그인해 주세요.'));
+    vi.mocked(withdraw).mockRejectedValue(
+      new Error('잠시 후 다시 시도해 주세요.')
+    );
     render(<MyReportsPage />);
     const user = await typeConfirm();
     await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
-    expect(await screen.findByText('다시 로그인해 주세요.')).toBeTruthy();
+    expect(await screen.findByText('잠시 후 다시 시도해 주세요.')).toBeTruthy();
     expect(openFresh).not.toHaveBeenCalled();
   });
 });

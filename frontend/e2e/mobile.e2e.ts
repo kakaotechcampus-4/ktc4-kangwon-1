@@ -52,6 +52,7 @@ test('폰 화면에서 로그인부터 리포트와 로그아웃까지', async (
 
   await page.getByRole('button', { name: '내 계정 메뉴' }).click();
   await page.getByRole('menuitem', { name: '로그아웃' }).click();
+  await expect(page).toHaveURL(/^http:\/\/localhost:3123\/$/);
   await expect(page.getByRole('link', { name: '로그인' })).toBeVisible();
 
   expect(errors).toEqual([]);

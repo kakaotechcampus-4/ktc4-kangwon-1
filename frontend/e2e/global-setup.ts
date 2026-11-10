@@ -8,7 +8,12 @@ import {
 } from './env';
 
 export default function globalSetup() {
-  for (const user of [E2E_USER, E2E_WITHDRAW_USER]) {
+  const withdrawEmail = `e2e-withdraw-${Date.now()}@example.com`;
+  process.env.E2E_WITHDRAW_EMAIL = withdrawEmail;
+  for (const user of [
+    E2E_USER,
+    { ...E2E_WITHDRAW_USER, email: withdrawEmail },
+  ]) {
     execFileSync(
       python(),
       ['scripts/create_e2e_user.py', E2E_DB, user.email, user.password],
