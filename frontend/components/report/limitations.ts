@@ -20,7 +20,6 @@ export function readableLimitations(raw: string): string[] {
     .map((sentence) => sentence.trim().replace(/\s+/gu, ' '))
     .filter(Boolean);
   const items = new Set<string>();
-  const notes = new Set<string>();
   let reviewIncomplete = false;
   let evidenceExcluded = false;
 
@@ -34,12 +33,10 @@ export function readableLimitations(raw: string): string[] {
       continue;
     }
     items.add(sentence);
-    if (ZERO_STORES.test(sentence) && !notes.has(ZERO_STORES_NOTE)) {
-      notes.add(ZERO_STORES_NOTE);
+    if (ZERO_STORES.test(sentence)) {
       items.add(ZERO_STORES_NOTE);
     }
-    if (SAMPLE_ONLY.test(sentence) && !notes.has(SAMPLE_ONLY_NOTE)) {
-      notes.add(SAMPLE_ONLY_NOTE);
+    if (SAMPLE_ONLY.test(sentence)) {
       items.add(SAMPLE_ONLY_NOTE);
     }
   }
