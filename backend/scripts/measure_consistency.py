@@ -19,7 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.application.analysis import execute_agentic_analysis, mock_run_options  # noqa: E402
 from app.application.answers import confirmed_space_values  # noqa: E402
+from app.application.ports.llm_settings import LLMSettings  # noqa: E402
 from app.infrastructure.config import load_environment  # noqa: E402
+
+
+def role_models():
+    return {role: LLMSettings.from_env(role).model for role in ("decision", "evaluator", "advisor")}
 
 
 def summarize_run(status, result, budget, seconds):
@@ -204,6 +209,8 @@ def main(argv=None):
         if stopped:
             break
     summary = {"mode": "real" if args.real else "mock", "total_calls": used_calls, "sites": report}
+    if args.real:
+        summary["models"] = role_models()
     if stopped:
         summary["stopped"] = stopped
         print(stopped, flush=True)

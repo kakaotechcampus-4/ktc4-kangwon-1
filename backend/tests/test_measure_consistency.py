@@ -1,9 +1,11 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from scripts.measure_consistency import compare_runs, main, summarize_run
+from scripts.measure_consistency import compare_runs, main, role_models, summarize_run
 
 
 def result(top5, grades, badges=None, evaluators=None, resolutions=None):
@@ -132,6 +134,25 @@ class MockRunTests(unittest.TestCase):
             self.assertEqual(comparison["total_runs"], 2)
             self.assertEqual(comparison["completed_runs"], 2)
             self.assertTrue(comparison["top5_identical"])
+
+    def test_real_summary_names_role_models_without_keys(self):
+        env = {
+            "DECISION_LLM_MODEL": "decision-model",
+            "EVALUATOR_LLM_MODEL": "evaluator-model",
+            "ADVISOR_LLM_MODEL": "advisor-model",
+            "DECISION_LLM_API_KEY": "secret-key",
+        }
+        with mock.patch.dict(os.environ, env):
+            models = role_models()
+        self.assertEqual(
+            models,
+            {
+                "decision": "decision-model",
+                "evaluator": "evaluator-model",
+                "advisor": "advisor-model",
+            },
+        )
+        self.assertNotIn("secret-key", json.dumps(models))
 
     def test_paid_run_needs_real_flag_and_call_cap(self):
         with self.assertRaises(SystemExit):

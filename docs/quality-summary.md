@@ -1,8 +1,8 @@
 # AI 품질 점검 기록 요약
 
-2026-10-26 기준. 아래는 저장된 실측 문서의 요약이며 이번 문서 작업에서 유료 호출은 하지 않았다. 서로 다른 코드·입력·설비·모드의 결과이므로 시간·지적 수 차이를 인과 효과나 정확도 개선으로 해석하지 않는다.
+2026-11-11 기준. 아래는 저장된 실측 문서의 요약이다. 서로 다른 코드·입력·설비·모드의 결과이므로 시간·지적 수 차이를 인과 효과나 정확도 개선으로 해석하지 않는다.
 
-## 실제 실행 8종
+## 실제 실행 9종
 
 | 날짜·기록 | 확인하려던 것 | 관찰·전후 지표 | 결론 | 한계 |
 | --- | --- | --- | --- | --- |
@@ -14,6 +14,7 @@
 | 10-15 [숫자 식별자](identifier-live-report.md) | 식별자와 측정 숫자 구분 | 85.047초, 27호출; 평가 4/4, 지적 12건 반영 | 당시 정한 실측 기준 통과 | 초안·평가 제출 거절 후 수정. unknown을 중립으로 부른 표현 문제 잔존 |
 | 10-19·26 [founder](founder-live-report.md) | 운영 관점·F3/F4 검토 | v1 지적 3→1, 읽기 3→1; v2 120.687초·22호출, founder 지적 3·거절 0 | v2 경쟁 검토 흔적은 있으나 지속성 검토 흔적 미확인 | 설비·초안이 달라 v1/v2 직접 비교 금지. v2 임대인 평가 실패·40k 제출 예외 |
 | 10-20 [임대인 입력](landlord-context-live-report.md) | 공간 외 영업 지속성·임차 수요 검토 | 오금로 초기 패킷 5,840→11,485자, 항동 2,320→6,474자; 검토 범위 확대 | 기존 자료 공급과 지침을 함께 보강 | 각 주소 단회. 출처 혼합 설명·빈 후보 설명·누락 근거 지적 거절 잔존 |
+| 11-11 [같은 주소 반복](consistency-live-report.md) | 구조 변경 뒤 재측정·같은 주소 3회 일관성 | 3곳×3회, 166호출; Top5·L 주소별 3회 동일, 평가자 35/36 완료, 최종 반영 6/9 | Top5·L은 흔들리지 않음. 마지막 반영 단계가 사실상 한 번만 시도 가능함을 발견 | L 근거가 면적 하나뿐인 입력이라 L 일치는 약한 증거. 지적 타당성 미판정 |
 
 ## 실패를 분석해 바꾼 사례
 
@@ -31,7 +32,8 @@
 | 8주소 × 51업종 = 408건 | `python scripts/verify_rubric_reproduction.py --samples cache/rubric_samples` | sample-*.json 8개와 dryrun-results.json 필요. cache는 Git 제외다. 당시 규칙의 회귀 비교이며 현재 채점 개정 후 동일함을 보장하지 않는다 |
 | 코드 채점 백테스트 | `python -m backtest.run --help` | input·data·baselines·out 경로 필요. 주소·시설·규제 외부 호출이 가능하므로 별도 승인 후 실행 |
 | 전체 L 포함 백테스트 | `python -m backtest.full --help` | 별도 실자료·실행 예산 필요. `--real`, `--max-calls` 필수. 유료 호출 승인 없이 실행 금지 |
+| 같은 주소 반복 | `python scripts/measure_consistency.py --sites <주소목록.json> --runs 3 --out cache/<폴더> --real --max-calls <상한>` | 유료. `--real`·`--max-calls` 필수, 결과는 Git 제외 cache에 저장. `--mock`은 비용 없이 배선만 확인 |
 | 녹화 재생 | `scripts/replay_agentic.py`와 테스트 `test_agentic_recording.py` | 원래 요청 DB·모델 녹화·고정 자료 버전 필요. 새 체크아웃만으로 실측 재현 불가 |
 | 채점·평가표 3종 | [decision 채점표](decision-prompt-rubric.md), [심사관](examiner-evaluator-rubric.md), [임차인](founder-evaluator-rubric.md) | 문서의 역할 범위와 실제 전용 패킷·연결 상태를 함께 확인. 임대인은 별도 평가표 문서 대신 [입력 보강 기록](landlord-context-live-report.md)과 `app/ai/landlord.py`를 참고 |
 
-실제 주소·운영 답변이 들어간 표본을 이번에 fixture로 복사하지 않았다. 자동 회귀용 가상 자료는 기존 tests의 임시 DB·대역을 사용한다. 브라우저 E2E나 반복 실호출 품질 평가가 완료됐다는 뜻은 아니다.
+실제 주소·운영 답변이 들어간 표본을 이번에 fixture로 복사하지 않았다. 자동 회귀용 가상 자료는 기존 tests의 임시 DB·대역을 사용한다. 브라우저 E2E가 완료됐다는 뜻은 아니며, 반복 실호출은 [11-11 반복 분석](consistency-live-report.md) 한 번이고 지적 타당성은 판정하지 않았다.
