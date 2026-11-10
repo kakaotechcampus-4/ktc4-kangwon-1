@@ -139,6 +139,7 @@ export function useAnalysisProgress(
             timer = setTimeout(tick, RECONNECT_INTERVAL_MS);
             return;
           }
+          setDisconnected(false);
           setError(
             caught instanceof Error
               ? caught.message

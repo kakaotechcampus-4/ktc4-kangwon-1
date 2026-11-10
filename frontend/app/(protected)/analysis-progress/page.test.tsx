@@ -100,7 +100,7 @@ describe('분석 진행 화면', () => {
   it('연결이 이어져 있으면 끊김 안내를 띄우지 않는다', async () => {
     progress({});
     render(<AnalysisProgressPage />);
-    await screen.findAllByText(/분석/);
+    expect(await screen.findByText('AI가 공실을 분석하고 있어요')).toBeTruthy();
     expect(screen.queryByText('연결이 잠시 끊겼어요')).toBeNull();
   });
 
