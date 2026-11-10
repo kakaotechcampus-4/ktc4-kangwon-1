@@ -8,7 +8,7 @@ Founder(임차인·창업자) 검토 기준은 [전용 평가표](founder-evalua
 
 ### 문항·배점·입력·식
 
-총 100점: **D35 + C25 + S30 + L10**. 코드 채점 90점, decision 판단 10점. 각 문항 점수는 `배점 × 등급 / 4`다. D4는 1.25점, C4·L은 2.5점 단위다. C2는 C1에 통합됐고(업종별 방향), C3·G는 별도 점수 없이 설명 또는 차단 조건이다.
+총 100점: **D35 + C30 + S15 + C410 + L10**. 코드 채점 90점, decision 판단 10점. 각 문항 점수는 `배점 × 등급 / 4`다. D4는 1.25점, C4·L은 2.5점 단위다. C2는 C1에 통합됐고(업종별 방향), C3·G는 별도 점수 없이 설명 또는 차단 조건이다.
 
 표의 경로는 해당 AgentAnalysis.data 내부다. `{i}`는 코드로 찾은 행이며 상권은 code, 개폐업은 industry_id로 연결한다. 지도는 MapObservation.data, 규제는 decision payload의 education_zones다. 없는 필드·null·citable=false는 유효 근거로 만들지 않는다.
 
