@@ -374,6 +374,49 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("20231~20234", reply)
         self.assertNotIn("2023년", reply)
 
+    async def test_final_phase_retries_once_at_measured_conversation_size(self):
+        from app.ai.runtime import DecisionLoop
+
+        async def evaluator(messages, definitions, settings, receipt):
+            payload = json.loads(messages[1]["content"])
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        finals = []
+
+        async def decision(messages, definitions, settings, receipt):
+            finals.append(messages)
+            if len(finals) == 1:
+                return self.message("get_facts", {"limit": 1})
+            reviews = next(
+                json.loads(m["content"])["reviews"]
+                for m in reversed(messages)
+                if m["role"] == "user" and '"reviews"' in m["content"]
+            )
+            resolutions = [
+                {"issue_id": i["issue_id"], "disposition": "accepted", "reason": "반영"}
+                for r in reviews
+                for i in r["issues"]
+            ]
+            return self.message(
+                "submit_draft",
+                {"phase": "final", "report": {}, "review_resolutions": resolutions},
+            )
+
+        loop = await DecisionLoop.create(
+            self.scope, self.site, generate=decision, evaluator_generate=evaluator
+        )
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        loop.state["messages"].append({"role": "user", "content": "x" * 50000})
+        outcome = await loop.review_and_finalize()
+        self.assertEqual(len(finals), 2)
+        texts = [s.text for s in outcome.result.limitations_segments if s.type == "text"]
+        self.assertNotIn("피드백 최종 반영을 완료하지 못했습니다.", texts)
+        self.assertNotIn("호출·시간·토큰 예산 상한에 도달해 코드 점수로 마무리했습니다.", texts)
+
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
         from app.ai.runtime import DecisionLoop
 

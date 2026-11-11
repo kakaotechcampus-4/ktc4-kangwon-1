@@ -51,11 +51,25 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
             reservations.append((role, False, await budget.claim_output(5500, role=role)))
             with self.assertRaises(BudgetExceeded):
                 await budget.claim_output(1, role=role)
-        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 6000, 2000])
-        self.assertEqual(sum(row[2] for row in reservations), 60000)
+        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 10000, 2000])
+        self.assertEqual(sum(row[2] for row in reservations), 64000)
         for role, final, reserved in reservations:
             await budget.release_output(reserved, role=role, final=final)
         self.assertEqual(budget.pending_output, 0)
+
+    async def test_final_phase_leaves_room_for_one_retry(self):
+        budget = RuntimeBudget()
+        reserved = await budget.claim_output(16000, role="decision", final=True)
+        first = await budget.reserve("decision", final=True, input_chars=80000)
+        await budget.finish(
+            first,
+            status="completed",
+            elapsed_ms=1,
+            usage=SimpleNamespace(prompt_tokens=29000, completion_tokens=3600),
+        )
+        await budget.release_output(reserved, role="decision", final=True)
+        self.assertEqual(await budget.claim_output(16000, role="decision", final=True), 6400)
+        self.assertEqual(await budget.reserve("decision", final=True, input_chars=100000), 2)
 
     async def test_pending_inputs_are_atomic_and_actual_usage_releases_estimate(self):
         budget = RuntimeBudget()
@@ -88,7 +102,7 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await resumed.reserve("customer", input_chars=80002), 2)
         with self.assertRaises(BudgetExceeded):
             await resumed.claim_output(1, role="decision")
-        self.assertEqual(await resumed.claim_output(16000, role="decision", final=True), 6000)
+        self.assertEqual(await resumed.claim_output(16000, role="decision", final=True), 10000)
         self.assertEqual(await resumed.reserve("decision", final=True, input_chars=100000), 3)
         self.assertEqual(await resumed.reserve("customer", input_chars=80000), 4)
 
