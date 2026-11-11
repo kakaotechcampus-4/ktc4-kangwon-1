@@ -29,7 +29,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             {"active_seconds": 600},
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 440000, "output_tokens": 0}],
+                "calls": [{"role": "decision", "input_tokens": 470000, "output_tokens": 0}],
             },
             {
                 "used": 1,
@@ -78,7 +78,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             {"active_seconds": 600},
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 440000, "output_tokens": 0}],
+                "calls": [{"role": "decision", "input_tokens": 470000, "output_tokens": 0}],
             },
             {
                 "used": 1,
