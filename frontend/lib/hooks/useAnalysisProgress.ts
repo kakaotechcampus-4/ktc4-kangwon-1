@@ -43,6 +43,12 @@ export function pollInterval(elapsedMs: number): number {
 
 // 일시적인 네트워크 오류는 몇 번 다시 시도한 뒤에만 실패로 본다.
 const MAX_CONSECUTIVE_ERRORS = 5;
+const RECONNECT_INTERVAL_MS = 5_000;
+
+function isConnectionLoss(caught: unknown): boolean {
+  if (!(caught instanceof AnalysisApiError)) return true;
+  return caught.status >= 500 || caught.status === 408 || caught.status === 429;
+}
 
 function markInitial(steps: ProgressStep[]): ProgressStep[] {
   return steps.map((step) => ({ ...step, status: 'pending' }));
@@ -62,6 +68,7 @@ export function useAnalysisProgress(
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [detail, setDetail] = useState<StoredAnalysis | null>(null);
+  const [disconnected, setDisconnected] = useState(false);
   const hasDetail = useRef(false);
   // 폴링을 다시 시작할 때마다 바뀌는 값. 이전 폴링 루프는 이 값이 달라지면 멈춘다.
   const [pollRun, setPollRun] = useState(0);
@@ -104,6 +111,7 @@ export function useAnalysisProgress(
         );
         if (cancelled) return;
         consecutiveErrors = 0;
+        setDisconnected(false);
         if (needDetail && !hasDetail.current && !page.finished) {
           hasDetail.current = true;
           getAnalysis(requestId as string)
@@ -126,6 +134,12 @@ export function useAnalysisProgress(
         if (cancelled) return;
         consecutiveErrors += 1;
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          if (isConnectionLoss(caught)) {
+            setDisconnected(true);
+            timer = setTimeout(tick, RECONNECT_INTERVAL_MS);
+            return;
+          }
+          setDisconnected(false);
           setError(
             caught instanceof Error
               ? caught.message
@@ -177,5 +191,18 @@ export function useAnalysisProgress(
     }
   }, []);
 
-  return { steps, stage, waiting, result, error, submitError, submit, detail };
+  const reconnect = useCallback(() => setPollRun((run) => run + 1), []);
+
+  return {
+    steps,
+    stage,
+    waiting,
+    result,
+    error,
+    submitError,
+    submit,
+    detail,
+    disconnected,
+    reconnect,
+  };
 }

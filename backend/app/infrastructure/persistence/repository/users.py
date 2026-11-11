@@ -34,16 +34,21 @@ def _normalize_email(email: str) -> str:
     return f"{local}@{domain.lower()}" if domain else local
 
 
-def create_email_user(email: str, password_hash: str, display_name: str | None, *, db_path=None):
+def create_email_user(email: str, password_hash: str, terms_version: str, *, db_path=None):
     """이메일 가입. 중복이면 EmailTaken이 올라옵니다."""
     user_id = uuid.uuid4().hex
     now = utc_now_iso()
     try:
         with connect(db_path) as db:
             db.execute(
-                "INSERT INTO users(user_id,email,password_hash,display_name,created_at,"
-                "last_login_at) VALUES(?,?,?,?,?,?)",
-                (user_id, _normalize_email(email), password_hash, display_name, now, now),
+                "INSERT INTO users(user_id,email,password_hash,created_at,last_login_at) "
+                "VALUES(?,?,?,?,?)",
+                (user_id, _normalize_email(email), password_hash, now, now),
+            )
+            db.execute(
+                "INSERT INTO terms_agreements(user_id,terms_version,method,agreed_at) "
+                "VALUES(?,?,'email',?)",
+                (user_id, terms_version, now),
             )
     except sqlite3.IntegrityError as exc:
         raise EmailTaken from exc
@@ -53,15 +58,15 @@ def create_email_user(email: str, password_hash: str, display_name: str | None, 
 def link_or_create_social_user(
     provider: str,
     provider_user_id: str,
+    terms_version: str,
     *,
     nickname: str | None = None,
-    profile_image_url: str | None = None,
     db_path=None,
 ) -> str:
     """소셜 로그인으로 들어온 사람의 계정을 찾고, 없으면 만듭니다.
 
-    users와 user_identities를 한 트랜잭션에서 넣습니다. 둘로 나누면 중간에 죽었을 때
-    로그인 수단 없는 계정이 남습니다.
+    users, user_identities, terms_agreements를 한 트랜잭션에서 넣습니다.
+    나누면 중간에 죽었을 때 로그인 수단 없는 계정이 남습니다.
     """
     now = utc_now_iso()
     with connect(db_path) as db:
@@ -71,18 +76,25 @@ def link_or_create_social_user(
         ).fetchone()
         if found is not None:
             user_id = str(found["user_id"])
-            db.execute("UPDATE users SET last_login_at=? WHERE user_id=?", (now, user_id))
+            db.execute(
+                "UPDATE users SET last_login_at=?, profile_image_url=NULL WHERE user_id=?",
+                (now, user_id),
+            )
             return user_id
         user_id = uuid.uuid4().hex
         db.execute(
-            "INSERT INTO users(user_id,display_name,profile_image_url,created_at,last_login_at)"
-            " VALUES(?,?,?,?,?)",
-            (user_id, nickname, profile_image_url, now, now),
+            "INSERT INTO users(user_id,display_name,created_at,last_login_at) VALUES(?,?,?,?)",
+            (user_id, nickname, now, now),
         )
         db.execute(
             "INSERT INTO user_identities(provider,provider_user_id,user_id,created_at)"
             " VALUES(?,?,?,?)",
             (provider, provider_user_id, user_id, now),
+        )
+        db.execute(
+            "INSERT INTO terms_agreements(user_id,terms_version,method,agreed_at)"
+            " VALUES(?,?,'kakao',?)",
+            (user_id, terms_version, now),
         )
         return user_id
 

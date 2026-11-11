@@ -3,6 +3,7 @@
 import logging
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 
 import httpx
 
@@ -99,6 +100,32 @@ class HttpLogProtectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("secret-state", line)
         self.assertIn("/api/v1/auth/kakao/callback?code=[REDACTED]&state=[REDACTED]", line)
         self.assertIn("307", line)
+
+    def test_typed_address_in_access_log_is_masked(self):
+        from uvicorn.logging import AccessFormatter
+
+        from app.shared.logging import _ACCESS_QUERY_FILTER
+
+        address = quote("서울 송파구 위례광장로 199")
+        record = logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            __file__,
+            1,
+            '%s - "%s %s HTTP/%s" %d',
+            (
+                "127.0.0.1:1",
+                "GET",
+                f"/api/v1/building-registry?address={address}&mock=false",
+                "1.1",
+                200,
+            ),
+            None,
+        )
+        self.assertTrue(_ACCESS_QUERY_FILTER.filter(record))
+        line = AccessFormatter(use_colors=False).format(record)
+        self.assertNotIn(address, line)
+        self.assertIn("/api/v1/building-registry?address=[REDACTED]&mock=false", line)
 
     def test_access_template_with_args_is_also_redacted(self):
         from app.shared.logging import _ACCESS_QUERY_FILTER

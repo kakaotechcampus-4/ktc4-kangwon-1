@@ -72,8 +72,13 @@ export function rankingView(
     if (!candidate) {
       return item;
     }
-    const reasons = renderSegments(candidate.reasons_segments, facts).trim();
-    const checks = candidateChecks(candidate, facts);
+    const shownSpaceFits = new Set<string>();
+    const reasons = renderSegments(
+      candidate.reasons_segments,
+      facts,
+      shownSpaceFits
+    ).trim();
+    const checks = candidateChecks(candidate, facts, shownSpaceFits);
     const detailTitle = item.aiExcluded
       ? 'AI가 뺀 이유 보기'
       : '추천 이유 보기';
@@ -112,7 +117,7 @@ export function rankingView(
     {
       title: '규제로 안 되는 업종',
       description:
-        '규제 확인에서 이 자리에서는 영업할 수 없다고 나온 업종이에요.',
+        '교육환경보호구역 안이라 순위에서 뺀 업종이에요. 절대보호구역(학교 출입문 50m 이내)이면 영업할 수 없고, 상대보호구역(학교 경계 200m 이내)이면 교육청 지역교육환경보호위원회 심의를 거쳐 허용받아야 해요. 어느 구역인지 관할 교육지원청에 먼저 확인하세요.',
       lines: regulationLines,
     },
   ].filter((group) => group.lines.length > 0);

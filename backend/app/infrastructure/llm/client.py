@@ -12,13 +12,12 @@ from openai.lib.streaming.chat import AsyncChatCompletionStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 
-from app.application.ports.llm import LLMHTTPError, LLMResponseError
+from app.application.ports.llm import LLMHTTPError, LLMResponseError, is_transport_retried
 from app.application.ports.llm_budget import current_scope
 from app.application.ports.llm_settings import LLMSettings
 from app.infrastructure.llm.session import acquire_client
 
 RETRY_DELAYS = (1.0, 2.0)
-RETRY_HTTP_STATUSES = frozenset({429, 502, 503, 504})
 
 
 class _DuplicateKey(ValueError):
@@ -43,19 +42,10 @@ async def _complete(
         try:
             return await _attempt(messages, settings, tools, metadata, budget, role, final)
         except (LLMResponseError, LLMHTTPError) as exc:
-            if delay is None or budget is None or not _transient(exc):
+            if delay is None or budget is None or not is_transport_retried(exc):
                 raise
         await asyncio.sleep(delay)
     raise AssertionError("unreachable")
-
-
-def _transient(exc: LLMResponseError | LLMHTTPError) -> bool:
-    if isinstance(exc, LLMHTTPError):
-        return (
-            exc.diagnostics["http_status"] in RETRY_HTTP_STATUSES
-            and exc.diagnostics["provider_code"] != "insufficient_quota"
-        )
-    return exc.code == "LLM_CONNECTION_ERROR"
 
 
 async def _attempt(

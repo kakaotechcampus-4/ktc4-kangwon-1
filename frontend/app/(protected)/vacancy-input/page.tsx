@@ -8,6 +8,7 @@ import FlowPageTitle from '@/components/form/FlowPageTitle';
 import AddressInput from '@/components/form/AddressInput';
 import FormActions from '@/components/form/FormActions';
 import AnalysisPreviewPanel from '@/components/form/AnalysisPreviewPanel';
+import { useEasterEggGate } from '@/components/form/useEasterEggGate';
 import { colors } from '@/styles/tokens';
 import { saveVacancyInput } from '@/lib/api/resultStore';
 
@@ -15,6 +16,7 @@ export default function VacancyInputPage() {
   const router = useRouter();
   const [roadAddress, setRoadAddress] = useState('');
   const [floorUnit, setFloorUnit] = useState('');
+  const { gate, dialog } = useEasterEggGate();
 
   // 주소 입력 카드를 아우르는 공통 버튼이라 제출 로직을 이 페이지에 둔다.
   // 분석 요청은 다음 화면(상가 정보 확인)의 확인 버튼에서 보내므로, 여기서는
@@ -25,8 +27,10 @@ export default function VacancyInputPage() {
       return;
     }
 
-    saveVacancyInput({ roadAddress, floorUnit });
-    router.push('/building-confirm');
+    gate(roadAddress, () => {
+      saveVacancyInput({ roadAddress, floorUnit });
+      router.push('/building-confirm');
+    });
   }
 
   return (
@@ -58,6 +62,7 @@ export default function VacancyInputPage() {
           <AnalysisPreviewPanel />
         </div>
       </main>
+      {dialog}
     </div>
   );
 }

@@ -1,9 +1,7 @@
-import { pretendard } from '@/styles/fonts';
 import { colors } from '@/styles/tokens';
 import type { BuildingField, BuildingInfo } from '@/lib/api/building';
+import AddressBanner from '@/components/building-confirm/AddressBanner';
 import { formatArea } from './labels';
-
-const dmMono = pretendard;
 
 type BuildingSummaryHeaderProps = {
   building: BuildingInfo;
@@ -32,57 +30,13 @@ export default function BuildingSummaryHeader({
 
   return (
     <div className="flex flex-col">
-      <div
-        className="flex flex-col items-start gap-3 px-4 py-5 sm:gap-4 sm:px-8 sm:py-7"
-        style={{ backgroundColor: colors.brand.dark }}
-      >
-        <h2
-          className="w-full font-bold leading-[1.4] break-keep"
-          style={{
-            color: colors.neutral.white,
-            fontSize: 'clamp(1.25rem, 2vw, 1.875rem)',
-            overflowWrap: 'normal',
-          }}
-        >
-          {title}
-        </h2>
-        {registryLine && (
-          <p
-            className="text-sm break-keep"
-            style={{ color: `${colors.neutral.white}CC` }}
-          >
-            {`건축물대장: ${registryLine}`}
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="rounded-md px-3 py-1.5 text-13 font-semibold"
-            style={{
-              backgroundColor: `${colors.neutral.white}14`,
-              color: `${colors.neutral.white}E6`,
-            }}
-          >
-            {building.floorLabel}
-          </span>
-          <span
-            className={`${dmMono.className} shrink-0 rounded-md px-3 py-1.5 text-13 tracking-[1px]`}
-            style={{
-              backgroundColor: `${colors.neutral.white}14`,
-              color: '#7F9BDC',
-            }}
-          >
-            건축물대장 HUB
-          </span>
-        </div>
-        {building.sourceNote && (
-          <p
-            className="text-sm break-keep"
-            style={{ color: `${colors.neutral.white}CC` }}
-          >
-            {building.sourceNote}
-          </p>
-        )}
-      </div>
+      <AddressBanner
+        title={title}
+        subtitle={registryLine ? `건축물대장: ${registryLine}` : undefined}
+        floorLabel={building.floorLabel}
+        tag="건축물대장 HUB"
+        note={building.sourceNote}
+      />
 
       <dl
         className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 sm:flex sm:flex-wrap sm:gap-x-12 sm:px-10 sm:py-6"

@@ -85,49 +85,226 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replies[0]["data"]["accepted"], ["valid"])
         self.assertEqual(replies[0]["data"]["rejected"][0]["issue_id"], "invalid")
 
-    async def run_truncated_review(self, truncations):
+    async def review_with(self, evaluator=None, *patches):
+        from contextlib import ExitStack
+
         from app.ai.evaluators import review
         from app.ai.runtime import DecisionLoop
-        from app.application.ports.llm import LLMResponseError
-
-        seen = []
-
-        async def evaluator(messages, definitions, settings, receipt):
-            seen.append(
-                (
-                    [d["function"]["name"] for d in definitions],
-                    messages[-1]["content"] if messages[-1]["role"] == "user" else "",
-                )
-            )
-            if len(seen) <= truncations:
-                raise LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")
-            payload = json.loads(messages[1]["content"])
-            return self.message(
-                "submit_review",
-                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
-            )
 
         loop = await DecisionLoop.create(self.scope, self.site, evaluator_generate=evaluator)
         await loop.submit_l(SubmitLInput(finish=True))
         await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
-        with patch(
-            "app.ai.examiner.review_packet",
-            return_value={"draft_id": loop.done.report_id, "facts": []},
-        ):
-            result = await review(
-                loop, "examiner", loop.evaluator_executors()["examiner"], loop.done
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "app.ai.examiner.review_packet",
+                    return_value={"draft_id": loop.done.report_id, "facts": []},
+                )
             )
-        return result, seen
+            for item in patches:
+                stack.enter_context(item)
+            return await review(loop, "examiner", loop.evaluator_executors()["examiner"], loop.done)
 
-    async def test_truncated_answer_gets_a_shorter_resubmit_chance(self):
-        result, seen = await self.run_truncated_review(truncations=1)
+    def submission(self, messages):
+        payload = json.loads(messages[1]["content"])
+        return self.message(
+            "submit_review",
+            {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+        )
+
+    async def run_scripted_review(self, steps):
+        pending = list(steps)
+        seen = []
+
+        async def evaluator(messages, definitions, settings, receipt):
+            seen.append(
+                {
+                    "tools": [d["function"]["name"] for d in definitions],
+                    "messages": json.loads(json.dumps(messages)),
+                }
+            )
+            if pending:
+                raise pending.pop(0)
+            return self.submission(messages)
+
+        return await self.review_with(evaluator), seen
+
+    async def run_review_through_client(self, steps):
+        from types import SimpleNamespace
+
+        from app.application.ports.llm import llm
+        from app.application.ports.llm_settings import LLMSettings
+        from app.infrastructure.llm import client
+
+        pending = list(steps)
+        attempts = []
+
+        async def request(messages, settings, *, tools, usage, receipt=None):
+            attempts.append(1)
+            if pending:
+                raise pending.pop(0)
+            return self.submission(messages)
+
+        async def no_sleep(delay):
+            return None
+
+        result = await self.review_with(
+            None,
+            patch.object(llm, "_value", SimpleNamespace(complete_tools=client.complete_tools)),
+            patch.object(client, "_request", request),
+            patch.object(client.asyncio, "sleep", no_sleep),
+            patch.object(LLMSettings, "require_credentials", lambda self: None),
+        )
+        return result, attempts
+
+    async def test_timeout_is_retried_once(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review([LLMResponseError("LLM_TIMEOUT")])
         self.assertEqual(result.status, "completed")
         self.assertEqual(len(seen), 2)
-        self.assertEqual(seen[1][0], ["submit_review"])
-        self.assertIn("잘렸", seen[1][1])
+
+    async def test_http_500_is_retried_once(self):
+        from app.application.ports.llm import LLMHTTPError
+
+        result, seen = await self.run_scripted_review([LLMHTTPError(500, {})])
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+
+    async def test_second_transient_error_fails(self):
+        from app.application.ports.llm import LLMHTTPError, LLMResponseError
+
+        result, seen = await self.run_scripted_review(
+            [LLMResponseError("LLM_TIMEOUT"), LLMHTTPError(500, {})]
+        )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 2)
+
+    async def test_connection_error_is_left_to_the_client_retry(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review([LLMResponseError("LLM_CONNECTION_ERROR")])
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 1)
+
+    async def test_gateway_status_is_left_to_the_client_retry(self):
+        from app.application.ports.llm import LLMHTTPError
+
+        result, seen = await self.run_scripted_review([LLMHTTPError(503, {})])
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 1)
+
+    async def test_credit_exhaustion_is_not_retried(self):
+        from app.application.ports.llm import LLMHTTPError
+
+        result, seen = await self.run_scripted_review(
+            [LLMHTTPError(429, {"error": {"code": "insufficient_quota"}})]
+        )
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 1)
+
+    async def test_non_transient_error_is_not_retried(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review([LLMResponseError("LLM_INVALID_JSON")])
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(len(seen), 1)
+
+    async def test_time_budget_timeout_is_not_retried(self):
+        result, seen = await self.run_scripted_review([TimeoutError()])
+        self.assertEqual(result.error_code, "TIMEOUT")
+        self.assertEqual(len(seen), 1)
+
+    async def test_call_budget_exhaustion_is_not_retried(self):
+        from app.application.ports.llm_budget import BudgetExceeded
+
+        result, seen = await self.run_scripted_review([BudgetExceeded()])
+        self.assertEqual(result.error_code, "BUDGET_EXCEEDED")
+        self.assertEqual(len(seen), 1)
+
+    async def test_retry_resends_same_messages(self):
+        from app.application.ports.llm import LLMResponseError
+
+        _, seen = await self.run_scripted_review([LLMResponseError("LLM_TIMEOUT")])
+        self.assertEqual(seen[0]["messages"], seen[1]["messages"])
+
+    async def test_truncation_then_timeout_follows_each_rule(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review(
+            [
+                LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length"),
+                LLMResponseError("LLM_TIMEOUT"),
+            ]
+        )
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 3)
+
+    async def test_truncation_then_two_timeouts_fail(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review(
+            [
+                LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length"),
+                LLMResponseError("LLM_TIMEOUT"),
+                LLMResponseError("LLM_TIMEOUT"),
+            ]
+        )
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(seen), 3)
+
+    async def test_timeout_does_not_use_up_the_truncation_chances(self):
+        from app.application.ports.llm import LLMResponseError
+
+        truncated = LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")
+        result, seen = await self.run_scripted_review(
+            [LLMResponseError("LLM_TIMEOUT"), truncated, truncated, truncated]
+        )
+        self.assertEqual(result.error_code, "REPORT_INVALID")
+        self.assertEqual(len(seen), 4)
+
+    async def test_client_retries_persistent_connection_error_three_times_then_fails(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, attempts = await self.run_review_through_client(
+            [LLMResponseError("LLM_CONNECTION_ERROR")] * 10
+        )
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.error_code, "SOURCE_UNAVAILABLE")
+        self.assertEqual(len(attempts), 3)
+
+    async def test_timeout_through_client_is_retried_by_the_evaluator(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, attempts = await self.run_review_through_client([LLMResponseError("LLM_TIMEOUT")])
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(attempts), 2)
+
+    async def test_http_500_through_client_is_retried_by_the_evaluator(self):
+        from app.application.ports.llm import LLMHTTPError
+
+        result, attempts = await self.run_review_through_client([LLMHTTPError(500, {})])
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(attempts), 2)
+
+    async def test_truncated_answer_gets_a_shorter_resubmit_chance(self):
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review(
+            [LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")]
+        )
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(seen[1]["tools"], ["submit_review"])
+        self.assertIn("잘렸", seen[1]["messages"][-1]["content"])
 
     async def test_three_truncations_end_as_failure(self):
-        result, seen = await self.run_truncated_review(truncations=3)
+        from app.application.ports.llm import LLMResponseError
+
+        result, seen = await self.run_scripted_review(
+            [LLMResponseError("LLM_OUTPUT_LIMIT", finish_reason="length")] * 3
+        )
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.error_code, "REPORT_INVALID")
         self.assertEqual(len(seen), 3)
@@ -196,6 +373,56 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, "20231~20234")
         self.assertIn("20231~20234", reply)
         self.assertNotIn("2023년", reply)
+
+    async def test_final_phase_retries_once_at_measured_conversation_size(self):
+        from app.ai.runtime import DecisionLoop
+
+        async def evaluator(messages, definitions, settings, receipt):
+            payload = json.loads(messages[1]["content"])
+            return self.message(
+                "submit_review",
+                {"draft_id": payload["draft_id"], "verdict": "agree", "issues": []},
+            )
+
+        finals = []
+
+        async def decision(messages, definitions, settings, receipt):
+            finals.append(messages)
+            if len(finals) == 1:
+                return self.message("get_facts", {"limit": 1})
+            reviews = next(
+                json.loads(m["content"])["reviews"]
+                for m in reversed(messages)
+                if m["role"] == "user" and '"reviews"' in m["content"]
+            )
+            resolutions = [
+                {"issue_id": i["issue_id"], "disposition": "accepted", "reason": "반영"}
+                for r in reviews
+                for i in r["issues"]
+            ]
+            return self.message(
+                "submit_draft",
+                {"phase": "final", "report": {}, "review_resolutions": resolutions},
+            )
+
+        loop = await DecisionLoop.create(
+            self.scope, self.site, generate=decision, evaluator_generate=evaluator
+        )
+        await loop.submit_l(SubmitLInput(finish=True))
+        await loop.submit_draft(SubmitDraftInput(phase="draft", report={}))
+        loop.state["messages"].append({"role": "user", "content": "x" * 50000})
+        outcome = await loop.review_and_finalize()
+        self.assertEqual(len(finals), 2)
+        instruction = next(
+            json.loads(m["content"])["instruction"]
+            for m in finals[0]
+            if m["role"] == "user" and '"reviews"' in m["content"]
+        )
+        for rule in ("applied", "not_applied", "fact_ids", "format", "빈 text"):
+            self.assertIn(rule, instruction)
+        texts = [s.text for s in outcome.result.limitations_segments if s.type == "text"]
+        self.assertNotIn("피드백 최종 반영을 완료하지 못했습니다.", texts)
+        self.assertNotIn("호출·시간·토큰 예산 상한에 도달해 코드 점수로 마무리했습니다.", texts)
 
     async def test_parallel_reviews_keep_failure_slot_and_finalize_once(self):
         from app.ai.runtime import DecisionLoop

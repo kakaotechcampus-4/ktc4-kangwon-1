@@ -44,7 +44,7 @@ import {
   loadVacancyInput,
   type VacancyInput,
 } from '@/lib/api/resultStore';
-import type { BuildingInfo } from '@/lib/api/building';
+import { fetchBuildingInfo, type BuildingInfo } from '@/lib/api/building';
 import {
   PARKING_LABELS,
   FACILITY_LABELS,
@@ -59,6 +59,7 @@ import {
 } from '@/lib/api/educationZone';
 import { MOCK_MODE } from '@/lib/api/mockMode';
 import {
+  confirmedSpace,
   isExampleReport,
   reportSource,
   storedReport,
@@ -297,6 +298,9 @@ function ReportContent() {
       return;
     }
     let cancelled = false;
+    const registryLookup = new AbortController();
+    const confirmedHere =
+      loadRequestId() === source.requestId ? loadConfirmedBuilding() : null;
     setNotice({ kind: 'loading' });
     getAnalysis(source.requestId)
       .then((detail) => {
@@ -308,10 +312,24 @@ function ReportContent() {
         }
         setAnalysisResult(report.result);
         setVacancyInput(report.vacancyInput);
-        setBuilding(null);
+        setBuilding(confirmedHere);
         setCoordinates(report.coordinates);
         setAnalyzedDay(report.analyzedDate);
         setNotice(null);
+        if (!confirmedHere && !MOCK_MODE && report.vacancyInput) {
+          fetchBuildingInfo(report.vacancyInput.roadAddress, {
+            floorUnit: report.vacancyInput.floorUnit,
+            signal: registryLookup.signal,
+          })
+            .then((info) => {
+              if (!cancelled) setBuilding(info);
+            })
+            .catch((error: unknown) => {
+              if (!cancelled) {
+                console.warn('[ReportPage] 건축물대장 다시 조회 실패:', error);
+              }
+            });
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -321,6 +339,7 @@ function ReportContent() {
       });
     return () => {
       cancelled = true;
+      registryLookup.abort();
     };
   }, [loadAttempt]);
 
@@ -411,7 +430,8 @@ function ReportContent() {
   });
   const displayAddress = address.replace(/\s+\d+층(?:\s+\d+호)?$/, '');
   const parkingValue = building?.parking.value;
-  const areaValue = building?.exclusiveAreaM2.value;
+  const confirmed = confirmedSpace(facts);
+  const areaValue = confirmed.areaM2 ?? building?.exclusiveAreaM2.value;
   const isPropertyPreview = !vacancyInput && !analysisResult && !building;
   const facilityValue = building?.facility.value;
   const facilityLabel = facilityValue
@@ -694,6 +714,7 @@ function ReportContent() {
                         <dd>
                           {demoReport?.floor ||
                             vacancyInput?.floorUnit.trim() ||
+                            confirmed.floor ||
                             (isPropertyPreview
                               ? mockReportData.floor
                               : '미입력')}
@@ -849,6 +870,7 @@ function ReportContent() {
                   floor:
                     demoReport?.floor ||
                     vacancyInput?.floorUnit.trim() ||
+                    confirmed.floor ||
                     (isPropertyPreview
                       ? mockReportData.floor
                       : '층 정보 확인 필요'),

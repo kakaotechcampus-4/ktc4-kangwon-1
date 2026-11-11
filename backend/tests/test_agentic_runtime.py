@@ -202,6 +202,113 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(output.result.limitations_segments)
 
+    async def test_decision_model_timeout_is_retried_once(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        calls = []
+
+        async def generate(messages, definitions, settings, receipt):
+            calls.append(messages)
+            if len(calls) == 1:
+                raise LLMResponseError("LLM_TIMEOUT")
+            return self.message("submit_draft", {"phase": "draft", "report": {}})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
+        output = await loop.run()
+        self.assertEqual(output.status, "draft_available")
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(loop.state["model_retried"])
+
+    async def test_decision_model_timeout_twice_falls_back(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        calls = []
+
+        async def generate(*args):
+            calls.append(1)
+            raise LLMResponseError("LLM_TIMEOUT")
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        output = await loop.run()
+        self.assertEqual(len(calls), 2)
+        self.assertIn(
+            "모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
+
+    async def test_decision_retry_is_spent_once_per_run(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMResponseError
+
+        calls = []
+
+        async def generate(*args):
+            calls.append(1)
+            if len(calls) == 2:
+                return self.message("get_scorecard", {"limit": 5})
+            raise LLMResponseError("LLM_TIMEOUT")
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        output = await loop.run()
+        self.assertEqual(len(calls), 3)
+        self.assertIn(
+            "모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
+
+    async def test_decision_http_error_is_retried_once_then_falls_back(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMHTTPError
+
+        calls = []
+
+        async def generate(*args):
+            calls.append(1)
+            if len(calls) == 1:
+                raise LLMHTTPError(503, {})
+            return self.message("submit_draft", {"phase": "draft", "report": {}})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        await self.close_l(loop)
+        output = await loop.run()
+        self.assertEqual(output.status, "draft_available")
+        self.assertEqual(len(calls), 2)
+
+        calls.clear()
+
+        async def failing(*args):
+            calls.append(1)
+            raise LLMHTTPError(500, {})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=failing)
+        output = await loop.run()
+        self.assertEqual(len(calls), 2)
+        self.assertIn(
+            "모델 서비스를 확인하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
+
+    async def test_decision_credit_exhaustion_is_not_retried(self):
+        from app.ai.runtime import DecisionLoop
+        from app.application.ports.llm import LLMHTTPError
+
+        calls = []
+
+        async def generate(*args):
+            calls.append(1)
+            raise LLMHTTPError(429, {"error": {"code": "insufficient_quota"}})
+
+        loop = await DecisionLoop.create(self.scope, self.site, generate=generate)
+        output = await loop.run()
+        self.assertEqual(len(calls), 1)
+        self.assertIn(
+            "모델 서비스를 확인하지 못해 코드 점수로 마무리했습니다.",
+            [s.text for s in output.result.limitations_segments if s.type == "text"],
+        )
+
     async def test_budget_fallback_has_unknown_L(self):
         from app.ai.runtime import DecisionLoop
 
@@ -589,6 +696,25 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(reply.error.code, "BUDGET_EXCEEDED")
 
+    async def test_two_advisor_answers_fit_at_measured_length(self):
+        from app.ai.runtime import DecisionLoop
+
+        fact_id = await self.make_fact()
+        limits = []
+
+        async def advisor(messages, definitions, settings, receipt):
+            limits.append(settings.max_tokens)
+            receipt["usage"] = {"prompt_tokens": 2398, "completion_tokens": 1808}
+            return {"consult_id": json.loads(messages[1]["content"])["consult_id"], "status": "ok"}
+
+        loop = await DecisionLoop.create(self.scope, self.site, advisor_generate=advisor)
+        for question in ["첫 자문", "둘째 자문"]:
+            reply = await loop.tools.execute(
+                "ask_advisor", {"question": question, "fact_ids": [fact_id]}
+            )
+            self.assertEqual(reply.data.status, "ok")
+        self.assertEqual(limits, [3000, 3000])
+
     async def test_numeric_sentence_rejected_and_fact_rendered(self):
         from app.ai.runtime import DecisionLoop
 
@@ -603,6 +729,29 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+        self.assertIn("summary_segments.0", reply.error.message)
+        self.assertNotIn("지수", reply.error.message)
+        reply = await loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {
+                    "candidates": [
+                        {
+                            "industry_code": "I201",
+                            "risks_segments": [
+                                {"type": "text", "text": "숫자 없는 문장"},
+                                {"type": "text", "text": "점포 3곳"},
+                            ],
+                        }
+                    ],
+                    "limitations_segments": [{"type": "text", "text": "반경 500"}],
+                },
+            },
+        )
+        self.assertIn("candidates.0.risks_segments.1", reply.error.message)
+        self.assertIn("limitations_segments.0", reply.error.message)
+        self.assertNotIn("risks_segments.0", reply.error.message)
         reply = await loop.tools.execute(
             "submit_draft",
             {
@@ -706,13 +855,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             {"active_seconds": 600},
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 400000, "output_tokens": 0}
+                    {"role": "decision", "attempt": 1, "input_tokens": 470000, "output_tokens": 0}
                 ],
                 "used": 1,
             },
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 60000}
+                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 68000}
                 ],
                 "used": 1,
             },

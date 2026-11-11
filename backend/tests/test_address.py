@@ -18,10 +18,22 @@ HIT = {
             "x": "127.14164",
             "y": "37.47475",
             "road_address": {"address_name": ROAD},
-            "address": {"address_name": "서울 송파구 장지동 887"},
+            "address": {"address_name": "서울 송파구 장지동 887", "b_code": "1171011400"},
         }
     ],
 }
+
+
+def located(road, jibun=None, b_code=None, region=None):
+    payload = copy.deepcopy(HIT)
+    payload["documents"][0]["road_address"] = {
+        "address_name": road,
+        **({"region_1depth_name": region} if region else {}),
+    }
+    payload["documents"][0]["address"] = (
+        {"address_name": jibun, **({"b_code": b_code} if b_code else {})} if jibun else None
+    )
+    return payload
 
 
 class AddressTests(unittest.IsolatedAsyncioTestCase):
@@ -76,6 +88,55 @@ class AddressTests(unittest.IsolatedAsyncioTestCase):
         for text in ("부산 송파구 위례광장로 120", "서울 강남구 위례광장로 120", ROAD + "-1"):
             with self.subTest(text=text):
                 await self.assert_error("ADDRESS_MISMATCH", text=text)
+
+    async def test_outside_seoul_is_refused(self):
+        text = "부산 해운대구 해운대로 264"
+        payload = located(text, "부산 해운대구 우동 1411", "2635010500")
+        with self.assertRaises(address.GeocodeError) as caught:
+            await self.resolve(text, payload=payload)
+        self.assertEqual(caught.exception.code, "OUTSIDE_SEOUL")
+        self.assertEqual(caught.exception.message, "지금은 서울 상가만 분석할 수 있어요.")
+
+    async def test_gyeonggi_next_to_seoul_is_refused(self):
+        for text, jibun, b_code in (
+            ("경기 성남시 분당구 정자일로 95", "경기 성남시 분당구 정자동 178-1", "4113510900"),
+            ("인천 부평구 부평대로 1", "인천 부평구 부평동 1", "2823710100"),
+        ):
+            with self.subTest(text=text):
+                await self.assert_error(
+                    "OUTSIDE_SEOUL", text=text, payload=located(text, jibun, b_code)
+                )
+
+    async def test_road_only_seoul_document_passes(self):
+        site = await self.resolve(payload=located(ROAD, region="서울"))
+        self.assertEqual((site.road_address, site.jibun_address), (ROAD, None))
+
+    async def test_seoul_si_prefix_is_accepted(self):
+        road = "서울 송파구 위례광장로 199"
+        site = await self.resolve(
+            "서울시 송파구 위례광장로 199",
+            payload=located(road, "서울 송파구 장지동 893", "1171011400"),
+        )
+        self.assertEqual(site.road_address, road)
+
+    def test_in_seoul_rules(self):
+        for document, expected in (
+            ({"address": {"b_code": "1171011400"}}, True),
+            ({"address": {"b_code": "4113510900"}}, False),
+            (
+                {
+                    "address": {"b_code": "4113510900"},
+                    "road_address": {"region_1depth_name": "서울"},
+                },
+                False,
+            ),
+            ({"address": {}, "road_address": {"region_1depth_name": "서울특별시"}}, True),
+            ({"address": None, "road_address": {"region_1depth_name": "서울"}}, True),
+            ({"road_address": {"region_1depth_name": "경기"}}, False),
+            ({"address": None, "road_address": None}, False),
+        ):
+            with self.subTest(document=document):
+                self.assertIs(address.in_seoul(document), expected)
 
     async def test_incomplete_or_keyword_address_is_ambiguous(self):
         for text in ("개롱역", "서울 송파구", "서울 강남구 역삼1동", "위례광장로 120"):

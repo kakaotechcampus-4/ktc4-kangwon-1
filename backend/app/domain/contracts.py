@@ -140,7 +140,7 @@ ErrorCode = Literal[
 
 class ToolError(Schema):
     code: ErrorCode
-    message: Annotated[str, Field(min_length=1, max_length=300)]
+    message: Annotated[str, Field(min_length=1, max_length=600)]
     retryable: bool = False
 
 
@@ -341,9 +341,12 @@ class ReviewResolution(Schema):
     @model_validator(mode="after")
     def check_reason(self) -> Self:
         if self.disposition == "rejected" and not self.fact_ids:
-            raise ValueError("기각에는 근거 fact_id가 필요합니다.")
+            raise ValueError("rejected에는 근거 fact_ids를 한 개 이상 넣으세요.")
         if self.disposition == "partial" and (not self.applied or not self.not_applied):
-            raise ValueError("일부 반영은 반영·미반영 부분을 나눠야 합니다.")
+            raise ValueError(
+                "partial이면 applied와 not_applied를 각각 채우세요. "
+                "나눌 수 없으면 accepted나 rejected로 바꾸세요."
+            )
         return self
 
 

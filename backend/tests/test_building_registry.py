@@ -381,6 +381,28 @@ class BuildingRegistryTests(unittest.IsolatedAsyncioTestCase):
             await lookup_building("서울 송파구 위례광장로 199", BuildingRegistrySettings())
         self.assertEqual(caught.exception.code, "CONFIG_ERROR")
 
+    async def test_outside_seoul_stops_before_hub(self):
+        busan = {
+            "address": {"address_name": "부산 해운대구 우동 1411", "b_code": "2635010500"},
+            "road_address": {"address_name": "부산 해운대구 해운대로 264"},
+        }
+        hosts = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            hosts.append(request.url.host)
+            return httpx.Response(200, json={**KAKAO, "documents": [busan]})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            with self.assertRaises(GeocodeError) as caught:
+                await lookup_building(
+                    "부산 해운대구 해운대로 264 1층",
+                    BuildingRegistrySettings(api_key="fake"),
+                    AddressSettings(api_key="fake"),
+                    client=client,
+                )
+        self.assertEqual(caught.exception.code, "OUTSIDE_SEOUL")
+        self.assertEqual(hosts, ["dapi.kakao.com"])
+
 
 def _logged_in_client(path):
     """대장 조회는 외부 할당량 보호 때문에 로그인을 요구합니다."""
@@ -439,6 +461,11 @@ class BuildingRegistryApiTests(unittest.TestCase):
     def test_mismatched_address_is_400(self):
         response = self.get(GeocodeError("ADDRESS_MISMATCH", "외부 원문"))
         self.assertEqual(response.status_code, 400)
+
+    def test_outside_seoul_is_422_with_notice(self):
+        response = self.get(GeocodeError("OUTSIDE_SEOUL", "x"))
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"], "지금은 서울 상가만 분석할 수 있어요.")
 
     def test_mock_needs_no_lookup(self):
         response = self.get(AssertionError("외부 조회 금지"), mock="true")

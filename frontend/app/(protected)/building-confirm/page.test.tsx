@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BuildingConfirmPage from './page';
 import { AnalysisApiError, startAnalysis } from '@/lib/api/analyses';
-import { fetchBuildingInfo } from '@/lib/api/building';
+import { OutsideServiceAreaError, fetchBuildingInfo } from '@/lib/api/building';
 import {
   LOOKUP_ERROR_NOTE,
   emptyBuildingInfo,
@@ -95,19 +95,39 @@ describe('상가 정보 확인 화면', () => {
     );
   });
 
-  it('분석 시작이 거절되면 잠시 후 다시 시도하라고 알린다', async () => {
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  it('동시 실행으로 거절되면 서버 안내를 화면에 남기고 머무른다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 서버가 다시 시도할 시점까지 적어 보내므로 그대로 보여 준다.
+    const notice =
+      '동시에 실행할 수 있는 분석 수를 넘었습니다. 30초 뒤에 다시 시도해 주세요.';
     vi.mocked(startAnalysis).mockRejectedValue(
-      new ApiError(429, '동시에 실행할 수 있는 분석 수를 넘었습니다.')
+      new AnalysisApiError(429, notice)
     );
     render(<BuildingConfirmPage />);
     const { user, start } = await chooseParking();
     await user.click(start);
-    await waitFor(() =>
-      expect(alert).toHaveBeenCalledWith('잠시 후 다시 시도해주세요.')
-    );
+
+    expect(await screen.findByText(notice)).toBeTruthy();
+    // 입력을 그대로 두고 다시 누를 수 있어야 한다.
     expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: START })).toBeTruthy();
+  });
+
+  it('원인을 밝힐 수 없는 실패는 서버 원문을 감춘다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(startAnalysis).mockRejectedValue(
+      new AnalysisApiError(500, 'Internal Server Error')
+    );
+    render(<BuildingConfirmPage />);
+    const { user, start } = await chooseParking();
+    await user.click(start);
+
+    expect(
+      await screen.findByText(
+        '분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
+      )
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Internal Server Error');
   });
 
   it('건축물대장 조회가 오래 걸려 멈추면 안내와 다시 조회를 보여 준다', async () => {
@@ -143,8 +163,7 @@ describe('상가 정보 확인 화면', () => {
     expect(fetchBuildingInfo).toHaveBeenCalledTimes(1);
   });
 
-  it('입력값이 잘못돼 거절되면 입력을 확인하라고 알린다', async () => {
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  it('입력값이 잘못돼 거절되면 입력을 확인하라고 화면에 알린다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const message =
       '요청 값이 올바르지 않아 처리하지 못했어요. 입력한 정보를 확인해 주세요.';
@@ -154,7 +173,54 @@ describe('상가 정보 확인 화면', () => {
     render(<BuildingConfirmPage />);
     const { user, start } = await chooseParking();
     await user.click(start);
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(message));
+
+    expect(await screen.findByText(message)).toBeTruthy();
+  });
+
+  it('서울 밖 주소면 확인 카드 대신 다시 입력하라는 안내를 보여 준다', async () => {
+    const busan = '부산 해운대구 해운대로 264';
+    saveVacancyInput({ roadAddress: busan, floorUnit: '1층' });
+    vi.mocked(fetchBuildingInfo).mockRejectedValueOnce(
+      new OutsideServiceAreaError('지금은 서울 상가만 분석할 수 있어요.')
+    );
+    render(<BuildingConfirmPage />);
+    expect(
+      await screen.findByRole('heading', { name: '이 주소는 분석할 수 없어요' })
+    ).toBeTruthy();
+    expect(
+      screen.getByText('채움은 지금 서울에 있는 상가만 분석해요.')
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('heading', {
+        name: '지금은 서울 상가만 분석할 수 있어요',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        '상권·인구 자료가 서울시 공공데이터라서 서울 밖 주소는 정확하게 분석할 수 없어요. 서울에 있는 상가 주소로 다시 입력해 주세요.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: busan })).toBeTruthy();
+    expect(screen.getByText('서울 밖 주소')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('link', { name: '주소 다시 입력하기' })
+        .getAttribute('href')
+    ).toBe('/vacancy-input');
+    expect(
+      screen.getByRole('link', { name: '홈으로' }).getAttribute('href')
+    ).toBe('/');
+    expect(
+      screen.queryByRole('button', { name: /이대로 분석하기/ })
+    ).toBeNull();
+    expect(screen.getByText('왜 서울만 분석하나요?')).toBeTruthy();
+    for (const reason of [
+      '상권·유동인구 자료가 서울시 열린데이터광장 자료예요.',
+      '서울 밖은 같은 기준의 자료가 없어 결과를 믿기 어려워요.',
+      '다른 지역은 아직 준비 중이에요.',
+    ]) {
+      expect(screen.getByText(reason)).toBeTruthy();
+    }
   });
 
   it('다시 조회도 오래 걸리면 직접 입력 화면으로 넘어간다', async () => {

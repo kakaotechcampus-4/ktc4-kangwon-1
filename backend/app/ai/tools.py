@@ -25,6 +25,12 @@ EVALUATORS = set(EVALUATOR_ACTORS)
 EVALUATOR_READS = {"get_scorecard", "get_facts", "query_raw"}
 
 
+FIX_HINTS = {
+    "string_too_short": " 빈 문자열 불가. 채우거나 그 항목을 빼세요.",
+    "missing": " 필수 칸 누락.",
+}
+
+
 def validation_message(model, failure):
     """오류 입력·사용자 키는 제외하고 공개 필드 경로·유형·상한만 돌려줍니다."""
     fields = set()
@@ -39,8 +45,8 @@ def validation_message(model, failure):
                 collect(value)
 
     collect(model.model_json_schema())
-    issues = []
-    for detail in failure.errors(include_input=False, include_url=False)[:3]:
+    issues: dict[str, list[str]] = {}
+    for detail in failure.errors(include_input=False, include_url=False)[:8]:
         path = []
         freeform = detail["type"] == "extra_forbidden"
         for part in detail["loc"]:
@@ -52,8 +58,15 @@ def validation_message(model, failure):
         upper = next((context[key] for key in ("max_length", "le", "lt") if key in context), None)
         maximum = f" max={upper}" if type(upper) in (int, float) else ""
         rule = " " + str(context["error"])[:120] if detail["type"] == "value_error" else ""
-        issues.append(".".join(path)[:80] + " " + detail["type"][:40] + maximum + rule)
-    return ("입력 오류: " + "; ".join(issues))[:400]
+        hint = FIX_HINTS.get(detail["type"], "")
+        if detail["type"] == "missing" and detail["loc"][-1] == "format":
+            hint += " format은 count/percent/rate/distance/text 중 하나."
+        issues.setdefault(detail["type"][:40] + maximum + rule + hint, []).append(
+            ".".join(path)[:80]
+        )
+    return (
+        "입력 오류: " + "; ".join(", ".join(paths) + " " + kind for kind, paths in issues.items())
+    )[:600]
 
 
 @dataclass

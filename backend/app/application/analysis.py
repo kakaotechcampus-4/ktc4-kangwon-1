@@ -12,6 +12,7 @@ from app.application.answers import save_confirmed_space
 from app.application.errors import (
     ADDRESS_INPUT_ERRORS,
     INTERRUPTED_MESSAGE,
+    OUTSIDE_SEOUL_MESSAGE,
     AddressError,
     AnalysisConflictError,
 )
@@ -38,6 +39,7 @@ MEASURING_COLLECT_TIMEOUT_SECONDS = 600
 
 FAILURE_MESSAGES = {
     "ADDRESS_FAILED": "주소를 확인하지 못했어요. 주소를 다시 확인한 뒤 분석해 주세요.",
+    "OUTSIDE_SEOUL": OUTSIDE_SEOUL_MESSAGE,
     "AI_FAILED": "AI 분석이 끝나지 못했어요. 잠시 후 다시 분석해 주세요.",
     "DATA_TIMEOUT": (
         "주변 자료를 불러오는 데 시간이 너무 오래 걸렸어요. 잠시 후 다시 분석해 주세요."
@@ -50,7 +52,9 @@ FAILURE_MESSAGES = {
 def public_failure(exc: BaseException, stage: str) -> AgentError:
     if isinstance(exc, asyncio.CancelledError):
         return AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
-    if isinstance(exc, AddressError) and exc.code in ADDRESS_INPUT_ERRORS:
+    if isinstance(exc, AddressError) and exc.code == "OUTSIDE_SEOUL":
+        code = "OUTSIDE_SEOUL"
+    elif isinstance(exc, AddressError) and exc.code in ADDRESS_INPUT_ERRORS:
         code = "ADDRESS_FAILED"
     elif stage == "루프":
         code = "AI_FAILED"
@@ -74,14 +78,18 @@ async def _event(path, request_id, stage, event):
 
 def _persist_outcome(path, request_id, outcome):
     if outcome.status == "waiting_for_input":
-        storage().requests.save_outcome(request_id, db_path=path)
+        saved = storage().requests.save_outcome(request_id, db_path=path)
     else:
-        storage().requests.save_outcome(
+        saved = storage().requests.save_outcome(
             request_id,
             result_text=outcome.result.model_dump_json(),
             completed_at=utc_now_iso(),
             db_path=path,
         )
+    if not saved:
+        # 서버 재시작 등으로 이미 닫힌 요청입니다. 결과를 덮어써 되살리지 않고,
+        # 분석은 끝났으므로 여기서 새 실패를 만들지도 않습니다.
+        logger.warning("이미 닫힌 요청이라 결과를 저장하지 않았습니다: %s", request_id)
 
 
 async def _failure(path, request_id, exc, stage, timings=None):

@@ -1,6 +1,7 @@
 """실행 계층이 공유하는 답변 사전검증 충돌과 주소 오류입니다."""
 
 INTERRUPTED_MESSAGE = "서비스 점검으로 분석이 멈췄어요. 다시 분석해 주세요."
+OUTSIDE_SEOUL_MESSAGE = "지금은 서울 상가만 분석할 수 있어요."
 ADDRESS_INPUT_ERRORS = frozenset(
     {"EMPTY_ADDRESS", "NOT_FOUND", "ADDRESS_AMBIGUOUS", "ADDRESS_MISMATCH", "ADDRESS_TOO_LONG"}
 )

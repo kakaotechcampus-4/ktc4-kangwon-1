@@ -18,9 +18,6 @@ from app.infrastructure.persistence.repository.events import (
     get_request_events as get_request_events,
 )
 from app.infrastructure.persistence.repository.events import list_events as list_events
-from app.infrastructure.persistence.repository.requests import (
-    LEGACY_OWNER_CUTOFF as LEGACY_OWNER_CUTOFF,
-)
 from app.infrastructure.persistence.repository.requests import create_request as create_request
 from app.infrastructure.persistence.repository.requests import fail_interrupted as fail_interrupted
 from app.infrastructure.persistence.repository.requests import get_request as get_request

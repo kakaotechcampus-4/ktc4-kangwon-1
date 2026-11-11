@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearBrowserTraces,
   loadAnalysisResult,
   loadRequestId,
   loadVacancyInput,
@@ -35,5 +36,26 @@ describe('saveVacancyInput', () => {
       roadAddress: '서울 송파구 오금로 404',
       floorUnit: '',
     });
+  });
+});
+
+describe('clearBrowserTraces', () => {
+  it('탈퇴·로그아웃 때 이 탭에 남은 분석 흔적을 모두 지운다', () => {
+    const traces = [
+      'chaeum:lastAnalysis',
+      'chaeum:lastAnalysisFacts',
+      'chaeum:lastRequestId',
+      'chaeum:vacancyInput',
+      'chaeum:confirmedBuilding',
+      'chaeum:clarifyingRecord',
+    ];
+    for (const key of [...traces, 'other:key']) {
+      sessionStorage.setItem(key, 'x');
+    }
+    clearBrowserTraces();
+    for (const key of traces) {
+      expect(sessionStorage.getItem(key)).toBeNull();
+    }
+    expect(sessionStorage.getItem('other:key')).toBe('x');
   });
 });

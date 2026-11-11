@@ -7,14 +7,14 @@ from time import monotonic
 from app.application.ports.llm_budget import FINAL_RESERVE, BudgetExceeded, LLMBudget
 
 ROLE_LIMITS = {
-    "decision": (230000, 36000, 22),
-    "advisor": (10000, 2000, 2),
-    "examiner": (40000, 5500, 4),
+    "decision": (270000, 40000, 22),
+    "advisor": (10000, 6000, 2),
+    "examiner": (70000, 5500, 4),
     "founder": (40000, 5500, 4),
     "customer": (40000, 5500, 4),
     "landlord_advocate": (40000, 5500, 4),
 }
-DECISION_PHASE_LIMITS = {False: (180000, 30000, 20), True: (50000, 6000, 2)}
+DECISION_PHASE_LIMITS = {False: (180000, 30000, 20), True: (90000, 10000, 2)}
 
 
 class RuntimeBudget(LLMBudget):
@@ -22,8 +22,8 @@ class RuntimeBudget(LLMBudget):
         saved = saved or {}
         self.measurement = measurement
         self.submitting: set[str] = set()
-        self.input_limit = 400000
-        self.output_limit = 60000
+        self.input_limit = 470000
+        self.output_limit = 68000
         self.seconds_limit = 600
         self.pending_output = 0
         self.pending_by_role: Counter[tuple[str, bool]] = Counter()

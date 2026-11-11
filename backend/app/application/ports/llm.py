@@ -76,6 +76,35 @@ class LLMHTTPError(RuntimeError):
         }
 
 
+_TRANSPORT_RETRY_STATUSES = frozenset({429, 502, 503, 504})
+_TRANSIENT_STATUSES = _TRANSPORT_RETRY_STATUSES | {500}
+_TRANSIENT_CODES = frozenset({"LLM_TIMEOUT", "LLM_CONNECTION_ERROR"})
+
+
+def _credit_exhausted(exc: LLMHTTPError) -> bool:
+    return exc.diagnostics.get("provider_code") == "insufficient_quota"
+
+
+def is_transport_retried(exc: BaseException) -> bool:
+    if isinstance(exc, LLMResponseError):
+        return exc.code == "LLM_CONNECTION_ERROR"
+    if isinstance(exc, LLMHTTPError):
+        return exc.diagnostics.get(
+            "http_status"
+        ) in _TRANSPORT_RETRY_STATUSES and not _credit_exhausted(exc)
+    return False
+
+
+def is_transient(exc: BaseException) -> bool:
+    if isinstance(exc, LLMResponseError):
+        return exc.code in _TRANSIENT_CODES
+    if isinstance(exc, LLMHTTPError):
+        return exc.diagnostics.get("http_status") in _TRANSIENT_STATUSES and not _credit_exhausted(
+            exc
+        )
+    return False
+
+
 class Recorder(Protocol):
     async def record(
         self,

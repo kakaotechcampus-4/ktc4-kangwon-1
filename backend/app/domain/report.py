@@ -10,6 +10,7 @@ from app.domain.contracts import (
 from app.domain.industries.catalog import INDUSTRIES
 from app.domain.scoring import rank_candidates, rank_key
 from app.domain.space_rules import FACILITY_NAMES, FACILITY_STATE_TEXT, load_requirements
+from app.domain.text import has_digit
 
 RULE_FACILITY_LEVELS = frozenset({"required", "preferred"})
 RULE_SPACE_MESSAGE = "층과 필수·선호 공간 조건은 규칙이 채점합니다. L 근거로 쓸 수 없습니다."
@@ -90,6 +91,34 @@ def segments(proposal):
     return fields
 
 
+def digit_text_paths(proposal):
+    paths = []
+
+    def scan(prefix, items):
+        paths.extend(
+            f"{prefix}.{index}"
+            for index, segment in enumerate(items)
+            if segment.type == "text" and has_digit(segment.text)
+        )
+
+    scan("summary_segments", proposal.summary_segments)
+    scan("limitations_segments", proposal.limitations_segments)
+    for group in ("candidates", "excluded_candidates"):
+        for index, candidate in enumerate(getattr(proposal, group)):
+            for field in (
+                "reasons_segments",
+                "risks_segments",
+                "confirmation_conditions_segments",
+            ):
+                scan(f"{group}.{index}.{field}", getattr(candidate, field))
+    return paths
+
+
+def numeric_text_message(prefix, paths):
+    shown = ", ".join(paths[:6]) + (f" 외 {len(paths) - 6}곳" if len(paths) > 6 else "")
+    return f"{prefix} 숫자가 든 text 위치: {shown}. 숫자를 빼거나 fact 슬롯으로 바꾸세요."
+
+
 def code90_uses_metric(row, metric):
     basis = row.get("items", {}).get("C1", {}).get("scoring", {}).get("basis", "")
     return metric == "lq" and "LQ" in basis
@@ -148,7 +177,9 @@ def text_value(value):
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        return str(int(value)) if value.is_integer() and abs(value) < 1e21 else repr(value)
+        if value.is_integer() and abs(value) < 1e21:
+            return str(int(value))
+        return fixed(value, 2) if abs(value) < 1e21 else repr(value)
     return None
 
 
@@ -174,7 +205,11 @@ def render_segment(segment, facts):
                 if value.get(key) in FACILITY_STATE_TEXT
             )
         if isinstance(value, dict):
-            return space_fit_text(value) if fact.metric == "space_fit" else "확인 불가"
+            if fact.metric == "space_fit":
+                return space_fit_text(value)
+            if fact.metric == "space_requirements" and isinstance(value.get("area_band"), str):
+                return f"권장 면적 {value['area_band']}"
+            return "확인 불가"
         if isinstance(value, list):
             items = [text_value(item) for item in value]
             return ", ".join(items) if items and None not in items else "확인 불가"

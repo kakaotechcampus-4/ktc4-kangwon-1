@@ -15,6 +15,7 @@ import FlowPageTitle from '@/components/form/FlowPageTitle';
 import ProgressTracker from '@/components/analysis-progress/ProgressTracker';
 import ClarifyingPanel from '@/components/analysis-progress/ClarifyingPanel';
 import AnalysisSummaryPanel from '@/components/analysis-progress/AnalysisSummaryPanel';
+import { ButtonLink } from '@/components/ui/Button';
 import { colors } from '@/styles/tokens';
 import { formatArea } from '@/components/building-confirm/labels';
 import { normalizeFloor } from '@/lib/api/building';
@@ -110,6 +111,13 @@ const STAGE_COPY: Record<
     tone: 'error',
     Icon: AlertCircle,
   },
+};
+
+const OUTSIDE_SEOUL_COPY = {
+  ...STAGE_COPY.failed,
+  title: '이 주소는 분석할 수 없어요',
+  description: '채움은 지금 서울에 있는 상가만 분석해요.',
+  statusHint: '서울 주소로 다시 입력해 주세요',
 };
 
 const TONE_COLORS = {
@@ -298,8 +306,18 @@ function LiveProgress({ requestId }: { requestId: string }) {
   const router = useRouter();
   const [session] = useState(() => readSession(requestId));
   const fromSession = progressSite(requestId, session, null) !== null;
-  const { steps, stage, waiting, result, error, submitError, submit, detail } =
-    useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
+  const {
+    steps,
+    stage,
+    waiting,
+    result,
+    error,
+    submitError,
+    submit,
+    detail,
+    disconnected,
+    reconnect,
+  } = useAnalysisProgress(requestId, mockAnalysisProgress.steps, !fromSession);
   const site = liveProgressSite(requestId, session, detail, stage === 'failed');
   const known: KnownSite = site
     ? toKnownSite({ summary: LOADING_SUMMARY }, site)
@@ -352,6 +370,11 @@ function LiveProgress({ requestId }: { requestId: string }) {
       }
       onRestart={() => router.replace(progressRestartPath(fromSession))}
       showNote={false}
+      outsideSeoul={
+        stage === 'failed' && detail?.error?.code === 'OUTSIDE_SEOUL'
+      }
+      connectionLost={disconnected}
+      onReconnect={reconnect}
     />
   );
 }
@@ -369,6 +392,9 @@ function ProgressView({
   onViewReport,
   onRestart,
   showNote,
+  outsideSeoul = false,
+  connectionLost = false,
+  onReconnect,
 }: {
   steps: ProgressStep[];
   stage: AnalysisStage;
@@ -382,8 +408,11 @@ function ProgressView({
   onViewReport: () => void;
   onRestart?: () => void;
   showNote?: boolean;
+  outsideSeoul?: boolean;
+  connectionLost?: boolean;
+  onReconnect?: () => void;
 }) {
-  const copy = STAGE_COPY[stage];
+  const copy = outsideSeoul ? OUTSIDE_SEOUL_COPY : STAGE_COPY[stage];
   const toneColor = TONE_COLORS[copy.tone];
 
   return (
@@ -425,7 +454,10 @@ function ProgressView({
               >
                 {copy.statusLabel}
               </p>
-              <p className="text-13" style={{ color: colors.text.secondary }}>
+              <p
+                className="text-13 break-keep"
+                style={{ color: colors.text.secondary }}
+              >
                 {copy.statusHint}
               </p>
             </div>
@@ -433,6 +465,17 @@ function ProgressView({
         </div>
 
         <StepIndicator currentStep={3} />
+
+        {connectionLost ? (
+          <StateNotice
+            title="연결이 잠시 끊겼어요"
+            description="분석은 서버에서 계속 진행되고 있어요. 이 화면이 같은 분석에 다시 연결하는 중이에요."
+            links={[]}
+            onRetry={onReconnect}
+            retryLabel="지금 다시 연결"
+            busy
+          />
+        ) : null}
 
         {/* 넓은 화면(xl)은 3컬럼: 진행 현황 · 질문·결과 · 분석 대상.
             태블릿·작은 노트북(md~lg)은 왼쪽에 진행 현황과 분석 대상을 쌓고 오른쪽에 질문·결과.
@@ -443,7 +486,12 @@ function ProgressView({
           </div>
           <div className="order-1 md:order-none md:col-start-2 md:row-span-2 md:row-start-1 xl:row-span-1">
             {stage === 'failed' ? (
-              <FailedNotice message={error} onRestart={onRestart} />
+              <FailedNotice
+                title={copy.title}
+                message={error}
+                onRestart={onRestart}
+                outsideSeoul={outsideSeoul}
+              />
             ) : (
               <ClarifyingPanel
                 key={questionKey ?? 'none'}
@@ -468,11 +516,15 @@ function ProgressView({
 }
 
 function FailedNotice({
+  title,
   message,
   onRestart,
+  outsideSeoul,
 }: {
+  title: string;
   message?: string | null;
   onRestart?: () => void;
+  outsideSeoul: boolean;
 }) {
   return (
     <div
@@ -482,24 +534,40 @@ function FailedNotice({
         backgroundColor: colors.neutral.white,
       }}
     >
-      <p className="text-xl font-bold" style={{ color: colors.text.primary }}>
-        분석을 마치지 못했어요
+      <p
+        className="text-xl font-bold break-keep"
+        style={{ color: colors.text.primary }}
+      >
+        {title}
       </p>
-      <p className="text-base" style={{ color: colors.text.secondary }}>
+      <p
+        className="text-base break-keep"
+        style={{ color: colors.text.secondary }}
+      >
         {message ?? '잠시 후 다시 시도해 주세요.'}
       </p>
-      {onRestart && (
-        <button
-          type="button"
-          onClick={onRestart}
-          className="w-fit rounded-lg px-5 py-3 text-base font-semibold"
-          style={{
-            backgroundColor: colors.brand.dark,
-            color: colors.neutral.white,
-          }}
+      {outsideSeoul ? (
+        <ButtonLink
+          href="/vacancy-input"
+          className="w-fit break-keep"
+          style={{ fontSize: 'var(--text-base)' }}
         >
-          다시 분석하기
-        </button>
+          주소 다시 입력하기
+        </ButtonLink>
+      ) : (
+        onRestart && (
+          <button
+            type="button"
+            onClick={onRestart}
+            className="w-fit rounded-lg px-5 py-3 text-base font-semibold"
+            style={{
+              backgroundColor: colors.brand.dark,
+              color: colors.neutral.white,
+            }}
+          >
+            다시 분석하기
+          </button>
+        )
       )}
     </div>
   );

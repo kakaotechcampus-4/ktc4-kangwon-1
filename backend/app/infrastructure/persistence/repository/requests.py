@@ -12,7 +12,7 @@ def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=
     """요청과 소유자를 한 트랜잭션에 넣습니다.
 
     둘로 나누면 사이에서 죽었을 때 소유자 없는 요청이 생기고, 그런 요청은
-    옛 요청과 구분되지 않아 조회가 열려 버립니다.
+    요청한 사람도 열 수 없게 됩니다.
     """
     request_id, address = _text(request_id), _text(address)
     if radius_m is not None:
@@ -31,26 +31,14 @@ def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=
             )
 
 
-# 이 시각 이전에 만들어진 요청은 소유자 기록이 없습니다. 인증을 붙이기 전의 자료라
-# 조회를 막지 않습니다. 경계를 두지 않으면 앞으로 소유자 기록이 빠진 요청까지
-# 전부 공개돼 영구 구멍이 됩니다.
-LEGACY_OWNER_CUTOFF = "2026-10-27T00:00:00+00:00"
-
-
 def owner_of(request_id, *, db_path=None):
-    """소유자 user_id. 소유자가 없는 옛 요청이면 "legacy", 요청 자체가 없으면 None."""
+    """소유자 user_id. 소유자가 없거나 요청 자체가 없으면 None."""
     with connect(db_path) as db:
         row = db.execute(
-            "SELECT o.user_id AS user_id, r.created_at AS created_at"
-            " FROM analysis_requests r LEFT JOIN analysis_owners o USING(request_id)"
-            " WHERE r.request_id=?",
+            "SELECT user_id FROM analysis_owners WHERE request_id=?",
             (_text(request_id),),
         ).fetchone()
-    if row is None:
-        return None
-    if row["user_id"] is not None:
-        return str(row["user_id"])
-    return "legacy" if str(row["created_at"]) < LEGACY_OWNER_CUTOFF else None
+    return None if row is None else str(row["user_id"])
 
 
 def list_user_requests(user_id, *, limit=20, offset=0, db_path=None):
@@ -106,28 +94,39 @@ def fail_interrupted(*, db_path=None):
     return changed.rowcount
 
 
+# 아직 끝나지 않은 요청만 결과로 닫을 수 있습니다. 서버가 다시 켜질 때 진행 중이던
+# 요청을 실패로 닫는데(fail_interrupted), 조건이 없으면 뒤늦게 끝난 작업이 그 요청을
+# 완료로 되살려 실패 이유와 완료 상태가 함께 남는 행이 생깁니다.
+OPEN_STATUSES = ("pending", "running", "waiting_for_input")
+
+
 def save_outcome(request_id, *, result_text=None, completed_at=None, db_path=None):
+    """이미 닫힌 요청은 건드리지 않습니다. 바꾼 행 수를 돌려줍니다."""
+    placeholders = ",".join("?" * len(OPEN_STATUSES))
     with connect(db_path) as db:
         if result_text is None:
-            db.execute(
-                "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id=?",
-                (request_id,),
+            changed = db.execute(
+                "UPDATE analysis_requests SET status='waiting_for_input' "
+                f"WHERE request_id=? AND status IN ({placeholders})",
+                (request_id, *OPEN_STATUSES),
             )
         else:
-            db.execute(
+            changed = db.execute(
                 "UPDATE analysis_requests SET "
-                "status='completed',result_json=?,completed_at=? WHERE "
-                "request_id=?",
-                (result_text, completed_at, request_id),
+                "status='completed',result_json=?,completed_at=? "
+                f"WHERE request_id=? AND status IN ({placeholders})",
+                (result_text, completed_at, request_id, *OPEN_STATUSES),
             )
+    return changed.rowcount
 
 
 def record_failure(request_id, *, error_text, diagnostics_text, failed_at, db_path=None):
     with connect(db_path) as db:
+        placeholders = ",".join("?" * len(OPEN_STATUSES))
         changed = db.execute(
             "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
-            "WHERE request_id=? AND status IN ('pending','running','waiting_for_input')",
-            (error_text, failed_at, request_id),
+            f"WHERE request_id=? AND status IN ({placeholders})",
+            (error_text, failed_at, request_id, *OPEN_STATUSES),
         )
         if changed.rowcount != 1:
             raise ValueError("종료할 수 있는 요청이 없습니다.")

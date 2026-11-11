@@ -9,9 +9,16 @@
 - **대상:** 입점 후보를 검토하는 임대인입니다. 실제 입점 가능성·매출·수익을 보장하는 서비스는 아닙니다.
 - **데모:** 주소·층 입력 → 확인 화면에서 면적·설비 확정 → 분석·필요한 질문에 답변 → 근거와 확인 조건이 있는 보고서 조회.
 
+| 운영 | 주소 |
+| --- | --- |
+| 서비스 | https://chaeum-ai.kr |
+| API | https://api.chaeum-ai.kr (상태 확인 https://api.chaeum-ai.kr/health) |
+
+예시 중개사·매칭 화면, chum.ai 표기, 로그인 뒤 주소 입력, 그리고 AI 분석에서 평가자가 실패해도 계속 진행하거나 예산이 차면 코드 점수로 마무리하는 것처럼 일부러 그렇게 만든 부분은 [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md)에 적었습니다.
+
 ![주소 하나가 리포트가 되기까지](docs/images/architecture-flow.png)
 
-- **100점 = 코드 90점 + decision 판단 10점.** 수요 35 · 경쟁 25 · 안정성 30은 코드가 계산하고, 코드가 볼 수 없는 것(주변 환경, 임대인 답변, 지표끼리의 충돌)만 decision이 10점으로 판단합니다.
+- **100점 = 코드 90점 + decision 판단 10점.** 수요 35 · 경쟁 30 · 안정성 15 · 시설 10은 코드가 계산하고, 코드가 볼 수 없는 것(주변 환경, 임대인 답변, 지표끼리의 충돌)만 decision이 10점으로 판단합니다.
 - **숫자는 코드만 씁니다.** 모델은 숫자를 직접 쓰지 않고 근거(fact)를 가리키기만 하며, 문장의 숫자는 서버가 채웁니다.
 - **평가자 4명이 항상 초안을 검토합니다.** 검토 의견은 decision이 한 번 반영한 뒤 서버가 최종 검증합니다.
 - **자료는 분기마다 한 번 받아 둡니다.** 요청은 자료를 복사하지 않고 고정한 버전을 읽으므로, 같은 요청은 언제나 같은 자료를 근거로 삼습니다.
@@ -85,7 +92,9 @@ HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없�
 | [백엔드 실행 분기표](backend/README.md#분기예외재개-코드-찾기) | 도구 루프·실패·평가·재개 위치 |
 | [docs/quality-summary.md](docs/quality-summary.md) | 실제 실행의 실패·개선 기록과 한계 |
 | [docs/TESTING.md](docs/TESTING.md) | 테스트 분류·커버리지·기술 부채 |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | 저장소로 확인한 배포 절차와 미확인 사항 |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 운영 주소·환경·배포 절차·되돌리기 |
+| [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md) | 일부러 그렇게 만든 화면·표기·AI 분석 동작과 이유 |
+| [docs/consistency-live-report.md](docs/consistency-live-report.md) | 같은 주소를 실제 모델로 반복 분석한 결과, 찾은 문제와 고친 것 |
 | [docs/archive/](docs/archive/README.md) | 이전 설계 기록 |
 
 실제 키, 주소별 실행 기록, 자료 DB, 원문 CSV는 커밋하지 않습니다.

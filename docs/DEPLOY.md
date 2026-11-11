@@ -1,47 +1,103 @@
-# 백엔드 배포·운영
+# 배포·운영
 
-2026-10-26 저장소 코드 기준. 서버 접속·실제 배포는 이번에 수행하지 않았다. 배포 URL·서버 nginx 설정은 운영자 확인 전에는 기재하지 않는다.
+지금 운영 중인 구조와 절차입니다. 2026-11-08 기준(develop `b936689`).
 
-## 코드에서 확인한 배포 흐름
+## 한눈에
 
-근거: [deploy.yml](../.github/workflows/deploy.yml), [deploy.sh](../deploy/deploy.sh), [systemd 서비스](../deploy/chaeum@.service).
+| 무엇 | 주소 | 배포 |
+| --- | --- | --- |
+| 서비스 화면 | https://chaeum-ai.kr | Vercel이 develop 커밋을 운영으로 배포합니다. `ktc4-kangwon-1.vercel.app`은 chaeum-ai.kr로 넘어갑니다(`frontend/next.config.ts`) |
+| API | `https://api.chaeum-ai.kr` (화면이 부르는 주소 — 맨 앞 주소는 페이지가 없어 Not Found가 정상) | GitHub Actions `deploy.yml` → AWS EC2 한 대, 무중단 전환 |
+| API 문서 | https://api.chaeum-ai.kr/docs · `/openapi.json` | FastAPI가 코드에서 만듭니다 |
+| 상태 확인 | https://api.chaeum-ai.kr/health | `{"status":"ok"}` |
+
+`kangwon-1-chaeum.duckdns.org`는 같은 서버의 다른 주소입니다. 배포 워크플로의 마지막 외부 확인이 이 주소를 씁니다.
+
+백엔드 배포 워크플로는 2026-10-10부터 39번 실행해 39번 모두 성공했습니다(2026-11-08 기준, Actions 탭 「배포」).
+
+## 환경
+
+| 환경 | 어디서 | 자료·AI | 쓰는 때 |
+| --- | --- | --- | --- |
+| 로컬 | 개발자 PC — 백엔드 `uvicorn`, 프론트 `npm run dev` | 각자 `backend/.env`, 로컬 SQLite, 실제 LLM 키 | 개발 |
+| 화면 mock 모드 | 로컬 프론트, `NEXT_PUBLIC_MOCK_MODE=true` | 백엔드 없이 고정 데이터 | 화면 흐름 확인 |
+| CI | GitHub Actions `ci.yml` — 모든 PR, main·develop push | 백엔드 검사·시험, 프론트 검사·빌드, 배포 스크립트 시험, 브라우저 E2E(백엔드 `MOCK_MODE=1`, 실제 AI 호출 없음) | 머지 전 검사 |
+| PR 미리보기 | Vercel Preview — PR마다 미리보기 주소를 PR 댓글로 남김 | 화면 | 리뷰 |
+| 운영 | chaeum-ai.kr + EC2 | 서버 공유 저장소의 자료 DB·요청 DB, 서버 `.env` | 서비스 |
+
+운영과 똑같은 별도 스테이징 서버는 두지 않았습니다. 서버가 한 대라 **CI 검사 → 미리보기 → 배포 직전 재검사 → 헬스체크를 통과해야 전환**하는 단계로 막습니다.
+
+## 백엔드 배포 흐름
+
+develop에 push되면(또는 Actions에서 「배포」를 직접 실행하면) 자동으로 돕니다. 배포는 한 번에 하나만 실행됩니다.
+「배포」를 직접 다시 실행해도 배포마다 새 폴더를 쓰므로 서비스 중인 버전을 건드리지 않습니다.
 
 ```text
-develop push 또는 수동 실행
-→ Ruff·포맷·mypy·unittest
-→ AWS OIDC 인증 → backend 배포 묶음 S3 업로드
-→ SSM으로 EC2의 deploy.sh 실행
-→ 8001/8002 중 비활성 포트 시작 → 내부 /health 확인
-→ nginx 검사·전환 → 이전 서비스 종료 → 외부 /health 확인
+검사: ruff · ruff format · mypy · unittest        ← 실패하면 여기서 멈추고 배포하지 않음
+→ AWS 인증(OIDC — GitHub에 AWS 키를 저장하지 않음)
+→ backend/·deploy/ 를 묶어 S3에 업로드
+→ SSM으로 EC2에서 deploy/deploy.sh 실행
+    1. 지금 쉬는 포트(8001/8002)에 새 버전을 띄움
+    2. 새 포트의 /health를 최대 60초 확인 — 실패하면 전환하지 않고 중단(구 버전이 계속 서비스)
+    3. nginx가 새 포트를 보게 바꾸고 reload — 기존 연결은 유지, 새 요청만 옮겨 감
+       (설정 검사 nginx -t나 reload가 실패하면 설정과 current를 되돌리고 중단 — 구 버전이 계속 서비스)
+    4. 구 버전 정지, 재부팅 때 올라올 쪽도 새 포트로
+    5. 릴리스는 최근 3개만 남김(실패한 배포의 폴더는 실패할 때 바로 지움)
+→ 외부에서 https://kangwon-1-chaeum.duckdns.org/health 200 확인 — 아니면 워크플로 실패로 표시
 ```
 
-| 항목 | 저장소에서 확인한 값 |
+근거: [deploy.yml](../.github/workflows/deploy.yml) · [deploy.sh](../deploy/deploy.sh) · [chaeum@.service](../deploy/chaeum@.service)
+
+## 서버 구성
+
+| 항목 | 값 |
 | --- | --- |
-| 설치 루트 | `/opt/chaeum` |
-| 환경 파일 | `/opt/chaeum/shared/.env`를 릴리스에서 연결 |
+| 설치 위치 | `/opt/chaeum` — `releases/<커밋>-<배포 시각>`, 지금 버전을 가리키는 `current` 링크, `shared` |
+| 공유 폴더 | `shared/.env` · `shared/storage` · `shared/cache` · `shared/venv` — 배포가 덮어쓰지 않고 릴리스에 링크로 연결 |
 | 요청 DB | `SQLITE_PATH=/opt/chaeum/shared/storage/chaeum.sqlite3` |
-| 자료 DB | `LOCAL_DATA_DB_PATH=/opt/chaeum/shared/storage/market_data.sqlite3` |
-| 릴리스 | 최근 3개 보관, `current` 심볼릭 링크 전환 |
-| 실행 | 포트별 systemd 서비스 `chaeum@8001`, `chaeum@8002`, 기본 worker 1개 |
-| 로그 | `/var/log/chaeum-deploy.log`, `journalctl -u chaeum@8001` 또는 `chaeum@8002` |
+| 자료 DB | `LOCAL_DATA_DB_PATH=/opt/chaeum/shared/storage/market_data.sqlite3` (서울 전체, 약 0.8GB) |
+| 실행 | systemd 템플릿 `chaeum@8001` / `chaeum@8002`, 워커 1개(분석 작업표가 프로세스 메모리에 있어서) |
+| 앞단 | nginx — `deploy.sh`가 `/etc/nginx/conf.d/chaeum-upstream.conf`의 포트 한 줄만 바꿈 |
+| AWS | 서울 리전 · S3 `ktc4-kangwon-1-deploy` · SSM · IAM 역할 `ktc-github-deploy`(OIDC) |
+| 로그 | 배포 `/var/log/chaeum-deploy.log`, 앱 `journalctl -u chaeum@8001`(또는 8002) |
 
-## 자료 DB 준비
+## 비밀 값
 
-앱 기동 시 요청 DB를 초기화하지만 자료 DB를 자동 다운로드·생성하지 않는다. 일반 분석의 `LocalAdapter`는 자료 DB를 읽기 전용으로 열고 활성 자료 버전을 확인한다. 파일이 없거나 활성 버전이 없으면 분석은 실패한다. `/health` 성공만으로 자료 준비를 보증할 수 없다.
+- **서버:** `/opt/chaeum/shared/.env` — LLM·카카오 등 키. 변수 이름은 `backend/.env.example`에 있습니다. git에는 올리지 않습니다.
+- **GitHub:** AWS 키를 저장하지 않고 OIDC로 역할을 빌립니다. 저장소 변수는 `AWS_ACCOUNT_ID` 하나입니다.
+- **Vercel:** `NEXT_PUBLIC_API_BASE_URL`(운영은 `https://api.chaeum-ai.kr`)·`NEXT_PUBLIC_KAKAO_MAP_APP_KEY`는 Vercel 프로젝트 환경 변수로 둡니다.
+- **CORS:** 화면 주소는 백엔드 `CORS_ALLOW_ORIGINS`에 쉼표로 이어 붙입니다.
 
-현재 갱신 도구는 `backend/scripts/refresh_local_data.py`다. 계획에 있던 `update_local_market_data.py`는 없다. 이 도구는 입력 CSV·SHP와 API 조회 자료를 적재하고 버전을 활성화한다. 필요한 파일·옵션은 다음으로 확인한다.
+## 자료 DB — 분기 갱신
 
-```powershell
-cd backend
-python scripts/refresh_local_data.py --help
-```
+앱은 자료 DB를 만들지 않고 **읽기만** 합니다. 요청마다 활성 자료 버전을 고정해서 읽습니다.
 
-실제 갱신에는 외부 호출·자료가 필요하므로 별도 승인·자료 준비 후 실행한다. 저장소에는 운영 서버 최초 자료 DB 업로드 자동화가 없다. **전송 수단·담당자·정기 갱신 절차는 미정(운영자 확인 필요)**이다. 실행 중 SQLite 파일 하나만 복사하지 말고 일관된 백업·검증 후 교체하는 절차부터 합의해야 한다. 기존 자료 DB를 삭제해 초기화하지 않는다.
+- **갱신:** `backend/scripts/refresh_local_data.py`가 분기 자료를 적재 → 검증 → 활성화합니다. 실패하면 이전 버전을 그대로 씁니다.
 
-## 복구 범위와 남은 결정
+  ```bash
+  cd backend
+  python scripts/refresh_local_data.py --help
+  python scripts/refresh_local_data.py --quarter 20262 --seoul-csv <서울 CSV> --dry-run   # 파일만 검증
+  ```
 
-새 포트의 내부 건강 검사가 실패하면 새 서비스를 중단하고 `current`를 이전 릴리스로 돌린다. 모든 단계의 자동 롤백은 아니다. nginx 전환 실패·외부 검사 실패의 완전 복구, 공유 가상환경 의존성의 이전 버전 복원까지 보장하지 않는다.
+- **서버 반영:** 갱신한 자료 DB를 서버 `shared/storage`에 올리는 단계는 아직 수동입니다. 실행 중인 파일을 그 자리에서 덮지 말고, 새 이름으로 올려 검증한 뒤 바꿉니다. 기존 자료 DB를 지워서 초기화하지 않습니다.
 
-- `/health`는 기존 전환 조건으로 유지한다. 자료 DB 준비 상태를 별도로 검사하는 `/health/ready`는 제안이며 미구현이다.
-- 명시적인 롤백 스크립트와 자료 DB 배포 절차도 후속 과제다. 이번에는 deploy.yml·deploy.sh·서비스 파일을 수정하지 않았다.
-- nginx 구성·서버 비밀 값·dev/prod 분리는 추정하거나 새로 작성하지 않았다.
+## 되돌리기
+
+- 새 버전이 내부 `/health`를 통과하지 못하면 **자동으로 전환하지 않습니다.** 구 버전이 그대로 서비스합니다.
+- 전환한 뒤 문제가 보이면: develop에서 원인 커밋을 `git revert` → push → 같은 흐름으로 다시 배포합니다. 검사·헬스체크를 다시 거치므로 가장 안전합니다.
+- 서버에는 최근 릴리스 3개가 남아 있어, 급하면 이전 릴리스로 직접 되돌릴 수 있습니다. 다만 가상환경(`shared/venv`)은 릴리스끼리 함께 쓰므로 의존성까지 이전 상태로 돌아가지는 않습니다.
+
+## 왜 Docker 대신 systemd인가
+
+백엔드는 EC2 한 대에서 FastAPI 프로세스 하나만 돌고, DB는 파일(SQLite)이며, 화면은 Vercel이 따로 배포합니다. 함께 띄울 서비스가 없어서 컨테이너 대신 systemd 서비스 두 개(8001/8002)와 nginx 전환으로 무중단 배포를 했습니다. 0.8GB 자료 DB는 분기마다 바뀌어 이미지에 넣을 수 없고, 컨테이너를 써도 볼륨으로 따로 붙여야 해서 지금 방식(`shared/storage` 링크)과 같습니다. 서버가 여러 대가 되거나 DB를 PostgreSQL로 옮기면 컨테이너로 바꿉니다.
+
+## 알려진 한계와 다음 단계
+
+| 한계 | 지금 대응 | 다음 단계 |
+| --- | --- | --- |
+| 서버 한 대, 스테이징 없음 | 배포 직전 재검사 · 헬스체크 통과 후 전환 | 서버를 늘릴 때 스테이징 분리 |
+| `/health`는 자료 DB 준비까지 확인하지 않음 | 자료 DB는 공유 저장소에 두고 배포가 건드리지 않음 | 자료 버전까지 보는 `/health/ready` |
+| 자료 DB 서버 반영이 수동 | 갱신 스크립트가 검증 후 활성화, 실패 시 이전 버전 유지 | S3를 거친 업로드·교체 자동화 |
+| 의존성 잠금 파일 없음 | Python 3.12 고정, 배포 직전 같은 검사 | lock 파일 추가 |
+| 전환 뒤 문제는 자동 복구 안 됨 | 외부 `/health` 확인, revert 후 재배포 | 롤백 스크립트 |

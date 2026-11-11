@@ -5,7 +5,7 @@ import logging
 from fastapi import HTTPException
 
 from app.api.v1.jobs import request_headers
-from app.application.errors import ADDRESS_INPUT_ERRORS, AddressError
+from app.application.errors import ADDRESS_INPUT_ERRORS, OUTSIDE_SEOUL_MESSAGE, AddressError
 from app.application.errors import AnalysisConflictError as AnalysisConflictError
 from app.shared.logging import log_exception
 
@@ -18,6 +18,10 @@ async def run_or_http(work, request_id, *, kind):
     except HTTPException:
         raise
     except AddressError as exc:
+        if exc.code == "OUTSIDE_SEOUL":
+            raise HTTPException(
+                422, OUTSIDE_SEOUL_MESSAGE, headers=request_headers(request_id)
+            ) from None
         invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise HTTPException(
             400 if invalid else 502,

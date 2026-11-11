@@ -51,17 +51,31 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
             reservations.append((role, False, await budget.claim_output(5500, role=role)))
             with self.assertRaises(BudgetExceeded):
                 await budget.claim_output(1, role=role)
-        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 6000, 2000])
-        self.assertEqual(sum(row[2] for row in reservations), 60000)
+        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 10000, 6000])
+        self.assertEqual(sum(row[2] for row in reservations), 68000)
         for role, final, reserved in reservations:
             await budget.release_output(reserved, role=role, final=final)
         self.assertEqual(budget.pending_output, 0)
 
+    async def test_final_phase_leaves_room_for_one_retry(self):
+        budget = RuntimeBudget()
+        reserved = await budget.claim_output(16000, role="decision", final=True)
+        first = await budget.reserve("decision", final=True, input_chars=80000)
+        await budget.finish(
+            first,
+            status="completed",
+            elapsed_ms=1,
+            usage=SimpleNamespace(prompt_tokens=29000, completion_tokens=3600),
+        )
+        await budget.release_output(reserved, role="decision", final=True)
+        self.assertEqual(await budget.claim_output(16000, role="decision", final=True), 6400)
+        self.assertEqual(await budget.reserve("decision", final=True, input_chars=100000), 2)
+
     async def test_pending_inputs_are_atomic_and_actual_usage_releases_estimate(self):
         budget = RuntimeBudget()
         attempts = await asyncio.gather(
-            budget.reserve("examiner", input_chars=48000),
-            budget.reserve("examiner", input_chars=48000),
+            budget.reserve("founder", input_chars=48000),
+            budget.reserve("founder", input_chars=48000),
             return_exceptions=True,
         )
         self.assertEqual(sum(isinstance(value, int) for value in attempts), 1)
@@ -72,8 +86,8 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
             elapsed_ms=1,
             usage=SimpleNamespace(prompt_tokens=10000, completion_tokens=50),
         )
-        self.assertEqual(await budget.reserve("examiner", input_chars=60000), 2)
-        self.assertEqual(await budget.reserve("founder", input_chars=80000), 3)
+        self.assertEqual(await budget.reserve("founder", input_chars=60000), 2)
+        self.assertEqual(await budget.reserve("examiner", input_chars=80000), 3)
 
     async def test_resume_preserves_role_and_phase_usage(self):
         budget = RuntimeBudget()
@@ -88,9 +102,27 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await resumed.reserve("customer", input_chars=80002), 2)
         with self.assertRaises(BudgetExceeded):
             await resumed.claim_output(1, role="decision")
-        self.assertEqual(await resumed.claim_output(16000, role="decision", final=True), 6000)
+        self.assertEqual(await resumed.claim_output(16000, role="decision", final=True), 10000)
         self.assertEqual(await resumed.reserve("decision", final=True, input_chars=100000), 3)
         self.assertEqual(await resumed.reserve("customer", input_chars=80000), 4)
+
+    async def test_only_examiner_share_fits_a_third_call_after_two_large_reads(self):
+        for role, fits in (("examiner", True), ("founder", False)):
+            with self.subTest(role=role):
+                budget = RuntimeBudget(
+                    {
+                        "used": 2,
+                        "calls": [
+                            {"role": role, "input_tokens": 9808, "output_tokens": 100},
+                            {"role": role, "input_tokens": 21014, "output_tokens": 100},
+                        ],
+                    }
+                )
+                if fits:
+                    self.assertEqual(await budget.reserve(role, input_chars=74000), 3)
+                else:
+                    with self.assertRaises(BudgetExceeded):
+                        await budget.reserve(role, input_chars=74000)
 
     async def test_role_schema_is_used_without_decision_schema(self):
         budget = RuntimeBudget()
@@ -206,6 +238,66 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated.error.code, "DUPLICATE_INDUSTRY")
         self.assertFalse(repeated.duplicate)
         self.assertEqual(handler.await_count, 2)
+
+    async def test_validation_error_lists_every_problem_with_how_to_fix_it(self):
+        executor = self.executor("decision")
+        partial = {"disposition": "partial", "reason": "일부만 반영"}
+        arguments = {
+            "phase": "final",
+            "report": {
+                "candidates": [
+                    {
+                        "industry_code": "I201",
+                        "reasons_segments": [{"type": "fact", "fact_id": "f_a"}],
+                        "risks_segments": [
+                            {"type": "text", "text": ""},
+                            {"type": "text", "text": ""},
+                        ],
+                    }
+                ]
+            },
+            "review_resolutions": [{"issue_id": f"examiner:{n}", **partial} for n in range(3)],
+        }
+        with patch("app.ai.tools._audit"):
+            reply = await executor.execute("submit_draft", arguments)
+        message = reply.error.message
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        for place in (
+            "reasons_segments.0",
+            "risks_segments.0",
+            "risks_segments.1",
+            "review_resolutions.0",
+            "review_resolutions.1",
+            "review_resolutions.2",
+        ):
+            self.assertIn(place, message)
+        self.assertIn("applied와 not_applied", message)
+        self.assertIn("count/percent/rate/distance/text", message)
+        self.assertIn("빈 문자열", message)
+        self.assertNotIn("일부만 반영", message)
+        self.assertLessEqual(len(message), 600)
+
+    async def test_long_validation_error_is_cut_to_the_reply_limit(self):
+        executor = self.executor("decision")
+        broken = [{"type": "fact", "fact_id": "f_a"}, {"type": "text", "text": ""}]
+        arguments = {
+            "phase": "draft",
+            "report": {
+                "candidates": [
+                    {
+                        "industry_code": "I201",
+                        "reasons_segments": broken,
+                        "risks_segments": broken,
+                        "confirmation_conditions_segments": broken,
+                    }
+                ]
+                * 5
+            },
+        }
+        with patch("app.ai.tools._audit"):
+            reply = await executor.execute("submit_draft", arguments)
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        self.assertLessEqual(len(reply.error.message), 600)
 
     async def test_validation_error_exposes_path_type_and_cap_only(self):
         executor = self.executor("decision")
@@ -400,6 +492,49 @@ class EvaluatorContextTests(unittest.IsolatedAsyncioTestCase):
                 },
             ),
         )
+
+    async def test_examiner_completes_after_two_reads_at_measured_size(self):
+        budget = RuntimeBudget()
+        scope = SimpleNamespace(snapshot_id="snapshot")
+        executor = ToolExecutor(scope, None, actor="examiner")
+        sequence = [call("get_scorecard", {"limit": limit}) for limit in (1, 2)] + [
+            call("submit_review", {"draft_id": "draft", "verdict": "agree", "issues": []})
+        ]
+        input_chars = [21138, 48930, 50844]
+        used_inputs = [9808, 21014, 25000]
+
+        async def model(role, messages, settings, definitions):
+            reservation = await budget.claim_output(settings.max_tokens, role=role)
+            try:
+                attempt = await budget.reserve(role, input_chars=input_chars.pop(0))
+            finally:
+                await budget.release_output(reservation, role=role)
+            await budget.finish(
+                attempt,
+                status="completed",
+                elapsed_ms=1,
+                usage=SimpleNamespace(prompt_tokens=used_inputs.pop(0), completion_tokens=100),
+            )
+            return sequence.pop(0), {}
+
+        loop = SimpleNamespace(scope=scope, budget=budget, _model=model, event=AsyncMock())
+        with (
+            patch(
+                "app.ai.tools.get_scorecard",
+                AsyncMock(return_value=ToolReply(status="ok", data={})),
+            ),
+            patch("app.ai.evaluators.fact_rows", return_value={}),
+            patch("app.ai.evaluators.save_review"),
+            patch("app.ai.tools._audit"),
+            patch("app.ai.evaluators.encode", side_effect=lambda scope, value: value),
+            patch(
+                "app.ai.examiner.review_packet",
+                return_value=evaluators.compact_draft(self.draft()),
+            ),
+        ):
+            result = await evaluators.review(loop, "examiner", executor, self.draft())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(budget.used, 3)
 
     async def test_final_event_counts_accepted_issues(self):
         scope = SimpleNamespace(snapshot_id="snapshot")

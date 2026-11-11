@@ -7,6 +7,7 @@ from app.infrastructure.persistence import provenance
 from app.infrastructure.persistence.repository import (
     agentic,
     analyses,
+    erasure,
     events,
     facts,
     raw,
@@ -25,7 +26,7 @@ BOUND = {
 PATHED = {
     port.UserStore: (users,),
     port.SessionStore: (sessions,),
-    port.RequestStore: (requests, analyses, events),
+    port.RequestStore: (requests, analyses, events, erasure),
     port.ProvenanceStore: (provenance,),
 }
 

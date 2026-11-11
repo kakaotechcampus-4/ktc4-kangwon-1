@@ -47,9 +47,12 @@ wait=false 작업은 이벤트와 GET으로 확인한다. 헤더 X-Request-ID를
 | 404 | 요청 없음 |
 | 409 | 답변 세션 불일치·이미 처리·동시 작업 충돌 |
 | 422 | 입력 스키마·답변 항목 검증 오류 |
+| 422 | 서울 밖 주소. `{"detail": "지금은 서울 상가만 분석할 수 있어요."}` |
 | 502 | 외부 서비스·실행 실패 |
 | 500 | 내부 오류 |
 | 429 | 동시 작업 수용 상한 또는 종료 중 |
+
+wait=false로 접수한 요청이 서울 밖 주소이면 failed가 되고 error는 `{"code": "OUTSIDE_SEOUL", "message": "지금은 서울 상가만 분석할 수 있어요."}`이다.
 
 평가자는 항상 네 슬롯이다. 실패 슬롯도 유지하며 평가 미완료를 표시한다.
 프론트 담당은 rendered 문장, 검토 후보 Top 5, 코드·L 점수와 구간·coverage,
@@ -77,10 +80,10 @@ Set-Cookie: chaeum_session=<난수>; HttpOnly; Secure; SameSite=Lax; Path=/; Max
 
 | 엔드포인트 | 입력·응답 |
 | --- | --- |
-| POST /api/v1/auth/signup | email·password(10자 이상)·display_name. 201 `{user_id, verification_sent}`. 세션 쿠키를 함께 내려준다 |
+| POST /api/v1/auth/signup | email·password(10자 이상)·agree_terms(참). 동의 없으면 422. 201 `{user_id, verification_sent}`. 세션 쿠키를 함께 내려준다 |
 | POST /api/v1/auth/login | email·password. 200 `{status}`. 실패 401, 시도 과다 429 |
 | POST /api/v1/auth/logout | 세션 폐기. 200 |
-| GET /api/v1/auth/me | `{user_id, email, display_name, profile_image_url, email_verified, needs_verification, created_at}`. 비로그인 401 |
+| GET /api/v1/auth/me | `{user_id, email, display_name, email_verified, needs_verification, created_at}`. 비로그인 401 |
 | DELETE /api/v1/auth/me | 탈퇴. 200 |
 | POST /api/v1/auth/verify-email | `{token}`. 만료·재사용 400 |
 | POST /api/v1/auth/verification/resend | 로그인 필요. `{verification_sent}` |
@@ -207,6 +210,7 @@ Set-Cookie: chaeum_session=<난수>; HttpOnly; Secure; SameSite=Lax; Path=/; Max
 | --- | --- | --- |
 | 400 | 주소를 찾지 못함, 여러 후보 | `{"detail": "주소를 확인해 주세요."}` |
 | 422 | `address`가 없거나 200자 초과 | FastAPI 기본 형식 |
+| 422 | 서울 밖 주소: 카카오 지번 주소의 법정동 코드(`b_code`) 앞 두 자리가 11이 아님(코드가 없으면 도로명 주소의 시·도 이름이 `서울`·`서울특별시`가 아님). 허브를 호출하지 않음 | `{"detail": "지금은 서울 상가만 분석할 수 있어요."}` |
 | 502 | 주소 조회 실패 | `{"detail": "주소 조회 서비스에 실패했습니다."}` |
 | 502 | 네 항목 모두 실패, 건축HUB 키 미설정 | `{"detail": "건축물대장 조회에 실패했습니다."}` |
 | 502 | 건축HUB 인증·권한 오류로 전체 실패 | `{"detail": "건축물대장 인증키 또는 사용 권한을 확인해 주세요."}` |

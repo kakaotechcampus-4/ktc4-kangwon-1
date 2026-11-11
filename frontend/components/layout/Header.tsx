@@ -120,9 +120,7 @@ export default function Header({ overlay = false }: HeaderProps) {
           })}
         </nav>
 
-        <div className="hidden justify-self-end sm:block">
-          <HeaderUserMenu />
-        </div>
+        <HeaderUserMenu />
       </div>
     </header>
   );

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ADDRESS_ERROR_NOTE,
   LOOKUP_ERROR_NOTE,
+  OutsideServiceAreaError,
   fetchBuildingInfo,
   normalizeFloor,
   toBuildingInfo,
@@ -429,6 +430,35 @@ describe('건축물대장 조회 호출', () => {
     expect(caught).toBeInstanceOf(ApiError);
     expect((caught as ApiError).status).toBe(504);
     expect((caught as ApiError).message).toBe(notice);
+  });
+
+  it('서울 밖 주소(422)는 서버 문구를 담은 오류로 던진다', async () => {
+    const notice = '지금은 서울 상가만 분석할 수 있어요.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ detail: notice }, 422))
+    );
+    const caught = await fetchBuildingInfo('부산 해운대구 해운대로 264').catch(
+      (e: unknown) => e
+    );
+    expect(caught).toBeInstanceOf(OutsideServiceAreaError);
+    expect((caught as OutsideServiceAreaError).message).toBe(notice);
+  });
+
+  it('주소 형식 검증 오류(422, detail 목록)는 지금처럼 빈칸으로 돌려준다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { detail: [{ msg: 'String should have at most 200' }] },
+            422
+          )
+        )
+    );
+    const info = await fetchBuildingInfo('입력 주소');
+    expect(info.sourceNote).toBe(LOOKUP_ERROR_NOTE);
   });
 
   it('그 밖의 조회 실패(502)는 지금처럼 직접 입력을 안내한다', async () => {

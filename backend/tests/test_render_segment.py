@@ -44,6 +44,16 @@ class RenderSegmentTests(unittest.TestCase):
         rendered = render_segment(text_segment(), {"f": fact("age_share", {"20": 0.3})})
         self.assertEqual(rendered, "확인 불가")
 
+    def test_space_requirements_read_as_recommended_area(self):
+        value = {
+            "area_band": "40~200㎡",
+            "confidence": "low",
+            "floor_preference": "basement_preferred",
+            "industry_code": "R104",
+        }
+        rendered = render_segment(text_segment(), {"f": fact("space_requirements", value)})
+        self.assertEqual(rendered, "권장 면적 40~200㎡")
+
 
 class JoinSegmentsTests(unittest.TestCase):
     def test_spaces_after_sentence_end_and_between_facts(self):
@@ -137,8 +147,17 @@ class TextValueParityTests(unittest.TestCase):
 
     def test_whole_floats_and_booleans_read_like_the_screen(self):
         self.assertEqual(self.render(2.0), "2")
+        self.assertEqual(self.render(2024), "2024")
         self.assertEqual(self.render(True), "예")
         self.assertEqual(self.render(None), "확인 불가")
+
+    def test_fractions_in_text_keep_two_decimals_like_the_screen(self):
+        self.assertEqual(self.render(1.088340273646639, unit="배수"), "1.09")
+        self.assertEqual(self.render(0.9324690402476782), "0.93")
+
+    def test_huge_numbers_read_like_the_screen(self):
+        self.assertEqual(self.render(1e21), "1e+21")
+        self.assertEqual(self.render(1.5e30), "1.5e+30")
 
     def test_ties_round_away_from_zero_like_the_screen(self):
         self.assertEqual(self.render(0.0625, "percent", "비율"), "6.3%")

@@ -1,7 +1,10 @@
 'use client';
 
+import LegalLink from '@/components/auth/LegalLink';
 import { kakaoLoginUrl } from '@/lib/api/auth';
 import { colors } from '@/styles/tokens';
+
+const NOTICE_ID = 'kakao-start-notice';
 
 /**
  * fetch가 아니라 주소창 이동이어야 한다. 쿠키는 백엔드가 직접 심으므로
@@ -10,20 +13,29 @@ import { colors } from '@/styles/tokens';
  */
 export default function KakaoButton({ next }: { next: string }) {
   return (
-    <button
-      type="button"
-      onClick={() => {
-        window.location.href = kakaoLoginUrl(next);
-      }}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-[28px] py-[14px] text-sm font-bold transition-opacity hover:opacity-90"
-      style={{
-        backgroundColor: colors.kakao.yellow,
-        color: colors.kakao.label,
-      }}
-    >
-      <KakaoMark />
-      카카오로 시작하기
-    </button>
+    <div className="flex flex-col gap-6">
+      <button
+        type="button"
+        aria-describedby={NOTICE_ID}
+        onClick={() => {
+          window.location.href = kakaoLoginUrl(next);
+        }}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-[28px] py-[14px] text-sm font-bold transition-opacity hover:opacity-90"
+        style={{
+          backgroundColor: colors.kakao.yellow,
+          color: colors.kakao.label,
+        }}
+      >
+        <KakaoMark />
+        카카오로 시작하기
+      </button>
+      <p id={NOTICE_ID} className="text-13 break-keep text-[#4B5866]">
+        카카오로 시작하면 만 14세 이상이며{' '}
+        <LegalLink href="/terms">이용약관</LegalLink>에 동의하고{' '}
+        <LegalLink href="/privacy">개인정보 처리방침</LegalLink>을 확인한 것으로
+        봅니다.
+      </p>
+    </div>
   );
 }
 

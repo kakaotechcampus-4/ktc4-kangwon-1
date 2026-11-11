@@ -27,10 +27,12 @@ function LoginForm() {
   const router = useRouter();
   const { refresh } = useAuth();
   const next = safeNext(params.get('next'));
+  const resetDone = params.get('reset') === 'done';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   // 카카오 쪽 실패는 주소창의 ?error= 로 돌아온다.
   const [error, setError] = useState(
     () => KAKAO_ERRORS[params.get('error') ?? ''] ?? ''
@@ -39,6 +41,7 @@ function LoginForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
+    setDismissed(true);
     setError('');
     try {
       await login(email, password);
@@ -71,6 +74,12 @@ function LoginForm() {
         </>
       }
     >
+      {resetDone && !dismissed && !error ? (
+        <FormMessage tone="success">
+          비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요.
+        </FormMessage>
+      ) : null}
+
       <KakaoButton next={next} />
 
       <div className="flex items-center gap-3">

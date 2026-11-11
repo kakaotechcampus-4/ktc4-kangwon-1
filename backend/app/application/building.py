@@ -1,4 +1,4 @@
-from app.application.errors import ADDRESS_INPUT_ERRORS, AddressError
+from app.application.errors import ADDRESS_INPUT_ERRORS, OUTSIDE_SEOUL_MESSAGE, AddressError
 from app.application.ports.demo import demo
 from app.application.ports.sites import BuildingRegistryError, sites
 from app.domain.building import BuildingRegistry
@@ -17,6 +17,8 @@ async def lookup(address: str, *, mock: bool) -> BuildingRegistry:
     try:
         return await sites().building(address)
     except AddressError as exc:
+        if exc.code == "OUTSIDE_SEOUL":
+            raise BuildingLookupFailed("outside_seoul", OUTSIDE_SEOUL_MESSAGE) from exc
         invalid = exc.code in ADDRESS_INPUT_ERRORS
         raise BuildingLookupFailed(
             "invalid_address" if invalid else "address_service",

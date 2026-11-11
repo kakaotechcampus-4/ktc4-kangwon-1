@@ -41,5 +41,8 @@ export function analysisLink(
   if (status === 'waiting_for_input') {
     return { label: '답변하러 가기', href: `/analysis-progress?id=${id}` };
   }
+  if (status === 'running' || status === 'pending') {
+    return { label: '진행 상황 보기', href: `/analysis-progress?id=${id}` };
+  }
   return null;
 }
