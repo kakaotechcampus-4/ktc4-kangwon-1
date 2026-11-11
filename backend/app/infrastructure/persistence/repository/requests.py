@@ -94,28 +94,39 @@ def fail_interrupted(*, db_path=None):
     return changed.rowcount
 
 
+# 아직 끝나지 않은 요청만 결과로 닫을 수 있습니다. 서버가 다시 켜질 때 진행 중이던
+# 요청을 실패로 닫는데(fail_interrupted), 조건이 없으면 뒤늦게 끝난 작업이 그 요청을
+# 완료로 되살려 실패 이유와 완료 상태가 함께 남는 행이 생깁니다.
+OPEN_STATUSES = ("pending", "running", "waiting_for_input")
+
+
 def save_outcome(request_id, *, result_text=None, completed_at=None, db_path=None):
+    """이미 닫힌 요청은 건드리지 않습니다. 바꾼 행 수를 돌려줍니다."""
+    placeholders = ",".join("?" * len(OPEN_STATUSES))
     with connect(db_path) as db:
         if result_text is None:
-            db.execute(
-                "UPDATE analysis_requests SET status='waiting_for_input' WHERE request_id=?",
-                (request_id,),
+            changed = db.execute(
+                "UPDATE analysis_requests SET status='waiting_for_input' "
+                f"WHERE request_id=? AND status IN ({placeholders})",
+                (request_id, *OPEN_STATUSES),
             )
         else:
-            db.execute(
+            changed = db.execute(
                 "UPDATE analysis_requests SET "
-                "status='completed',result_json=?,completed_at=? WHERE "
-                "request_id=?",
-                (result_text, completed_at, request_id),
+                "status='completed',result_json=?,completed_at=? "
+                f"WHERE request_id=? AND status IN ({placeholders})",
+                (result_text, completed_at, request_id, *OPEN_STATUSES),
             )
+    return changed.rowcount
 
 
 def record_failure(request_id, *, error_text, diagnostics_text, failed_at, db_path=None):
     with connect(db_path) as db:
+        placeholders = ",".join("?" * len(OPEN_STATUSES))
         changed = db.execute(
             "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
-            "WHERE request_id=? AND status IN ('pending','running','waiting_for_input')",
-            (error_text, failed_at, request_id),
+            f"WHERE request_id=? AND status IN ({placeholders})",
+            (error_text, failed_at, request_id, *OPEN_STATUSES),
         )
         if changed.rowcount != 1:
             raise ValueError("종료할 수 있는 요청이 없습니다.")
