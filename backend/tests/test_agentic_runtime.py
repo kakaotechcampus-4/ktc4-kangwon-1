@@ -696,6 +696,25 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(reply.error.code, "BUDGET_EXCEEDED")
 
+    async def test_two_advisor_answers_fit_at_measured_length(self):
+        from app.ai.runtime import DecisionLoop
+
+        fact_id = await self.make_fact()
+        limits = []
+
+        async def advisor(messages, definitions, settings, receipt):
+            limits.append(settings.max_tokens)
+            receipt["usage"] = {"prompt_tokens": 2398, "completion_tokens": 1808}
+            return {"consult_id": json.loads(messages[1]["content"])["consult_id"], "status": "ok"}
+
+        loop = await DecisionLoop.create(self.scope, self.site, advisor_generate=advisor)
+        for question in ["첫 자문", "둘째 자문"]:
+            reply = await loop.tools.execute(
+                "ask_advisor", {"question": question, "fact_ids": [fact_id]}
+            )
+            self.assertEqual(reply.data.status, "ok")
+        self.assertEqual(limits, [3000, 3000])
+
     async def test_numeric_sentence_rejected_and_fact_rendered(self):
         from app.ai.runtime import DecisionLoop
 
@@ -813,13 +832,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             {"active_seconds": 600},
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 440000, "output_tokens": 0}
+                    {"role": "decision", "attempt": 1, "input_tokens": 470000, "output_tokens": 0}
                 ],
                 "used": 1,
             },
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 64000}
+                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 68000}
                 ],
                 "used": 1,
             },

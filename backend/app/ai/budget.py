@@ -8,8 +8,8 @@ from app.application.ports.llm_budget import FINAL_RESERVE, BudgetExceeded, LLMB
 
 ROLE_LIMITS = {
     "decision": (270000, 40000, 22),
-    "advisor": (10000, 2000, 2),
-    "examiner": (40000, 5500, 4),
+    "advisor": (10000, 6000, 2),
+    "examiner": (70000, 5500, 4),
     "founder": (40000, 5500, 4),
     "customer": (40000, 5500, 4),
     "landlord_advocate": (40000, 5500, 4),
@@ -22,8 +22,8 @@ class RuntimeBudget(LLMBudget):
         saved = saved or {}
         self.measurement = measurement
         self.submitting: set[str] = set()
-        self.input_limit = 440000
-        self.output_limit = 64000
+        self.input_limit = 470000
+        self.output_limit = 68000
         self.seconds_limit = 600
         self.pending_output = 0
         self.pending_by_role: Counter[tuple[str, bool]] = Counter()

@@ -38,7 +38,7 @@ async def ask_advisor(loop, input):
         return error("UNCITABLE", "관측된 fact만 자문에 전달할 수 있습니다.")
     consult_id = "consult_" + str(uuid.uuid4())
     receipt = {}
-    settings = LLMSettings.from_env("advisor", max_tokens=1000, timeout_seconds=45)
+    settings = LLMSettings.from_env("advisor", max_tokens=3000, timeout_seconds=45)
     payload = {
         "consult_id": consult_id,
         "question": input.question,
