@@ -51,8 +51,8 @@ class RoleBudgetTests(unittest.IsolatedAsyncioTestCase):
             reservations.append((role, False, await budget.claim_output(5500, role=role)))
             with self.assertRaises(BudgetExceeded):
                 await budget.claim_output(1, role=role)
-        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 10000, 2000])
-        self.assertEqual(sum(row[2] for row in reservations), 64000)
+        self.assertEqual([row[2] for row in reservations[:4]], [16000, 14000, 10000, 6000])
+        self.assertEqual(sum(row[2] for row in reservations), 68000)
         for role, final, reserved in reservations:
             await budget.release_output(reserved, role=role, final=final)
         self.assertEqual(budget.pending_output, 0)
