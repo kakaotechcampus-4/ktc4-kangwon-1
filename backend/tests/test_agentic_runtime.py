@@ -813,13 +813,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             {"active_seconds": 600},
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 400000, "output_tokens": 0}
+                    {"role": "decision", "attempt": 1, "input_tokens": 440000, "output_tokens": 0}
                 ],
                 "used": 1,
             },
             {
                 "calls": [
-                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 60000}
+                    {"role": "decision", "attempt": 1, "input_tokens": 0, "output_tokens": 64000}
                 ],
                 "used": 1,
             },
