@@ -51,7 +51,7 @@ def _warm_reference() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     path = app.state.execution_settings.db_path
     await asyncio.to_thread(initialize, path)
-    # 이전 프로세스가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
+    # 이 서버가 멈추며 끊긴 백그라운드 분석은 이어 갈 수 없으므로 실패로 닫습니다.
     await asyncio.to_thread(repository.fail_interrupted, db_path=path)
     if app.state.execution_settings.warm_reference:
         threading.Thread(target=_warm_reference, daemon=True).start()
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await registry.shutdown()
+        await registry.shutdown(drain_seconds=app.state.execution_settings.shutdown_drain_seconds)
 
 
 def create_app(

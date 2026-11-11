@@ -1,9 +1,11 @@
 """단일 분석 요청의 상태와 위치를 저장합니다."""
 
+from datetime import UTC, datetime, timedelta
+
 from app.application.errors import INTERRUPTED_MESSAGE as INTERRUPTED_MESSAGE
 from app.domain.industries.catalog import CATALOG_VERSION
 from app.domain.schemas import AgentError, AnalysisTask, validate_radius
-from app.infrastructure.persistence.connection import connect
+from app.infrastructure.persistence.connection import connect, worker_instance
 from app.infrastructure.persistence.repository.common import _request_row, _require_changed, _text
 from app.shared.clock import utc_now_iso
 
@@ -23,6 +25,10 @@ def create_request(request_id, address, *, radius_m=None, user_id=None, db_path=
             "INSERT INTO analysis_requests(request_id,input_address,radius_m,catalog_version,"
             "status,created_at) VALUES(?,?,?,?,'pending',?)",
             (request_id, address, radius_m, CATALOG_VERSION, now),
+        )
+        db.execute(
+            "INSERT INTO analysis_workers(request_id,instance,claimed_at) VALUES(?,?,?)",
+            (request_id, worker_instance(), now),
         )
         if user_id is not None:
             db.execute(
@@ -83,13 +89,18 @@ def get_request(request_id, *, db_path=None):
         return dict(row) if row else None
 
 
+STALE_AFTER_SECONDS = 900
+
+
 def fail_interrupted(*, db_path=None):
     error = AgentError(code="INTERRUPTED", message=INTERRUPTED_MESSAGE)
+    stale_before = (datetime.now(UTC) - timedelta(seconds=STALE_AFTER_SECONDS)).isoformat()
     with connect(db_path) as db:
         changed = db.execute(
             "UPDATE analysis_requests SET error_json=?,status='failed',completed_at=? "
-            "WHERE status IN ('pending','running')",
-            (error.model_dump_json(), utc_now_iso()),
+            "WHERE status IN ('pending','running') AND (created_at < ? OR request_id IN "
+            "(SELECT request_id FROM analysis_workers WHERE instance=?))",
+            (error.model_dump_json(), utc_now_iso(), stale_before, worker_instance()),
         )
     return changed.rowcount
 

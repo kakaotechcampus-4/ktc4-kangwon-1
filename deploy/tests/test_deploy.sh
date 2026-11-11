@@ -31,7 +31,12 @@ new_root() {
   fake bin/curl '[ "${CURL_FAIL:-}" != 1 ]'
   fake bin/sleep
   fake bin/date 'if [ -n "${RELEASE_TIME:-}" ] && [ "$1" = +%Y%m%d%H%M%S ]; then echo "$RELEASE_TIME"; else exec /usr/bin/date "$@"; fi'
-  fake bin/systemctl '[ "$1" != reload ] || grep -oE "127\.0\.0\.1:[0-9]+" "$CHAEUM_UPSTREAM_CONF" >>"$FAKE/reloads.log"
+  fake bin/systemctl 'if [ "$1" = is-active ]; then
+  left="$(cat "$FAKE/draining" 2>/dev/null || echo 0)"
+  if [ "$left" -gt 0 ]; then echo $((left - 1)) >"$FAKE/draining"; echo deactivating; else echo inactive; fi
+  exit 3
+fi
+[ "$1" != reload ] || grep -oE "127\.0\.0\.1:[0-9]+" "$CHAEUM_UPSTREAM_CONF" >>"$FAKE/reloads.log"
 [ "${SYSTEMCTL_FAIL:-}" != "$1" ]'
   fake bin/chown
   fake bin/journalctl
@@ -237,6 +242,41 @@ upstream_without_port() {
   logged "upstream 포트를 해석할 수 없습니다" || fail "포트를 못 읽었다는 메시지가 기록에 없음"
 }
 
+old_version_left_to_finish() {
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  run_deploy def5678 || fail "두 번째 배포가 실패함"
+
+  called "systemctl stop --no-block chaeum@8002" || fail "구 버전(8002)에 종료를 알리지 않음"
+  not_called "systemctl stop chaeum@8002" || fail "구 버전(8002)이 꺼질 때까지 배포가 기다림"
+}
+
+waits_for_previous_old_version() {
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  echo 3 >"$FAKE/draining"
+  run_deploy def5678 || fail "구 버전이 꺼진 뒤의 배포가 실패함"
+
+  logged "분석을 마치는 중입니다" || fail "기다린다는 메시지가 기록에 없음"
+  [ "$(cat "$FAKE/draining")" = 0 ] || fail "구 버전이 꺼지기 전에 넘어감(남은 확인 $(cat "$FAKE/draining"))"
+  [ "$(upstream_port)" = 8001 ] || fail "포트가 8001로 바뀌지 않음: $(upstream_port)"
+  called "systemctl restart chaeum@8001" || fail "새 버전을 띄우지 않음"
+}
+
+previous_old_version_never_stops() {
+  local before status=0
+  run_deploy abc1234 || fail "첫 배포가 실패함"
+  save_upstream
+  before="$(current_release)"
+  echo 100000 >"$FAKE/draining"
+  run_deploy def5678 || status=$?
+
+  [ "$status" -ne 0 ] || fail "배포가 성공으로 끝남"
+  logged "안에 꺼지지 않았습니다" || fail "중단 메시지가 기록에 없음"
+  not_called "systemctl restart chaeum@8001" || fail "아직 분석 중인 구 버전을 다시 띄움"
+  upstream_unchanged || fail "upstream 설정이 바뀜"
+  [ "$(current_release)" = "$before" ] || fail "current가 바뀜"
+  [ "$(release_shas)" = abc1234 ] || fail "새 릴리스 폴더가 남음: $(release_shas)"
+}
+
 scenario "같은 커밋 두 번" same_commit_twice
 scenario "네 번 배포" four_deploys
 scenario "nginx 검사 실패" nginx_check_fails
@@ -248,5 +288,8 @@ scenario "바뀐 systemd 유닛 되돌리기" changed_unit_rolled_back
 scenario "실패한 배포 뒤에도 정상 릴리스 유지" failed_deploys_keep_last_good
 scenario "같은 이름의 릴리스 폴더가 이미 있음" existing_release_folder_kept
 scenario "upstream 설정에 포트가 없음" upstream_without_port
+scenario "구 버전은 기다리지 않고 종료만 알림" old_version_left_to_finish
+scenario "지난 배포의 구 버전이 꺼지기를 기다림" waits_for_previous_old_version
+scenario "지난 배포의 구 버전이 끝내 꺼지지 않음" previous_old_version_never_stops
 
 [ "$FAILED" -eq 0 ] || exit 1
