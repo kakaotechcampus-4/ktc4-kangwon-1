@@ -33,7 +33,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             },
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 64000}],
+                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 68000}],
             },
         ]:
             with self.subTest(saved=saved):
@@ -82,7 +82,7 @@ class MeasurementBudgetTests(unittest.IsolatedAsyncioTestCase):
             },
             {
                 "used": 1,
-                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 64000}],
+                "calls": [{"role": "decision", "input_tokens": 0, "output_tokens": 68000}],
             },
         ]:
             with self.subTest(saved=saved):
