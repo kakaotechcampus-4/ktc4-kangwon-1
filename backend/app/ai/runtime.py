@@ -275,7 +275,12 @@ class DecisionLoop:
                         "instruction": (
                             "평가 결과를 한 번 반영하여 submit_draft(phase=final)로 제출하세요. "
                             "모든 issue_id에 accepted/partial/rejected와 이유·근거를 "
-                            "review_resolutions에 기록하세요. 추가 임대인 질문은 하지 마세요."
+                            "review_resolutions에 기록하세요. 추가 임대인 질문은 하지 마세요. "
+                            "partial이면 applied와 not_applied를 각각 한 개 이상 채우고, "
+                            "rejected이면 근거 fact_ids를 넣으세요. "
+                            "보고서에는 빈 text를 넣지 말고, fact 조각마다 format"
+                            "(count/percent/rate/distance/text)을 넣으세요. "
+                            "제출 기회는 두 번이니 오류 안내를 받으면 안내된 곳을 모두 고치세요."
                         ),
                         "reviews": self.state["reviews"],
                     }

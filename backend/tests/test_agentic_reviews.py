@@ -413,6 +413,13 @@ class ReviewTests(unittest.IsolatedAsyncioTestCase):
         loop.state["messages"].append({"role": "user", "content": "x" * 50000})
         outcome = await loop.review_and_finalize()
         self.assertEqual(len(finals), 2)
+        instruction = next(
+            json.loads(m["content"])["instruction"]
+            for m in finals[0]
+            if m["role"] == "user" and '"reviews"' in m["content"]
+        )
+        for rule in ("applied", "not_applied", "fact_ids", "format", "빈 text"):
+            self.assertIn(rule, instruction)
         texts = [s.text for s in outcome.result.limitations_segments if s.type == "text"]
         self.assertNotIn("피드백 최종 반영을 완료하지 못했습니다.", texts)
         self.assertNotIn("호출·시간·토큰 예산 상한에 도달해 코드 점수로 마무리했습니다.", texts)

@@ -729,6 +729,29 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertEqual(reply.error.code, "L_EVIDENCE_INVALID")
+        self.assertIn("summary_segments.0", reply.error.message)
+        self.assertNotIn("지수", reply.error.message)
+        reply = await loop.tools.execute(
+            "submit_draft",
+            {
+                "phase": "draft",
+                "report": {
+                    "candidates": [
+                        {
+                            "industry_code": "I201",
+                            "risks_segments": [
+                                {"type": "text", "text": "숫자 없는 문장"},
+                                {"type": "text", "text": "점포 3곳"},
+                            ],
+                        }
+                    ],
+                    "limitations_segments": [{"type": "text", "text": "반경 500"}],
+                },
+            },
+        )
+        self.assertIn("candidates.0.risks_segments.1", reply.error.message)
+        self.assertIn("limitations_segments.0", reply.error.message)
+        self.assertNotIn("risks_segments.0", reply.error.message)
         reply = await loop.tools.execute(
             "submit_draft",
             {

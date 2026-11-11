@@ -239,6 +239,66 @@ class EvaluatorToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(repeated.duplicate)
         self.assertEqual(handler.await_count, 2)
 
+    async def test_validation_error_lists_every_problem_with_how_to_fix_it(self):
+        executor = self.executor("decision")
+        partial = {"disposition": "partial", "reason": "일부만 반영"}
+        arguments = {
+            "phase": "final",
+            "report": {
+                "candidates": [
+                    {
+                        "industry_code": "I201",
+                        "reasons_segments": [{"type": "fact", "fact_id": "f_a"}],
+                        "risks_segments": [
+                            {"type": "text", "text": ""},
+                            {"type": "text", "text": ""},
+                        ],
+                    }
+                ]
+            },
+            "review_resolutions": [{"issue_id": f"examiner:{n}", **partial} for n in range(3)],
+        }
+        with patch("app.ai.tools._audit"):
+            reply = await executor.execute("submit_draft", arguments)
+        message = reply.error.message
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        for place in (
+            "reasons_segments.0",
+            "risks_segments.0",
+            "risks_segments.1",
+            "review_resolutions.0",
+            "review_resolutions.1",
+            "review_resolutions.2",
+        ):
+            self.assertIn(place, message)
+        self.assertIn("applied와 not_applied", message)
+        self.assertIn("count/percent/rate/distance/text", message)
+        self.assertIn("빈 문자열", message)
+        self.assertNotIn("일부만 반영", message)
+        self.assertLessEqual(len(message), 600)
+
+    async def test_long_validation_error_is_cut_to_the_reply_limit(self):
+        executor = self.executor("decision")
+        broken = [{"type": "fact", "fact_id": "f_a"}, {"type": "text", "text": ""}]
+        arguments = {
+            "phase": "draft",
+            "report": {
+                "candidates": [
+                    {
+                        "industry_code": "I201",
+                        "reasons_segments": broken,
+                        "risks_segments": broken,
+                        "confirmation_conditions_segments": broken,
+                    }
+                ]
+                * 5
+            },
+        }
+        with patch("app.ai.tools._audit"):
+            reply = await executor.execute("submit_draft", arguments)
+        self.assertEqual(reply.error.code, "INVALID_ARGUMENT")
+        self.assertLessEqual(len(reply.error.message), 600)
+
     async def test_validation_error_exposes_path_type_and_cap_only(self):
         executor = self.executor("decision")
         arguments = {

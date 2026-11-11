@@ -19,10 +19,12 @@ from app.domain.report import (
     code90_uses_metric,
     complete_l_records,
     condition_excluded,
+    digit_text_paths,
     industry_ranking,
     join_segments,
     l_grade,
     limitation_segments,
+    numeric_text_message,
     regulation_excluded,
     rule_scored_space,
     segments,
@@ -207,8 +209,11 @@ def validate_proposal(scope, proposal):
     ids = {s.fact_id for s in segments(proposal) if s.type == "fact"}
     for candidate in proposal.candidates + proposal.excluded_candidates:
         ids.update(candidate.fact_ids)
-    if any(has_digit(s.text) for s in segments(proposal) if s.type == "text"):
-        raise ReportInvalid("문장 숫자는 fact 슬롯으로 제출해야 합니다.")
+    numeric = digit_text_paths(proposal)
+    if numeric:
+        raise ReportInvalid(
+            numeric_text_message("문장 숫자는 fact 슬롯으로 제출해야 합니다.", numeric)
+        )
     facts = fact_rows(scope, ids)
     if any(f.status != "observed" or not f.citable for f in facts.values()):
         raise ReportInvalid("미확인 fact는 인용할 수 없습니다.")
@@ -280,12 +285,20 @@ def finalize(
     reviews=None,
     resolutions=(),
 ):
-    if any(
-        has_digit(text)
-        for resolution in resolutions
-        for text in [resolution.reason, *resolution.applied, *resolution.not_applied]
-    ):
-        raise ReportInvalid("검토 반영 문장 숫자는 fact 슬롯으로 제출해야 합니다.")
+    numeric = [
+        f"review_resolutions.{index}.{field}"
+        for index, resolution in enumerate(resolutions)
+        for field, texts in (
+            ("reason", [resolution.reason]),
+            ("applied", resolution.applied),
+            ("not_applied", resolution.not_applied),
+        )
+        if any(has_digit(text) for text in texts)
+    ]
+    if numeric:
+        raise ReportInvalid(
+            numeric_text_message("검토 반영 문장 숫자는 fact 슬롯으로 제출해야 합니다.", numeric)
+        )
     facts = validate_proposal(scope, proposal)
     all_records = complete_l_records(l_records, base_id, base_rows, advisor_unavailable)
     facts.update(validate_l_records(scope, all_records, base_id, base_rows, advisor_unavailable))
