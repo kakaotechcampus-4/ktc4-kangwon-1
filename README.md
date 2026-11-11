@@ -14,7 +14,7 @@
 | 서비스 | https://chaeum-ai.kr |
 | API | https://api.chaeum-ai.kr (상태 확인 https://api.chaeum-ai.kr/health) |
 
-예시 중개사·매칭 화면, chum.ai 표기, 로그인 뒤 주소 입력처럼 일부러 그렇게 만든 부분은 [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md)에 적었습니다.
+예시 중개사·매칭 화면, chum.ai 표기, 로그인 뒤 주소 입력, 그리고 AI 분석에서 평가자가 실패해도 계속 진행하거나 예산이 차면 코드 점수로 마무리하는 것처럼 일부러 그렇게 만든 부분은 [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md)에 적었습니다.
 
 ![주소 하나가 리포트가 되기까지](docs/images/architecture-flow.png)
 
@@ -93,7 +93,8 @@ HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없�
 | [docs/quality-summary.md](docs/quality-summary.md) | 실제 실행의 실패·개선 기록과 한계 |
 | [docs/TESTING.md](docs/TESTING.md) | 테스트 분류·커버리지·기술 부채 |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | 운영 주소·환경·배포 절차·되돌리기 |
-| [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md) | 일부러 그렇게 만든 화면·표기와 이유 |
+| [docs/DESIGN_INTENT.md](docs/DESIGN_INTENT.md) | 일부러 그렇게 만든 화면·표기·AI 분석 동작과 이유 |
+| [docs/consistency-live-report.md](docs/consistency-live-report.md) | 같은 주소를 실제 모델로 반복 분석한 결과, 찾은 문제와 고친 것 |
 | [docs/archive/](docs/archive/README.md) | 이전 설계 기록 |
 
 실제 키, 주소별 실행 기록, 자료 DB, 원문 CSV는 커밋하지 않습니다.
