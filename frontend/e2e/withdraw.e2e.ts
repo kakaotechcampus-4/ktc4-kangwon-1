@@ -37,6 +37,8 @@ test('내 분석 기록에서 탈퇴하면 같은 계정으로 다시 로그인�
   await expect(page).not.toHaveURL(/\/my\/reports/);
 
   await logInAsWithdrawUser(page);
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByText('이메일 또는 비밀번호가 올바르지 않습니다.')
+  ).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });
