@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readableLimitations } from './limitations';
 
 const INCOMPLETE =
-  '일부 업종은 검토가 완료되지 않아 확인된 자료만으로 평가했습니다. 검토 미완료는 부적합 판정이 아닙니다.';
+  'AI 검토가 모두 끝나지는 않았습니다. 끝나지 않은 부분은 확인된 자료만으로 평가했습니다. 검토 미완료는 부적합 판정이 아닙니다.';
 
-const EXCLUDED = '근거를 확인할 수 없는 문장은 리포트에서 뺐습니다.';
+const EXCLUDED = '근거를 확인할 수 없는 인용 부분은 리포트에서 뺐습니다.';
 const ZERO_NOTE =
   '자료에 점포 수가 0건으로 표시되어도 실제 동종 점포가 없다는 뜻은 아닙니다.';
 
@@ -73,10 +73,19 @@ describe('분석의 한계 문장', () => {
     );
   });
 
-  it('미등록 근거 문장은 숨기고 근거 제외 안내만 붙인다', () => {
-    expect(
-      readableLimitations('미등록 근거를 인용한 문장을 제외했습니다.')
-    ).toEqual([EXCLUDED]);
+  it.each([
+    '미등록 근거를 인용한 부분을 제외했습니다.',
+    '미등록 근거를 인용한 문장을 제외했습니다.',
+  ])('미등록 근거 문장은 숨기고 근거 제외 안내만 붙인다', (sentence) => {
+    expect(readableLimitations(sentence)).toEqual([EXCLUDED]);
+  });
+
+  it('AI가 업종 전부를 검토하지 못한 경우에도 일부 업종이라고 하지 않는다', () => {
+    const [note] = readableLimitations(
+      'L 판단 미제출 업종 수: 51. 모델 응답을 완료하지 못해 코드 점수로 마무리했습니다.'
+    );
+    expect(note).toBe(INCOMPLETE);
+    expect(note).not.toContain('일부 업종');
   });
 
   it('근거 제외 안내 뒤에 검토 미완료 안내를 붙인다', () => {

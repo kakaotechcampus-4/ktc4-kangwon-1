@@ -95,7 +95,7 @@ def decode(scope, value):
 
 
 def decode_report(scope, arguments):
-    """미존재 인용은 해당 문장/참조만 제거하고 나머지 보고서를 검증합니다."""
+    """미존재 인용은 해당 조각/참조만 제거하고 나머지 보고서를 검증합니다."""
     warnings = []
     report = arguments.get("report", {})
     if not isinstance(report, dict):
@@ -110,7 +110,7 @@ def decode_report(scope, arguments):
                     try:
                         segments.append(decode(scope, segment))
                     except ValueError as exc:
-                        warnings.append(str(exc) + "; 해당 문장을 제외했습니다.")
+                        warnings.append(str(exc) + "; 해당 부분을 제외했습니다.")
                 result[key] = segments
             elif key == "fact_ids" and isinstance(value, list):
                 result[key] = []
@@ -132,5 +132,5 @@ def decode_report(scope, arguments):
     if warnings:
         segments = cleaned.setdefault("limitations_segments", [])
         if isinstance(segments, list):
-            segments.append({"type": "text", "text": "미등록 근거를 인용한 문장을 제외했습니다."})
+            segments.append({"type": "text", "text": "미등록 근거를 인용한 부분을 제외했습니다."})
     return decode(scope, arguments | {"report": cleaned}), warnings

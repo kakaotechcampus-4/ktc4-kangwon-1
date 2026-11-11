@@ -9,9 +9,9 @@ const ZERO_STORES_NOTE =
 const SAMPLE_ONLY_NOTE =
   '경쟁 점포 정보는 수집된 검색 표본으로, 실제 점포 전체를 포함하지 않을 수 있습니다.';
 const EXCLUDED_EVIDENCE_NOTE =
-  '근거를 확인할 수 없는 문장은 리포트에서 뺐습니다.';
+  '근거를 확인할 수 없는 인용 부분은 리포트에서 뺐습니다.';
 const REVIEW_INCOMPLETE_NOTE =
-  '일부 업종은 검토가 완료되지 않아 확인된 자료만으로 평가했습니다. 검토 미완료는 부적합 판정이 아닙니다.';
+  'AI 검토가 모두 끝나지는 않았습니다. 끝나지 않은 부분은 확인된 자료만으로 평가했습니다. 검토 미완료는 부적합 판정이 아닙니다.';
 
 /** 내부 실행 상태는 숨기고, 모델이 쓴 한계 문장은 그대로 두며 오해하기 쉬운 경우에만 짧은 보충 안내를 덧붙인다. */
 export function readableLimitations(raw: string): string[] {
