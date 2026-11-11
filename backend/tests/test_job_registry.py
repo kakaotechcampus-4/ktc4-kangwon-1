@@ -93,3 +93,30 @@ class JobRegistryTests(unittest.IsolatedAsyncioTestCase):
         release.set()
         with self.assertRaises(asyncio.CancelledError):
             await task
+
+    async def test_drain_lets_running_work_finish_before_closing(self):
+        registry = AnalysisJobRegistry(2)
+        release = asyncio.Event()
+
+        async def work():
+            await release.wait()
+            return "done"
+
+        task = registry.start("first", work())
+        await asyncio.sleep(0)
+        closing = asyncio.create_task(registry.shutdown(drain_seconds=5))
+        await asyncio.sleep(0)
+        rejected = asyncio.Event().wait()
+        with self.assertRaises(JobClosedError):
+            registry.start("second", rejected)
+        self.assertFalse(task.done())
+        release.set()
+        await closing
+        self.assertEqual(task.result(), "done")
+
+    async def test_drain_deadline_cancels_work_still_running(self):
+        registry = AnalysisJobRegistry(1)
+        task = registry.start("first", asyncio.Event().wait())
+        await asyncio.sleep(0)
+        await registry.shutdown(drain_seconds=0.01)
+        self.assertTrue(task.cancelled())

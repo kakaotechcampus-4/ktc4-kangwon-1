@@ -1,14 +1,18 @@
 import asyncio
 import json
+import os
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from app.application.analysis import public_failure
 from app.application.errors import AddressError
 from app.infrastructure.clients.address import GeocodeError
 from app.infrastructure.persistence.connection import connect, initialize
 from app.infrastructure.persistence.repository import create_request, fail_interrupted, mark_running
+from app.infrastructure.persistence.repository.requests import STALE_AFTER_SECONDS
 
 INTERRUPTED = "서비스 점검으로 분석이 멈췄어요. 다시 분석해 주세요."
 
@@ -97,3 +101,58 @@ class InterruptedTests(unittest.TestCase):
                 ).fetchone()
             body = json.loads(error)
             self.assertEqual((body["code"], body["message"]), ("INTERRUPTED", INTERRUPTED))
+
+
+class OtherServerTests(unittest.TestCase):
+    def test_request_running_on_another_server_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = initialize(Path(temp) / "two-servers.sqlite3")
+            with patch.dict(os.environ, {"CHAEUM_INSTANCE": "8001"}):
+                create_request("old", "서울 송파구 위례광장로 199", db_path=path)
+                mark_running("old", db_path=path)
+            with patch.dict(os.environ, {"CHAEUM_INSTANCE": "8002"}):
+                create_request("mine", "서울 송파구 위례광장로 199", db_path=path)
+                mark_running("mine", db_path=path)
+                self.assertEqual(fail_interrupted(db_path=path), 1)
+            self.assertEqual(_statuses(path), {"old": "running", "mine": "failed"})
+
+    def test_same_server_restart_closes_its_own_requests(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = initialize(Path(temp) / "restart.sqlite3")
+            with patch.dict(os.environ, {"CHAEUM_INSTANCE": "8001"}):
+                create_request("pending", "서울 송파구 위례광장로 199", db_path=path)
+                create_request("running", "서울 송파구 위례광장로 199", db_path=path)
+                mark_running("running", db_path=path)
+                self.assertEqual(fail_interrupted(db_path=path), 2)
+            self.assertEqual(_statuses(path), {"pending": "failed", "running": "failed"})
+
+    def test_request_too_old_to_be_running_anywhere_is_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = initialize(Path(temp) / "stale.sqlite3")
+            with patch.dict(os.environ, {"CHAEUM_INSTANCE": "8001"}):
+                create_request("fresh", "서울 송파구 위례광장로 199", db_path=path)
+                create_request("stale", "서울 송파구 위례광장로 199", db_path=path)
+                mark_running("stale", db_path=path)
+            old = (datetime.now(UTC) - timedelta(seconds=STALE_AFTER_SECONDS + 60)).isoformat()
+            with connect(path) as db:
+                db.execute(
+                    "UPDATE analysis_requests SET created_at=? WHERE request_id='stale'", (old,)
+                )
+            with patch.dict(os.environ, {"CHAEUM_INSTANCE": "8002"}):
+                self.assertEqual(fail_interrupted(db_path=path), 1)
+            self.assertEqual(_statuses(path), {"fresh": "pending", "stale": "failed"})
+
+    def test_request_without_owner_record_follows_age_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = initialize(Path(temp) / "legacy.sqlite3")
+            create_request("legacy", "서울 송파구 위례광장로 199", db_path=path)
+            mark_running("legacy", db_path=path)
+            with connect(path) as db:
+                db.execute("DELETE FROM analysis_workers")
+            self.assertEqual(fail_interrupted(db_path=path), 0)
+            self.assertEqual(_statuses(path), {"legacy": "running"})
+
+
+def _statuses(path):
+    with connect(path) as db:
+        return dict(db.execute("SELECT request_id,status FROM analysis_requests").fetchall())

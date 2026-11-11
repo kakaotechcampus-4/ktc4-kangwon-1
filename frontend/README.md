@@ -31,6 +31,7 @@
 | `npm run dev`                             | 개발 서버 (http://localhost:3000)                     |
 | `npm run build` · `npm run start`         | 운영용 빌드 · 실행                                    |
 | `npm test`                                | 단위·화면 시험 (Vitest)                               |
+| `npm run test:coverage`                   | 같은 시험 + 줄 커버리지 하한 55% 확인 (CI가 돌림)     |
 | `npm run e2e`                             | E2E 시험 (Playwright, 백엔드 8123 · 화면 3123에 띄움) |
 | `npm run lint`                            | ESLint                                                |
 | `npm run typecheck`                       | 타입 검사                                             |

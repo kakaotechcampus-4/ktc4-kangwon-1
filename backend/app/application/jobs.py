@@ -55,10 +55,14 @@ class AnalysisJobRegistry:
             # 실패의 상세 진단은 서비스가 저장하며 여기서는 원문·스택을 남기지 않습니다.
             logger.warning("백그라운드 분석 실패: %s (%s)", request_id, type(error).__name__)
 
-    async def shutdown(self, timeout_seconds: float = 10) -> None:
+    async def shutdown(self, timeout_seconds: float = 10, drain_seconds: float = 0) -> None:
         tasks = [task for task in self.tasks.values() if not task.done()]
         if not self.closed:
             self.closed = True
+            if tasks and drain_seconds > 0:
+                logger.info("진행 중 분석 %s개가 끝나기를 기다립니다.", len(tasks))
+                _, unfinished = await asyncio.wait(tasks, timeout=drain_seconds)
+                tasks = list(unfinished)
             for task in tasks:
                 task.cancel()
         if tasks:
