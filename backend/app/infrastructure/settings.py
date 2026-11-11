@@ -12,6 +12,7 @@ class ExecutionSettings:
     db_path: str | Path | None = None
     max_concurrency: int = 2
     warm_reference: bool = False
+    shutdown_drain_seconds: float = 0
 
     def __post_init__(self):
         if type(self.max_concurrency) is not int or self.max_concurrency < 1:
@@ -23,4 +24,5 @@ class ExecutionSettings:
             db_path=resolve_path(),
             max_concurrency=int(os.getenv("ANALYSIS_MAX_CONCURRENCY", "2")),
             warm_reference=os.getenv("WARM_SCORE_REFERENCE", "0") == "1",
+            shutdown_drain_seconds=float(os.getenv("SHUTDOWN_DRAIN_SECONDS", "0")),
         )

@@ -132,4 +132,10 @@ class SimpleLTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(body["report"]["summary_segments"]), 2)
         self.assertEqual(body["report"]["summary_segments"][1]["fact_id"], fid)
+        self.assertEqual(body["report"]["summary_segments"][0]["text"], "검토")
         self.assertIn("deadbeef", warnings[0])
+        self.assertTrue(warnings[0].endswith("해당 부분을 제외했습니다."))
+        self.assertEqual(
+            body["report"]["limitations_segments"][-1]["text"],
+            "미등록 근거를 인용한 부분을 제외했습니다.",
+        )

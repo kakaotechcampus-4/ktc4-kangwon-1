@@ -28,6 +28,8 @@ Environment=SQLITE_PATH=/opt/chaeum/shared/storage/chaeum.sqlite3
 # 비우면 홈의 .chaeum 으로 가서 요청 DB와 자리가 갈립니다.
 Environment=LOCAL_DATA_DB_PATH=/opt/chaeum/shared/storage/market_data.sqlite3
 Environment=WARM_SCORE_REFERENCE=1
+Environment=CHAEUM_INSTANCE=%i
+Environment=SHUTDOWN_DRAIN_SECONDS=660
 
 # python -m 으로 실행해야 현재 디렉터리가 import 경로 맨 앞에 붙습니다.
 # 그래야 구·신 프로세스가 각자 자기 릴리스의 코드를 씁니다.
@@ -37,8 +39,8 @@ ExecStart=/opt/chaeum/shared/venv/bin/python -m uvicorn app.main:create_app \
 
 Restart=on-failure
 RestartSec=5
-# 종료 시 진행 중 분석을 10초 동안 정리합니다. 여유를 둡니다.
-TimeoutStopSec=30
+# 종료 시 진행 중 분석이 끝나기를 최대 660초 기다린 뒤 10초 동안 정리합니다. 여유를 둡니다.
+TimeoutStopSec=720
 
 [Install]
 WantedBy=multi-user.target

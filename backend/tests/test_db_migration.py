@@ -160,7 +160,7 @@ class SchemaVersionTests(unittest.TestCase):
 
         initialize(path)
 
-        self.assertEqual(_user_version(path), 7)
+        self.assertEqual(_user_version(path), SCHEMA_VERSION)
         with closing(sqlite3.connect(path)) as db:
             tables = {
                 row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -193,6 +193,31 @@ class SchemaVersionTests(unittest.TestCase):
 
         self.assertEqual(set(results), {path.resolve()})
         self.assertEqual(_user_version(path), SCHEMA_VERSION)
+
+    def test_worker_table_is_added_to_a_version_seven_database(self):
+        path = self.directory / "v7.sqlite3"
+        initialize(path)
+        with closing(sqlite3.connect(path)) as db:
+            db.execute(
+                "INSERT INTO analysis_requests(request_id,input_address,status,created_at)"
+                " VALUES ('before-workers','주소','running','2026-11-11T00:00:00+00:00')"
+            )
+            db.execute("DROP TABLE analysis_workers")
+            db.execute("PRAGMA user_version = 7")
+            db.commit()
+
+        initialize(path)
+
+        self.assertEqual(_user_version(path), SCHEMA_VERSION)
+        with closing(sqlite3.connect(path)) as db:
+            tables = {
+                row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            status = db.execute(
+                "SELECT status FROM analysis_requests WHERE request_id='before-workers'"
+            ).fetchone()[0]
+        self.assertIn("analysis_workers", tables)
+        self.assertEqual(status, "running")
 
 
 if __name__ == "__main__":

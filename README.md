@@ -27,11 +27,11 @@
 | --- | --- |
 | [backend/](backend/README.md) | 로컬 자료 계산, decision, 평가, 저장, API |
 | [frontend/](frontend/README.md) | 주소 입력과 결과 화면 |
-| [docs/](docs/DATABASE.md) | 팀 규칙, API 계약, DB 구조, 설계 기록 |
+| [docs/](docs/) | 팀 규칙, API 계약, DB 구조, 설계 기록 |
 
 ## 실행
 
-Python 3.12 환경에서 프로젝트 루트부터 실행합니다.
+Python 3.12 환경에서 프로젝트 루트부터 실행합니다. 환경이 없으면 `conda create -n chaeum python=3.12`로 먼저 만듭니다.
 
 ```powershell
 conda activate chaeum
@@ -51,17 +51,28 @@ npm run dev
 화면은 <http://localhost:3000>, 백엔드 문서는 <http://localhost:8000/docs>입니다.
 
 실제 분석에는 키 설정(`backend/.env`)과 저장소 밖 **자료 DB**가 필요합니다. 설정과 준비 방법은 [백엔드 README](backend/README.md)를 보세요.
-외부 호출 없이 응답 형태만 확인하려면 `POST /api/v1/analyses?mock=true`를 호출합니다.
 
-### 외부 호출 없는 질문·재개 데모
+### 키·자료 DB 없이 확인하기
+
+- **화면:** `frontend/.env.local`에 `NEXT_PUBLIC_MOCK_MODE=true`를 두고 `npm run dev`를 띄우면, 백엔드 없이 주소 입력부터 리포트까지 예시 자료로 돕니다.
+- **API:** `?mock=true`를 붙이면 외부 호출 없이 고정 응답을 돌려줍니다. 분석 API는 메일 인증을 마친 계정의 로그인 쿠키와 허용된 출처(`Origin`)가 있어야 받으므로, 아래 순서로 호출합니다. 백엔드를 띄워 둔 채 다른 터미널(Git Bash · macOS · Linux)에서 실행합니다.
 
 ```bash
-curl -X POST 'http://localhost:8000/api/v1/analyses?mock=true' \
-  -H 'Content-Type: application/json' \
-  -d '{"address":"서울 송파구 오금로 404","allow_questions":true}'
+cd backend
+
+# 1. 메일 인증까지 끝난 시험 계정을 요청 DB에 만듭니다
+python scripts/create_e2e_user.py storage/chaeum.sqlite3 demo@example.com demo-pass-1234
+
+# 2. 로그인해서 세션 쿠키를 받습니다
+curl -c storage/cookies.txt -X POST http://localhost:8000/api/v1/auth/login   -H 'Origin: http://localhost:3000' -H 'Content-Type: application/json'   -d '{"email":"demo@example.com","password":"demo-pass-1234"}'
+
+# 3. 질문을 허용한 분석을 시작합니다
+curl -b storage/cookies.txt -X POST 'http://localhost:8000/api/v1/analyses?mock=true'   -H 'Origin: http://localhost:3000' -H 'Content-Type: application/json'   -d @- <<'EOF'
+{"address":"서울 송파구 오금로 404","allow_questions":true}
+EOF
 ```
 
-HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없는 요청은 최종 DecisionResult를 바로 반환합니다.
+3번의 HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없는 요청은 최종 DecisionResult를 바로 반환합니다.
 
 ```json
 {
@@ -74,9 +85,29 @@ HTTP 200 응답 예입니다. ID는 실행마다 달라집니다. 질문이 없�
 }
 ```
 
-응답의 ID로 `POST /api/v1/analyses/{request_id}/answers?mock=true`에
-`{"question_session_id":"받은 세션 ID","answers":{"floor":"1층"}}`을 보내면 같은 요청이 재개됩니다.
-최종 결과는 `GET /api/v1/analyses/{request_id}`에서도 조회합니다. 목업은 계약·화면 연결 시험이며 추천 품질의 근거가 아닙니다.
+받은 ID로 답을 보내면 같은 요청이 재개되어 최종 결과가 돌아옵니다.
+
+```bash
+curl -b storage/cookies.txt -X POST 'http://localhost:8000/api/v1/analyses/<request_id>/answers?mock=true'   -H 'Origin: http://localhost:3000' -H 'Content-Type: application/json'   -d @- <<'EOF'
+{"question_session_id":"<받은 세션 ID>","answers":{"floor":"1층"}}
+EOF
+```
+
+최종 결과는 `curl -b storage/cookies.txt http://localhost:8000/api/v1/analyses/<request_id>`로도 조회합니다. 쿠키나 `Origin`이 없으면 401·403으로 거절됩니다. 목업은 계약·화면 연결 시험이며 추천 품질의 근거가 아닙니다.
+
+## 시험과 CI/CD
+
+| 대상 | 실행 | 2026-11-11 CI 결과 |
+| --- | --- | --- |
+| 백엔드 | `backend/`에서 `python -m unittest discover -s tests` | 1,189개 통과, 구문 커버리지 91.75% |
+| 화면 | `frontend/`에서 `npm test` | 431개 통과 |
+| 브라우저 E2E | `frontend/`에서 `npm run e2e` | 4개 통과(로그인부터 리포트까지, 질문 답변 뒤 재개, 폰 화면, 탈퇴) |
+| 배포 스크립트 | `bash deploy/tests/test_deploy.sh` | 배포 실패·되돌리기 상황 11개 통과 |
+
+자동 시험은 임시 DB와 대역 모델만 쓰고 외부 API·실제 모델을 부르지 않습니다. 실제 모델로 돌린 결과는 [docs/quality-summary.md](docs/quality-summary.md)에 따로 기록합니다.
+
+- **CI:** [ci.yml](.github/workflows/ci.yml)이 모든 PR과 develop·main push에서 위 네 가지와 형식·린트·타입 검사·빌드를 돌립니다.
+- **배포:** develop에 합쳐지면 백엔드는 [deploy.yml](.github/workflows/deploy.yml)이 AWS EC2에 무중단으로 배포하고, 화면은 Vercel이 배포합니다. 새 버전이 상태 확인을 통과하지 못하면 전환하지 않고 이전 버전이 계속 서비스합니다. 절차와 되돌리기는 [docs/DEPLOY.md](docs/DEPLOY.md)에 있습니다.
 
 ## 문서
 

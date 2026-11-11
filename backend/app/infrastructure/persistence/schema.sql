@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS analysis_requests (
     CHECK (result_json IS NULL OR json_extract(result_json, '$.request_id') IS request_id)
 );
 
+CREATE TABLE IF NOT EXISTS analysis_workers (
+    request_id TEXT PRIMARY KEY NOT NULL REFERENCES analysis_requests(request_id),
+    instance TEXT NOT NULL CHECK (length(trim(instance)) > 0),
+    claimed_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decision_failures (
     request_id TEXT NOT NULL REFERENCES analysis_requests(request_id),
     failed_at TEXT NOT NULL,

@@ -24,6 +24,7 @@ UPSTREAM_CONF="${CHAEUM_UPSTREAM_CONF:-/etc/nginx/conf.d/chaeum-upstream.conf}"
 UNIT_DEST="${CHAEUM_UNIT_DEST:-/etc/systemd/system/chaeum@.service}"
 
 HEALTH_TIMEOUT=60   # 새 버전 기동을 기다리는 최대 시간(초)
+DRAIN_TIMEOUT=720
 KEEP_RELEASES=3     # 롤백용으로 남겨 둘 릴리스 수
 LOG="${CHAEUM_DEPLOY_LOG:-/var/log/chaeum-deploy.log}"
 
@@ -76,6 +77,18 @@ say "현재 $CURRENT_PORT 서비스 중 → 새 버전은 $NEW_PORT 에 띄웁�
 
 PREV_CURRENT="$(readlink -e "$ROOT/current" || true)"
 UNIT_CHANGED=0
+
+draining() { [ "$(systemctl is-active "chaeum@$NEW_PORT" 2>/dev/null || true)" = deactivating ]; }
+if draining; then
+  say "$NEW_PORT 에서 지난 배포의 구 버전이 분석을 마치는 중입니다. 꺼질 때까지 기다립니다 (최대 ${DRAIN_TIMEOUT}초)"
+  for _ in $(seq 1 "$DRAIN_TIMEOUT"); do
+    draining || break
+    sleep 1
+  done
+  if draining; then
+    die "$NEW_PORT 의 구 버전이 ${DRAIN_TIMEOUT}초 안에 꺼지지 않았습니다. 배포하지 않고 중단합니다"
+  fi
+fi
 
 # ── 2. S3 에서 릴리스를 받아 푼다 ──────────────────────────────────────
 REL="$RELEASES/$SHA-$(date +%Y%m%d%H%M%S)"
@@ -164,10 +177,10 @@ fi
 say "전환 완료 — $CURRENT_PORT → $NEW_PORT"
 
 # ── 9. 구 버전 정지, 재부팅 시 올라올 쪽도 새 포트로 ───────────────────
-systemctl stop "chaeum@$CURRENT_PORT" || true
+systemctl stop --no-block "chaeum@$CURRENT_PORT" || true
 systemctl disable "chaeum@$CURRENT_PORT" >/dev/null 2>&1 || true
 systemctl enable  "chaeum@$NEW_PORT"    >/dev/null 2>&1 || true
-say "구 버전 정지 및 자동시작 대상 이전"
+say "구 버전은 하던 분석을 마친 뒤 꺼집니다. 자동시작 대상 이전"
 
 # ── 10. 오래된 릴리스 정리 (롤백용으로 최근 것만 남김) ─────────────────
 # shellcheck disable=SC2012
