@@ -11,6 +11,17 @@ export default defineConfig({
     },
   },
   test: {
+    coverage: {
+      provider: 'v8',
+      include: [
+        'app/**/*.{ts,tsx}',
+        'components/**/*.{ts,tsx}',
+        'lib/**/*.{ts,tsx}',
+      ],
+      exclude: ['**/*.test.*'],
+      reporter: ['text-summary'],
+      thresholds: { lines: 55 },
+    },
     projects: [
       {
         extends: true,

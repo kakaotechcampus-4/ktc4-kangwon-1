@@ -11,8 +11,8 @@ refactor/* 리뷰 반영·정리
 docs/*    문서만 바뀔 때
 ```
 
-**develop에 들어간 커밋은 곧 운영 배포입니다.** develop에 push되면 `deploy.yml`이 백엔드 검사(ruff · mypy · unittest)를
-다시 돌리고, 통과해야만 EC2에 무중단으로 배포합니다. 검사가 실패하면 배포하지 않고 지금 버전이 계속 서비스합니다.
+**develop에 들어간 커밋은 곧 운영 배포입니다.** develop에 push된 커밋의 CI(`ci.yml` — 백엔드 · 프론트엔드 · 브라우저 E2E · 배포 스크립트 시험)가
+모두 통과해야만 `deploy.yml`이 EC2에 무중단으로 배포합니다. 검사가 실패하면 배포하지 않고 지금 버전이 계속 서비스합니다.
 
 **작업 브랜치는 develop에서 따고 develop으로 돌아옵니다.** `main`에 직접 push하지 않습니다.
 
